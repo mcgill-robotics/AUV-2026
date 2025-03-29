@@ -16,13 +16,16 @@ Before setting up the dev environment, you should have the following software in
 If you have the software installed, follow these instructions:
 
 1. `git clone` this repository on your local environment.
+   
 2. Open the repo in **VS Code**.
+
 3. In the bottom left, you should see a little blue/green box. This will bring up the VSCode dialogue.
   (Keyboard Shortcut: `CTRL + SHIFT + P` or `CMD + SHIFT + P`)
 
 ![image](https://github.com/user-attachments/assets/69cfa5b7-9513-4aa1-b797-e9adcc8aa68a)
 
-5. Select ***"Remote Containers: Reopen in container"***
-6. VS Code will automatically load necessary files and configure the dev environment. This can take minutes to load.
+4. Select ***"Dev Containers: Reopen in container"***
+   
+5. VS Code will automatically load necessary files and configure the dev environment. This can take minutes to load.
 
 Once loading is complete, your ready to develop! 
