@@ -5,7 +5,7 @@ def generate_launch_description():
     return LaunchDescription([
         Node(
             package='usb_cam',
-            executable='usb_cam_node',
+            executable='usb_cam_node_exe',
             name='down_cam',
             output='screen',
             parameters=[{

@@ -1,5 +1,5 @@
-# Use the ROS 2 Humble base image for Jetson
-FROM dustynv/ros:humble-ros-base-l4t-r36.3.0
+# Use 36.4?
+FROM dustynv/ros:humble-ros-base-l4t-r36.4.0 
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -44,24 +44,35 @@ RUN rosdep init && \
     rosdep update --rosdistro $ROS_DISTRO
 
 # Install ROS 2 packages
-RUN apt-get update && apt-get install -y --no-install-recommends \
-ros-humble-ros-core \
-ros-humble-ros-base \
-ros-humble-cv-bridge \
-ros-humble-image-transport \
-ros-humble-camera-info-manager \
-ros-humble-usb-cam \
-# ros-humble-robot-localization \
-&& rm -rf /var/lib/apt/lists/*
+# RUN apt-get update && apt-get install -y --no-install-recommends \
+# # ros-humble-ros-core \
+# # ros-humble-ros-base \
+# # ros-humble-cv-bridge \
+# # ros-humble-image-transport \
+# # ros-humble-camera-info-manager \
+# # ros-humble-robot-localization \
+# && rm -rf /var/lib/apt/lists/*
 
 # Clone and build the SBG ROS 2 driver
-RUN mkdir -p /ros2_ws/src && \
-    cd /ros2_ws/src && \
-    git clone https://github.com/SBG-Systems/sbg_ros2_driver.git && \
-    cd /ros2_ws && \
-    rosdep install --from-paths src --ignore-src -y && \
-    colcon build
+# RUN mkdir -p /ros2_ws/src && \
+#     cd /ros2_ws/src && \
+#     git clone https://github.com/SBG-Systems/sbg_ros2_driver.git && \
+#     cd /ros2_ws && \
+#     rosdep install --from-paths src --ignore-src -y && \
+#     colcon build
 
+RUN mkdir -p /ros2_ws/src
+WORKDIR /ros2_ws/src
+
+# RUN git clone --recursive https://github.com/stereolabs/zed-ros2-wrapper.git && \
+#     git clone -b ros2 https://github.com/ros-geographic-info/geographic_info.git && \
+#     git clone -b humble https://github.com/stereolabs/zed-ros2-interfaces.git \
+RUN    git clone --depth=1 https://github.com/ros-drivers/usb_cam.git && \
+    git clone --depth=1 https://github.com/ros-drivers/nmea_msgs.git && \
+    git clone --depth=1 https://github.com/tilk/rtcm_msgs.git
+
+WORKDIR /ros2_ws
+RUN rosdep update --rosdistro=$ROS_DISTRO && rosdep install --from-paths src --ignore-src -r -y
 # # Install Python packages
 # COPY requirements.txt requirements.txt
 # RUN pip3 install --no-cache-dir -r requirements.txt \
@@ -77,6 +88,9 @@ RUN mkdir -p /ros2_ws/src && \
 #     pip3 install --no-cache-dir --verbose /opt/torchvision*.whl && \
 #     cd ../ && \
 #     rm -rf torchvision
+
+# Build the workspace
+RUN . /opt/ros/humble/setup.sh && colcon build
 
 # Set up environment variables
 RUN echo "source /opt/ros/$ROS_DISTRO/setup.bash" >> ~/.bashrc \
