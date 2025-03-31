@@ -1,5 +1,5 @@
-# Use 36.4?
-FROM dustynv/ros:humble-ros-base-l4t-r36.4.0 
+# Use the correct Jetson ROS base image (Ensure JetPack matches L4T version)
+FROM dustynv/ros:humble-ros-base-l4t-r36.3.0 
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -39,71 +39,30 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Bootstrap rosdep
-RUN rosdep init && \
-    rosdep update --rosdistro $ROS_DISTRO
-
-# Install ROS 2 packages
-# RUN apt-get update && apt-get install -y --no-install-recommends \
-# # ros-humble-ros-core \
-# # ros-humble-ros-base \
-# # ros-humble-cv-bridge \
-# # ros-humble-image-transport \
-# # ros-humble-camera-info-manager \
-# # ros-humble-robot-localization \
-# && rm -rf /var/lib/apt/lists/*
+# Initialize and update rosdep before cloning repositories
+RUN rosdep init && rosdep update --rosdistro=$ROS_DISTRO
 
 # Clone and build the SBG ROS 2 driver
-# RUN mkdir -p /ros2_ws/src && \
-#     cd /ros2_ws/src && \
-#     git clone https://github.com/SBG-Systems/sbg_ros2_driver.git && \
-#     cd /ros2_ws && \
-#     rosdep install --from-paths src --ignore-src -y && \
-#     colcon build
-
 RUN mkdir -p /ros2_ws/src
 WORKDIR /ros2_ws/src
 
-# RUN git clone --recursive https://github.com/stereolabs/zed-ros2-wrapper.git && \
-#     git clone -b ros2 https://github.com/ros-geographic-info/geographic_info.git && \
-#     git clone -b humble https://github.com/stereolabs/zed-ros2-interfaces.git \
-RUN    git clone --depth=1 https://github.com/ros-drivers/usb_cam.git && \
+RUN git clone --depth=1 https://github.com/ros-drivers/usb_cam.git && \
     git clone --depth=1 https://github.com/ros-drivers/nmea_msgs.git && \
     git clone --depth=1 https://github.com/tilk/rtcm_msgs.git
 
+# Install dependencies from rosdep
 WORKDIR /ros2_ws
-RUN rosdep update --rosdistro=$ROS_DISTRO && rosdep install --from-paths src --ignore-src -r -y
-# # Install Python packages
-# COPY requirements.txt requirements.txt
-# RUN pip3 install --no-cache-dir -r requirements.txt \
-#     && pip3 install --no-deps --no-cache-dir ultralytics==8.0.207 \
-#     && rm -f /usr/local/bin/cmake && rm -rf /root/.cache/pip && rm requirements.txt
-
-# # Install PyTorch Vision
-# RUN git clone --branch release/0.16 --recursive --depth=1 https://github.com/pytorch/vision torchvision && \
-#     cd torchvision && \
-#     git checkout release/0.16 && \
-#     python3 setup.py bdist_wheel && \
-#     cp dist/torchvision*.whl /opt && \
-#     pip3 install --no-cache-dir --verbose /opt/torchvision*.whl && \
-#     cd ../ && \
-#     rm -rf torchvision
+RUN rosdep install --from-paths src --ignore-src -r -y
 
 # Build the workspace
-RUN . /opt/ros/humble/setup.sh && colcon build
+RUN /bin/bash -c "source /opt/ros/humble/setup.bash && colcon build"
 
 # Set up environment variables
 RUN echo "source /opt/ros/$ROS_DISTRO/setup.bash" >> ~/.bashrc \
-    && echo "source /AUV-2026/ros2_ws/install/setup.bash" >> ~/.bashrc 
-    # && echo "source /AUV-2026/scripts/set_env.bash" >> ~/.bashrc \
-    # && echo "source /AUV-2026/scripts/jetson/docker_aliases.bash" >> ~/.bashrc
+    && echo "source /ros2_ws/install/setup.bash" >> ~/.bashrc
 
-# Install additional tools
-# RUN apt-get update && apt-get install -y \
-#     docker.io \
-#     && pip3 install sklearn
-
-# Set default command
-RUN echo "tmux" >> ~/.bashrc
+# Set default shell to Bash
 SHELL ["/bin/bash", "-c"]
+
+# Default command
 CMD ["bash"]
