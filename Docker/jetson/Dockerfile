@@ -39,26 +39,23 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    ros-humble-usb-cam \
-    --fix-broken \
-    || true && \
-    rm -rf /var/lib/apt/lists/*
-
 # Initialize and update rosdep before cloning repositories
-# RUN rosdep update --rosdistro=$ROS_DISTRO
+RUN rosdep init && rosdep update --rosdistro=$ROS_DISTRO
 
+# Clone and build the SBG ROS 2 driver
 RUN mkdir -p /ros2_ws/src
-# WORKDIR /ros2_ws/src
+WORKDIR /ros2_ws/src
 
-# RUN git clone --depth=1 https://github.com/ros-drivers/usb_cam.git && \
-#     git clone --depth=1 https://github.com/ros-drivers/nmea_msgs.git && \
-#     git clone --depth=1 https://github.com/tilk/rtcm_msgs.git
+RUN git clone --depth=1 https://github.com/ros-drivers/usb_cam.git && \
+    git clone --depth=1 https://github.com/ros-drivers/nmea_msgs.git && \
+    git clone --depth=1 https://github.com/tilk/rtcm_msgs.git
 
 # Install dependencies from rosdep
 WORKDIR /ros2_ws
-# RUN rosdep install --from-paths src --ignore-src -r -y
+RUN rosdep install --from-paths src --ignore-src -r -y
+
+# Build the workspace
+RUN /bin/bash -c "source /opt/ros/humble/setup.bash && colcon build"
 
 # Set up environment variables
 RUN echo "source /opt/ros/$ROS_DISTRO/setup.bash" >> ~/.bashrc \
