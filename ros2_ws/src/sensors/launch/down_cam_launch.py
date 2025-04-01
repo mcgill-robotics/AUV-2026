@@ -9,7 +9,7 @@ def generate_launch_description():
             name='down_cam',
             output='screen',
             parameters=[{
-                'video_device': '/dev/down_cam',
+                'video_device': '/dev/video0',
                 'image_width': 1280,
                 'image_height': 720,
                 'pixel_format': 'yuyv',
