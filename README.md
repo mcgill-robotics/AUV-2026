@@ -28,4 +28,4 @@ If you have the software installed, follow these instructions:
    
 5. VS Code will automatically load necessary files and configure the dev environment. This can take minutes to load.
 
-Once loading is complete, your ready to develop! 
+Once loading is complete, you're ready to develop! 
