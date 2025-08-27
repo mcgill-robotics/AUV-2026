@@ -1,3 +1,10 @@
+---
+name: "Task"
+description: "New task"
+title: ""
+labels: ["task"]
+---
+
 # Task Template
 
 An issue should be detailed and clear enough that anyone on the team can read it and start working on the task.

@@ -1,3 +1,10 @@
+---
+name: "Bug Report"
+description: "Report a bug"
+title: ""
+labels: ["bug"]
+---
+
 # Bug Template
 
 ## 🐛 Bug Description
