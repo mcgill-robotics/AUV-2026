@@ -1,11 +1,12 @@
 ---
-name: "Bug Report"
-description: "Report a bug"
-title: ""
-labels: ["bug"]
----
+name: Bug Report
+about: "Before submitting, \U0001F50Dsearch existing issues to avoid duplicates and
+  check the \U0001F4D6 documentation and README"
+title: ''
+labels: bug
+assignees: ''
 
-# Bug Template
+---
 
 ## 🐛 Bug Description
 A clear and concise description of what the bug is.
@@ -34,7 +35,3 @@ Add any other context about the problem here.
 ## 📋 Checklist
 - [ ] I've searched for similar issues
 - [ ] I can reproduce this issue consistently
-
-## Before You Submit
-- 🔍 Search existing issues to avoid duplicates
-- 📖 Check the documentation and README
