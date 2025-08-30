@@ -4,17 +4,16 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - /dev:/dev
       - /var/run/docker.sock:/var/run/docker.sock
-      - type: bind ##TODO: check if this is correct
-        source: ../../../AUV-2026
-        target: /AUV-2026
+      - type: bind 
+        source: ../../../AUV-2026/ros2_ws
+        target: /ros2_ws
     image: "mcgillrobotics/auv_2026:ros2" 
     privileged: true
     environment:
-      - DISPLAY
+      - DISPLAY=${DISPLAY}
       - QT_X11_NO_MITSHM=1
       - NVIDIA_VISIBLE_DEVICES=all
       - UDEV=on
-      # - ROS_MASTER_URI=http://localhost:11311 #TODO: this is a ros1 thing, research if we need it for bridge
     runtime: nvidia
     command: bash -c ${OVERRIDE_COMMAND:-"tail -f /dev/null"}
     build: .

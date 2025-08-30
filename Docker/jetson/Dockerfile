@@ -1,6 +1,8 @@
 # Use the correct Jetson ROS base image (Ensure JetPack matches L4T version)
 FROM dustynv/ros:humble-desktop-l4t-r36.4.0
 
+RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     dirmngr \
@@ -47,7 +49,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-#Install graphis, video, c++ dev libraries
+#Install graphics, video, c++ dev libraries
 RUN apt-get update && apt-get install -y --no-install-recommends \
     g++ \
     libc++-dev \
@@ -75,38 +77,53 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN rosdep init || true && \
     rosdep update --rosdistro $ROS_DISTRO
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install ROS packages
+# NVIDIA’s custom OpenCV (opencv-dev, opencv-libs, etc.) are not the same as Ubuntu’s libopencv-dev 4.5.4+dfsg-9ubuntu4
+# Any ROS package that depends on vision_opencv (like cv-bridge, image-view) must be built from source against NVIDIA’s OpenCV.
+# You can check the dependencies by running apt-get install -s ros-humble-[package name] inside the clean base container
+# Problematic packages will have a line like: Conf libopencv-core4.5d (4.5.4+dfsg-9ubuntu4 Ubuntu:22.04/jammy [arm64])
+RUN apt-get update && apt-get install -y -f --no-install-recommends \
     ros-$ROS_DISTRO-joy \
     ros-$ROS_DISTRO-joy-teleop \
-    ros-$ROS_DISTRO-cv-bridge \
-    ros-$ROS_DISTRO-image-view \
+    # ros-$ROS_DISTRO-cv-bridge \
+    # ros-$ROS_DISTRO-image-view \
     ros-$ROS_DISTRO-rqt-gui \
     ros-$ROS_DISTRO-smach-ros \
-    ros-$ROS_DISTRO-usb-cam \
+    #ros-$ROS_DISTRO-usb-cam \
     ros-$ROS_DISTRO-rviz2 \
     ros-$ROS_DISTRO-robot-localization \
     ros-$ROS_DISTRO-foxglove-bridge \
     ros-$ROS_DISTRO-xacro \
     ros-$ROS_DISTRO-robot-state-publisher \
     ros-$ROS_DISTRO-nmea-msgs \
-    ros-$ROS_DISTRO-mavros-msgs && \
-#    --fix-broken || true \
+    ros-$ROS_DISTRO-mavros-msgs \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
+
+###
+#TODO: build cv-bridge, image-view and usb-cam from source against NVIDIA's opencv
+# For usb-cam, you could also use a different camera driver
+
+###
 
 # Create New User for Jetson
 RUN adduser jetson --disabled-password --gecos "" 
 
-# https://stereolabs.sfo2.cdn.digitaloceanspaces.com/zedsdk/5.0/ZED_SDK_Tegra_L4T36.4_v5.0.0.zstd.run <-- this downloads smth
-#https://download.stereolabs.com/zedsdk/5.0/l4t36.4/jetsons
-# WORKDIR /root/
-# RUN wget "https://stereolabs.sfo2.cdn.digitaloceanspaces.com/zedsdk/5.0/ZED_SDK_Tegra_L4T36.4_v5.0.0.zstd.run" -O ZED_SDK_Installer.run && \
-#     chmod +x ZED_SDK_Installer.run && \
-#     ./ZED_SDK_Installer.run -- silent && \
-#     chown -R jetson:jetson /usr/local/zed && \
-#     rm ZED_SDK_Installer.run
+#TODO: whenever someone is rebuilding this without cache, pls include zstd in one of the layers above
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    zstd \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
-# COPY SN33688213.conf /usr/local/zed/settings/
+# Get ZED SDK
+WORKDIR /root/
+RUN wget "https://stereolabs.sfo2.cdn.digitaloceanspaces.com/zedsdk/5.0/ZED_SDK_Tegra_L4T36.4_v5.0.0.zstd.run" -O ZED_SDK_Installer.run && \
+    chmod +x ZED_SDK_Installer.run && \
+    ./ZED_SDK_Installer.run -- silent && \
+    chown -R jetson:jetson /usr/local/zed && \
+    rm ZED_SDK_Installer.run
+
+COPY SN33688213.conf /usr/local/zed/settings/
 
 RUN mkdir -p /ros2_ws/src
 WORKDIR /ros2_ws
