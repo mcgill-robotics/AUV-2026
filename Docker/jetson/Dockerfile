@@ -107,7 +107,10 @@ RUN apt-get update && apt-get install -y -f --no-install-recommends \
 ###
 
 # Create New User for Jetson
-RUN adduser jetson --disabled-password --gecos "" 
+RUN adduser jetson --disabled-password --gecos "" && \
+    echo "jetson:jetson" | chpasswd && \
+	adduser jetson sudo && \
+	adduser jetson video
 
 #TODO: whenever someone is rebuilding this without cache, pls include zstd in one of the layers above
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -125,11 +128,14 @@ RUN wget "https://stereolabs.sfo2.cdn.digitaloceanspaces.com/zedsdk/5.0/ZED_SDK_
 
 COPY SN33688213.conf /usr/local/zed/settings/
 
-RUN mkdir -p /ros2_ws/src
-WORKDIR /ros2_ws
+#Change User 
+USER jetson
+
+RUN mkdir -p ~/ros2_ws/src
+WORKDIR ~/ros2_ws
 
 # Set up environment variables
-RUN echo "source /opt/ros/$ROS_DISTRO/setup.bash" >> ~/.bashrc \
+RUN echo "source /opt/ros/$ROS_DISTRO/install/setup.bash" >> ~/.bashrc \
     && echo "source /ros2_ws/install/setup.bash" >> ~/.bashrc
 
 # Set default shell to Bash
