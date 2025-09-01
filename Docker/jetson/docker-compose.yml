@@ -6,7 +6,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - type: bind 
         source: ../../../AUV-2026/ros2_ws
-        target: /ros2_ws
+        target: /home/jetson/ros2_ws
     image: "mcgillrobotics/auv_2026:ros2" 
     privileged: true
     environment:
