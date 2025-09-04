@@ -1,22 +1,68 @@
-# Use the correct Jetson ROS base image (Ensure JetPack matches L4T version)
-FROM dustynv/ros:humble-desktop-l4t-r36.4.0
+# Define the L4T_VERSION argument
+ARG L4T_VERSION=l4t-r36.4.0
+ARG IMAGE_NAME=dustynv/ros:humble-ros-base-l4t-r36.4.0
+
+FROM ${IMAGE_NAME}
+
+ARG ZED_SDK_MAJOR=5
+ARG ZED_SDK_MINOR=0
+ARG ZED_SDK_PATCH=0
+ARG L4T_MAJOR=36
+ARG L4T_MINOR=4
+# Optional: Override ZED SDK URL
+ARG CUSTOM_ZED_SDK_URL=""
+
+# ROS2 distribution
+ARG ROS2_DIST=humble
+
+# ZED ROS2 Wrapper dependencies version
+ARG XACRO_VERSION=2.0.8
+ARG DIAGNOSTICS_VERSION=4.0.0
+ARG AMENT_LINT_VERSION=0.12.11
+ARG ROBOT_LOCALIZATION_VERSION=3.5.3
+ARG ZED_MSGS_VERSION=5.0.0
+ARG NMEA_MSGS_VERSION=2.0.0
+ARG ANGLES_VERSION=1.15.0
+ARG GEOGRAPHIC_INFO_VERSION=1.0.6
+ARG POINTCLOUD_TRANSPORT_VERSION=1.0.18
+ARG POINTCLOUD_TRANSPORT_PLUGINS_VERSION=1.0.11
+ARG RMW_CYCLONEDDS_VERSION=1.3.4
+ARG BACKWARD_ROS_VERSION=1.0.7
+ARG JOY_VERSION=humble-3.2.0
+ARG JOY_TELEOP_VERSION=1.7.0         
+ARG RQT_GUI_VERSION=1.1.7
+ARG SMACH_VERSION=3.0.3
+ARG RVIZ2_VERSION=14.3.3          
+ARG FOXGLOVE_BRIDGE_VERSION=0.8.5
+ARG ROBOT_STATE_PUBLISHER_VERSION=3.5.2
+ARG MAVROS_VERSION=2.10.1
+ARG USB_CAM_VERSION=0.8.1
+ARG CV_BRIDGE_VERSION=3.2.1
+ARG IMAGE_VIEW_VERSION=3.0.8
+ENV PYPI_URL=https://pypi.jetson-ai-lab.io/jp6/cu126
 
 
-RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
-
-
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-   dirmngr \
-   gnupg2 \
-   && rm -rf /var/lib/apt/lists/*
-
-
-# Set up environment
+# Set up environment (we in paris because official docs are in paris)
 ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
-ENV ROS_DISTRO=humble
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Europe/Paris 
 
+# ZED SDK link
+ENV ZED_SDK_URL=${CUSTOM_ZED_SDK_URL:-"https://download.stereolabs.com/zedsdk/${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}.${ZED_SDK_PATCH}/l4t${L4T_MAJOR}.${L4T_MINOR}/jetsons"}
+
+# Check that this SDK exists
+RUN if [ "$(curl -L -I "${ZED_SDK_URL}" -o /dev/null -s -w '%{http_code}\n' | head -n 1)" = "200" ]; then \
+        echo "The URL points to something."; \
+    else \
+        echo "The URL does not point to a .run file or the file does not exist."; \
+        exit 1; \
+    fi
+
+# Disable apt-get warnings
+RUN curl -fsSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg && \
+   apt-get update || true && apt-get install -y --no-install-recommends apt-utils dialog && \
+   rm -rf /var/lib/apt/lists/*
 
 # Install SSH server and set up SSH access
 # Hardcoding a password is not secure but eh
@@ -31,29 +77,58 @@ RUN apt-get update && apt-get install -y \
    && echo 'root:jetson' | chpasswd \
    && rm -rf /var/lib/apt/lists/*
 
-
 # Install common development tools
-# Keep these in alphabetical order
-RUN apt-get update && apt-get install -y --no-install-recommends \
-   build-essential \
-   git \
-   git-lfs \
-   iproute2 \
-   iputils-ping \
-   nano \
-   python3-colcon-common-extensions \
-   python3-pip \
-   python3-rosdep \
-   python3-vcstools \
-   tar \
-   tmux \
-   v4l-utils \
-   vim \
-   wget \
-   zlib1g-dev \
-   && rm -rf /var/lib/apt/lists/* \
-   && apt-get clean
+# Keep these in alphabetical 
 
+RUN echo "# R${L4T_MAJOR} (release), REVISION: ${L4T_MINOR}" > /etc/nv_tegra_release && \
+  apt-get update -y || true && \
+  apt-get install -y --no-install-recommends zstd wget less cmake curl gnupg2 \
+  build-essential python3 python3-pip python3-dev python3-setuptools libusb-1.0-0-dev \ 
+  libgeographic-dev libdraco-dev zlib1g-dev -y && \
+  export PIP_INDEX_URL="${PYPI_URL}" && \
+  pip install protobuf && \
+  wget -q --no-check-certificate -O ZED_SDK_Linux_JP.run \
+  ${ZED_SDK_URL} && \
+  chmod +x ZED_SDK_Linux_JP.run ; ./ZED_SDK_Linux_JP.run silent skip_tools && \
+  rm -rf /usr/local/zed/resources/* && \
+  rm -rf ZED_SDK_Linux_JP.run && \
+  rm -rf /var/lib/apt/lists/*order
+
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone && \ 
+    apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    curl \
+    git \
+    git-lfs \
+    gnupg2 \
+    iproute2 \
+    iputils-ping \
+    jq \
+    less \
+    libpq-dev \
+    lsb-release \
+    nano \
+    python3 \
+    python3-colcon-common-extensions \
+    python3-dev \
+    python3-pip \
+    python3-rosdep \
+    python3-setuptools \
+    python3-vcstools \
+    python3-wheel \
+    sudo \
+    tar \
+    tmux \
+    udev \
+    usbutils \
+    v4l-utils \
+    vim \
+    wget \
+    zstd \
+    zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
 #Install graphics, video, c++ dev libraries
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -63,109 +138,86 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
    libavdevice-dev \
    libavformat-dev \
    libavutil-dev \
+   libdraco-dev \
    libegl1-mesa-dev \
    libepoxy-dev \
    libgl1-mesa-dev \
+   libgeographic-dev \
    libglew-dev \
    libjpeg-dev \
    libpng-dev \
    libswscale-dev \
-   libusb-dev \
+   libusb-1.0-0-dev \
    libwayland-dev \
    libxkbcommon-dev \
    ninja-build \
-   wayland-protocols \
+  #  wayland-protocols \
+   zlib1g-dev \
    && add-apt-repository ppa:deadsnakes/ppa -y \
    && rm -rf /var/lib/apt/lists/* \
    && apt-get clean
 
+# HOLY GRAIL functionning zed sdk install hence why some apt-get installs are here
+RUN echo "# R${L4T_MAJOR} (release), REVISION: ${L4T_MINOR}" > /etc/nv_tegra_release && \
+  export PIP_INDEX_URL="${PYPI_URL}" && \
+  pip install protobuf && \
+  wget -q --no-check-certificate -O ZED_SDK_Linux_JP.run \
+  ${ZED_SDK_URL} && \
+  chmod +x ZED_SDK_Linux_JP.run ; ./ZED_SDK_Linux_JP.run silent skip_tools && \
+  rm -rf /usr/local/zed/resources/* && \
+  rm -rf ZED_SDK_Linux_JP.run && \
+  rm -rf /var/lib/apt/lists/*
 
-# bootstrap rosdep
-RUN rosdep init || true && \
-   rosdep update --rosdistro $ROS_DISTRO
-
-
-# Install ROS packages
-# NVIDIA’s custom OpenCV (opencv-dev, opencv-libs, etc.) are not the same as Ubuntu’s libopencv-dev 4.5.4+dfsg-9ubuntu4
-# Any ROS package that depends on vision_opencv (like cv-bridge, image-view) must be built from source against NVIDIA’s OpenCV.
-# You can check the dependencies by running apt-get install -s ros-humble-[package name] inside the clean base container
-# Problematic packages will have a line like: Conf libopencv-core4.5d (4.5.4+dfsg-9ubuntu4 Ubuntu:22.04/jammy [arm64])
-RUN apt-get update && apt-get install -y -f --no-install-recommends \
-   ros-$ROS_DISTRO-joy \
-   ros-$ROS_DISTRO-joy-teleop \
-   ros-$ROS_DISTRO-rqt-gui \
-   ros-$ROS_DISTRO-smach-ros \
-   ros-$ROS_DISTRO-rviz2 \
-   ros-$ROS_DISTRO-robot-localization \
-   ros-$ROS_DISTRO-foxglove-bridge \
-   ros-$ROS_DISTRO-xacro \
-   ros-$ROS_DISTRO-robot-state-publisher \
-   ros-$ROS_DISTRO-nmea-msgs \
-   ros-$ROS_DISTRO-mavros-msgs \
-   && rm -rf /var/lib/apt/lists/* \
-   && apt-get clean
-
-
-# Create New User for Jetson
-RUN adduser jetson --disabled-password --gecos "" && \
-   echo "jetson:jetson" | chpasswd && \
-   adduser jetson sudo && \
-   adduser jetson video
-
-
-#TODO: whenever someone is rebuilding this without cache, pls include zstd in one of the layers above
-RUN apt-get update && apt-get install -y --no-install-recommends \
-   zstd \
-   && rm -rf /var/lib/apt/lists/* \
-   && apt-get clean
-
-
-# Get ZED SDK
-WORKDIR /root/
-RUN wget "https://stereolabs.sfo2.cdn.digitaloceanspaces.com/zedsdk/5.0/ZED_SDK_Tegra_L4T36.4_v5.0.0.zstd.run" -O ZED_SDK_Installer.run && \
-   chmod +x ZED_SDK_Installer.run && \
-   ./ZED_SDK_Installer.run -- silent && \
-   chown -R jetson:jetson /usr/local/zed && \
-   rm ZED_SDK_Installer.run
-
-
+# Install the ZED ROS2 Wrapper and copy our configs for zed2i
+ENV ROS_DISTRO=${ROS2_DIST}
 COPY SN33688213.conf /usr/local/zed/settings/
 
+# Copy the sources in the Docker image
+WORKDIR /root/ros2_ws/src
+COPY tmp_sources/ ./
 
-# Configure passwordless sudo for installing dependepcies with rosdep as jetson, can only do so as ROOT
-RUN echo "jetson ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+# Install cython
+RUN python3 -m pip install --upgrade cython
 
-#Change User
-USER jetson
+# Install missing dependencies and wanted packages from the sources
+WORKDIR /root/ros2_ws/src
 
+RUN wget https://github.com/ros/xacro/archive/refs/tags/${XACRO_VERSION}.tar.gz -O - | tar -xvz && mv xacro-${XACRO_VERSION} xacro && \
+    wget https://github.com/ros/diagnostics/archive/refs/tags/${DIAGNOSTICS_VERSION}.tar.gz -O - | tar -xvz && mv diagnostics-${DIAGNOSTICS_VERSION} diagnostics && \
+    wget https://github.com/ament/ament_lint/archive/refs/tags/${AMENT_LINT_VERSION}.tar.gz -O - | tar -xvz && mv ament_lint-${AMENT_LINT_VERSION} ament-lint && \
+    wget https://github.com/cra-ros-pkg/robot_localization/archive/refs/tags/${ROBOT_LOCALIZATION_VERSION}.tar.gz -O - | tar -xvz && mv robot_localization-${ROBOT_LOCALIZATION_VERSION} robot-localization && \
+    wget https://github.com/stereolabs/zed-ros2-interfaces/archive/refs/tags/${ZED_MSGS_VERSION}.tar.gz -O - | tar -xvz && mv zed-ros2-interfaces-${ZED_MSGS_VERSION} zed-ros2-interfaces && \
+    wget https://github.com/ros-drivers/nmea_msgs/archive/refs/tags/${NMEA_MSGS_VERSION}.tar.gz -O - | tar -xvz && mv nmea_msgs-${NMEA_MSGS_VERSION} nmea_msgs && \
+    wget https://github.com/ros/angles/archive/refs/tags/${ANGLES_VERSION}.tar.gz -O - | tar -xvz && mv angles-${ANGLES_VERSION} angles && \
+    wget https://github.com/ros-perception/point_cloud_transport/archive/refs/tags/${POINTCLOUD_TRANSPORT_VERSION}.tar.gz -O - | tar -xvz && mv point_cloud_transport-${POINTCLOUD_TRANSPORT_VERSION} point_cloud_transport && \
+    wget https://github.com/ros-perception/point_cloud_transport_plugins/archive/refs/tags/${POINTCLOUD_TRANSPORT_PLUGINS_VERSION}.tar.gz -O - | tar -xvz && mv point_cloud_transport_plugins-${POINTCLOUD_TRANSPORT_PLUGINS_VERSION} point_cloud_transport_plugins && \
+    wget https://github.com/ros2/rmw_cyclonedds/archive/refs/tags/${RMW_CYCLONEDDS_VERSION}.tar.gz -O - | tar -xvz && mv rmw_cyclonedds-${RMW_CYCLONEDDS_VERSION} rmw_cyclonedds && \
+    wget https://github.com/ros-geographic-info/geographic_info/archive/refs/tags/${GEOGRAPHIC_INFO_VERSION}.tar.gz -O - | tar -xvz && mv geographic_info-${GEOGRAPHIC_INFO_VERSION} geographic-info && \
+    wget https://github.com/pal-robotics/backward_ros/archive/refs/tags/${BACKWARD_ROS_VERSION}.tar.gz -O - | tar -xvz && mv backward_ros-${BACKWARD_ROS_VERSION} backward_ros && \
+    wget https://github.com/ros-drivers/usb_cam/archive/refs/tags/${USB_CAM_VERSION}.tar.gz -O - | tar -xvz && mv usb_cam-${USB_CAM_VERSION} usb_cam && \
+    cp -r geographic-info/geographic_msgs/ . && \
+    rm -rf geographic-info
 
-RUN mkdir -p /home/jetson/ros2_ws/src
+RUN apt-get update && apt-get install -y --no-install-recommends \
+   ros-humble-mavros \
+   && rm -rf /var/lib/apt/lists/* \
+   && apt-get clean
 
-# Set up open ROS2 packages w/ open cv dependencies built from source
-WORKDIR /home/jetson/ros2_ws/src
-RUN git clone --branch ${ROS_DISTRO} https://github.com/ros-perception/vision_opencv.git && \
-   git clone https://github.com/ros-drivers/usb_cam.git
+# Build the dependencies and the ZED ROS2 Wrapper
+WORKDIR /root/ros2_ws
 
+RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
+  colcon build --parallel-workers $(nproc) --symlink-install \
+  --event-handlers console_direct+ --base-paths src \
+  --cmake-args ' -DCMAKE_BUILD_TYPE=Release' \
+  ' -DCMAKE_LIBRARY_PATH=/usr/local/cuda/lib64/stubs' \
+  ' -DCMAKE_CXX_FLAGS="-Wl,--allow-shlib-undefined"' \
+  ' --no-warn-unused-cli' "
 
-# Install dependencies with rosdep
-WORKDIR /home/jetson/ros2_ws
-RUN rosdep init || true && \
-   rosdep update --rosdistro $ROS_DISTRO
+# Setup environment variables 
+COPY ros_entrypoint_jetson.sh /sbin/ros_entrypoint.sh
+RUN sudo chmod 755 /sbin/ros_entrypoint.sh
 
-RUN apt-get update && apt-get install -y libxcb-cursor0 && rm -rf /var/lib/apt/lists/* && \
-   rosdep install --from-paths src --ignore-src -y --rosdistro ${ROS_DISTRO} || true
-
-
-# Build packages
-RUN . /opt/ros/$ROS_DISTRO/install/setup.sh && \
-   colcon build --symlink-install
-
-
-# Set up environment variables
-RUN echo "source /opt/ros/$ROS_DISTRO/install/setup.bash" >> ~/.bashrc \
-   && echo "source /ros2_ws/install/setup.bash" >> ~/.bashrc
-
-
-# Set default shell to Bash
-SHELL ["/bin/bash", "-c"]
+ENTRYPOINT ["/sbin/ros_entrypoint.sh"]
+CMD ["bash"]
 RUN echo "tmux" >> ~/.bashrc
