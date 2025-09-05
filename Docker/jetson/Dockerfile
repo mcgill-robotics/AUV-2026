@@ -219,6 +219,27 @@ RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
   ' -DCMAKE_CXX_FLAGS="-Wl,--allow-shlib-undefined"' \
   ' --no-warn-unused-cli' "
 
+
+# Add XSENS Movella Driver 
+WORKDIR /root/dependencies_ws/src
+RUN git clone --branch ros2 https://github.com/xsenssupport/Xsens_MTi_ROS_Driver_and_Ntrip_Client.git && \
+    wget https://github.com/mavlink/mavros/archive/refs/tags/2.10.1.tar.gz -O - | tar -xvz && mv mavros-2.10.1 mavros_msgs
+
+RUN echo "hi"
+RUN apt-get update && apt-get install -y \
+   ros-$ROS_DISTRO-mavros-msgs 
+
+WORKDIR /root/dependencies_ws
+RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
+  source /root/dependencies_ws/install/setup.bash && \
+  colcon build --packages-select xsens_mti_ros2_driver mavros_msgs --parallel-workers $(nproc) --symlink-install \
+  --event-handlers console_direct+ --base-paths src \
+  --cmake-args ' -DCMAKE_BUILD_TYPE=Release' \
+  ' -DCMAKE_LIBRARY_PATH=/usr/local/cuda/lib64/stubs' \
+  ' -DCMAKE_CXX_FLAGS="-Wl,--allow-shlib-undefined"' \
+  ' --no-warn-unused-cli' "
+
+
 # Setup environment variables
 COPY ros_entrypoint_jetson.sh /sbin/ros_entrypoint.sh
 RUN sudo chmod 755 /sbin/ros_entrypoint.sh
