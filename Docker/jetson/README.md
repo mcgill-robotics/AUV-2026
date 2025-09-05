@@ -6,11 +6,15 @@ This repository contains a Dockerized ROS 2 Humble development environment for t
 *   **ZED SDK:** 5.0.0
   
 ## 🚀 Quick Start
-1.  **Launch the Container:**
+1.  Give the container to access EGL display resources (required only once):
+    ```bash
+    sudo xhost +si:localuser:root
+    ```
+3.  **Launch the Container:**
     ```bash
     docker compose up -d
     ```
-2.  **Open a Shell inside the Container:**
+4.  **Open a Shell inside the Container:**
     ```bash
     docker exec -it jetson-douglas-1 bash
     ```
