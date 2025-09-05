@@ -25,7 +25,7 @@ ZED_SDK_version=$2
 # copy the wrapper content
 rm -r ./tmp_sources
 mkdir -p ./tmp_sources
-cp -r ../zed* ./tmp_sources
+cp -r ../../ros2_ws/src/zed-ros2-wrapper/zed* ./tmp_sources
 
 # Split the string and assign to variables
 IFS='.' read -r l4t_major l4t_minor l4t_patch <<< "$l4t_version_number"
