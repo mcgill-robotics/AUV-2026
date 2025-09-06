@@ -28,17 +28,9 @@ ARG POINTCLOUD_TRANSPORT_VERSION=1.0.18
 ARG POINTCLOUD_TRANSPORT_PLUGINS_VERSION=1.0.11
 ARG RMW_CYCLONEDDS_VERSION=1.3.4
 ARG BACKWARD_ROS_VERSION=1.0.7
-# ARG JOY_VERSION=humble-3.2.0
-# ARG JOY_TELEOP_VERSION=1.7.0         
 ARG RQT_GUI_VERSION=1.1.7
-# ARG SMACH_VERSION=3.0.3
-# ARG RVIZ2_VERSION=14.3.3          
-# ARG FOXGLOVE_BRIDGE_VERSION=0.8.5
 ARG ROBOT_STATE_PUBLISHER_VERSION=3.5.2
-# ARG MAVROS_VERSION=2.10.1
 ARG USB_CAM_VERSION=0.8.1
-# ARG CV_BRIDGE_VERSION=3.2.1
-# ARG IMAGE_VIEW_VERSION=3.0.8
 ENV PYPI_URL=https://pypi.jetson-ai-lab.io/jp6/cu126
 
 
@@ -103,16 +95,6 @@ RUN echo "# R${L4T_MAJOR} (release), REVISION: ${L4T_MINOR}" > /etc/nv_tegra_rel
   rm -rf ZED_SDK_Linux_JP.run && \
   rm -rf /var/lib/apt/lists/*
 
-
- # export PIP_INDEX_URL="${PYPI_URL}" && \
- # pip install protobuf && \
- # wget -q --no-check-certificate -O ZED_SDK_Linux_JP.run \
- # ${ZED_SDK_URL} && \
- # chmod +x ZED_SDK_Linux_JP.run ; ./ZED_SDK_Linux_JP.run silent skip_tools && \
- # rm -rf /usr/local/zed/resources/* && \
- # rm -rf ZED_SDK_Linux_JP.run && \
- # rm -rf /var/lib/apt/lists/*order
-
 # Install other common development tools
 # Keep these in alphabetical
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone && \ 
@@ -164,13 +146,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # copy our configs for zed2i
 COPY SN33688213.conf /usr/local/zed/settings/
 
-# Install cython
-#RUN python3 -m pip install --upgrade cython
-
 # Install missing dependencies and wanted packages from source
-WORKDIR /root/ros2_ws/src
-COPY ./zed_packages/zed* ./
-
 WORKDIR /root/dependencies_ws/src
 RUN wget https://github.com/ros/xacro/archive/refs/tags/${XACRO_VERSION}.tar.gz -O - | tar -xvz && mv xacro-${XACRO_VERSION} xacro && \
     wget https://github.com/ros/diagnostics/archive/refs/tags/${DIAGNOSTICS_VERSION}.tar.gz -O - | tar -xvz && mv diagnostics-${DIAGNOSTICS_VERSION} diagnostics && \
@@ -185,10 +161,13 @@ RUN wget https://github.com/ros/xacro/archive/refs/tags/${XACRO_VERSION}.tar.gz 
     wget https://github.com/ros-geographic-info/geographic_info/archive/refs/tags/${GEOGRAPHIC_INFO_VERSION}.tar.gz -O - | tar -xvz && mv geographic_info-${GEOGRAPHIC_INFO_VERSION} geographic-info && \
     wget https://github.com/pal-robotics/backward_ros/archive/refs/tags/${BACKWARD_ROS_VERSION}.tar.gz -O - | tar -xvz && mv backward_ros-${BACKWARD_ROS_VERSION} backward_ros && \
     wget https://github.com/ros-drivers/usb_cam/archive/refs/tags/${USB_CAM_VERSION}.tar.gz -O - | tar -xvz && mv usb_cam-${USB_CAM_VERSION} usb_cam && \
+    wget https://github.com/mavlink/mavros/archive/refs/tags/2.10.1.tar.gz -O - | tar -xvz && mv mavros-2.10.1 mavros && \
     cp -r geographic-info/geographic_msgs/ . && \
+    cp -r mavros/mavros_msgs/ . && \
+    rm -rf mavros && \
     rm -rf geographic-info
 
-#ROS packages that do not depend on OpenCV/that ZED wrapper doesn't depend on can be installed here
+# ROS packages that do not depend on OpenCV/that ZED wrapper doesn't depend on can be installed here
 RUN apt-get update && apt-get install -y --no-install-recommends \
    ros-$ROS_DISTRO-joy \
    ros-$ROS_DISTRO-joy-teleop \
@@ -197,7 +176,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
    && rm -rf /var/lib/apt/lists/* \
    && apt-get clean
 
-# Build the dependencies and the ZED ROS2 Wrapper
+# Build the dependencies from source against NVIDIA OpenCV
+# There are 2 workspaces so that all the dependencies installed source
+# do not clutter our ros2_ws
 WORKDIR /root/dependencies_ws
 
 RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
@@ -208,7 +189,13 @@ RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
   ' -DCMAKE_CXX_FLAGS="-Wl,--allow-shlib-undefined"' \
   ' --no-warn-unused-cli' "
 
-# Setup environment variables 
+# Install ZED wrapper and IMU Driver
+WORKDIR /root/ros2_ws/src
+
+RUN git clone --branch ros2 https://github.com/xsenssupport/Xsens_MTi_ROS_Driver_and_Ntrip_Client.git && \
+    git clone https://github.com/stereolabs/zed-ros2-wrapper.git
+
+# Build the ZED Wrapper and IMU driver
 WORKDIR /root/ros2_ws
 RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
   source /root/dependencies_ws/install/setup.bash && \
@@ -219,32 +206,6 @@ RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
   ' -DCMAKE_CXX_FLAGS="-Wl,--allow-shlib-undefined"' \
   ' --no-warn-unused-cli' "
 
-
-# Add XSENS Movella Driver 
-WORKDIR /root/dependencies_ws/src
-RUN git clone --branch ros2 https://github.com/xsenssupport/Xsens_MTi_ROS_Driver_and_Ntrip_Client.git && \
-    wget https://github.com/mavlink/mavros/archive/refs/tags/2.10.1.tar.gz -O - | tar -xvz && mv mavros-2.10.1 mavros_msgs
-
-RUN echo "hi"
-RUN apt-get update && apt-get install -y \
-   ros-$ROS_DISTRO-mavros-msgs 
-
-WORKDIR /root/dependencies_ws
-RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
-  source /root/dependencies_ws/install/setup.bash && \
-  colcon build --packages-select xsens_mti_ros2_driver mavros_msgs --parallel-workers $(nproc) --symlink-install \
-  --event-handlers console_direct+ --base-paths src \
-  --cmake-args ' -DCMAKE_BUILD_TYPE=Release' \
-  ' -DCMAKE_LIBRARY_PATH=/usr/local/cuda/lib64/stubs' \
-  ' -DCMAKE_CXX_FLAGS="-Wl,--allow-shlib-undefined"' \
-  ' --no-warn-unused-cli' "
-
-
-# Setup environment variables
-COPY ros_entrypoint_jetson.sh /sbin/ros_entrypoint.sh
-RUN sudo chmod 755 /sbin/ros_entrypoint.sh
-
-ENTRYPOINT ["/sbin/ros_entrypoint.sh"]
-CMD ["bash"]
 RUN echo "source /opt/ros/humble/install/setup.bash && source /root/dependencies_ws/install/setup.bash && source /root/ros2_ws/install/setup.bash" >> ~/.bashrc
 RUN echo "tmux" >> ~/.bashrc
+CMD ["bash"]
