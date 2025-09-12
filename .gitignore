@@ -18,3 +18,5 @@
 #builds
 **/bin/
 **/install/
+**/build/
+**/log/
