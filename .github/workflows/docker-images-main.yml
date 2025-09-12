@@ -1,4 +1,4 @@
-name: Docker Images CI
+name: Docker Images Main CI
 
 on:
   push:
@@ -38,7 +38,7 @@ jobs:
         context: Docker/dev
         file: Docker/dev/Dockerfile
         platforms: linux/amd64
-        push: ${{ github.event_name == 'pull_request' && github.ref == 'refs/heads/main' }}
+        push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         tags: mcgillrobotics/auv_2026:dev-amd64
 
   build-arm:
@@ -69,7 +69,7 @@ jobs:
         context: Docker/dev
         file: Docker/dev/Dockerfile
         platforms: linux/arm64
-        push: ${{ github.event_name == 'pull_request' && github.ref == 'refs/heads/main' }}
+        push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         tags: mcgillrobotics/auv_2026:dev-arm64
 
   build-jetson:
@@ -103,5 +103,5 @@ jobs:
         context: Docker/jetson
         file: Docker/jetson/Dockerfile
         platforms: linux/arm64
-        push: ${{ github.event_name == 'pull_request' && github.ref == 'refs/heads/main' }}
+        push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         tags: mcgillrobotics/auv_2026:jetson
