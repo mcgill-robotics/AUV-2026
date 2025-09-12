@@ -2,7 +2,7 @@
 
 This repository contains a Dockerized ROS 2 Humble development environment for the **NVIDIA Jetson Orin Nano**, pre-configured with the ZED SDK, CUDA-accelerated OpenCV, and other essential tools. It is designed to provide a consistent, performant, and isolated workspace for our projects. It has been tested with:
 *   **Hardware:** NVIDIA Jetson Orin Nano Developer Kit.
-*   **Host OS:** L4T 36.4.4
+*   **Host OS:** L4T 36.4.0
 *   **ZED SDK:** 5.0.0
   
 ## 🚀 Quick Start
@@ -10,18 +10,18 @@ This repository contains a Dockerized ROS 2 Humble development environment for t
     ```bash
     sudo xhost +si:localuser:root
     ```
-3.  **Launch the Container:**
+2.  **Launch the Container:**
     ```bash
     docker compose up -d
     ```
-4.  **Open a Shell inside the Container:**
+3.  **Open a Shell inside the Container:**
     ```bash
     docker exec -it jetson-douglas-1 bash
     ```
 
 ## 🏗️ Building from Source 
 
-This container is built upon the excellent [`dustynv/ros:humble-desktop-l4t-r36.4.0`](https://hub.docker.com/layers/dustynv/ros/humble-desktop-l4t-r36.4.0/images/sha256-b8ee30b1ae189cfeeea755a7fd6b8aea74267f5c1bc0cfa4f19a6acec9d941e5) image. The core of our setup is derived from the [ZED ROS2 Wrapper Dockerfile](https://github.com/stereolabs/zed-ros2-wrapper/blob/master/docker/Dockerfile.l4t-humble), which we have extended with our own packages.
+This container is built upon the [`dustynv/ros:humble-desktop-l4t-r36.4.0`](https://hub.docker.com/layers/dustynv/ros/humble-desktop-l4t-r36.4.0/images/sha256-b8ee30b1ae189cfeeea755a7fd6b8aea74267f5c1bc0cfa4f19a6acec9d941e5) image. The core of our setup is derived from the [ZED ROS2 Wrapper Dockerfile](https://github.com/stereolabs/zed-ros2-wrapper/blob/master/docker/Dockerfile.l4t-humble), which we have extended with our own packages.
 
 To rebuild the container from scratch, run the following command:
 
