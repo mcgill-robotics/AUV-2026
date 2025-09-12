@@ -1,20 +1,34 @@
-services: 
+services:
   douglas:
-    volumes:
-      - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      - /dev:/dev
-      - /var/run/docker.sock:/var/run/docker.sock
-      - type: bind 
-        source: ../../../AUV-2026/ros2_ws
-        target: /home/jetson/ros2_ws
-    image: "mcgillrobotics/auv_2026:ros2" 
+    image: "mcgillrobotics/auv_2026:ros2"    
+    runtime: nvidia
     privileged: true
+    network_mode: host
+    ipc: host
+    pid: host
     environment:
+      - NVIDIA_DRIVER_CAPABILITIES=all
       - DISPLAY=${DISPLAY}
       - QT_X11_NO_MITSHM=1
       - NVIDIA_VISIBLE_DEVICES=all
       - UDEV=on
-    runtime: nvidia
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # X11 display
+      - /tmp/.X11-unix/:/tmp/.X11-unix
+      # ZED SDK calibration and resources
+      - /usr/local/zed/settings/:/usr/local/zed/settings/
+      - /usr/local/zed/resources/:/usr/local/zed/resources/
+      # Video devices and shared memory
+      - /dev:/dev
+      - /dev/shm:/dev/shm
+      # Optional: GMSL2 camera support
+      - /tmp:/tmp
+      - /var/nvidia/nvcam/settings/:/var/nvidia/nvcam/settings/
+      - /etc/systemd/system/zed_x_daemon.service:/etc/systemd/system/zed_x_daemon.service
+      - type: bind 
+        source: ../../../AUV-2026/ros2_ws
+        target: /root/ros2_ws
     command: bash -c ${OVERRIDE_COMMAND:-"tail -f /dev/null"}
     build: .
     deploy:
@@ -24,5 +38,5 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
+    stdin_open: true
     tty: true
-    network_mode: host
