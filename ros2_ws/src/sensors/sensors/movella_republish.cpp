@@ -55,7 +55,7 @@ class MovellaRepublisher : public rclcpp::Node
 			processed_imu_msg.linear_acceleration_covariance = imu_msg->linear_acceleration_covariance;
 
 			// Check if the two fused messages are too far apart time wise
-			double dt = fabs((imu_msg->header.stamp.sec - free_acc_msg->header.stamp.sec));
+			double dt = fabs((imu_msg->header.stamp.nanosec - free_acc_msg->header.stamp.nanosec) * 1000000);
 
 			if (dt > 0.015) 
 			{
