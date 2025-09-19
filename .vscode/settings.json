@@ -65,5 +65,8 @@
         ".vscode",
         ".vscode-insiders",
         ".devcontainer/devcontainer.json"
-    ]
+    ],
+    "ros.distro": "humble",
+    "python-envs.defaultEnvManager": "ms-python.python:system",
+    "python-envs.pythonProjects": []
 }
