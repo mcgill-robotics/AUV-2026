@@ -208,8 +208,8 @@ RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
   ' --no-warn-unused-cli' "
 
 # MAKE PIP WORK (old URL in base Image no maintained anymore)
-RUN export PIP_INDEX_URL=https://pypi.jetson-ai-lab.io/jp6/cu126
-RUN export PIP_TRUSTED_HOST=pypi.jetson-ai-lab.io
+ENV PIP_INDEX_URL=https://pypi.jetson-ai-lab.io/jp6/cu126
+ENV PIP_TRUSTED_HOST=pypi.jetson-ai-lab.io
 
 RUN echo "source /opt/ros/humble/install/setup.bash && source /root/dependencies_ws/install/setup.bash && source /root/AUV-2026/ros2_ws/install/setup.bash" >> ~/.bashrc
 RUN echo "tmux" >> ~/.bashrc
