@@ -5,3 +5,6 @@
 [submodule "ros2_ws/src/Xsens_MTi_ROS_Driver_and_Ntrip_Client"]
 	path = ros2_ws/src/Xsens_MTi_ROS_Driver_and_Ntrip_Client
 	url = https://github.com/WilliamZhang2205/Xsens_MTi_ROS_Driver_and_Ntrip_Client.git
+[submodule "ros2_ws/src/VINS-Fusion-ROS2-humble-arm"]
+	path = ros2_ws/src/VINS-Fusion-ROS2-humble-arm
+	url = https://github.com/Bob-Eric/VINS-Fusion-ROS2-humble-arm.git
