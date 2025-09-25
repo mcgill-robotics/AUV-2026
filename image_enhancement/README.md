@@ -20,7 +20,12 @@ The tool includes the following enhancement algorithms:
 
 1. Install the required dependencies:
 ```bash
-pip install -r requirements.txt
+pip install opencv-python>=4.8.0 numpy>=1.21.0 matplotlib>=3.5.0 Pillow>=9.0.0
+```
+
+Or install all at once:
+```bash
+pip install opencv-python numpy matplotlib Pillow
 ```
 
 ## Usage
@@ -58,11 +63,14 @@ python enhancement_comparison.py --max-width 1600
 ```
 image_enhancement/
 ├── enhancement_comparison.py    # Main script
-├── requirements.txt             # Python dependencies
 ├── README.md                   # This file
 ├── input/                      # Place your images here (gitignored)
+│   └── *.jpg, *.png, *.jpeg   # Input images
 └── output/                     # Comparison results (gitignored)
+    └── comparison_*.png        # Generated comparison images
 ```
+
+**Note**: The `input/` and `output/` directories are automatically ignored by git to prevent large image files from being committed to the repository. This is configured in the main project's `.gitignore` file.
 
 ## Input Requirements
 
@@ -135,7 +143,7 @@ Output files are saved as `comparison_[original_filename].png` in the output dir
 
 ## Troubleshooting
 
-- **Import errors**: Make sure all dependencies are installed with `pip install -r requirements.txt`
+- **Import errors**: Make sure all dependencies are installed with `pip install opencv-python numpy matplotlib Pillow`
 - **No images found**: Check that images are in the correct format (.jpg, .png, .jpeg) and in the input directory
 - **Memory issues**: Reduce image size or process images one at a time
 - **Poor results**: Try adjusting algorithm parameters in the script for your specific images
