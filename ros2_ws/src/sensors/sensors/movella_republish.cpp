@@ -1,10 +1,5 @@
 #include <rclcpp/rclcpp.hpp>
-#include <sensor_msgs/msg/imu.hpp> 
-#include <geometry_msgs/msg/vector3_stamped.hpp>
-#include <message_filters/subscriber.h>
-#include <message_filters/sync_policies/approximate_time.h>
-#include <message_filters/synchronizer.h>
-#include <message_filters/time_synchronizer.h>
+#include <sensors/imu_movella.hpp> 
 
 class MovellaRepublisher : public rclcpp::Node
 {
@@ -12,23 +7,22 @@ class MovellaRepublisher : public rclcpp::Node
 		MovellaRepublisher() : Node("movella_republisher")
 	{
 		// Create subscribers and publisher
-		pub_imu = this->create_publisher<sensor_msgs::msg::Imu>("sensor/imu/data", 20);
+		pub_imu = this->create_publisher<sensor_msgs::msg::Imu>("sensor/imu/data", param_framerate_pub);
 		sub_imu.subscribe(this, "imu/data"); //uses .subscribe instead of create_subscription because using messageFilters
 		sub_free_acc_imu.subscribe(this, "filter/free_acceleration");
 	
 
 		// Create a synchronizer that synchs the free_acc message and regular imu message 
 		// with an interval of 0.05s allowed time and calls the callback func to process the messages
-		using SyncPolicy = message_filters::sync_policies::ApproximateTime< \
-			            sensor_msgs::msg::Imu, geometry_msgs::msg::Vector3Stamped>; //ApproximateTime is a message filter algorithm that matches messages with similar timestamps
-		
 		sync.reset(new message_filters::Synchronizer<SyncPolicy>(SyncPolicy(20), sub_imu, sub_free_acc_imu));
 		sync->setMaxIntervalDuration(rclcpp::Duration::from_seconds(0.05));
 		sync->registerCallback(std::bind(&MovellaRepublisher::callback, this, std::placeholders::_1, std::placeholders::_2));
 
 		// Set parameters
 		this->declare_parameter<std::string>("frame_id", "imu"); //create default param value to frame_id
-		this->get_parameter("frame_id", frame_override);         //override in case launch file has a desired value
+		this->get_parameter("frame_id", frame_override);         //override in case launch file has a desired value and same with pub rate
+		this->declare_parameter<int>("framerate_pub", 20);
+		this->get_parameter("framerate_pub", param_framerate_pub); 
 	}
 		
 	private:
@@ -67,12 +61,6 @@ class MovellaRepublisher : public rclcpp::Node
 			pub_imu->publish(processed_imu_msg);
 		}
 
-		rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr pub_imu;
-		message_filters::Subscriber<sensor_msgs::msg::Imu> sub_imu;
-		message_filters::Subscriber<geometry_msgs::msg::Vector3Stamped> sub_free_acc_imu;
-		std::shared_ptr<message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime< \
-			sensor_msgs::msg::Imu, geometry_msgs::msg::Vector3Stamped>>> sync;
-		std::string frame_override;
 };
 
 

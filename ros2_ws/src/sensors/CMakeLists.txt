@@ -17,8 +17,15 @@ find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(message_filters REQUIRED)
 
+include_directories(include)
+
 add_executable(imu sensors/movella_republish.cpp)
-ament_target_dependencies(imu rclcpp std_msgs geometry_msgs sensor_msgs  message_filters)
+ament_target_dependencies(imu 
+	rclcpp 
+	std_msgs 
+	geometry_msgs 
+	sensor_msgs  
+	message_filters)
 
 install(TARGETS
 	 imu
