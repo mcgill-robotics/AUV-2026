@@ -31,7 +31,10 @@ ARG BACKWARD_ROS_VERSION=1.0.7
 ARG RQT_GUI_VERSION=1.1.7
 ARG ROBOT_STATE_PUBLISHER_VERSION=3.5.2
 ARG USB_CAM_VERSION=0.8.1
+# Make pip work
 ENV PYPI_URL=https://pypi.jetson-ai-lab.io/jp6/cu126
+ENV PIP_INDEX_URL=https://pypi.jetson-ai-lab.io/jp6/cu126 
+ENV PIP_TRUSTED_HOST=pypi.jetson-ai-lab.io
 
 
 # Set up environment (we in paris because official docs are in paris)
@@ -91,7 +94,7 @@ RUN echo "# R${L4T_MAJOR} (release), REVISION: ${L4T_MINOR}" > /etc/nv_tegra_rel
   pip install protobuf && \
   wget -q --no-check-certificate -O ZED_SDK_Linux_JP.run \
   ${ZED_SDK_URL} && \
-  chmod +x ZED_SDK_Linux_JP.run ; ./ZED_SDK_Linux_JP.run silent && \
+  chmod +x ZED_SDK_Linux_JP.run ; ./ZED_SDK_Linux_JP.run silent skip_python && \
   rm -rf ZED_SDK_Linux_JP.run && \
   rm -rf /var/lib/apt/lists/*
 
@@ -193,7 +196,7 @@ RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
 RUN git clone --recursive https://github.com/mcgill-robotics/AUV-2026.git 
 WORKDIR /root/AUV-2026/ros2_ws/src
 
-RUN git clone --branch ros2 https://github.com/xsenssupport/Xsens_MTi_ROS_Driver_and_Ntrip_Client.git && \
+RUN git clone --branch ros2 https://github.com/WilliamZhang2205/Xsens_MTi_ROS_Driver_and_Ntrip_Client.git && \
     git clone https://github.com/stereolabs/zed-ros2-wrapper.git
 
 # Build the ZED Wrapper and IMU driver
@@ -207,10 +210,28 @@ RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
   ' -DCMAKE_CXX_FLAGS="-Wl,--allow-shlib-undefined"' \
   ' --no-warn-unused-cli' "
 
-# MAKE PIP WORK (old URL in base Image no maintained anymore)
-ENV PIP_INDEX_URL=https://pypi.jetson-ai-lab.io/jp6/cu126
-ENV PIP_TRUSTED_HOST=pypi.jetson-ai-lab.io
+# Get CUDA dependencies to install torch and torchvision
+WORKDIR root
+RUN wget https://developer.download.nvidia.com/compute/cusparselt/0.8.1/local_installers/cusparselt-local-tegra-repo-ubuntu2204-0.8.1_0.8.1-1_arm64.deb && \
+    sudo dpkg -i cusparselt-local-tegra-repo-ubuntu2204-0.8.1_0.8.1-1_arm64.deb && \
+    sudo cp /var/cusparselt-local-tegra-repo-ubuntu2204-0.8.1/cusparselt-*-keyring.gpg /usr/share/keyrings/ && \
+    sudo apt-get update && \
+    sudo apt-get -y install cusparselt-cuda-12
 
+ARG CUSPARSE_SOLVER_NAME="libcudss-linux-sbsa-0.6.0.5_cuda12-archive"
+RUN mkdir -p tmp_cudss && cd tmp_cudss && \
+    curl -L -O https://developer.download.nvidia.com/compute/cudss/redist/libcudss/linux-sbsa/${CUSPARSE_SOLVER_NAME}.tar.xz && \
+    tar xf ${CUSPARSE_SOLVER_NAME}.tar.xz && \
+    sudo cp -a ${CUSPARSE_SOLVER_NAME}/include/* /usr/local/cuda/include/ && \
+    sudo cp -a ${CUSPARSE_SOLVER_NAME}/lib/* /usr/local/cuda/lib64/
+
+# Install ultralytics, avoid reinstalling numpy and opencv (torch, tensorflow and torchvision installed in the .toml file, cuda supported cause pip index is Jetpack6 one)
+RUN pip install --ignore-install sympy && pip install cython --upgrade
+RUN git clone https://github.com/ultralytics/ultralytics.git
+RUN cd ultralytics && sed -i '/"numpy>=1.23.0"/d; /"opencv-python>=4.6.0"/d; /"numpy<2.0.0"/d' pyproject.toml && pip install -e .
+
+
+# Source env variables
 RUN echo "source /opt/ros/humble/install/setup.bash && source /root/dependencies_ws/install/setup.bash && source /root/AUV-2026/ros2_ws/install/setup.bash" >> ~/.bashrc
 RUN echo "tmux" >> ~/.bashrc
 CMD ["bash"]
