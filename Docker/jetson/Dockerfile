@@ -192,43 +192,31 @@ RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
   ' -DCMAKE_CXX_FLAGS="-Wl,--allow-shlib-undefined"' \
   ' --no-warn-unused-cli' "
 
-# Install ZED wrapper and IMU Driver
-RUN git clone --recursive https://github.com/mcgill-robotics/AUV-2026.git 
-WORKDIR /root/AUV-2026/ros2_ws/src
-
-RUN git clone --branch ros2 https://github.com/WilliamZhang2205/Xsens_MTi_ROS_Driver_and_Ntrip_Client.git && \
-    git clone https://github.com/stereolabs/zed-ros2-wrapper.git
-
-# Build the ZED Wrapper and IMU driver
-WORKDIR /root/AUV-2026/ros2_ws/
-RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
-  source /root/dependencies_ws/install/setup.bash && \
-  colcon build --parallel-workers $(nproc) --symlink-install \
-  --event-handlers console_direct+ --base-paths src \
-  --cmake-args ' -DCMAKE_BUILD_TYPE=Release' \
-  ' -DCMAKE_LIBRARY_PATH=/usr/local/cuda/lib64/stubs' \
-  ' -DCMAKE_CXX_FLAGS="-Wl,--allow-shlib-undefined"' \
-  ' --no-warn-unused-cli' "
-
 # Get CUDA dependencies to install torch and torchvision
-WORKDIR root
+WORKDIR /root
 RUN wget https://developer.download.nvidia.com/compute/cusparselt/0.8.1/local_installers/cusparselt-local-tegra-repo-ubuntu2204-0.8.1_0.8.1-1_arm64.deb && \
     sudo dpkg -i cusparselt-local-tegra-repo-ubuntu2204-0.8.1_0.8.1-1_arm64.deb && \
     sudo cp /var/cusparselt-local-tegra-repo-ubuntu2204-0.8.1/cusparselt-*-keyring.gpg /usr/share/keyrings/ && \
     sudo apt-get update && \
-    sudo apt-get -y install cusparselt-cuda-12
+    sudo apt-get -y install cusparselt-cuda-12 && \
+	rm -rf cusparselt-local-tegra-repo-ubuntu2204-0.8.1_0.8.1-1_arm64.deb
 
 ARG CUSPARSE_SOLVER_NAME="libcudss-linux-sbsa-0.6.0.5_cuda12-archive"
 RUN mkdir -p tmp_cudss && cd tmp_cudss && \
     curl -L -O https://developer.download.nvidia.com/compute/cudss/redist/libcudss/linux-sbsa/${CUSPARSE_SOLVER_NAME}.tar.xz && \
     tar xf ${CUSPARSE_SOLVER_NAME}.tar.xz && \
     sudo cp -a ${CUSPARSE_SOLVER_NAME}/include/* /usr/local/cuda/include/ && \
-    sudo cp -a ${CUSPARSE_SOLVER_NAME}/lib/* /usr/local/cuda/lib64/
+    sudo cp -a ${CUSPARSE_SOLVER_NAME}/lib/* /usr/local/cuda/lib64/ && \
+	rm -rf ${CUSPARSE_SOLVER_NAME} ${CUSPARSE_SOLVER_NAME}.tar.xz
 
 # Install ultralytics, avoid reinstalling numpy and opencv (torch, tensorflow and torchvision installed in the .toml file, cuda supported cause pip index is Jetpack6 one)
 RUN pip install --ignore-install sympy && pip install cython --upgrade
-RUN git clone https://github.com/ultralytics/ultralytics.git
-RUN cd ultralytics && sed -i '/"numpy>=1.23.0"/d; /"opencv-python>=4.6.0"/d; /"numpy<2.0.0"/d' pyproject.toml && pip install -e .
+RUN git clone https://github.com/ultralytics/ultralytics.git && \
+    cd ultralytics && \
+	sed -i '/"numpy>=1.23.0"/d; /"opencv-python>=4.6.0"/d; /"numpy<2.0.0"/d' pyproject.toml && \
+	pip install -e . && \
+    cd .. && \
+	rm -rf ultralytics
 
 
 # Source env variables
