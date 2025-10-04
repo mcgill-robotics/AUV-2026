@@ -34,6 +34,7 @@ class MovellaRepublisher : public rclcpp::Node
 		// Parameters
 		std::string frame_override;
 		int param_framerate_pub;
+		double max_interval_comparison_messages;
 };
 
 }
