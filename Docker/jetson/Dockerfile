@@ -215,8 +215,14 @@ RUN git clone https://github.com/ultralytics/ultralytics.git && \
     cd ultralytics && \
 	sed -i '/"numpy>=1.23.0"/d; /"opencv-python>=4.6.0"/d; /"numpy<2.0.0"/d' pyproject.toml && \
 	pip install -e . && \
-    cd .. && \
-	rm -rf ultralytics
+    cd ..
+
+# Install dependencies for vision
+RUN pip install notebook && \
+    pip install roboflow albumentations pandas && \
+    pip install --ignore-install --upgrade typing_extensions 
+
+#RUN pip uninstall typing_extensions
 
 
 # Source env variables
