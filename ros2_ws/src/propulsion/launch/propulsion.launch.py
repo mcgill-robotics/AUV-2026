@@ -40,21 +40,21 @@ def generate_launch_description():
         ]
     )
 
-    # --- Recording
-    record_bag = ExecuteProcess(
-        condition=IfCondition(LaunchConfiguration('record')),
-        cmd=[
-            'ros2', 'bag', 'record',
-            '/propulsion/forces',
-            '/controls/effort'
-        ],
-        output='screen'
-    )
+    # # --- Recording
+    # record_bag = ExecuteProcess(
+    #     condition=IfCondition(LaunchConfiguration('record')),
+    #     cmd=[
+    #         'ros2', 'bag', 'record',
+    #         '/propulsion/forces',
+    #         '/controls/effort'
+    #     ],
+    #     output='screen'
+    # )
 
     return LaunchDescription([
         sim_arg,
         record_arg,
         serial_group,
         thrust_mapper,
-        record_bag,
+        #record_bag,
     ])

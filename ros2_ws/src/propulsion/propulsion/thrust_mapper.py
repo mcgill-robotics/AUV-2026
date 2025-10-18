@@ -16,7 +16,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 
-from thrust_mapper_utils import force_to_pwm_thruster
+from propulsion.thrust_mapper_utils import force_to_pwm_thruster
 from auv_msgs.msg import ThrusterForces, ThrusterMicroseconds
 from geometry_msgs.msg import Wrench
 
