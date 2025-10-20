@@ -146,10 +146,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
    libwayland-dev \
    libxkbcommon-dev \
    ninja-build \
-   ros-${ROS2_DIST}-usb_cam \
-   ros-${ROS2_DIST}-image-transport \
-   ros-${ROS2_DIST}-camera-info-manager \
-   ros-${ROS2_DIST}-image-tools \
+   ros-${ROS2_DISTRO}-usb-cam \
+   ros-${ROS2_DISTRO}-image-transport \
+   ros-${ROS2_DISTRO}-camera-info-manager \
+   ros-${ROS2_DISTRO}-image-tools \
    v4l-utils \
    && add-apt-repository ppa:deadsnakes/ppa -y \
    && rm -rf /var/lib/apt/lists/* \
