@@ -13,12 +13,17 @@ def generate_launch_description():
     # Set Sim condition
     sim_condition = DeclareLaunchArgument(
             'sim', default_value='false', description='no launch if in sim')
-
+    
     # Find other launch files to launch 
     included_launch = IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(['/root/ros2_ws/install/xsens_mti_ros2_driver/share/xsens_mti_ros2_driver/launch', '/xsens_mti_node.launch.py']))
+            PythonLaunchDescriptionSource(['/root/AUV-2026/ros2_ws/install/xsens_mti_ros2_driver/share/xsens_mti_ros2_driver/launch', '/xsens_mti_node.launch.py']))
+    
+    # Get the sim parameter value
+    sim = LaunchConfiguration('sim')
 
+    # Launch :D
     return LaunchDescription([
+       sim_condition,
        included_launch,
         Node(
             package='sensors',
@@ -26,9 +31,10 @@ def generate_launch_description():
             name='movella_imu',
             parameters=[
                 {"frame_override":"imu"},
-                {"framerate_pub" : 20  }
+                {"framerate_pub" : 20  },
+                {"max_interval_comparison_messages" : 0.015}
             ],
-            condition=UnlessCondition(LaunchConfiguration('sim'))
+            condition=UnlessCondition(sim)
             )
         ])
     
