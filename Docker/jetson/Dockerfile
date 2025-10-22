@@ -215,7 +215,9 @@ RUN mkdir -p tmp_cudss && cd tmp_cudss && \
 
 # Install ultralytics, avoid reinstalling numpy and opencv (torch, tensorflow and torchvision installed in the .toml file, cuda supported cause pip index is Jetpack6 one)
 RUN export PIP_INDEX_URL="${PIP_INDEX_FOR_NON_NVIDIA}" && \ 
-    pip install --ignore-install sympy && pip install cython --upgrade
+    pip install --ignore-install sympy && pip install cython --upgrade && \
+    pip install pillow && pip install pyyaml && pip install requests && \
+    pip install scipy && pip install psutil && pip install polars && pip install ultralytics-thop>=2.0.0
 
 RUN git clone https://github.com/ultralytics/ultralytics.git && \
     cd ultralytics && \
