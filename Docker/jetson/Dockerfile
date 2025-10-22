@@ -39,7 +39,7 @@ ENV PIP_TRUSTED_HOST=pypi.jetson-ai-lab.io
 
 # protobuf is a pip package needed by zed sdk, for some reason nvidias pip server killed protobuf in its available packages so you need 
 # the default non nvidia pip index just to download protobuf
-ENV PIP_INDEX_FOR_PROTOBUF=https://pypi.python.org/simple
+ENV PIP_INDEX_FOR_NON_NVIDIA=https://pypi.python.org/simple
 
 # Set up environment (we in paris because official docs are in paris)
 ENV LANG=C.UTF-8
@@ -94,7 +94,7 @@ RUN echo "# R${L4T_MAJOR} (release), REVISION: ${L4T_MINOR}" > /etc/nv_tegra_rel
   wget \
   zlib1g-dev \
   zstd && \
-  export PIP_INDEX_URL="${PIP_INDEX_FOR_PROTOBUF}" && \
+  export PIP_INDEX_URL="${PIP_INDEX_FOR_NON_NVIDIA}" && \
   pip install protobuf && \
   wget -q --no-check-certificate -O ZED_SDK_Linux_JP.run \
   ${ZED_SDK_URL} && \
@@ -214,7 +214,9 @@ RUN mkdir -p tmp_cudss && cd tmp_cudss && \
 	rm -rf ${CUSPARSE_SOLVER_NAME} ${CUSPARSE_SOLVER_NAME}.tar.xz
 
 # Install ultralytics, avoid reinstalling numpy and opencv (torch, tensorflow and torchvision installed in the .toml file, cuda supported cause pip index is Jetpack6 one)
-RUN pip install --ignore-install sympy && pip install cython --upgrade
+RUN export PIP_INDEX_URL="${PIP_INDEX_FOR_NON_NVIDIA}" && \ 
+    pip install --ignore-install sympy && pip install cython --upgrade
+
 RUN git clone https://github.com/ultralytics/ultralytics.git && \
     cd ultralytics && \
 	sed -i '/"numpy>=1.23.0"/d; /"opencv-python>=4.6.0"/d; /"numpy<2.0.0"/d' pyproject.toml && \
