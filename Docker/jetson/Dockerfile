@@ -31,11 +31,15 @@ ARG BACKWARD_ROS_VERSION=1.0.7
 ARG RQT_GUI_VERSION=1.1.7
 ARG ROBOT_STATE_PUBLISHER_VERSION=3.5.2
 ARG USB_CAM_VERSION=0.8.1
+
 # Make pip work
 ENV PYPI_URL=https://pypi.jetson-ai-lab.io/jp6/cu126
 ENV PIP_INDEX_URL=https://pypi.jetson-ai-lab.io/jp6/cu126 
 ENV PIP_TRUSTED_HOST=pypi.jetson-ai-lab.io
 
+# protobuf is a pip package needed by zed sdk, for some reason nvidias pip server killed protobuf in its available packages so you need 
+# the default non nvidia pip index just to download protobuf
+ENV PIP_INDEX_FOR_PROTOBUF=https://pypi.python.org/simple
 
 # Set up environment (we in paris because official docs are in paris)
 ENV LANG=C.UTF-8

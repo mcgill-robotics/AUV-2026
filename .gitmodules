@@ -2,9 +2,6 @@
 	path = ros2_ws/src/zed-ros2-wrapper
 	url = https://github.com/stereolabs/zed-ros2-wrapper.git
 
-[submodule "ros2_ws/src/Xsens_MTi_ROS_Driver_and_Ntrip_Client"]
-	path = ros2_ws/src/Xsens_MTi_ROS_Driver_and_Ntrip_Client
-	url = https://github.com/WilliamZhang2205/Xsens_MTi_ROS_Driver_and_Ntrip_Client.git
 [submodule "ros2_ws/src/Xsens_MTi_Driver"]
 	path = ros2_ws/src/Xsens_MTi_Driver
 	url = https://github.com/WilliamZhang2205/Xsens_MTi_ROS_Driver_and_Ntrip_Client.git
