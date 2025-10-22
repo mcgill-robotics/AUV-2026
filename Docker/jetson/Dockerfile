@@ -94,7 +94,7 @@ RUN echo "# R${L4T_MAJOR} (release), REVISION: ${L4T_MINOR}" > /etc/nv_tegra_rel
   wget \
   zlib1g-dev \
   zstd && \
-  export PIP_INDEX_URL="${PYPI_URL}" && \
+  export PIP_INDEX_URL="${PIP_INDEX_FOR_PROTOBUF}" && \
   pip install protobuf && \
   wget -q --no-check-certificate -O ZED_SDK_Linux_JP.run \
   ${ZED_SDK_URL} && \
