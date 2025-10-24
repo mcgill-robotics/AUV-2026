@@ -12,15 +12,12 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Wrench
 import time
-# Verify the exact path to your custom message.
-# Usually '<package_name>.msg'. Assuming your package is 'auv_msgs'.
+
 try:
     from auv_msgs.msg import ThrusterMicroseconds
+#verify the package name 'auv_msgs' is correct 
 except ImportError:
-    # If the custom message is not in 'auv_msgs', you MUST fix this line.
-    print("WARNING: Cannot import ThrusterMicroseconds. Check package name!")
-    # NOTE: You need to confirm the package name where ThrusterMicroseconds is defined.
-    # If your custom messages are in 'auv_msgs', this line is correct.
+    print("WARNING: Cannot import ThrusterMicroseconds. Check package name")
 
 # --- CONSTANTS ---
 # Standard neutral PWM value for the thrusters.
@@ -44,10 +41,9 @@ class MechTestNode(Node):
         # ROS 2 publishers are created with create_publisher(MsgType, topic_name, QoS_profile)
         # For control commands, a small queue_size (like 10) is often used for the default profile.
 
-        # Publisher for safety reset (sends microsecond signals directly to hardware)
         self.pwm_pub = self.create_publisher(
             ThrusterMicroseconds, 
-            # NOTE: Verify this topic name is correct for direct PWM control
+#verify this topic name 
             '/propulsion/microseconds', 
             10
         )
@@ -55,7 +51,7 @@ class MechTestNode(Node):
         # Publisher for the test command (sends Wrench to the Thrust Mapper node)
         self.effort_pub = self.create_publisher(
             Wrench, 
-            # NOTE: Verify this topic name is correct for Wrench input to the mapper
+#verify this topic name is correct for Wrench input to the mapper
             '/controls/effort', 
             10
         ) 
@@ -64,7 +60,7 @@ class MechTestNode(Node):
         self.reset_cmd = ThrusterMicroseconds(microseconds=[NEUTRAL_PWM] * 8) 
         
         # 4. Declare the CoM offset parameters (gx, gy)
-        # These are the new parameters your boss wants to tune.
+#These are the new parameters we want to tune
         self.declare_parameter('gx_offset', 0.0)
         self.declare_parameter('gy_offset', 0.0)
         self.get_logger().info("CoM parameters 'gx_offset' and 'gy_offset' declared (default 0.0).")
