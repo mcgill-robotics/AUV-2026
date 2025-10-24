@@ -62,7 +62,8 @@ python enhancement_comparison.py --max-width 1600
 
 ```
 image_enhancement/
-├── enhancement_comparison.py    # Main script
+├── image_enhancement.py    # Contain enhancement algorithms
+├── enhancement_comparison.py # Generates comparisons between algorithms
 ├── README.md                   # This file
 ├── input/                      # Place your images here (gitignored)
 │   └── *.jpg, *.png, *.jpeg   # Input images
@@ -151,9 +152,43 @@ Output files are saved as `comparison_[original_filename].png` in the output dir
 ## Contributing
 
 To add new enhancement algorithms:
-1. Add a new method to the `ImageEnhancer` class
-2. Add the method to the `enhancement_methods` list in the `main()` function
-3. Update this README with algorithm details
+1. In [image_enhancement.py](./image_enhancement.py), add a new class that inherits from `EnhancementAlgorithm`
+2. Implement the `apply_algorithm` method, which only takes an numpy array image. Set optional parameters in the `__init__`
+4. (Optional) In [enhancement_comparison.py](./enhancement_comparison.py) Add the method to the `enhancement_methods` list in the `main()` function
+5. Update this README with algorithm details
+
+To compose multiple algorithms, use the `ImageEnhancer` class:
+ 
+- The constructor expects `EnhancementAlgorithm` objects
+- The `__call__`, as with all algorithms, expects a numpy array image.
+- The `to_torch_transform` method can be used to obtain the [PyTorch vision tranform](https://docs.pytorch.org/vision/stable/transforms.html) equivalent of the enhancer itself. This can easily be slotted into the YOLO object detection pipeline as a preprocessing step, for instance.
+
+### Next Steps
+
+Using a pytorch transform, while simple, is very slow, as it requires at least 2 conversions (Tensor $\to$ Numpy Array $\to$ Tensor), 4 including transfers to and from GPUs, and 6 including ROS topic image stream subscription and publishing. Thus a more feasible solution is to directly use ROS, as have a ROS package that:
+1. Subscribes to the ZED Camera stream, which publishes a [Image](https://docs.ros.org/en/noetic/api/sensor_msgs/html/msg/Image.html) message
+2. Converts the image to a BGR Numpy Array using 
+```python
+from cv_bridge import CvBridge
+cv2_image = bridge.imgmsg_to_cv2(raw_image, "bgr8")
+```
+3. Applies desired enhancements using `ImageEnhancer`
+4. Convert result back into a ROS Image message
+```python
+bridge.cv2_to_imgmsg(enhanced_img, "bgr8")
+```
+5. Publish the message to a ROS topic e.g. `/image_enhancement/`
+6. This can then be picked up by the object detection pipeline
+
+(instead of 4-6 we can add the `ImageEnhancer` directly in the object detection node to save on conversions)
+
+See [here](https://github.com/mcgill-robotics/AUV-2025/blob/d258d7c2819ee4e45ed785ea26cf59be19d9b2ea/catkin_ws/src/vision/src/object_detection.py#L194) for a more involved example of implementation. While this still requires 2 conversions, there are several advantages:
+- it is substantially faster than using a Pytorch transform
+- it avoids requiring a complete PyTorch dependency in the project overall (the ultralytics handles a light dependency instead). The imports can then be removed from [image_enhancement.py](./image_enhancement.py) entirely
+- it makes the image enhancement decoupled from the object detection, which makes refactoring easier 
+- a ROS package makes it possible to optimize even further. Most of the algorithms, since they involve the OpenCV module, are also available in C++, and the enhancement can even be done on GPU with `cv::cuda`. Since online inference on an image stream should be done on GPU anyway, this would significantly reduce runtime of enhancement
+
+The main disadvantage is that if image enhancement on a ROS node, then training the YOLO model on the enhanced images requires stores them on disk. 
 
 ## License
 
