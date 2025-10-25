@@ -21,6 +21,7 @@ setup(
         'console_scripts': [
             # ros2 run propulsion thrust_mapper
             'thrust_mapper = propulsion.thrust_mapper:main',
+            'drytest = propulsion.drytest:main', # ros2 run propulsion drytest
         ],
     },
 )
