@@ -1,0 +1,9 @@
+yolo task=detect \
+                                          mode=train \
+                                          model=yolov8s.pt \
+                                          data=data.yaml \
+                                          epochs=50 \
+                                          imgsz=640
+
+
+yolo detect train resume=True model=runs/detect/train2/weights/last.pt data=data.yaml epochs=100
