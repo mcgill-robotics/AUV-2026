@@ -17,8 +17,9 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 
 from propulsion.thrust_mapper_utils import force_to_pwm_thruster
-from auv_msgs.msg import ThrusterForces, ThrusterMicroseconds
+from auv_msgs.msg import ThrusterForces
 from geometry_msgs.msg import Wrench
+from std_msgs.msg import Int16MultiArray
 
 
 class ThrusterMapper(Node):
@@ -34,7 +35,7 @@ class ThrusterMapper(Node):
         )
 
         # --- Publishers
-        self.pub_us = self.create_publisher(ThrusterMicroseconds, 'propulsion/microseconds', qos)
+        self.pub_us = self.create_publisher(Int16MultiArray, 'propulsion/microseconds', qos)
         self.pub_forces = self.create_publisher(ThrusterForces, 'propulsion/forces', qos)
 
         # --- Thruster PWM Limits
@@ -168,15 +169,16 @@ class ThrusterMapper(Node):
         pwm_arr = np.clip(pwm_arr, self.thruster_lower_limit, self.thruster_upper_limit)
         pwm_arr = pwm_arr.astype(np.uint16, copy=False) # Ensure uint16 for message compatibility
         
-        pwm_msg = ThrusterMicroseconds(microseconds=pwm_arr.tolist())
+        pwm_msg = Int16MultiArray()
+        pwm_msg.data = pwm_arr.tolist()
         self.pub_us.publish(pwm_msg)
 
     def re_arm(self):
         """
         Sends the arming signal to the thrusters upon startup.
         """
-        msg1 = ThrusterMicroseconds(microseconds=[1500] * 8)
-        msg2 = ThrusterMicroseconds(microseconds=[1540] * 8)
+        msg1 = Int16MultiArray(data=[1500] * 8)
+        msg2 = msg1 = Int16MultiArray(data=[1540] * 8)
         self.pub_us.publish(msg1)
         time.sleep(0.5)
         self.pub_us.publish(msg2)
@@ -184,7 +186,7 @@ class ThrusterMapper(Node):
         self.pub_us.publish(msg1)
 
     def shutdown_thrusters(self):
-        msg = ThrusterMicroseconds(microseconds=[1500] * 8)
+        msg = Int16MultiArray(data=[1500] * 8)
         self.pub_us.publish(msg)
 
 
