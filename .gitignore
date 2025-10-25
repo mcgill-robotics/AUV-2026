@@ -11,7 +11,7 @@
 *.mp4
 #training images
 *.png
-*.jpg
+#*.jpg
 *.bag
 *unity.lock
 
