@@ -44,17 +44,17 @@ class ThrusterMapper(Node):
         # Geometric parameters of the thruster positions
         # Consult README for reference axes and dimensions used to declare variables and create allocation matrix below
         # Units are in Degrees and m
-        self.declare_parameter('a')
-        self.declare_parameter('b')
-        self.declare_parameter('c')
-        self.declare_parameter('d')
-        self.declare_parameter('e')
-        self.declare_parameter('alpha')  # degrees
+        self.declare_parameter('a', float("nan")) # [m]
+        self.declare_parameter('b', float("nan")) # [m]
+        self.declare_parameter('c', float("nan")) # [m]
+        self.declare_parameter('d', float("nan")) # [m]
+        self.declare_parameter('e', float("nan")) # [m]
+        self.declare_parameter('alpha', float("nan")) # degrees
 
         # Read parameters (raises if missing and no default)
         try:
-            self.thruster_lower_limit = self.get_parameter('thruster_PWM_lower_limit').get_parameter_value().integer_value
-            self.thruster_upper_limit = self.get_parameter('thruster_PWM_upper_limit').get_parameter_value().integer_value
+            self.thruster_lower_limit = self.get_parameter('thruster_PWM_lower_limit').value
+            self.thruster_upper_limit = self.get_parameter('thruster_PWM_upper_limit').value
 
             a = self._get_float('a')
             b = self._get_float('b')
@@ -99,12 +99,17 @@ class ThrusterMapper(Node):
 
 
     def _get_float(self, name: str) -> float:
-        val = self.get_parameter(name).get_parameter_value()
-        if val.type_ == val.Type.DOUBLE:
-            return val.double_value
-        if val.type_ == val.Type.INTEGER:
-            return float(val.integer_value)
-        raise ValueError(f'Parameter {name} must be numeric.')
+        p: Parameter = self.get_parameter(name)
+        v = p.value
+  
+        if isinstance(v, (float,int)):
+            v = float(v)
+            if math.isnan(v):
+                raise ValueError(f'Parameter {name} is NaN (unset)')
+            return v
+        else:
+            raise ValueError(f'Parameter {name} is not a number (got {type(v)})')
+
 
     def _do_arming_once(self):
         if self._arming_done:
@@ -163,15 +168,15 @@ class ThrusterMapper(Node):
         pwm_arr = np.clip(pwm_arr, self.thruster_lower_limit, self.thruster_upper_limit)
         pwm_arr = pwm_arr.astype(np.uint16, copy=False) # Ensure uint16 for message compatibility
         
-        pwm_msg = ThrusterMicroseconds(pwm_arr.tolist())
+        pwm_msg = ThrusterMicroseconds(microseconds=pwm_arr.tolist())
         self.pub_us.publish(pwm_msg)
 
     def re_arm(self):
         """
         Sends the arming signal to the thrusters upon startup.
         """
-        msg1 = ThrusterMicroseconds([1500] * 8)
-        msg2 = ThrusterMicroseconds([1540] * 8)
+        msg1 = ThrusterMicroseconds(microseconds=[1500] * 8)
+        msg2 = ThrusterMicroseconds(microseconds=[1540] * 8)
         self.pub_us.publish(msg1)
         time.sleep(0.5)
         self.pub_us.publish(msg2)
@@ -179,7 +184,7 @@ class ThrusterMapper(Node):
         self.pub_us.publish(msg1)
 
     def shutdown_thrusters(self):
-        msg = ThrusterMicroseconds([1500] * 8)
+        msg = ThrusterMicroseconds(microseconds=[1500] * 8)
         self.pub_us.publish(msg)
 
 
