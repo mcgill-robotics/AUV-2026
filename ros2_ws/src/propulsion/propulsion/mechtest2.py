@@ -11,16 +11,10 @@ Converted from ROS 1 (mechtest2.py) to ROS 2 (class-based node) for AUV-2026.
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Wrench
+from std_msgs.msg import Int16MultiArray
 import time
 
-try:
-    from auv_msgs.msg import ThrusterMicroseconds
-#verify the package name 'auv_msgs' is correct 
-except ImportError:
-    print("WARNING: Cannot import ThrusterMicroseconds. Check package name")
-
-# --- CONSTANTS ---
-# Standard neutral PWM value for the thrusters.
+# Neutral PWM value for the thrusters.
 NEUTRAL_PWM = 1500
 # Duration to command the force (in seconds)
 TEST_DURATION = 20.0
@@ -41,23 +35,13 @@ class MechTestNode(Node):
         # ROS 2 publishers are created with create_publisher(MsgType, topic_name, QoS_profile)
         # For control commands, a small queue_size (like 10) is often used for the default profile.
 
-        self.pwm_pub = self.create_publisher(
-            ThrusterMicroseconds, 
-#verify this topic name 
-            '/propulsion/microseconds', 
-            10
-        )
+        self.pwm_pub = self.create_publisher( Int16MultiArray, '/propulsion/microseconds', 10)
 
         # Publisher for the test command (sends Wrench to the Thrust Mapper node)
-        self.effort_pub = self.create_publisher(
-            Wrench, 
-#verify this topic name is correct for Wrench input to the mapper
-            '/controls/effort', 
-            10
-        ) 
+        self.effort_pub = self.create_publisher( Wrench,'/controls/effort', 10) 
         
         # 3. Define Constants/Commands
-        self.reset_cmd = ThrusterMicroseconds(microseconds=[NEUTRAL_PWM] * 8) 
+        self.reset_cmd = Int16MultiArray(data=[NEUTRAL_PWM] * 8)
         
         # 4. Declare the CoM offset parameters (gx, gy)
 #These are the new parameters we want to tune
