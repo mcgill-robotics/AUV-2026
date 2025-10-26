@@ -33,9 +33,12 @@ def generate_launch_description():
     serial_group = GroupAction(
         condition=UnlessCondition(LaunchConfiguration('sim')),
         actions=[
-            ExecuteProcess(
-                cmd=['micro_ros_agent', 'serial', '-D', '/dev/power', '-b', '115200'],
-                output='screen'
+            Node(
+                package='micro_ros_agent',
+                executable='micro_ros_agent',
+                name='micro_ros_agent',
+                output='screen',
+                arguments=["serial", "--dev", "/dev/power", "--baud-rate", "115200"],
             ),
         ]
     )
