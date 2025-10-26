@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 import rclpy
 from rclpy.node import Node
-from auv_msgs.msg import ThrusterMicroseconds
+from std_msgs.msg import Int16MultiArray
 from geometry_msgs.msg import Wrench
-import keyboard
 from propulsion.thrust_mapper_utils import force_to_pwm_thruster
 from time import sleep
 
@@ -20,19 +19,18 @@ reset_msg = [1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500]
 class DryTestNode(Node):
     def __init__(self):
         super().__init__('dry_test_node')
-        self.thruster_microseconds_pub = self.create_publisher(ThrusterMicroseconds, '/propulsion/microseconds', 1)
+        self.thruster_microseconds_pub = self.create_publisher(Int16MultiArray, '/propulsion/microseconds', 1)
         self.forces_pub = self.create_publisher(Wrench, '/controls/effort', 1)
         self.get_logger().info("Dry Test Node Initialized")
 
     def publish_thruster(self, msg):
-        self.get_logger().info(f"Publishing thruster command: {msg}")
-        ros_msg = ThrusterMicroseconds()
-        ros_msg.microseconds = msg
+        #self.get_logger().info(f"Publishing thruster command: {msg}")
+        ros_msg = Int16MultiArray()
+        ros_msg.data = msg
         self.thruster_microseconds_pub.publish(ros_msg)
-        print("Hi")
 
     def publish_force(self, msg):
-        self.get_logger().info(f"Publishing force command: {msg}")
+        #self.get_logger().info(f"Publishing force command: {msg}")
         ros_msg = Wrench()
         ros_msg.force = msg.force
         ros_msg.torque = msg.torque
@@ -59,7 +57,6 @@ class DryTestNode(Node):
         optimized_dry_test_msg = reset_msg.copy()
         optimized_dry_test_msg[t - 1] = force_to_pwm_thruster(t, force_amt * MAX_FWD_FORCE * thruster_mount_dirs[t - 1])
         self.publish_thruster(optimized_dry_test_msg)
-        print("Hello")
         sleep(1)
         self.publish_thruster(reset_msg)
 
@@ -110,9 +107,10 @@ def dry_test(self):
                 desired_effort.torque.x = 0.0
                 desired_effort.torque.y = 0.0
                 desired_effort.torque.z = 0.0
-                key = input("Press key to control, then ENTER to send command (e to exit)\n")
+                key = input("Press key to control, then ENTER to send command (y to exit)\n")
                 print("You pressed: " + key)
-                if key == "e":
+                if key == "y":
+                    self.publish_thruster(reset_msg)
                     break
                 if key == "w":
                     desired_effort.force.x = (
@@ -166,15 +164,20 @@ def dry_test(self):
                 sleep(1)
         else:
             self.publish_thruster(reset_msg)
+            print("Thank you for using the dry test program. Exiting...")
             break
 
 def main(args=None):
     rclpy.init(args=args)
     dry_test_node = DryTestNode()
-    dry_test(dry_test_node)
-    rclpy.spin(dry_test_node)
-    dry_test_node.publish_thruster(reset_msg)
-    rclpy.shutdown()
+    try:
+        dry_test(dry_test_node)
+    except:
+        pass
+    finally:
+        dry_test_node.publish_thruster(reset_msg)
+        dry_test_node.destroy_node()
+        rclpy.shutdown()
 
 if __name__ == '__main__':
     main()
