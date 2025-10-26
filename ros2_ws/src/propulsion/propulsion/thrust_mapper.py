@@ -51,7 +51,7 @@ class ThrusterMapper(Node):
         self.declare_parameter('d', float("nan")) # [m]
         self.declare_parameter('e', float("nan")) # [m]
         self.declare_parameter('dx', float("nan")) # [m]
-        self.delcare_parameter('dy', float("nan")) # [m]
+        self.declare_parameter('dy', float("nan")) # [m]
         self.declare_parameter('alpha', float("nan")) # degrees
 
         # Read parameters (raises if missing and no default)
