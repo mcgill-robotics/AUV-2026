@@ -62,7 +62,7 @@ jobs:
           lfs: true
 
     - name: Set up Docker Buildx for cache usage
-    - uses: docker/setup-buildx-action@v3
+      uses: docker/setup-buildx-action@v3
 
     - name: Login to DockerHub
       if: github.ref == 'refs/heads/main'
@@ -98,7 +98,7 @@ jobs:
           lfs: true
 
     - name: Set up Docker buildx
-    - uses: docker/setup-buildx-action@v3
+      uses: docker/setup-buildx-action@v3
 
     - name: Log in to Docker Hub
       if: github.ref == 'refs/heads/main'
