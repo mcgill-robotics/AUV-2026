@@ -5,6 +5,7 @@ from auv_msgs.msg import ThrusterMicroseconds
 from geometry_msgs.msg import Wrench
 import keyboard
 from propulsion.thrust_mapper_utils import force_to_pwm_thruster
+from time import sleep
 
 
 MAX_FWD_FORCE = 4 * 9.81 # Numbers from drytest in AUV-2025
@@ -21,7 +22,6 @@ class DryTestNode(Node):
         super().__init__('dry_test_node')
         self.thruster_microseconds_pub = self.create_publisher(ThrusterMicroseconds, '/propulsion/microseconds', 1)
         self.forces_pub = self.create_publisher(Wrench, '/controls/effort', 1)
-        self.rate = self.create_rate(1.0)
         self.get_logger().info("Dry Test Node Initialized")
 
     def publish_thruster(self, msg):
@@ -29,6 +29,7 @@ class DryTestNode(Node):
         ros_msg = ThrusterMicroseconds()
         ros_msg.microseconds = msg
         self.thruster_microseconds_pub.publish(ros_msg)
+        print("Hi")
 
     def publish_force(self, msg):
         self.get_logger().info(f"Publishing force command: {msg}")
@@ -46,7 +47,7 @@ class DryTestNode(Node):
             self.get_logger().info("all thrusters spinning at " + str(100 * force_amt) + "% max forwards force for 1s")
             forward_test_msg = [force_to_pwm_thruster(i + 1, force_amt * MAX_FWD_FORCE * thruster_mount_dirs[i]) for i in range(8)]
             self.publish_thruster(forward_test_msg)
-            self.rate.sleep()
+            sleep(1)
             self.publish_thruster(reset_msg)
 
             choice = input("Press 1 to repeat test\nPress 2 to proceed\n")
@@ -58,19 +59,20 @@ class DryTestNode(Node):
         optimized_dry_test_msg = reset_msg.copy()
         optimized_dry_test_msg[t - 1] = force_to_pwm_thruster(t, force_amt * MAX_FWD_FORCE * thruster_mount_dirs[t - 1])
         self.publish_thruster(optimized_dry_test_msg)
-        self.rate.sleep()
+        print("Hello")
+        sleep(1)
         self.publish_thruster(reset_msg)
 
     def re_arm(self):
         self.get_logger().info("Re-arming thrusters...")
-        self.rate.sleep()
+        sleep(1)
 
-        arming_msg = ThrusterMicroseconds([1540] * 8)
+        arming_msg = ([1540] * 8)
 
         self.publish_thruster(reset_msg)
-        self.rate.sleep()
+        sleep(1)
         self.publish_thruster(arming_msg)
-        self.rate.sleep()
+        sleep(1)
         self.publish_thruster(reset_msg)
 
 def dry_test(self):
@@ -108,60 +110,62 @@ def dry_test(self):
                 desired_effort.torque.x = 0.0
                 desired_effort.torque.y = 0.0
                 desired_effort.torque.z = 0.0
-
-                if keyboard.is_pressed("esc"):
+                key = input("Press key to control, then ENTER to send command (e to exit)\n")
+                print("You pressed: " + key)
+                if key == "e":
                     break
-                if keyboard.is_pressed("w"):
+                if key == "w":
                     desired_effort.force.x = (
                         desired_effort.force.x + force_amt * MAX_FWD_FORCE
                     )
-                if keyboard.is_pressed("s"):
+                if key == "s":
                     desired_effort.force.x = (
                         desired_effort.force.x + force_amt * MAX_BWD_FORCE
                     )
-                if keyboard.is_pressed("a"):
+                if key == "a":
                     desired_effort.force.y = (
                         desired_effort.force.y + force_amt * MAX_FWD_FORCE
                     )
-                if keyboard.is_pressed("d"):
+                if key == "d":
                     desired_effort.force.y = (
                         desired_effort.force.y + force_amt * MAX_BWD_FORCE
                     )
-                if keyboard.is_pressed("q"):
+                if key == "q":
                     desired_effort.force.z = (
                         desired_effort.force.z + force_amt * MAX_FWD_FORCE
                     )
-                if keyboard.is_pressed("e"):
+                if key == "e":
                     desired_effort.force.z = (
                         desired_effort.force.z + force_amt * MAX_BWD_FORCE
                     )
-                if keyboard.is_pressed("o"):
+                if key == "o":
                     desired_effort.torque.y = (
                         desired_effort.torque.x + force_amt * MAX_FWD_FORCE
                     )
-                if keyboard.is_pressed("u"):
+                if key == "u":
                     desired_effort.torque.y = (
                         desired_effort.torque.x + force_amt * MAX_BWD_FORCE
                     )
-                if keyboard.is_pressed("i"):
+                if key == "i":
                     desired_effort.torque.y = (
                         desired_effort.torque.y + force_amt * MAX_FWD_FORCE
                     )
-                if keyboard.is_pressed("k"):
+                if key == "k":
                     desired_effort.torque.y = (
                         desired_effort.torque.y + force_amt * MAX_BWD_FORCE
                     )
-                if keyboard.is_pressed("j"):
+                if key == "j":
                     desired_effort.torque.z = (
                         desired_effort.torque.z + force_amt * MAX_FWD_FORCE
                     )
-                if keyboard.is_pressed("l"):
+                if key == "l":
                     desired_effort.torque.z = (
                         desired_effort.torque.z + force_amt * MAX_BWD_FORCE
                     )
                 self.publish_force(desired_effort)
-                self.rate.sleep()
+                sleep(1)
         else:
+            self.publish_thruster(reset_msg)
             break
 
 def main(args=None):
@@ -169,6 +173,7 @@ def main(args=None):
     dry_test_node = DryTestNode()
     dry_test(dry_test_node)
     rclpy.spin(dry_test_node)
+    dry_test_node.publish_thruster(reset_msg)
     rclpy.shutdown()
 
 if __name__ == '__main__':
