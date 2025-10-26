@@ -40,6 +40,8 @@ jobs:
         platforms: linux/amd64
         push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         tags: mcgillrobotics/auv_2026:dev-amd64
+		cache-from: type=gha
+        cache-to: type=gha,mode=max
 
   build-arm:
     runs-on: ubuntu-22.04-arm
@@ -71,6 +73,8 @@ jobs:
         platforms: linux/arm64
         push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         tags: mcgillrobotics/auv_2026:dev-arm64
+		cache-from: type=gha
+        cache-to: type=gha,mode=max
 
   build-jetson:
     runs-on: ubuntu-22.04-arm
@@ -105,3 +109,5 @@ jobs:
         platforms: linux/arm64
         push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         tags: mcgillrobotics/auv_2026:jetson
+		cache-from: type=gha
+        cache-to: type=gha,mode=max
