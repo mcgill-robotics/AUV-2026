@@ -24,7 +24,9 @@ def generate_launch_description():
             'c': 0.202572,                      # [m]
             'd': 0.228205,                      # [m]
             'e': 0.004945,                      # [m]
-            'alpha': 45.0                       # [deg]
+            'alpha': 45.0,                      # [deg]
+            'dx': 0.0,                          # [m]
+            'dy': 0.0                           # [m]
         }]
     )
 

@@ -6,7 +6,7 @@ and then converts the forces to PWM signals and publishes them.
 Subscribes:  /controls/effort (geometry_msgs/msg/Wrench)
 Publishes:   /propulsion/microseconds (auv_msgs/msg/ThrusterMicroseconds)
              /propulsion/forces      (auv_msgs/msg/ThrusterForces)
-Parameters:  a, b, c, d, e (m), alpha (deg), thruster_PWM_lower_limit, thruster_PWM_upper_limit
+Parameters:  a, b, c, d, e, dx, dy (m), alpha (deg), thruster_PWM_lower_limit, thruster_PWM_upper_limit
 """
 
 import math
@@ -50,6 +50,8 @@ class ThrusterMapper(Node):
         self.declare_parameter('c', float("nan")) # [m]
         self.declare_parameter('d', float("nan")) # [m]
         self.declare_parameter('e', float("nan")) # [m]
+        self.declare_parameter('dx', float("nan")) # [m]
+        self.delcare_parameter('dy', float("nan")) # [m]
         self.declare_parameter('alpha', float("nan")) # degrees
 
         # Read parameters (raises if missing and no default)
@@ -62,6 +64,8 @@ class ThrusterMapper(Node):
             c = self._get_float('c')
             d = self._get_float('d')
             e = self._get_float('e')
+            dx = self._get_float('dx')
+            dy = self._get_float('dy')
             alpha_deg = self._get_float('alpha')
         except Exception as ex:
             self.get_logger().fatal(f'Missing or invalid parameters: {ex}')
@@ -78,11 +82,11 @@ class ThrusterMapper(Node):
             # HEAVE (Z)
             [ 0, -1, -1, 0, 0, -1, -1, 0],
             # ROLL (X-rotation)
-            [ np.sin(alpha)*e, b, b, np.sin(alpha)*e, -np.sin(alpha)*e, -b, -b, -np.sin(alpha)*e],
+            [ np.sin(alpha)*e, (b+dy), (b+dy), np.sin(alpha)*e, -np.sin(alpha)*e, -(b-dy), -(b-dy), -np.sin(alpha)*e],
             # PITCH (Y-rotation)
-            [ np.cos(alpha)*e, -a, a, -np.cos(alpha)*e, -np.cos(alpha)*e, a, -a, np.cos(alpha)*e],
+            [ np.cos(alpha)*e, -(a+dx), (a-dx), -np.cos(alpha)*e, -np.cos(alpha)*e, (a-dx), -(a+dx), np.cos(alpha)*e],
             # YAW (Z-rotation)
-            [ (np.cos(alpha)*c + np.sin(alpha)*d), 0, 0, -(np.cos(alpha)*c + np.sin(alpha)*d), (np.cos(alpha)*c + np.sin(alpha)*d), 0, 0, -(np.cos(alpha)*c + np.sin(alpha)*d)]
+            [ (np.cos(alpha)*(c+dy) + np.sin(alpha)*(d+dx)), 0, 0, -(np.cos(alpha)*(c+dy) + np.sin(alpha)*(d-dx)), (np.cos(alpha)*(c-dy) + np.sin(alpha)*(d-dx)), 0, 0, -(np.cos(alpha)*(c-dy) + np.sin(alpha)*(d+dx))]
         ])
         self.T_inv = np.linalg.pinv(T)  # Pseudo-inverse (8x6)
 
