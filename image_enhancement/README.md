@@ -16,16 +16,17 @@ The tool includes the following enhancement algorithms:
 8. **Underwater Color Correction** - Specialized color correction for underwater images
 9. **Bilateral Filter** - Noise reduction while preserving edges
 
+On top of running these algorithms, the script simultaneously runs basic performance metrics on the enhances metrics:
+
+1. **Structural Similarity Structure Index (SSIM)** - computes error from base image based on changes in structure, luminance, and contrast, aiming to quantify perceptual differences.
+2. **Peak Signal-to-Noise Ratio (PSNR)** - computes error from base image based on absolute error, aiming to quantify overall fidelity.
+3. **Runtime** - time taken to process each image with each algorithm.
+
 ## Installation
 
 1. Install the required dependencies:
 ```bash
-pip install opencv-python>=4.8.0 numpy>=1.21.0 matplotlib>=3.5.0 Pillow>=9.0.0
-```
-
-Or install all at once:
-```bash
-pip install opencv-python numpy matplotlib Pillow
+pip install -r image_enhancement/requirements.txt
 ```
 
 ## Usage
@@ -49,14 +50,18 @@ python enhancement_comparison.py --input /path/to/input --output /path/to/output
 
 # Adjust output image size
 python enhancement_comparison.py --max-width 1600
+
+# Compute performance metrics
+python enhancement_comparison.py --metrics-input /path/to/metrics_output
 ```
 
 ### Command Line Options
 
 - `--input, -i`: Input directory containing images (default: `input`)
-- `--output, -o`: Output directory for comparison images (default: `output`)
+- `--output, -o`: Output directory for comparison images and metrics(default: `output`)
 - `--image`: Process a specific image file
 - `--max-width`: Maximum width for output images (default: 1200)
+- `--metrics-input`: Parse and display metrics in input directory (default: `output`, since metrics are saved there)
 
 ## Directory Structure
 
@@ -68,7 +73,7 @@ image_enhancement/
 ├── input/                      # Place your images here (gitignored)
 │   └── *.jpg, *.png, *.jpeg   # Input images
 └── output/                     # Comparison results (gitignored)
-    └── comparison_*.png        # Generated comparison images
+    └── comparison_*.png        # Generated comparison images and metrics
 ```
 
 **Note**: The `input/` and `output/` directories are automatically ignored by git to prevent large image files from being committed to the repository. This is configured in the main project's `.gitignore` file.
@@ -144,7 +149,7 @@ Output files are saved as `comparison_[original_filename].png` in the output dir
 
 ## Troubleshooting
 
-- **Import errors**: Make sure all dependencies are installed with `pip install opencv-python numpy matplotlib Pillow`
+- **Import errors**: Make sure all dependencies are installed with `pip install -r image_enhancement/requirements.txt`
 - **No images found**: Check that images are in the correct format (.jpg, .png, .jpeg) and in the input directory
 - **Memory issues**: Reduce image size or process images one at a time
 - **Poor results**: Try adjusting algorithm parameters in the script for your specific images
