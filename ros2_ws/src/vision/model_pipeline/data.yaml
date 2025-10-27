@@ -1,0 +1,5 @@
+train: /root/AUV-2026/ros2_ws/src/vision/model_pipeline/data/augmented/train/images
+test: /root/AUV-2026/ros2_ws/src/vision/model_pipeline/data/augmented/test/images
+val: /root/AUV-2026/ros2_ws/src/vision/model_pipeline/data/augmented/val/images
+nc: 6
+names: ['gate', 'octagon table', 'octagon top', 'path_marker', 'sawfish', 'shark']
