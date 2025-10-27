@@ -11,7 +11,6 @@ setup(
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch', [
             'launch/propulsion.launch.py',
-            'launch/drytest.launch.py',
             'launch/mechtest2.launch.py',
         ]),
     ],

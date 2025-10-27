@@ -107,11 +107,14 @@ def dry_test(self):
                 desired_effort.torque.x = 0.0
                 desired_effort.torque.y = 0.0
                 desired_effort.torque.z = 0.0
-                key = input("Press key to control, then ENTER to send command (y to exit)\n")
+                key = input("Press key to control, then ENTER to send command (b to stop) (y to exit)\n")
                 print("You pressed: " + key)
                 if key == "y":
                     self.publish_thruster(reset_msg)
                     break
+                if key == "b":
+                    self.publish_thruster(reset_msg)
+                    continue
                 if key == "w":
                     desired_effort.force.x = (
                         desired_effort.force.x + force_amt * MAX_FWD_FORCE
@@ -161,7 +164,7 @@ def dry_test(self):
                         desired_effort.torque.z + force_amt * MAX_BWD_FORCE
                     )
                 self.publish_force(desired_effort)
-                sleep(1)
+
         else:
             self.publish_thruster(reset_msg)
             print("Thank you for using the dry test program. Exiting...")
