@@ -85,20 +85,9 @@ class GammaCorrection(EnhancementAlgorithm):
                 # Apply gamma correction
                 return cv2.LUT(image, self.table)
 class WhiteBalance(EnhancementAlgorithm):
-        """Apply white balance correction."""
+        """Apply white balance correction using gray world assumption."""
         
-        def __init__(self, method: str = 'gray_world'):
-                match method:
-                        case "gray_world":
-                                self.apply_algorithm = WhiteBalance.gray_world
-                        case "white_patch":
-                                self.apply_algorithm = WhiteBalance.white_patch
-                        case _:
-                                self.apply_algorithm = lambda image:image
         def apply_algorithm(self, image: np.ndarray) -> np.ndarray:
-                return self.apply_algorithm(image)
-        @staticmethod
-        def gray_world(image: np.ndarray) -> np.ndarray:
             # Gray world assumption
             b, g, r = cv2.split(image.astype(np.float32))
             b_mean, g_mean, r_mean = np.mean(b), np.mean(g), np.mean(r)
@@ -110,10 +99,6 @@ class WhiteBalance(EnhancementAlgorithm):
             r = np.clip(r * (gray_mean / r_mean), 0, 255)
             
             return cv2.merge([b, g, r]).astype(np.uint8)
-        
-        def white_patch(image: np.ndarray) -> np.ndarray:
-            max_val = np.max(image)
-            return np.clip(image * (255.0 / max_val), 0, 255).astype(np.uint8)
                 
 class RedChannelEnhancement(EnhancementAlgorithm):
         """Enhance red channel to counteract underwater blue/green dominance."""
