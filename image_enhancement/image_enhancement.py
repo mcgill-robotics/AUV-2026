@@ -201,14 +201,6 @@ class UnderwaterColorCorrection(EnhancementAlgorithm):
                 corrected = np.dot(img.reshape(-1, 3), correction_matrix.T).reshape(img.shape)
                 
                 return np.clip(corrected * 255, 0, 255).astype(np.uint8)
-class BilateralFilter(EnhancementAlgorithm):
-        """Apply bilateral filtering for noise reduction while preserving edges."""
-        def __init__(self,d: int = 9, sigma_color: float = 75, sigma_space: float = 75):
-                self.d = d
-                self.sigma_color = sigma_color
-                self.sigma_space = sigma_space
-        def apply_algorithm(self, image: np.array) -> np.ndarray:
-                return cv2.bilateralFilter(image, self.d, self.sigma_color, self.sigma_space)
 
 class GuidedFilter(EnhancementAlgorithm):
     """Apply guided filter for edge-preserving smoothing."""
