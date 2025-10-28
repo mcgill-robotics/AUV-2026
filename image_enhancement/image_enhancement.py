@@ -85,20 +85,9 @@ class GammaCorrection(EnhancementAlgorithm):
                 # Apply gamma correction
                 return cv2.LUT(image, self.table)
 class WhiteBalance(EnhancementAlgorithm):
-        """Apply white balance correction."""
+        """Apply white balance correction using gray world assumption."""
         
-        def __init__(self, method: str = 'gray_world'):
-                match method:
-                        case "gray_world":
-                                self.apply_algorithm = WhiteBalance.gray_world
-                        case "white_patch":
-                                self.apply_algorithm = WhiteBalance.white_patch
-                        case _:
-                                self.apply_algorithm = lambda image:image
         def apply_algorithm(self, image: np.ndarray) -> np.ndarray:
-                return self.apply_algorithm(image)
-        @staticmethod
-        def gray_world(image: np.ndarray) -> np.ndarray:
             # Gray world assumption
             b, g, r = cv2.split(image.astype(np.float32))
             b_mean, g_mean, r_mean = np.mean(b), np.mean(g), np.mean(r)
@@ -110,10 +99,6 @@ class WhiteBalance(EnhancementAlgorithm):
             r = np.clip(r * (gray_mean / r_mean), 0, 255)
             
             return cv2.merge([b, g, r]).astype(np.uint8)
-        
-        def white_patch(image: np.ndarray) -> np.ndarray:
-            max_val = np.max(image)
-            return np.clip(image * (255.0 / max_val), 0, 255).astype(np.uint8)
                 
 class RedChannelEnhancement(EnhancementAlgorithm):
         """Enhance red channel to counteract underwater blue/green dominance."""
@@ -177,27 +162,6 @@ class HistogramEqualization(EnhancementAlgorithm):
                 return cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR)
         
 
-class UnsharpMasking(EnhancementAlgorithm):
-        """Apply unsharp masking for image sharpening."""
-        def __init__(self,kernel_size: Tuple[int, int] = (5, 5), sigma: float = 1.0, sharpening_amount: float = 1.0, threshold: int = 0):
-               self.kernel_size = kernel_size
-               self.sigma = sigma
-               self.amount = sharpening_amount
-               self.threshold = threshold
-        
-        def apply_algorithm(self, image: np.array) -> np.ndarray:
-                # Create Gaussian blur
-                blurred = cv2.GaussianBlur(image, self.kernel_size, self.sigma)
-                
-                # Calculate sharpened image
-                sharpened = cv2.addWeighted(image, 1.0 + self.amount, blurred, -self.amount, 0)
-                
-                # Apply threshold
-                if self.threshold > 0:
-                        low_contrast_mask = np.absolute(      image - blurred) < self.threshold
-                        sharpened[low_contrast_mask] = image[low_contrast_mask]
-                
-                return sharpened
 
 class UnderwaterColorCorrection(EnhancementAlgorithm):
         """Apply underwater-specific color correction."""
@@ -216,11 +180,48 @@ class UnderwaterColorCorrection(EnhancementAlgorithm):
                 corrected = np.dot(img.reshape(-1, 3), correction_matrix.T).reshape(img.shape)
                 
                 return np.clip(corrected * 255, 0, 255).astype(np.uint8)
-class BilateralFilter(EnhancementAlgorithm):
-        """Apply bilateral filtering for noise reduction while preserving edges."""
-        def __init__(self,d: int = 9, sigma_color: float = 75, sigma_space: float = 75):
-                self.d = d
-                self.sigma_color = sigma_color
-                self.sigma_space = sigma_space
-        def apply_algorithm(self, image: np.array) -> np.ndarray:
-                return cv2.bilateralFilter(image, self.d, self.sigma_color, self.sigma_space)
+
+class GuidedFilter(EnhancementAlgorithm):
+    """Apply guided filter for edge-preserving smoothing."""
+
+    def apply_algorithm(self, image: np.ndarray) -> np.ndarray:
+        # Convert to float
+        img = image.astype(np.float32) / 255.0
+
+        # Default parameters
+        radius = 8
+        epsilon = 0.01
+
+        # Convert to grayscale guide (2D array)
+        if img.ndim == 3:
+            guide = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        else:
+            guide = img
+
+        # Prepare output container
+        result = np.zeros_like(img)
+
+        # Compute guided filter per channel if RGB
+        for c in range(img.shape[2]) if img.ndim == 3 else [0]:
+            p = img[..., c] if img.ndim == 3 else img
+
+            mean_I = cv2.boxFilter(guide, -1, (radius, radius))
+            mean_p = cv2.boxFilter(p, -1, (radius, radius))
+
+            corr_Ip = cv2.boxFilter(guide * p, -1, (radius, radius))
+            cov_Ip = corr_Ip - mean_I * mean_p
+
+            corr_II = cv2.boxFilter(guide * guide, -1, (radius, radius))
+            var_I = corr_II - mean_I * mean_I
+
+            a = cov_Ip / (var_I + epsilon)
+            b = mean_p - a * mean_I
+
+            mean_a = cv2.boxFilter(a, -1, (radius, radius))
+            mean_b = cv2.boxFilter(b, -1, (radius, radius))
+
+            q = mean_a * guide + mean_b
+            result[..., c] = q if img.ndim == 3 else q
+
+        # Clip and scale back to 8-bit
+        return np.clip(result * 255, 0, 255).astype(np.uint8)
