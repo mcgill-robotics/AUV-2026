@@ -209,3 +209,48 @@ class BilateralFilter(EnhancementAlgorithm):
                 self.sigma_space = sigma_space
         def apply_algorithm(self, image: np.array) -> np.ndarray:
                 return cv2.bilateralFilter(image, self.d, self.sigma_color, self.sigma_space)
+
+class GuidedFilter(EnhancementAlgorithm):
+    """Apply guided filter for edge-preserving smoothing."""
+
+    def apply_algorithm(self, image: np.ndarray) -> np.ndarray:
+        # Convert to float
+        img = image.astype(np.float32) / 255.0
+
+        # Default parameters
+        radius = 8
+        epsilon = 0.01
+
+        # Convert to grayscale guide (2D array)
+        if img.ndim == 3:
+            guide = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        else:
+            guide = img
+
+        # Prepare output container
+        result = np.zeros_like(img)
+
+        # Compute guided filter per channel if RGB
+        for c in range(img.shape[2]) if img.ndim == 3 else [0]:
+            p = img[..., c] if img.ndim == 3 else img
+
+            mean_I = cv2.boxFilter(guide, -1, (radius, radius))
+            mean_p = cv2.boxFilter(p, -1, (radius, radius))
+
+            corr_Ip = cv2.boxFilter(guide * p, -1, (radius, radius))
+            cov_Ip = corr_Ip - mean_I * mean_p
+
+            corr_II = cv2.boxFilter(guide * guide, -1, (radius, radius))
+            var_I = corr_II - mean_I * mean_I
+
+            a = cov_Ip / (var_I + epsilon)
+            b = mean_p - a * mean_I
+
+            mean_a = cv2.boxFilter(a, -1, (radius, radius))
+            mean_b = cv2.boxFilter(b, -1, (radius, radius))
+
+            q = mean_a * guide + mean_b
+            result[..., c] = q if img.ndim == 3 else q
+
+        # Clip and scale back to 8-bit
+        return np.clip(result * 255, 0, 255).astype(np.uint8)
