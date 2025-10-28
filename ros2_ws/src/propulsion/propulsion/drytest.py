@@ -83,7 +83,12 @@ def dry_test(self):
         print("You selected option " + choice)
         if choice == "1":
             while True:
-                choice = int(input("Select thruster to test (1-8) or any other key to go back:\n"))
+                choice = input("Select thruster to test (1-8) or any other key to go back:\n")
+                try:
+                    choice = int(choice)
+                except:
+                    print("Invalid input, returning to main menu.")
+                    break
                 if 1 <= choice and choice <= 8:
                     self.optimized_dry_test(choice)
                 else: 
@@ -108,11 +113,12 @@ def dry_test(self):
                 desired_effort.torque.y = 0.0
                 desired_effort.torque.z = 0.0
                 key = input("Press key to control, then ENTER to send command (b to stop) (y to exit)\n")
-                print("You pressed: " + key)
                 if key == "y":
+                    print("Exiting keyboard control mode...")
                     self.publish_thruster(reset_msg)
                     break
-                if key == "b":
+                if key == "b" or key == "":
+                    print("Stopping all thrusters")
                     self.publish_thruster(reset_msg)
                     continue
                 if key == "w":
@@ -140,11 +146,11 @@ def dry_test(self):
                         desired_effort.force.z + force_amt * MAX_BWD_FORCE
                     )
                 if key == "o":
-                    desired_effort.torque.y = (
+                    desired_effort.torque.x = (
                         desired_effort.torque.x + force_amt * MAX_FWD_FORCE
                     )
                 if key == "u":
-                    desired_effort.torque.y = (
+                    desired_effort.torque.x = (
                         desired_effort.torque.x + force_amt * MAX_BWD_FORCE
                     )
                 if key == "i":
@@ -164,6 +170,8 @@ def dry_test(self):
                         desired_effort.torque.z + force_amt * MAX_BWD_FORCE
                     )
                 self.publish_force(desired_effort)
+                print("Force (x=" + str(desired_effort.force.x) + ", y=" + str(desired_effort.force.y) + ", z=" + str(desired_effort.force.z) + \
+                      "), Torque (x=" + str(desired_effort.torque.x) + ", y=" + str(desired_effort.torque.y) + ", z=" + str(desired_effort.torque.z) + ")")
 
         else:
             self.publish_thruster(reset_msg)
