@@ -162,27 +162,6 @@ class HistogramEqualization(EnhancementAlgorithm):
                 return cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR)
         
 
-class UnsharpMasking(EnhancementAlgorithm):
-        """Apply unsharp masking for image sharpening."""
-        def __init__(self,kernel_size: Tuple[int, int] = (5, 5), sigma: float = 1.0, sharpening_amount: float = 1.0, threshold: int = 0):
-               self.kernel_size = kernel_size
-               self.sigma = sigma
-               self.amount = sharpening_amount
-               self.threshold = threshold
-        
-        def apply_algorithm(self, image: np.array) -> np.ndarray:
-                # Create Gaussian blur
-                blurred = cv2.GaussianBlur(image, self.kernel_size, self.sigma)
-                
-                # Calculate sharpened image
-                sharpened = cv2.addWeighted(image, 1.0 + self.amount, blurred, -self.amount, 0)
-                
-                # Apply threshold
-                if self.threshold > 0:
-                        low_contrast_mask = np.absolute(      image - blurred) < self.threshold
-                        sharpened[low_contrast_mask] = image[low_contrast_mask]
-                
-                return sharpened
 
 class UnderwaterColorCorrection(EnhancementAlgorithm):
         """Apply underwater-specific color correction."""
