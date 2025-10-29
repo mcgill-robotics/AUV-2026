@@ -8,8 +8,8 @@
 	},
     "remoteUser" : "root",
     "runArgs": [
-         // This will allow you to use a ptrace-based debugger like C++, Go, and Rust.
-	"--network=host",
+        // This will allow you to use a ptrace-based debugger like C++, Go, and Rust.
+	    // "--network=host",
         "--cap-add=SYS_PTRACE",
         "--security-opt=seccomp:unconfined",
         "--security-opt=apparmor:unconfined",

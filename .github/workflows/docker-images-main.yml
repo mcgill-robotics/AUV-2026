@@ -6,6 +6,7 @@ on:
   pull_request:
     branches: [ "main", "pooltest/*" ]
   workflow_dispatch:
+  # Note: keeps our Dockerhub up to date with latest working images
   schedule:
     - cron: '0 0,12 * * *'
 
