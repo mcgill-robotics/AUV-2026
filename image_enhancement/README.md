@@ -23,8 +23,18 @@ On top of running these algorithms, the script simultaneously runs basic perform
 3. **Runtime** - time taken to process each image with each algorithm.
 
 ## Installation
-
-1. Install the required dependencies:
+Many of the packages used by the script conflict with ROS2 Humble's python packages (notably `numpy` and `opencv-python`), so it is recommended to create a separate Python virtual environment:
+1. Start with installing `venv` (not installed by default since we use Docker for ROS2):
+```bash
+apt update
+apt install -y python3.10-venv
+```
+2. Create the virtual environment and activate it:
+```bash
+python3 -m venv ~/auv_image_enhancement_venv
+source ~/auv_image_enhancement_venv/bin/activate
+```
+3. Now we can install the required dependencies:
 ```bash
 pip install -r image_enhancement/requirements.txt
 ```
@@ -54,6 +64,8 @@ python enhancement_comparison.py --max-width 1600
 # Compute performance metrics
 python enhancement_comparison.py --metrics-input /path/to/metrics_output
 ```
+
+See Contributing for instructions on adding and testing new algorithms.
 
 ### Command Line Options
 
@@ -163,10 +175,9 @@ To add new enhancement algorithms:
 5. Update this README with algorithm details
 
 To compose multiple algorithms, use the `ImageEnhancer` class:
- 
-- The constructor expects `EnhancementAlgorithm` objects
+
+- The constructor expects `EnhancementAlgorithm` objects, and will apply default algorithms if none are provided.
 - The `__call__`, as with all algorithms, expects a numpy array image.
-- The `to_torch_transform` method can be used to obtain the [PyTorch vision tranform](https://docs.pytorch.org/vision/stable/transforms.html) equivalent of the enhancer itself. This can easily be slotted into the YOLO object detection pipeline as a preprocessing step, for instance.
 
 ### Next Steps
 
