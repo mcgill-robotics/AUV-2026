@@ -38,8 +38,17 @@ class EnhancementAlgorithm(ABC):
         
 class ImageEnhancer:
         '''Aggregation of enhancement algorithms'''
-        def __init__ (self,*algorithms: EnhancementAlgorithm):
-                self.algorithms = list(algorithms)
+        def __init__(self,*algorithms):
+                # Current combination and ordering of algorithms for image enhancement (one of each of the categories )
+                if not algorithms: 
+                        self.algorithms = [
+                                WhiteBalance(),                   
+                                DCPEnhancement(),                 
+                                GuidedFilter(),                    
+                                CLAHEEnhancement()                 
+                        ]
+                else:
+                        self.algorithms = list(algorithms)
 
         def enhance(self, image: np.ndarray) -> np.ndarray:
                 for algorithm in self.algorithms:
