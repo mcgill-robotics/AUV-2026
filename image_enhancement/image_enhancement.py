@@ -65,17 +65,8 @@ class WhiteBalance(EnhancementAlgorithm):
         """Apply white balance correction using gray world assumption."""
         
         def apply_algorithm(self, image: np.ndarray) -> np.ndarray:
-            # Gray world assumption
-            b, g, r = cv2.split(image.astype(np.float32))
-            b_mean, g_mean, r_mean = np.mean(b), np.mean(g), np.mean(r)
-            gray_mean = (b_mean + g_mean + r_mean) / 3
-            
-            # Scale channels
-            b = np.clip(b * (gray_mean / b_mean), 0, 255)
-            g = np.clip(g * (gray_mean / g_mean), 0, 255)
-            r = np.clip(r * (gray_mean / r_mean), 0, 255)
-            
-            return cv2.merge([b, g, r]).astype(np.uint8)
+            wb = cv2.xphoto.createGrayworldWB()
+            return wb.balanceWhite(image)
 
 class RedChannelEnhancement(EnhancementAlgorithm):
         """Enhance red channel to counteract underwater blue/green dominance."""
@@ -91,20 +82,15 @@ class RedChannelEnhancement(EnhancementAlgorithm):
 class UnderwaterColorCorrection(EnhancementAlgorithm):
         """Apply underwater-specific color correction."""
         def apply_algorithm(self, image: np.array) -> np.ndarray:
-                # Convert to float
-                img = image.astype(np.float32) / 255.0
-                
                 # Underwater color correction matrix (approximate)
                 correction_matrix = np.array([
                 [1.2, -0.1, -0.1],  # Red channel
                 [-0.1, 1.1, 0.0],   # Green channel
                 [-0.2, -0.1, 1.3]   # Blue channel
-                ])
+                ], dtype=np.float32)
                 
-                # Apply correction
-                corrected = np.dot(img.reshape(-1, 3), correction_matrix.T).reshape(img.shape)
-                
-                return np.clip(corrected * 255, 0, 255).astype(np.uint8)
+                # Apply correction using OpenCV
+                return cv2.transform(image, correction_matrix)
 
 
 # 2. BACKSCATTER REDUCTION ALGORITHMS
@@ -200,13 +186,5 @@ class GammaCorrection(EnhancementAlgorithm):
 class HistogramEqualization(EnhancementAlgorithm):
         """Apply histogram equalization."""
         def apply_algorithm(self, image: np.array) -> np.ndarray:
-                # Convert to YUV color space
-                yuv = cv2.cvtColor(image, cv2.COLOR_BGR2YUV)
-                y, u, v = cv2.split(yuv)
-                
-                # Apply histogram equalization to Y channel
-                y = cv2.equalizeHist(y)
-                
-                # Merge channels and convert back to BGR
-                yuv = cv2.merge([y, u, v])
-                return cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR)
+                # Apply histogram equalization directly using OpenCV
+                return cv2.equalizeHist(image)
