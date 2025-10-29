@@ -57,33 +57,10 @@ class ImageEnhancer:
                         ])
         def __call__(self, image: np.ndarray) -> np.ndarray:
                 return self.enhance(image)
-        
-class CLAHEEnhancement(EnhancementAlgorithm):
-        """Apply Contrast Limited Adaptive Histogram Equalization (CLAHE)."""
-        def __init__(self,clip_limit: float = 2.0, tile_grid_size: Tuple[int, int] = (8, 8)):
-                self._clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=tile_grid_size)
-                                
-        def apply_algorithm(self, image: np.array) -> np.ndarray:
-                # Convert to LAB color space
-                lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
-                l, a, b = cv2.split(lab)
-                
-                # Apply CLAHE to L channel
-                l = self._clahe.apply(l)
-                
-                # Merge channels and convert back to BGR
-                lab = cv2.merge([l, a, b])
-                return cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
 
-class GammaCorrection(EnhancementAlgorithm):
-        """Apply gamma correction to adjust brightness and contrast."""
-        def __init__(self,gamma: float = 1.5):
-                inv_gamma = 1.0 / gamma
-                self.table = np.array([((i / 255.0) ** inv_gamma) * 255 for i in range(256)]).astype("uint8")
-                
-        def apply_algorithm(self, image: np.array) -> np.ndarray:             
-                # Apply gamma correction
-                return cv2.LUT(image, self.table)
+
+# 1. COLOR CORRECTION ALGORITHMS
+
 class WhiteBalance(EnhancementAlgorithm):
         """Apply white balance correction using gray world assumption."""
         
@@ -99,7 +76,7 @@ class WhiteBalance(EnhancementAlgorithm):
             r = np.clip(r * (gray_mean / r_mean), 0, 255)
             
             return cv2.merge([b, g, r]).astype(np.uint8)
-                
+
 class RedChannelEnhancement(EnhancementAlgorithm):
         """Enhance red channel to counteract underwater blue/green dominance."""
         def __init__(self,enhancement_factor: float = 1.2):
@@ -110,7 +87,28 @@ class RedChannelEnhancement(EnhancementAlgorithm):
                 # Enhance red channel
                 r = np.clip(r * self.factor, 0, 255)
                 return cv2.merge([b, g, r]).astype(np.uint8)
-                        
+
+class UnderwaterColorCorrection(EnhancementAlgorithm):
+        """Apply underwater-specific color correction."""
+        def apply_algorithm(self, image: np.array) -> np.ndarray:
+                # Convert to float
+                img = image.astype(np.float32) / 255.0
+                
+                # Underwater color correction matrix (approximate)
+                correction_matrix = np.array([
+                [1.2, -0.1, -0.1],  # Red channel
+                [-0.1, 1.1, 0.0],   # Green channel
+                [-0.2, -0.1, 1.3]   # Blue channel
+                ])
+                
+                # Apply correction
+                corrected = np.dot(img.reshape(-1, 3), correction_matrix.T).reshape(img.shape)
+                
+                return np.clip(corrected * 255, 0, 255).astype(np.uint8)
+
+
+# 2. BACKSCATTER REDUCTION ALGORITHMS
+
 class DCPEnhancement(EnhancementAlgorithm):
         """Apply Dark Channel Prior (DCP) dehazing algorithm."""
         def __init__(self,window_size: int = 15, omega: float = 0.95, t0: float = 0.1):
@@ -146,40 +144,9 @@ class DCPEnhancement(EnhancementAlgorithm):
             kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (self.window_size, self.window_size))
             dark_channel = cv2.erode(min_channel, kernel)
             return dark_channel
-    
-class HistogramEqualization(EnhancementAlgorithm):
-        """Apply histogram equalization."""
-        def apply_algorithm(self, image: np.array) -> np.ndarray:
-                # Convert to YUV color space
-                yuv = cv2.cvtColor(image, cv2.COLOR_BGR2YUV)
-                y, u, v = cv2.split(yuv)
-                
-                # Apply histogram equalization to Y channel
-                y = cv2.equalizeHist(y)
-                
-                # Merge channels and convert back to BGR
-                yuv = cv2.merge([y, u, v])
-                return cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR)
-        
 
 
-class UnderwaterColorCorrection(EnhancementAlgorithm):
-        """Apply underwater-specific color correction."""
-        def apply_algorithm(self, image: np.array) -> np.ndarray:
-                # Convert to float
-                img = image.astype(np.float32) / 255.0
-                
-                # Underwater color correction matrix (approximate)
-                correction_matrix = np.array([
-                [1.2, -0.1, -0.1],  # Red channel
-                [-0.1, 1.1, 0.0],   # Green channel
-                [-0.2, -0.1, 1.3]   # Blue channel
-                ])
-                
-                # Apply correction
-                corrected = np.dot(img.reshape(-1, 3), correction_matrix.T).reshape(img.shape)
-                
-                return np.clip(corrected * 255, 0, 255).astype(np.uint8)
+# 3. EDGE PRESERVATION ALGORITHMS
 
 class GuidedFilter(EnhancementAlgorithm):
     """Apply guided filter for edge-preserving smoothing using OpenCV implementation."""
@@ -199,3 +166,47 @@ class GuidedFilter(EnhancementAlgorithm):
         result = cv2.ximgproc.guidedFilter(guide, image, radius, epsilon)
         
         return result
+
+
+# 4. CONTRAST ENHANCEMENT ALGORITHMS
+
+class CLAHEEnhancement(EnhancementAlgorithm):
+        """Apply Contrast Limited Adaptive Histogram Equalization (CLAHE)."""
+        def __init__(self,clip_limit: float = 2.0, tile_grid_size: Tuple[int, int] = (8, 8)):
+                self._clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=tile_grid_size)
+                                
+        def apply_algorithm(self, image: np.array) -> np.ndarray:
+                # Convert to LAB color space
+                lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+                l, a, b = cv2.split(lab)
+                
+                # Apply CLAHE to L channel
+                l = self._clahe.apply(l)
+                
+                # Merge channels and convert back to BGR
+                lab = cv2.merge([l, a, b])
+                return cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+
+class GammaCorrection(EnhancementAlgorithm):
+        """Apply gamma correction to adjust brightness and contrast."""
+        def __init__(self,gamma: float = 1.5):
+                inv_gamma = 1.0 / gamma
+                self.table = np.array([((i / 255.0) ** inv_gamma) * 255 for i in range(256)]).astype("uint8")
+                
+        def apply_algorithm(self, image: np.array) -> np.ndarray:             
+                # Apply gamma correction
+                return cv2.LUT(image, self.table)
+
+class HistogramEqualization(EnhancementAlgorithm):
+        """Apply histogram equalization."""
+        def apply_algorithm(self, image: np.array) -> np.ndarray:
+                # Convert to YUV color space
+                yuv = cv2.cvtColor(image, cv2.COLOR_BGR2YUV)
+                y, u, v = cv2.split(yuv)
+                
+                # Apply histogram equalization to Y channel
+                y = cv2.equalizeHist(y)
+                
+                # Merge channels and convert back to BGR
+                yuv = cv2.merge([y, u, v])
+                return cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR)
