@@ -29,8 +29,9 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'image_collection = vision.image_collection:main',
-            'fake_camera_node = vision.fake_camera_node:main',
+                'image_collection = vision.image_collection:main',
+                'down_cam_image_enhancer = vision.down_image_enhancement:main',
+                'front_cam_image_enhancer = vision.front_image_enhancement:main'
         ],
     },
 )
