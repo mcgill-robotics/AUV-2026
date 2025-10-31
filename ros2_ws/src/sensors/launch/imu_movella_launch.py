@@ -25,7 +25,7 @@ def generate_launch_description():
     return LaunchDescription([
        sim_condition,
        included_launch,
-        Node(
+       Node(
             package='sensors',
             executable='imu',
             name='movella_imu',

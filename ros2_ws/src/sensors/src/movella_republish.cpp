@@ -1,5 +1,5 @@
 #include <rclcpp/rclcpp.hpp>
-#include <sensors/imu_movella.hpp> 
+#include <sensors/movella_republish.hpp> 
 
 namespace sensors {
 
@@ -30,7 +30,9 @@ MovellaRepublisher::MovellaRepublisher() : Node("movella_republisher")
 		sync->registerCallback(std::bind(&MovellaRepublisher::callback, this, std::placeholders::_1, std::placeholders::_2));
 
 		
-}	
+}
+
+MovellaRepublisher::~MovellaRepublisher() = default;	
 
 void MovellaRepublisher::callback(const sensor_msgs::msg::Imu::ConstSharedPtr& imu_msg, 
 			const geometry_msgs::msg::Vector3Stamped::ConstSharedPtr& free_acc_msg) const

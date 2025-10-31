@@ -15,6 +15,7 @@ class MovellaRepublisher : public rclcpp::Node
 {
 	public:
 		MovellaRepublisher();
+		~MovellaRepublisher();
 
 	private:
 		void callback(const sensor_msgs::msg::Imu::ConstSharedPtr &imu_msg, 
