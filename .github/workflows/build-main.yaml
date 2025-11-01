@@ -1,0 +1,162 @@
+name: ROS2 Build and Test
+
+on:
+  push:
+    branches: [ "main", "pooltest/*", "dev/*" ]
+  pull_request:
+    branches: [ "main", "pooltest/*" ]
+  workflow_dispatch:
+
+jobs:
+  # Build Docker images first
+  # Note: this job exists for independence from the Docker image build process
+  build-docker-dev:
+    runs-on: ubuntu-22.04-arm
+    # If manually triggered on either dev or empty, run this job
+    # if: ${{ github.event.inputs.docker_image == 'dev' || github.event.inputs.docker_image == '' }}
+    
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-tags: true
+        submodules: recursive
+        lfs: true
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Login to DockerHub
+      if: github.ref == 'refs/heads/main'
+      uses: docker/login-action@v3
+      with:
+        username: ${{ vars.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+    
+    - name: Build and push Docker image
+      id: build
+      uses: docker/build-push-action@v6
+      with:
+        context: Docker/dev
+        file: Docker/dev/Dockerfile
+        platforms: linux/arm64
+        push: false
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  # ROS2 build jobs
+  colcon-build-dev:
+    # Dependency on the docker build process
+    needs: build-docker-dev
+    # If manually triggered on either dev or empty, run this job
+    # if: ${{ always() && (needs.build-docker-dev.result == 'success' || github.event.inputs.docker_image == '') }}
+    runs-on: ubuntu-22.04-arm
+    
+    # Expand the build matrix when new packages are added
+    strategy:
+      fail-fast: false
+      matrix:
+        package_group:
+          - name: "sensors"
+            packages: "sensors"
+          - name: "ros_tcp_endpoint" 
+            packages: "ros_tcp_endpoint"
+          - name: "xsens_drivers"
+            packages: "Xsens_MTi_Driver"
+          # Note: zed build is not supported on usual ubuntu due to jetpack dependencies
+          # - name: "zed_wrapper"
+          #   packages: "zed_components zed_wrapper"
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-tags: true
+        submodules: recursive
+        lfs: true
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Login to DockerHub
+      if: github.ref == 'refs/heads/main'
+      uses: docker/login-action@v3
+      with:
+        username: ${{ vars.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+    
+    - name: Determine packages to build
+      id: packages
+      run: |
+        echo "packages=${{ matrix.package_group.packages }}" >> $GITHUB_OUTPUT
+    
+    - name: Run colcon build in container
+      run: |
+        docker run --rm \
+          -v ${{ github.workspace }}:/workspace \
+          -w /workspace \
+          mcgillrobotics/auv_2026:dev-arm64 \
+          bash -c "
+            set -e
+            
+            # Source ROS2 environment
+            source /opt/ros/\$ROS_DISTRO/setup.bash
+            
+            # Navigate to ROS2 workspace
+            cd ros2_ws
+            
+            # Install dependencies using rosdep
+            apt-get update
+            rosdep update --rosdistro \$ROS_DISTRO
+            rosdep install --from-paths src --ignore-src --rosdistro \$ROS_DISTRO -y || true
+            
+            # Build specified packages
+            echo 'Building packages: ${{ steps.packages.outputs.packages }}'
+            colcon build \
+              --packages-select ${{ steps.packages.outputs.packages }} \
+              --event-handlers console_direct+ \
+              --parallel-workers \$(nproc)
+            
+            # Source the built packages
+            source install/setup.bash
+          "
+    
+    - name: Archive build artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-artifacts-${{ matrix.package_group.name }}
+        path: |
+          ros2_ws/build/
+          ros2_ws/install/
+          ros2_ws/log/
+        retention-days: 7
+
+  # Job that summarizes the build results
+  build-summary:
+    if: always()
+    needs: [build-docker-dev, colcon-build-dev]
+    runs-on: ubuntu-22.04-arm
+    
+    steps:
+    - name: Check build results
+      run: |
+        echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Docker build
+        if [ "${{ needs.build-docker-dev.result }}" != "skipped" ]; then
+          echo "- Docker Dev Build: ${{ needs.build-docker-dev.result }}" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        # Colcon build
+        if [ "${{ needs.colcon-build-dev.result }}" != "skipped" ]; then
+          echo "- ROS2 Dev Build: ${{ needs.colcon-build-dev.result }}" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Workflow completed at $(date)" >> $GITHUB_STEP_SUMMARY
