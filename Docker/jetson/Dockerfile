@@ -31,8 +31,15 @@ ARG BACKWARD_ROS_VERSION=1.0.7
 ARG RQT_GUI_VERSION=1.1.7
 ARG ROBOT_STATE_PUBLISHER_VERSION=3.5.2
 ARG USB_CAM_VERSION=0.8.1
-ENV PYPI_URL=https://pypi.jetson-ai-lab.io/jp6/cu126
 
+# Make pip work
+ENV PYPI_URL=https://pypi.jetson-ai-lab.io/jp6/cu126
+ENV PIP_INDEX_URL=https://pypi.jetson-ai-lab.io/jp6/cu126 
+ENV PIP_TRUSTED_HOST=pypi.jetson-ai-lab.io
+
+# protobuf is a pip package needed by zed sdk, for some reason nvidias pip server killed protobuf in its available packages so you need 
+# the default non nvidia pip index just to download protobuf
+ENV PIP_INDEX_FOR_NON_NVIDIA=https://pypi.python.org/simple
 
 # Set up environment (we in paris because official docs are in paris)
 ENV LANG=C.UTF-8
@@ -87,11 +94,11 @@ RUN echo "# R${L4T_MAJOR} (release), REVISION: ${L4T_MINOR}" > /etc/nv_tegra_rel
   wget \
   zlib1g-dev \
   zstd && \
-  export PIP_INDEX_URL="${PYPI_URL}" && \
+  export PIP_INDEX_URL="${PIP_INDEX_FOR_NON_NVIDIA}" && \
   pip install protobuf && \
   wget -q --no-check-certificate -O ZED_SDK_Linux_JP.run \
   ${ZED_SDK_URL} && \
-  chmod +x ZED_SDK_Linux_JP.run ; ./ZED_SDK_Linux_JP.run silent && \
+  chmod +x ZED_SDK_Linux_JP.run ; ./ZED_SDK_Linux_JP.run silent skip_python && \
   rm -rf ZED_SDK_Linux_JP.run && \
   rm -rf /var/lib/apt/lists/*
 
@@ -189,23 +196,40 @@ RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
   ' -DCMAKE_CXX_FLAGS="-Wl,--allow-shlib-undefined"' \
   ' --no-warn-unused-cli' "
 
-# Install ZED wrapper and IMU Driver
-WORKDIR /root/ros2_ws/src
+# Get CUDA dependencies to install torch and torchvision
+WORKDIR /root
+RUN wget https://developer.download.nvidia.com/compute/cusparselt/0.8.1/local_installers/cusparselt-local-tegra-repo-ubuntu2204-0.8.1_0.8.1-1_arm64.deb && \
+    dpkg -i cusparselt-local-tegra-repo-ubuntu2204-0.8.1_0.8.1-1_arm64.deb && \
+    cp /var/cusparselt-local-tegra-repo-ubuntu2204-0.8.1/cusparselt-*-keyring.gpg /usr/share/keyrings/ && \
+    apt-get update && \
+    apt-get -y install cusparselt-cuda-12 && \
+	rm -rf cusparselt-local-tegra-repo-ubuntu2204-0.8.1_0.8.1-1_arm64.deb
 
-RUN git clone --branch ros2 https://github.com/xsenssupport/Xsens_MTi_ROS_Driver_and_Ntrip_Client.git && \
-    git clone https://github.com/stereolabs/zed-ros2-wrapper.git
+ARG CUSPARSE_SOLVER_NAME="libcudss-linux-sbsa-0.6.0.5_cuda12-archive"
+RUN mkdir -p tmp_cudss && cd tmp_cudss && \
+    curl -L -O https://developer.download.nvidia.com/compute/cudss/redist/libcudss/linux-sbsa/${CUSPARSE_SOLVER_NAME}.tar.xz && \
+    tar xf ${CUSPARSE_SOLVER_NAME}.tar.xz && \
+    cp -a ${CUSPARSE_SOLVER_NAME}/include/* /usr/local/cuda/include/ && \
+    cp -a ${CUSPARSE_SOLVER_NAME}/lib/* /usr/local/cuda/lib64/ && \
+	rm -rf ${CUSPARSE_SOLVER_NAME} ${CUSPARSE_SOLVER_NAME}.tar.xz
 
-# Build the ZED Wrapper and IMU driver
-WORKDIR /root/ros2_ws
-# RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
-#   source /root/dependencies_ws/install/setup.bash && \
-#   colcon build --parallel-workers $(nproc) --symlink-install \
-#   --event-handlers console_direct+ --base-paths src \
-#   --cmake-args ' -DCMAKE_BUILD_TYPE=Release' \
-#   ' -DCMAKE_LIBRARY_PATH=/usr/local/cuda/lib64/stubs' \
-#   ' -DCMAKE_CXX_FLAGS="-Wl,--allow-shlib-undefined"' \
-#   ' --no-warn-unused-cli' "
+# Install ultralytics, avoid reinstalling numpy and opencv (torch, tensorflow and torchvision installed in the .toml file, cuda supported cause pip index is Jetpack6 one)
+RUN pip install --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} --ignore-install sympy \ 
+	cython --upgrade
 
-RUN echo "source /opt/ros/humble/install/setup.bash && source /root/dependencies_ws/install/setup.bash && source /root/ros2_ws/install/setup.bash" >> ~/.bashrc
+RUN git clone https://github.com/ultralytics/ultralytics.git && \
+    cd ultralytics && \
+	sed -i '/"numpy>=1.23.0"/d; /"opencv-python>=4.6.0"/d; /"numpy<2.0.0"/d' pyproject.toml && \
+	pip install --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} -e . && \
+    cd .. && \
+	rm -rf ultralytics
+
+# Install dependencies for vision
+RUN pip install --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} notebook \
+	roboflow albumentations pandas && \
+	pip install --ignore-install --upgrade typing_extensions
+
+# Source env variables
+RUN echo "source /opt/ros/humble/install/setup.bash && source /root/dependencies_ws/install/setup.bash && source /root/AUV-2026/ros2_ws/install/setup.bash" >> ~/.bashrc
 RUN echo "tmux" >> ~/.bashrc
 CMD ["bash"]
