@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-"""
-Fake Camera Node for Testing Image Collection
-Publishes synthetic images to simulate ZED2i and down camera
-"""
+
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
