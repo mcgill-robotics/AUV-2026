@@ -27,8 +27,8 @@ services:
       - /var/nvidia/nvcam/settings/:/var/nvidia/nvcam/settings/
       - /etc/systemd/system/zed_x_daemon.service:/etc/systemd/system/zed_x_daemon.service
       - type: bind 
-        source: ../../../AUV-2026
-        target: /root/AUV-2026
+        source: ../../../AUV-2026/ros2_ws
+        target: /root/ros2_ws
     command: bash -c ${OVERRIDE_COMMAND:-"tail -f /dev/null"}
     build: .
     deploy:
