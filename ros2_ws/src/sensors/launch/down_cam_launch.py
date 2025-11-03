@@ -4,13 +4,12 @@ from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 
 def generate_launch_description():
-    # args to configure camera node
     video_device_arg = DeclareLaunchArgument('video_device', default_value='/dev/down_cam')
     width_arg        = DeclareLaunchArgument('image_width', default_value='1280')
     height_arg       = DeclareLaunchArgument('image_height', default_value='720')
     fps_arg          = DeclareLaunchArgument('framerate', default_value='30.0')
-    pixfmt_arg       = DeclareLaunchArgument('pixel_format', default_value='yuyv')  # try 'mjpeg' later
-    frame_id_arg     = DeclareLaunchArgument('camera_frame_id', default_value='vision/down_cam')  # no leading '/'
+    pixfmt_arg       = DeclareLaunchArgument('pixel_format', default_value='yuyv') 
+    frame_id_arg     = DeclareLaunchArgument('camera_frame_id', default_value='vision/down_cam')
 
     cam = Node(
         package='usb_cam',
@@ -23,12 +22,10 @@ def generate_launch_description():
             'image_height':    LaunchConfiguration('image_height'),
             'framerate':       LaunchConfiguration('framerate'),
             'pixel_format':    LaunchConfiguration('pixel_format'),
-            'camera_frame_id': LaunchConfiguration('camera_frame_id'),
+            'camera_frame_id': LaunchConfiguration('down_cam'),
             'io_method':       'mmap',
-            # add calibration later
-            # 'camera_info_url': 'file:///root/ros2_ws/src/sensors/config/down_cam.yaml',
+            
         }],
-        # force standardized topic names
         remappings=[
             ('image_raw',  '/down_cam/image_raw'),
             ('camera_info','/down_cam/camera_info'),
