@@ -101,15 +101,6 @@ def tabulate_metrics(filename: Path) -> None:
     print("Average Metrics:")
     for column in metrics.columns:
         print(f"{column}: {metrics[column].mean():0.3f}")
-    
-    # print("---Max---")
-    # for column in metrics.columns:
-    #     print(f"{column}: {metrics[column].max():0.3f} at row {metrics[column].idxmax()}")
-    # print("---Min---")
-    # for column in metrics.columns:
-    #     print(f"{column}: {metrics[column].min():0.3f} at row {metrics[column].idxmin()}")
-    # print("---Mean---")
-
 def main(verbose: bool = True, progress_bar: bool = True):
     parser = argparse.ArgumentParser(description='AUV Image Enhancement Comparison Tool')
     parser.add_argument('--input', '-i', type=str, default='input', 
