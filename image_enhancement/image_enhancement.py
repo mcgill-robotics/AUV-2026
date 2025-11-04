@@ -3,29 +3,6 @@ import cv2
 import numpy as np
 from typing import Tuple
 from abc import ABC, abstractmethod
-# optional PyTorch support
-try:
-        import torch
-        import torchvision.transforms as T
-        TORCH_INSTALLED = True
-except ImportError:
-        TORCH_INSTALLED = False
-
-if TORCH_INSTALLED:
-        class TorchRBGTensorToCVBGRNumpy:
-                """Convert torch RGB tensor [C,H,W] in [0,1] to np.ndarray in BGR uint8."""
-                def __call__(self, tensor: torch.Tensor) -> np.ndarray:
-                        array = tensor.permute(1, 2, 0).detach().cpu().numpy()
-                        array = (array * 255).clip(0, 255).astype(np.uint8)
-                        return cv2.cvtColor(array, cv2.COLOR_RGB2BGR)
-
-        class CVBGRNumpyToTorchRGBTensor:
-                """Convert np.ndarray BGR uint8 -> torch RGB float tensor [C,H,W]."""
-                def __call__(self, array: np.ndarray) -> torch.Tensor:
-                        rgb = cv2.cvtColor(array, cv2.COLOR_BGR2RGB)
-                        tensor = torch.from_numpy(rgb).permute(2, 0, 1).float() / 255.0
-                        return tensor
-
 
 class EnhancementAlgorithm(ABC):
         '''Abstract Base Class containing various image enhancement algorithms for underwater images.'''
@@ -38,29 +15,23 @@ class EnhancementAlgorithm(ABC):
         
 class ImageEnhancer:
         '''Aggregation of enhancement algorithms'''
-        def __init__(self):
+        def __init__(self,*algorithms):
                 # Current combination and ordering of algorithms for image enhancement (one of each of the categories )
-                self.algorithms = [
-                        WhiteBalance(),                   
-                        DCPEnhancement(),                 
-                        GuidedFilter(),                    
-                        CLAHEEnhancement()                 
-                ]
+                if not algorithms: 
+                        self.algorithms = [
+                                WhiteBalance(),                   
+                                DCPEnhancement(),                 
+                                GuidedFilter(),                    
+                                CLAHEEnhancement()                 
+                        ]
+                else:
+                        self.algorithms = list(algorithms)
 
         def enhance(self, image: np.ndarray) -> np.ndarray:
                 for algorithm in self.algorithms:
                         image = algorithm(image)
                 return image
-        def to_torch_transform(self):
-                '''Return a torch transform compose equivalent (calls enhancement on CPU).'''
-                if not TORCH_INSTALLED:
-                        raise NotImplementedError("PyTorch is not installed.")
-                else:
-                        return T.Compose([
-                        TorchRBGTensorToCVBGRNumpy(),
-                        self, # Call the enhance method
-                        CVBGRNumpyToTorchRGBTensor(),
-                        ])
+        
         def __call__(self, image: np.ndarray) -> np.ndarray:
                 return self.enhance(image)
 
