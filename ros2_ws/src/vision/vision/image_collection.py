@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image

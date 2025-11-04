@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 from launch import LaunchDescription
 from launch_ros.actions import Node
 from launch.actions import DeclareLaunchArgument
@@ -36,7 +38,7 @@ def generate_launch_description():
     # Image collection node
     image_collection_node = Node(
         package='vision',  # Change to your package name
-        executable='image_collection',  # No .py extension!
+        executable='image_collection',  
         name='image_collection',
         output='screen',
         parameters=[{
