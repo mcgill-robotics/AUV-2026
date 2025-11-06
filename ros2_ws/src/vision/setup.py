@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 from setuptools import find_packages, setup
 import os
 from glob import glob
