@@ -25,13 +25,13 @@ def generate_launch_description():
     
     front_cam_topic_arg = DeclareLaunchArgument(
         'front_cam_topic',
-        default_value='/zed2i/zed_node/stereo/image_rect_color',
+        default_value='/zed/zed_node/stereo/image_rect_color',
         description='Front camera topic'
     )
     
     down_cam_topic_arg = DeclareLaunchArgument(
         'down_cam_topic',
-        default_value='/vision/down_cam/image_raw',
+        default_value='/down_cam/image_raw',
         description='Down camera topic'
     )
     

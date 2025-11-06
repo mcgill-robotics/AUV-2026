@@ -8,6 +8,7 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
 import cv2
 import os
+import subprocess
 from datetime import datetime
 import threading
 from pathlib import Path
@@ -24,7 +25,7 @@ class ImageCollectionNode(Node):
         self.declare_parameter('front_cam_data_dir', 'data_front_cam')
         self.declare_parameter('down_cam_data_dir', 'data_down_cam')
         self.declare_parameter('front_cam_topic', '/zed/zed_node/stereo/image_rect_color')
-        self.declare_parameter('down_cam_topic', '/vision/down_cam/image_raw')
+        self.declare_parameter('down_cam_topic', '/down_cam/image_raw')
         
         # Get parameters
         self.front_cam_dir = self.get_parameter('front_cam_data_dir').value
@@ -69,13 +70,12 @@ class ImageCollectionNode(Node):
     
     def _check_display(self):
         """Check if display is actually available and working"""
-        import os
-        import subprocess
         
         # Check DISPLAY variable
         if 'DISPLAY' not in os.environ:
             return False
         
+
         # Try to actually test X connection
         try:
             result = subprocess.run(
@@ -174,7 +174,7 @@ class ImageCollectionNode(Node):
                 image = cv2.resize(image, (int(w * scale), int(h * scale)))
             
             cv2.imshow(window_name, image)
-            cv2.waitKey(1000)  # Display for 1 second
+            cv2.waitKey(0)  # Display for 1 second
             cv2.destroyWindow(window_name)
             cv2.destroyAllWindows()
             
