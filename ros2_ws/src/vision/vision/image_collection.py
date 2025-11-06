@@ -23,7 +23,7 @@ class ImageCollectionNode(Node):
         # Parameters
         self.declare_parameter('front_cam_data_dir', 'data_front_cam')
         self.declare_parameter('down_cam_data_dir', 'data_down_cam')
-        self.declare_parameter('front_cam_topic', '/zed2i/zed_node/stereo/image_rect_color')
+        self.declare_parameter('front_cam_topic', '/zed/zed_node/stereo/image_rect_color')
         self.declare_parameter('down_cam_topic', '/vision/down_cam/image_raw')
         
         # Get parameters
