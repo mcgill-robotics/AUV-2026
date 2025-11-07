@@ -152,4 +152,7 @@ RUN echo "source ros_entrypoint.sh" >> ~/.bashrc \
     && echo "source ros-humble-ros1-bridge/install/setup.bash " >> ~/.bashrc \
     && echo "set +e" >> ~/.bashrc
 
-RUN echo "tmux" >> ~/.bashrc
+RUN echo '[ -z "$TMUX" ] && tmux' >> ~/.bashrc
+
+RUN echo 'set -g default-command "bash -l -i"' >> ~/.tmux.conf \
+    && echo 'set -g default-terminal "screen-256color"' >> ~/.tmux.conf
