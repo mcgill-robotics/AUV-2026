@@ -143,6 +143,8 @@ RUN pip install -qq --no-cache-dir -r requirements.txt \
 # Set shell to bash
 SHELL ["/bin/bash", "-c"]
 
+RUN git config --global --add safe.directory '*'
+
 # Add source to bashrc
 RUN echo "source ros_entrypoint.sh" >> ~/.bashrc \
     && echo "source ros_tutorials/install/setup.bash" >> ~/.bashrc \
