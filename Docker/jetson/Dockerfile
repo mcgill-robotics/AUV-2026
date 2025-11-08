@@ -31,11 +31,7 @@ ARG BACKWARD_ROS_VERSION=1.0.7
 ARG RQT_GUI_VERSION=1.1.7
 ARG ROBOT_STATE_PUBLISHER_VERSION=3.5.2
 ARG USB_CAM_VERSION=0.8.1
-# Make pip work
 ENV PYPI_URL=https://pypi.jetson-ai-lab.io/jp6/cu126
-ENV PIP_INDEX_URL=https://pypi.jetson-ai-lab.io/jp6/cu126 
-ENV PIP_TRUSTED_HOST=pypi.jetson-ai-lab.io
-
 
 # Set up environment (we in paris because official docs are in paris)
 ENV LANG=C.UTF-8
@@ -94,7 +90,11 @@ RUN echo "# R${L4T_MAJOR} (release), REVISION: ${L4T_MINOR}" > /etc/nv_tegra_rel
   pip install protobuf && \
   wget -q --no-check-certificate -O ZED_SDK_Linux_JP.run \
   ${ZED_SDK_URL} && \
+<<<<<<< HEAD
   chmod +x ZED_SDK_Linux_JP.run ; ./ZED_SDK_Linux_JP.run silent skip_python && \
+=======
+  chmod +x ZED_SDK_Linux_JP.run ; ./ZED_SDK_Linux_JP.run silent && \
+>>>>>>> main
   rm -rf ZED_SDK_Linux_JP.run && \
   rm -rf /var/lib/apt/lists/*
 
@@ -183,6 +183,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # There are 2 workspaces so that all the dependencies installed source
 # do not clutter our ros2_ws
 WORKDIR /root/dependencies_ws
+<<<<<<< HEAD
 
 RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
   colcon build --parallel-workers $(nproc) --symlink-install \
@@ -223,9 +224,39 @@ RUN pip install notebook && \
     pip install --ignore-install --upgrade typing_extensions 
 
 #RUN pip uninstall typing_extensions
+=======
+>>>>>>> main
 
+RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
+  colcon build --parallel-workers $(nproc) --symlink-install \
+  --event-handlers console_direct+ --base-paths src \
+  --cmake-args ' -DCMAKE_BUILD_TYPE=Release' \
+  ' -DCMAKE_LIBRARY_PATH=/usr/local/cuda/lib64/stubs' \
+  ' -DCMAKE_CXX_FLAGS="-Wl,--allow-shlib-undefined"' \
+  ' --no-warn-unused-cli' "
 
+<<<<<<< HEAD
 # Source env variables
 RUN echo "source /opt/ros/humble/install/setup.bash && source /root/dependencies_ws/install/setup.bash && source /root/AUV-2026/ros2_ws/install/setup.bash" >> ~/.bashrc
+=======
+# Install ZED wrapper and IMU Driver
+WORKDIR /root/ros2_ws/src
+
+RUN git clone --branch ros2 https://github.com/xsenssupport/Xsens_MTi_ROS_Driver_and_Ntrip_Client.git && \
+    git clone https://github.com/stereolabs/zed-ros2-wrapper.git
+
+# Build the ZED Wrapper and IMU driver
+WORKDIR /root/ros2_ws
+RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
+  source /root/dependencies_ws/install/setup.bash && \
+  colcon build --parallel-workers $(nproc) --symlink-install \
+  --event-handlers console_direct+ --base-paths src \
+  --cmake-args ' -DCMAKE_BUILD_TYPE=Release' \
+  ' -DCMAKE_LIBRARY_PATH=/usr/local/cuda/lib64/stubs' \
+  ' -DCMAKE_CXX_FLAGS="-Wl,--allow-shlib-undefined"' \
+  ' --no-warn-unused-cli' "
+
+RUN echo "source /opt/ros/humble/install/setup.bash && source /root/dependencies_ws/install/setup.bash && source /root/ros2_ws/install/setup.bash" >> ~/.bashrc
+>>>>>>> main
 RUN echo "tmux" >> ~/.bashrc
 CMD ["bash"]
