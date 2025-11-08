@@ -9,7 +9,7 @@ def generate_launch_description():
     height_arg       = DeclareLaunchArgument('image_height', default_value='720')
     fps_arg          = DeclareLaunchArgument('framerate', default_value='30.0')
     pixfmt_arg       = DeclareLaunchArgument('pixel_format', default_value='yuyv') 
-    frame_id_arg     = DeclareLaunchArgument('camera_frame_id', default_value='vision/down_cam')
+    frame_id_arg     = DeclareLaunchArgument('camera_frame_id', default_value='sensors/down_cam')
 
     cam = Node(
         package='usb_cam',
@@ -22,7 +22,7 @@ def generate_launch_description():
             'image_height':    LaunchConfiguration('image_height'),
             'framerate':       LaunchConfiguration('framerate'),
             'pixel_format':    LaunchConfiguration('pixel_format'),
-            'camera_frame_id': LaunchConfiguration('down_cam'),
+            'camera_frame_id': LaunchConfiguration('camera_frame_id'),
             'io_method':       'mmap',
             
         }],
