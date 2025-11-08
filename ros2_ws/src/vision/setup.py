@@ -30,8 +30,8 @@ setup(
     entry_points={
         'console_scripts': [
                 'image_collection = vision.image_collection:main',
-                'down_cam_image_enhancer = vision.down_image_enhancement:main',
-                'front_cam_image_enhancer = vision.front_image_enhancement:main'
+                'down_image_enhancement = vision.down_image_enhancement:main',
+                'front_image_enhancement = vision.front_image_enhancement:main',
         ],
     },
 )

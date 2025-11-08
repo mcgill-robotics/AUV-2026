@@ -1,20 +1,18 @@
 import rclpy
 
-from ros2_ws.src.vision.vision.image_enhancement import image_enhancement_utils
-from ros2_ws.src.vision.vision.image_enhancement import enhancement_algorithms as enhance
+from vision import image_enhancement_utils
+from vision import enhancement_algorithms as enhance
 
 def main(args=None):
     rclpy.init(args=args)
 
     enhancer = enhance.ImageEnhancer(
-        enhance.UnderwaterColorCorrection(),
         enhance.DCPEnhancement(),
-        enhance.BilateralFilter(),
         enhance.CLAHEEnhancement()
     )
     enhance_node = image_enhancement_utils.EnhanceNode(
         node_name="front_image_enhancement",
-        input_topic="sensors/zed2i/zed_node/stereo/image_rect_color",
+        input_topic="sensors/zed/zed_node/stereo/image_rect_color",
         output_topic="vision/front_cam/image_enhanced",
         enhancer=enhancer
     )
