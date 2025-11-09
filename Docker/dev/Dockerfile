@@ -33,7 +33,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     vim \
     wget \
     x11-apps \
-    libboost-all-dev \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -44,8 +43,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
    ros-$ROS_DISTRO-foxglove-bridge \
    ros-$ROS_DISTRO-mavros \
    ros-$ROS_DISTRO-rviz2 \
-   ros-$ROS_DISTRO-nmea-msgs \
-   ros-$ROS_DISTRO-mavros-msgs \
    && rm -rf /var/lib/apt/lists/* \
    && apt-get clean
 
