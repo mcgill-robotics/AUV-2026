@@ -3,11 +3,19 @@ from sensor_msgs.msg import Image
 
 from cv_bridge import CvBridge
 
-from ros2_ws.src.vision.vision.image_enhancement import enhancement_algorithms as enhance
+from vision.image_enhancement import enhancement_algorithms as enhance
 
 class EnhanceNode(Node):
     def __init__(self,node_name:str,input_topic:str,output_topic:str,enhancer:enhance.ImageEnhancer):
         super().__init__(node_name)
+        
+        self.declare_parameter("input_topic", input_topic)
+        self.declare_parameter("output_topic", output_topic)
+        
+        # Get parameters
+        input_topic = self.get_parameter("input_topic").value or input_topic
+        output_topic = self.get_parameter("output_topic").value or output_topic
+
         self.subscription = self.create_subscription(
 			Image, # Image message type
 			input_topic, # Topic name
@@ -17,7 +25,7 @@ class EnhanceNode(Node):
         self.publisher = self.create_publisher(Image, output_topic, 10)
         self.get_logger().info(f"EnhanceNode initialized with input topic: {input_topic} and output topic: {output_topic}")
         self.enhancer = enhancer
-        self.get_logger().info(f"Using Enhancer: {self.enhancer}")
+        self.get_logger().info(f"Using: {self.enhancer}")
         self.br = CvBridge()
         
     def enhancement_callback(self, msg):

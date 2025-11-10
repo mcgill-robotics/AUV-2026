@@ -43,8 +43,8 @@ class ImageEnhancer:
         return self.enhance(image)
 
     def __str__(self) -> str:
-        algos = '\n\t'.join([algo.algorithm_name() for algo in self.algorithms])
-        return f"Image Enhancer with algorithms:(\n{algos}\n)"
+        algos = '\n\t'.join([f"{i}. {algo.algorithm_name()}" for i, algo in enumerate(self.algorithms,1)])
+        return f"Image Enhancer with algorithms [\n\t{algos}\n]"
 
 # 1. COLOR CORRECTION ALGORITHMS
 

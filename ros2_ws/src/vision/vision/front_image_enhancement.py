@@ -1,7 +1,7 @@
 import rclpy
 
-from vision import image_enhancement_utils
-from vision import enhancement_algorithms as enhance
+from vision.image_enhancement  import image_enhancement_utils
+from vision.image_enhancement  import enhancement_algorithms as enhance
 
 def main(args=None):
     rclpy.init(args=args)
