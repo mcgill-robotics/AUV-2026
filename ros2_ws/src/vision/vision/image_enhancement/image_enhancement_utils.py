@@ -15,7 +15,9 @@ class EnhanceNode(Node):
 			10 # QoS: if received message > this #, start dropping oldest received ones
 		)
         self.publisher = self.create_publisher(Image, output_topic, 10)
+        self.get_logger().info(f"EnhanceNode initialized with input topic: {input_topic} and output topic: {output_topic}")
         self.enhancer = enhancer
+        self.get_logger().info(f"Using Enhancer: {self.enhancer}")
         self.br = CvBridge()
         
     def enhancement_callback(self, msg):
