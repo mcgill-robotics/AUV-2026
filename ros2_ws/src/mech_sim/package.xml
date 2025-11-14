@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>mech_sim</name>
+  <version>0.0.1</version>
+  <description>AUV 6-DOF equations-of-motion simulator (C++)</description>
+
+  <maintainer email="nadim.asmar@mail.mcgill.ca">Nadim Asmar</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <!-- Core ROS deps -->
+  <depend>rclcpp</depend>
+  <depend>nav_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>tf2</depend>
+  <depend>tf2_ros</depend>
+
+  <!-- If you have a custom message package for thrusters, enable this line: -->
+  <depend>auv_msgs</depend>
+
+  <!-- System deps found via CMake -->
+  <exec_depend>eigen3_cmake_module</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
