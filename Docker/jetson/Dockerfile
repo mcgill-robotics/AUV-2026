@@ -31,6 +31,8 @@ ARG BACKWARD_ROS_VERSION=1.0.7
 ARG RQT_GUI_VERSION=1.1.7
 ARG ROBOT_STATE_PUBLISHER_VERSION=3.5.2
 ARG USB_CAM_VERSION=0.8.1
+ARG IMAGE_COMMON_VERSION=3.1.12
+ARG MAVROS_VERSION=2.10.1
 
 # Make pip work
 ENV PYPI_URL=https://pypi.jetson-ai-lab.io/jp6/cu126
@@ -61,46 +63,46 @@ RUN if [ "$(curl -L -I "${ZED_SDK_URL}" -o /dev/null -s -w '%{http_code}\n' | he
 
 # Disable apt-get warnings
 RUN curl -fsSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg && \
-   apt-get update || true && apt-get install -y --no-install-recommends apt-utils dialog && \
-   rm -rf /var/lib/apt/lists/*
+    apt-get update || true && apt-get install -y --no-install-recommends apt-utils dialog && \
+    rm -rf /var/lib/apt/lists/*
 
 # Install SSH server and set up SSH access
 # Hardcoding a password is not secure but eh
 RUN apt-get update && apt-get install -y \
-   openssh-server \
-   xauth \
-   && mkdir /var/run/sshd \
-   && mkdir /root/.ssh \
-   && chmod 700 /root/.ssh \
-   && echo "Port 222" >> /etc/ssh/sshd_config \
-   && echo "PermitRootLogin yes" >> /etc/ssh/sshd_config \
-   && echo 'root:jetson' | chpasswd \
-   && rm -rf /var/lib/apt/lists/*
- 
+    openssh-server \
+    xauth \
+    && mkdir /var/run/sshd \
+    && mkdir /root/.ssh \
+    && chmod 700 /root/.ssh \
+    && echo "Port 222" >> /etc/ssh/sshd_config \
+    && echo "PermitRootLogin yes" >> /etc/ssh/sshd_config \
+    && echo 'root:jetson' | chpasswd \
+    && rm -rf /var/lib/apt/lists/*
+    
 RUN echo "# R${L4T_MAJOR} (release), REVISION: ${L4T_MINOR}" > /etc/nv_tegra_release && \
-  apt-get update -y || true && apt-get install -y --no-install-recommends \
-  build-essential \
-  cmake \
-  curl \
-  gnupg2 \
-  less \
-  libdraco-dev \
-  libgeographic-dev \
-  libusb-1.0-0-dev \
-  python3 \
-  python3-dev \
-  python3-pip \
-  python3-setuptools \
-  wget \
-  zlib1g-dev \
-  zstd && \
-  export PIP_INDEX_URL="${PIP_INDEX_FOR_NON_NVIDIA}" && \
-  pip install protobuf && \
-  wget -q --no-check-certificate -O ZED_SDK_Linux_JP.run \
-  ${ZED_SDK_URL} && \
-  chmod +x ZED_SDK_Linux_JP.run ; ./ZED_SDK_Linux_JP.run silent skip_python && \
-  rm -rf ZED_SDK_Linux_JP.run && \
-  rm -rf /var/lib/apt/lists/*
+    apt-get update -y || true && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    curl \
+    gnupg2 \
+    less \
+    libdraco-dev \
+    libgeographic-dev \
+    libusb-1.0-0-dev \
+    python3 \
+    python3-dev \
+    python3-pip \
+    python3-setuptools \
+    wget \
+    zlib1g-dev \
+    zstd && \
+    export PIP_INDEX_URL="${PIP_INDEX_FOR_NON_NVIDIA}" && \
+    pip install protobuf && \
+    wget -q --no-check-certificate -O ZED_SDK_Linux_JP.run \
+    ${ZED_SDK_URL} && \
+    chmod +x ZED_SDK_Linux_JP.run ; ./ZED_SDK_Linux_JP.run silent skip_python && \
+    rm -rf ZED_SDK_Linux_JP.run && \
+    rm -rf /var/lib/apt/lists/*
 
 # Install other common development tools
 # Keep these in alphabetical
@@ -146,6 +148,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
    libwayland-dev \
    libxkbcommon-dev \
    ninja-build \
+   v4l-utils \
    && add-apt-repository ppa:deadsnakes/ppa -y \
    && rm -rf /var/lib/apt/lists/* \
    && apt-get clean
@@ -168,7 +171,8 @@ RUN wget https://github.com/ros/xacro/archive/refs/tags/${XACRO_VERSION}.tar.gz 
     wget https://github.com/ros-geographic-info/geographic_info/archive/refs/tags/${GEOGRAPHIC_INFO_VERSION}.tar.gz -O - | tar -xvz && mv geographic_info-${GEOGRAPHIC_INFO_VERSION} geographic-info && \
     wget https://github.com/pal-robotics/backward_ros/archive/refs/tags/${BACKWARD_ROS_VERSION}.tar.gz -O - | tar -xvz && mv backward_ros-${BACKWARD_ROS_VERSION} backward_ros && \
     wget https://github.com/ros-drivers/usb_cam/archive/refs/tags/${USB_CAM_VERSION}.tar.gz -O - | tar -xvz && mv usb_cam-${USB_CAM_VERSION} usb_cam && \
-    wget https://github.com/mavlink/mavros/archive/refs/tags/2.10.1.tar.gz -O - | tar -xvz && mv mavros-2.10.1 mavros && \
+    wget https://github.com/mavlink/mavros/archive/refs/tags/${MAVROS_VERSION}.tar.gz -O - | tar -xvz && mv mavros-${MAVROS_VERSION} mavros && \
+    wget https://github.com/ros-perception/image_common/archive/refs/tags/${IMAGE_COMMON_VERSION}.tar.gz -O - | tar -xvz && mv image_common-${IMAGE_COMMON_VERSION} image_common && \
     cp -r geographic-info/geographic_msgs/ . && \
     cp -r mavros/mavros_msgs/ . && \
     rm -rf mavros && \
@@ -176,10 +180,9 @@ RUN wget https://github.com/ros/xacro/archive/refs/tags/${XACRO_VERSION}.tar.gz 
 
 # ROS packages that do not depend on OpenCV/that ZED wrapper doesn't depend on can be installed here
 RUN apt-get update && apt-get install -y --no-install-recommends \
-   ros-$ROS_DISTRO-joy \
-   ros-$ROS_DISTRO-joy-teleop \
-   ros-$ROS_DISTRO-foxglove-bridge \
-   ros-$ROS_DISTRO-mavros \
+    ros-$ROS_DISTRO-foxglove-bridge \
+    ros-$ROS_DISTRO-joy \
+    ros-$ROS_DISTRO-joy-teleop \
    && rm -rf /var/lib/apt/lists/* \
    && apt-get clean
 
@@ -231,5 +234,4 @@ RUN pip install --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} notebook \
 
 # Source env variables
 RUN echo "source /opt/ros/humble/install/setup.bash && source /root/dependencies_ws/install/setup.bash && source /root/AUV-2026/ros2_ws/install/setup.bash" >> ~/.bashrc
-RUN echo "tmux" >> ~/.bashrc
 CMD ["bash"]
