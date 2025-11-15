@@ -15,11 +15,21 @@ class DownCamDetectorNode(Node):
     def __init__(self):
         super().__init__('down_cam_detector')
 
-        self.class_names = ['gate', 'octagon_table', 'octagon_top', 'path_marker', 'sawfish', 'shark']
+        self.declare_parameter('class_names')
+        self.declare_parameter('downcam_model_path')
+        self.declare_parameter('downcam_input_topic')
+        self.declare_parameter('downcam_output_topic')
+        self.declare_parameter('queue_size')
+
+        self.class_names = self.get_parameter('class_names').get_parameter_value().string_array_value
+        model_path = self.get_parameter('downcam_model_path').get_parameter_value().string_value
+        input_topic = self.get_parameter('downcam_input_topic').get_parameter_value().string_value
+        output_topic = self.get_parameter('downcam_output_topic').get_parameter_value().string_value
+        queue_size = self.get_parameter('queue_size').get_parameter_value().integer_value
 
         # Load YOLO
         self.bridge = CvBridge()
-        self.model = YOLO("/best_AUV_sim_down_camera_model.pt")
+        self.model = YOLO(model_path)
 
         if torch.cuda.is_available():
             self.device = "cuda"
@@ -31,22 +41,22 @@ class DownCamDetectorNode(Node):
 
         self.create_subscription(
             Image,
-            "/vision/down_cam/image_enhanced",
+            input_topic,
             self.image_callback,
-            10
+            queue_size
         )
 
         self.pub_detections = self.create_publisher(
             VisionObjectArray,
-            "/vision/down_cam/object_detection",
-            10
+            output_topic,
+            queue_size
         )
 
         self.get_logger().info("DownCam detector initialized.")
 
     def image_callback(self, msg: Image):
         try:
-            # img = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+            img = self.bridge.imgmsg_to_cv2(msg, "bgr8")
         except Exception as e:
             self.get_logger().error(f"cv_bridge failed: {e}")
             return
@@ -62,13 +72,15 @@ class DownCamDetectorNode(Node):
 
         for results in results_list:
             boxes = results.boxes
+            if boxes is None: 
+                continue
             try:
                 boxes = boxes.cpu().numpy() if torch.cuda.is_available() else boxes.numpy()
             except:
                 continue
 
             for box in boxes:
-                conf = float(box.conf[0]) [1,]
+                conf = float(box.conf[0]) 
 
                 cls_id = int(box.cls[0])
                 if cls_id >= len(self.class_names):
