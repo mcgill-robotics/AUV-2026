@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<!-- filepath: /Users/heidibax/AUV-2026/object_detection/launch/frontcam_launch.xml -->
+<launch>
+    <!-- Front Camera Detection Node -->
+    <node pkg="object_detection" exec="front_cam_detector" name="front_cam_detector" output="screen">
+        <param name="class_names" value="['gate', 'octagon_table', 'octagon_top', 'path_marker', 'sawfish', 'shark']"/>
+        <param name="frontcam_model_path" value="/ros2_ws/src/vision/model_pipeline/models/frontcam.pt"/>
+        <param name="frontcam_input_topic" value="/vision/front_cam/image_enhanced"/>
+        <param name="frontcam_output_topic" value="/vision/front_cam/object_detection"/>
+        <param name="queue_size" value="10"/>
+      
+    </node>
+</launch>

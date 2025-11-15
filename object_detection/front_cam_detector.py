@@ -15,11 +15,23 @@ class FrontCamDetectorNode(Node):
     def __init__(self):
         super().__init__('front_cam_detector')
 
-        self.class_names = ['gate', 'octagon_table', 'octagon_top', 'path_marker', 'sawfish', 'shark']
+        self.declare_parameter('class_names')
+        self.declare_parameter('frontcam_model_path')
+        self.declare_parameter('frontcam_input_topic')
+        self.declare_parameter('frontcam_output_topic')
+        self.declare_parameter('queue_size')
+ 
 
+        self.class_names = self.get_parameter('class_names').get_parameter_value().string_array_value
+        model_path = self.get_parameter('frontcam_model_path').get_parameter_value().string_value
+        input_topic = self.get_parameter('frontcam_input_topic').get_parameter_value().string_value
+        output_topic = self.get_parameter('frontcam_output_topic').get_parameter_value().string_value
+        queue_size = self.get_parameter('queue_size').get_parameter_value().integer_value
+
+   
         # Load YOLO
         self.bridge = CvBridge()
-        self.model = YOLO("/ros2_ws/src/vision/model_pipeline/models/frontcam.pt")
+        self.model = YOLO(model_path)
 
         if torch.cuda.is_available():
             self.device = "cuda"
@@ -31,32 +43,32 @@ class FrontCamDetectorNode(Node):
 
         self.create_subscription(
             Image,
-            "/vision/front_cam/image_enhanced",
+            input_topic,
             self.image_callback,
-            10
+            queue_size
         )
 
         self.pub_detections = self.create_publisher(
             VisionObjectArray,
-            "/vision/front_cam/object_detection",
-            10
+            output_topic,
+            queue_size
         )
 
         self.get_logger().info("FrontCam detector initialized.")
 
     def image_callback(self, msg: Image):
         try:
-            img = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+            img = self.bridge.imgmsg_to_cv2(msg, "bgr8") 
         except Exception as e:
             self.get_logger().error(f"cv_bridge failed: {e}")
             return
 
         try:
-            results_list = self.model(img, device=self.device, verbose=False)
+            results_list = self.model(img, device=self.device, verbose=False)  
         except Exception as e:
             self.get_logger().error(f"YOLO failed: {e}")
             return
-
+        
         det_msg = VisionObjectArray()
         det_objects = []
 
@@ -71,13 +83,12 @@ class FrontCamDetectorNode(Node):
 
             for box in boxes:
                 conf = float(box.conf[0])
-
                 cls_id = int(box.cls[0])
+                
                 if cls_id >= len(self.class_names):
                     continue
 
                 label = self.class_names[cls_id]
-
                 cx, cy, w, h = list(box.xywh[0])
 
                 obj = VisionObject()
