@@ -10,7 +10,6 @@ from time import sleep
 MAX_FWD_FORCE = 4 * 9.81 # Numbers from drytest in AUV-2025
 MAX_BWD_FORCE = -2 * 9.81 # Numbers from drytest in AUV-2025
 
-thruster_mount_dirs = [1, 1, 1, 1, 1, 1, 1, 1] # THIS NEEDS TO BE SET BASED ON MOUNTING ORIENTATION
 
 force_amt = 0.1
 
@@ -43,7 +42,7 @@ class DryTestNode(Node):
     def simultaneous_forwards_test(self):
         while rclpy.ok():
             self.get_logger().info("all thrusters spinning at " + str(100 * force_amt) + "% max forwards force for 1s")
-            forward_test_msg = [force_to_pwm_thruster(i + 1, force_amt * MAX_FWD_FORCE * thruster_mount_dirs[i]) for i in range(8)]
+            forward_test_msg = [force_to_pwm_thruster(i + 1, force_amt * MAX_FWD_FORCE) for i in range(8)]
             self.publish_thruster(forward_test_msg)
             sleep(1)
             self.publish_thruster(reset_msg)
@@ -55,7 +54,7 @@ class DryTestNode(Node):
     def optimized_dry_test(self, t):
         print("Thruster " + str(t) + " spinning at " + str(100 * force_amt) + "% max forwards force for 1s")
         optimized_dry_test_msg = reset_msg.copy()
-        optimized_dry_test_msg[t - 1] = force_to_pwm_thruster(t, force_amt * MAX_FWD_FORCE * thruster_mount_dirs[t - 1])
+        optimized_dry_test_msg[t - 1] = force_to_pwm_thruster(t, force_amt * MAX_FWD_FORCE)
         self.publish_thruster(optimized_dry_test_msg)
         sleep(1)
         self.publish_thruster(reset_msg)
