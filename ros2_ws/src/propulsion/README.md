@@ -25,7 +25,7 @@ This process occurs in two stages:
 The [wrench](https://docs.ros.org/en/noetic/api/geometry_msgs/html/msg/Wrench.html) consists of forces AND torques on the X,Y,Z axes. These are distributed to the thrusters using the following allocation matrix:
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/0a9ddce5-7d18-44d3-95cb-cef3be8d99f7" alt="Thruster Allocation Matrix" width="1000"/>
+  <img src="https://github.com/user-attachments/assets/27314862-01d8-41d9-a60b-5a9c4279ef51" alt="Thruster Allocation Matrix" width="1000"/>
 </p>
 
 
