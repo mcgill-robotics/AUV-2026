@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+    <arg name="front_cam_topic" default="/sensors/zed/zed_node/stereo/image_rect_color"/>
+    <arg name="down_cam_topic" default="/sensors/down_cam/image_raw"/>
+    <arg name="front_enhanced_topic" default="/vision/front_cam/enhanced_image"/>
+    <arg name="down_enhanced_topic" default="/vision/down_cam/enhanced_image"/>
+
+    <node pkg="vision" exec="front_image_enhancement" name="front_image_enhancement" output="screen">
+        <param name="input_topic" value="$(var front_cam_topic)"/>
+        <param name="output_topic" value="$(var front_enhanced_topic)"/>
+    </node>
+
+    <node pkg="vision" exec="down_image_enhancement" name="down_image_enhancement" output="screen">
+        <param name="input_topic" value="$(var down_cam_topic)"/>
+        <param name="output_topic" value="$(var down_enhanced_topic)"/>
+    </node>
+</launch>
