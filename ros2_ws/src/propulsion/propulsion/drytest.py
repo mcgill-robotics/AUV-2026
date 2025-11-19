@@ -172,10 +172,37 @@ def dry_test(self):
                 print("Force (x=" + str(desired_effort.force.x) + ", y=" + str(desired_effort.force.y) + ", z=" + str(desired_effort.force.z) + \
                       "), Torque (x=" + str(desired_effort.torque.x) + ", y=" + str(desired_effort.torque.y) + ", z=" + str(desired_effort.torque.z) + ")")
 
+        if choice == "5":
+            while True:
+                thruster_num = input("Select thruster to test (1-8) or any other key to go back:\n")
+                try:
+                    thruster_num = int(thruster_num)
+                except:
+                    print("Invalid input, returning to main menu.")
+                    break
+                if not (1 <= thruster_num and thruster_num <= 8):
+                    print("Invalid input, returning to main menu.")
+                    break
+                duration = input("Select duration to run test (in seconds):\n")
+                try:
+                    duration = float(duration)
+                except:
+                    print("Invalid input")
+                    continue
+                if duration <= 0:
+                    print("Invalid input")
+                    continue
+                print("Thruster " + str(thruster_num) + " spinning at " + str(100 * force_amt) + "% max forwards force for " + str(duration) + "s")
+                custom_test_msg = reset_msg.copy()
+                custom_test_msg[thruster_num - 1] = force_to_pwm_thruster(thruster_num, force_amt * MAX_FWD_FORCE * thruster_mount_dirs[thruster_num - 1])
+                self.publish_thruster(custom_test_msg)
+                sleep(duration)
+                self.publish_thruster(reset_msg)
         else:
             self.publish_thruster(reset_msg)
             print("Thank you for using the dry test program. Exiting...")
             break
+
 
 def main(args=None):
     rclpy.init(args=args)
