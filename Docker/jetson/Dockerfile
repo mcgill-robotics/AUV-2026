@@ -31,8 +31,17 @@ ARG BACKWARD_ROS_VERSION=1.0.7
 ARG RQT_GUI_VERSION=1.1.7
 ARG ROBOT_STATE_PUBLISHER_VERSION=3.5.2
 ARG USB_CAM_VERSION=0.8.1
-ENV PYPI_URL=https://pypi.jetson-ai-lab.io/jp6/cu126
+ARG IMAGE_COMMON_VERSION=3.1.12
+ARG MAVROS_VERSION=2.10.1
 
+# Make pip work
+ENV PYPI_URL=https://pypi.jetson-ai-lab.io/jp6/cu126
+ENV PIP_INDEX_URL=https://pypi.jetson-ai-lab.io/jp6/cu126 
+ENV PIP_TRUSTED_HOST=pypi.jetson-ai-lab.io
+
+# protobuf is a pip package needed by zed sdk, for some reason nvidias pip server killed protobuf in its available packages so you need 
+# the default non nvidia pip index just to download protobuf
+ENV PIP_INDEX_FOR_NON_NVIDIA=https://pypi.python.org/simple
 
 # Set up environment (we in paris because official docs are in paris)
 ENV LANG=C.UTF-8
@@ -54,46 +63,46 @@ RUN if [ "$(curl -L -I "${ZED_SDK_URL}" -o /dev/null -s -w '%{http_code}\n' | he
 
 # Disable apt-get warnings
 RUN curl -fsSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg && \
-   apt-get update || true && apt-get install -y --no-install-recommends apt-utils dialog && \
-   rm -rf /var/lib/apt/lists/*
+    apt-get update || true && apt-get install -y --no-install-recommends apt-utils dialog && \
+    rm -rf /var/lib/apt/lists/*
 
 # Install SSH server and set up SSH access
 # Hardcoding a password is not secure but eh
 RUN apt-get update && apt-get install -y \
-   openssh-server \
-   xauth \
-   && mkdir /var/run/sshd \
-   && mkdir /root/.ssh \
-   && chmod 700 /root/.ssh \
-   && echo "Port 222" >> /etc/ssh/sshd_config \
-   && echo "PermitRootLogin yes" >> /etc/ssh/sshd_config \
-   && echo 'root:jetson' | chpasswd \
-   && rm -rf /var/lib/apt/lists/*
- 
+    openssh-server \
+    xauth \
+    && mkdir /var/run/sshd \
+    && mkdir /root/.ssh \
+    && chmod 700 /root/.ssh \
+    && echo "Port 222" >> /etc/ssh/sshd_config \
+    && echo "PermitRootLogin yes" >> /etc/ssh/sshd_config \
+    && echo 'root:jetson' | chpasswd \
+    && rm -rf /var/lib/apt/lists/*
+    
 RUN echo "# R${L4T_MAJOR} (release), REVISION: ${L4T_MINOR}" > /etc/nv_tegra_release && \
-  apt-get update -y || true && apt-get install -y --no-install-recommends \
-  build-essential \
-  cmake \
-  curl \
-  gnupg2 \
-  less \
-  libdraco-dev \
-  libgeographic-dev \
-  libusb-1.0-0-dev \
-  python3 \
-  python3-dev \
-  python3-pip \
-  python3-setuptools \
-  wget \
-  zlib1g-dev \
-  zstd && \
-  export PIP_INDEX_URL="${PYPI_URL}" && \
-  pip install protobuf && \
-  wget -q --no-check-certificate -O ZED_SDK_Linux_JP.run \
-  ${ZED_SDK_URL} && \
-  chmod +x ZED_SDK_Linux_JP.run ; ./ZED_SDK_Linux_JP.run silent && \
-  rm -rf ZED_SDK_Linux_JP.run && \
-  rm -rf /var/lib/apt/lists/*
+    apt-get update -y || true && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    curl \
+    gnupg2 \
+    less \
+    libdraco-dev \
+    libgeographic-dev \
+    libusb-1.0-0-dev \
+    python3 \
+    python3-dev \
+    python3-pip \
+    python3-setuptools \
+    wget \
+    zlib1g-dev \
+    zstd && \
+    export PIP_INDEX_URL="${PIP_INDEX_FOR_NON_NVIDIA}" && \
+    pip install protobuf && \
+    wget -q --no-check-certificate -O ZED_SDK_Linux_JP.run \
+    ${ZED_SDK_URL} && \
+    chmod +x ZED_SDK_Linux_JP.run ; ./ZED_SDK_Linux_JP.run silent skip_python && \
+    rm -rf ZED_SDK_Linux_JP.run && \
+    rm -rf /var/lib/apt/lists/*
 
 # Install other common development tools
 # Keep these in alphabetical
@@ -139,6 +148,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
    libwayland-dev \
    libxkbcommon-dev \
    ninja-build \
+   v4l-utils \
    && add-apt-repository ppa:deadsnakes/ppa -y \
    && rm -rf /var/lib/apt/lists/* \
    && apt-get clean
@@ -161,7 +171,8 @@ RUN wget https://github.com/ros/xacro/archive/refs/tags/${XACRO_VERSION}.tar.gz 
     wget https://github.com/ros-geographic-info/geographic_info/archive/refs/tags/${GEOGRAPHIC_INFO_VERSION}.tar.gz -O - | tar -xvz && mv geographic_info-${GEOGRAPHIC_INFO_VERSION} geographic-info && \
     wget https://github.com/pal-robotics/backward_ros/archive/refs/tags/${BACKWARD_ROS_VERSION}.tar.gz -O - | tar -xvz && mv backward_ros-${BACKWARD_ROS_VERSION} backward_ros && \
     wget https://github.com/ros-drivers/usb_cam/archive/refs/tags/${USB_CAM_VERSION}.tar.gz -O - | tar -xvz && mv usb_cam-${USB_CAM_VERSION} usb_cam && \
-    wget https://github.com/mavlink/mavros/archive/refs/tags/2.10.1.tar.gz -O - | tar -xvz && mv mavros-2.10.1 mavros && \
+    wget https://github.com/mavlink/mavros/archive/refs/tags/${MAVROS_VERSION}.tar.gz -O - | tar -xvz && mv mavros-${MAVROS_VERSION} mavros && \
+    wget https://github.com/ros-perception/image_common/archive/refs/tags/${IMAGE_COMMON_VERSION}.tar.gz -O - | tar -xvz && mv image_common-${IMAGE_COMMON_VERSION} image_common && \
     cp -r geographic-info/geographic_msgs/ . && \
     cp -r mavros/mavros_msgs/ . && \
     rm -rf mavros && \
@@ -169,10 +180,9 @@ RUN wget https://github.com/ros/xacro/archive/refs/tags/${XACRO_VERSION}.tar.gz 
 
 # ROS packages that do not depend on OpenCV/that ZED wrapper doesn't depend on can be installed here
 RUN apt-get update && apt-get install -y --no-install-recommends \
-   ros-$ROS_DISTRO-joy \
-   ros-$ROS_DISTRO-joy-teleop \
-   ros-$ROS_DISTRO-foxglove-bridge \
-   ros-$ROS_DISTRO-mavros \
+    ros-$ROS_DISTRO-foxglove-bridge \
+    ros-$ROS_DISTRO-joy \
+    ros-$ROS_DISTRO-joy-teleop \
    && rm -rf /var/lib/apt/lists/* \
    && apt-get clean
 
@@ -189,23 +199,39 @@ RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
   ' -DCMAKE_CXX_FLAGS="-Wl,--allow-shlib-undefined"' \
   ' --no-warn-unused-cli' "
 
-# Install ZED wrapper and IMU Driver
-WORKDIR /root/ros2_ws/src
+# Get CUDA dependencies to install torch and torchvision
+WORKDIR /root
+RUN wget https://developer.download.nvidia.com/compute/cusparselt/0.8.1/local_installers/cusparselt-local-tegra-repo-ubuntu2204-0.8.1_0.8.1-1_arm64.deb && \
+    dpkg -i cusparselt-local-tegra-repo-ubuntu2204-0.8.1_0.8.1-1_arm64.deb && \
+    cp /var/cusparselt-local-tegra-repo-ubuntu2204-0.8.1/cusparselt-*-keyring.gpg /usr/share/keyrings/ && \
+    apt-get update && \
+    apt-get -y install cusparselt-cuda-12 && \
+	rm -rf cusparselt-local-tegra-repo-ubuntu2204-0.8.1_0.8.1-1_arm64.deb
 
-RUN git clone --branch ros2 https://github.com/xsenssupport/Xsens_MTi_ROS_Driver_and_Ntrip_Client.git && \
-    git clone https://github.com/stereolabs/zed-ros2-wrapper.git
+ARG CUSPARSE_SOLVER_NAME="libcudss-linux-sbsa-0.6.0.5_cuda12-archive"
+RUN mkdir -p tmp_cudss && cd tmp_cudss && \
+    curl -L -O https://developer.download.nvidia.com/compute/cudss/redist/libcudss/linux-sbsa/${CUSPARSE_SOLVER_NAME}.tar.xz && \
+    tar xf ${CUSPARSE_SOLVER_NAME}.tar.xz && \
+    cp -a ${CUSPARSE_SOLVER_NAME}/include/* /usr/local/cuda/include/ && \
+    cp -a ${CUSPARSE_SOLVER_NAME}/lib/* /usr/local/cuda/lib64/ && \
+	rm -rf ${CUSPARSE_SOLVER_NAME} ${CUSPARSE_SOLVER_NAME}.tar.xz
 
-# Build the ZED Wrapper and IMU driver
-WORKDIR /root/ros2_ws
-RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
-  source /root/dependencies_ws/install/setup.bash && \
-  colcon build --parallel-workers $(nproc) --symlink-install \
-  --event-handlers console_direct+ --base-paths src \
-  --cmake-args ' -DCMAKE_BUILD_TYPE=Release' \
-  ' -DCMAKE_LIBRARY_PATH=/usr/local/cuda/lib64/stubs' \
-  ' -DCMAKE_CXX_FLAGS="-Wl,--allow-shlib-undefined"' \
-  ' --no-warn-unused-cli' "
+# Install ultralytics, avoid reinstalling numpy and opencv (torch, tensorflow and torchvision installed in the .toml file, cuda supported cause pip index is Jetpack6 one)
+RUN pip install --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} --ignore-install sympy \ 
+	cython --upgrade
 
-RUN echo "source /opt/ros/humble/install/setup.bash && source /root/dependencies_ws/install/setup.bash && source /root/ros2_ws/install/setup.bash" >> ~/.bashrc
-RUN echo "tmux" >> ~/.bashrc
+RUN git clone https://github.com/ultralytics/ultralytics.git && \
+    cd ultralytics && \
+	sed -i '/"numpy>=1.23.0"/d; /"opencv-python>=4.6.0"/d; /"numpy<2.0.0"/d' pyproject.toml && \
+	pip install --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} -e . && \
+    cd .. && \
+	rm -rf ultralytics
+
+# Install dependencies for vision
+RUN pip install --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} notebook \
+	roboflow albumentations pandas && \
+	pip install --ignore-install --upgrade typing_extensions
+
+# Source env variables
+RUN echo "source /opt/ros/humble/install/setup.bash && source /root/dependencies_ws/install/setup.bash && source /root/AUV-2026/ros2_ws/install/setup.bash" >> ~/.bashrc
 CMD ["bash"]
