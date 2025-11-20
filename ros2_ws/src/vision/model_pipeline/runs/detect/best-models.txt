@@ -1,0 +1,4 @@
+11s: yolo11s
+11n: yolo11n2
+8s:
+8n: yolov8n5
