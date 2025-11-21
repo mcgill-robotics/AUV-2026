@@ -223,10 +223,8 @@ RUN pip install --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} --ignore-install s
 RUN git clone https://github.com/ultralytics/ultralytics.git && \
     cd ultralytics && \
 	sed -i '/"numpy>=1.23.0"/d; /"opencv-python>=4.6.0"/d; /"numpy<2.0.0"/d' pyproject.toml && \
-	pip install --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} -e . && \
-    cd .. && \
-	rm -rf ultralytics
-
+	pip install -e . && \
+    cd .. 
 # Install dependencies for vision
 RUN pip install --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} notebook \
 	roboflow albumentations pandas && \
