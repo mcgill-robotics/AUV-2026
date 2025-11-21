@@ -10,10 +10,11 @@
 #recorded videos
 *.mp4
 #training images
-*.png
+#*.png
 #*.jpg
 *.bag
 *unity.lock
+yolo*.pt
 
 #builds
 **/bin/
