@@ -5,8 +5,8 @@ ARG IMAGE_NAME=dustynv/ros:humble-desktop-l4t-r36.4.0
 FROM ${IMAGE_NAME}
 
 ARG ZED_SDK_MAJOR=5
-ARG ZED_SDK_MINOR=0
-ARG ZED_SDK_PATCH=0
+ARG ZED_SDK_MINOR=1
+ARG ZED_SDK_PATCH=1
 ARG L4T_MAJOR=36
 ARG L4T_MINOR=4
 # Optional: Override ZED SDK URL
@@ -33,6 +33,7 @@ ARG ROBOT_STATE_PUBLISHER_VERSION=3.5.2
 ARG USB_CAM_VERSION=0.8.1
 ARG IMAGE_COMMON_VERSION=3.1.12
 ARG MAVROS_VERSION=2.10.1
+ARG MARINE_ACOUSTIC_MSGS_VERSION=2.1.0
 
 # Make pip work
 ENV PYPI_URL=https://pypi.jetson-ai-lab.io/jp6/cu126
@@ -144,6 +145,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
    libglew-dev \
    libjpeg-dev \
    libpng-dev \
+   libserialport-dev \
    libswscale-dev \
    libwayland-dev \
    libxkbcommon-dev \
@@ -176,7 +178,9 @@ RUN wget https://github.com/ros/xacro/archive/refs/tags/${XACRO_VERSION}.tar.gz 
     cp -r geographic-info/geographic_msgs/ . && \
     cp -r mavros/mavros_msgs/ . && \
     rm -rf mavros && \
-    rm -rf geographic-info
+    rm -rf geographic-info && \
+    wget https://github.com/apl-ocean-engineering/marine_msgs/archive/refs/tags/${MARINE_ACOUSTIC_MSGS_VERSION}.tar.gz -O - | tar -xvz && \
+    mv marine_msgs-${MARINE_ACOUSTIC_MSGS_VERSION} marine_msgs
 
 # ROS packages that do not depend on OpenCV/that ZED wrapper doesn't depend on can be installed here
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -186,10 +190,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
    && rm -rf /var/lib/apt/lists/* \
    && apt-get clean
 
-# Build the dependencies from source against NVIDIA OpenCV
-# There are 2 workspaces so that all the dependencies installed source
-# do not clutter our ros2_ws
 WORKDIR /root/dependencies_ws
+RUN git clone --recursive https://github.com/ndahn/dvl_a50.git src/dvl_a50
 
 RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
   colcon build --parallel-workers $(nproc) --symlink-install \
@@ -223,9 +225,8 @@ RUN pip install --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} --ignore-install s
 RUN git clone https://github.com/ultralytics/ultralytics.git && \
     cd ultralytics && \
 	sed -i '/"numpy>=1.23.0"/d; /"opencv-python>=4.6.0"/d; /"numpy<2.0.0"/d' pyproject.toml && \
-	pip install --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} -e . && \
-    cd .. && \
-	rm -rf ultralytics
+	pip install -e . && \
+    cd .. 
 
 # Install dependencies for vision
 RUN pip install --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} notebook \
