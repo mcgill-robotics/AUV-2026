@@ -6,12 +6,16 @@ mkdir data/augmented/train
 mkdir data/augmented/test
 mkdir data/augmented/val
 mkdir data/augmented/train/images
-mkdir data/augmented/test/images
-mkdir data/augmented/val/images
 mkdir data/augmented/train/labels
-mkdir data/augmented/test/labels
-mkdir data/augmented/val/labels
 mkdir data/raw
 mkdir data/raw/images
 mkdir data/raw/labels
-
+mkdir data/raw/train
+mkdir data/raw/val
+mkdir data/raw/test
+mkdir data/raw/train/images
+mkdir data/raw/train/labels
+mkdir data/raw/val/images
+mkdir data/raw/val/labels
+mkdir data/raw/test/images
+mkdir data/raw/test/labels

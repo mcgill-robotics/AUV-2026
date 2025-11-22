@@ -1,13 +1,14 @@
 import os
 import random
 import cv2
-import matplotlib
-matplotlib.use('Agg')  # headless mode
-import matplotlib.pyplot as plt
 
 # Root paths
-img_dir = "data/split_raw/left/images"
-label_dir = "data/split_raw/left/labels"
+#img_dir = "data/augmented/val/images"
+#label_dir = "data/augmented/val/labels"
+img_dir = "data/augmented/train/images"
+label_dir = "data/augmented/train/labels"
+#img_dir = "data/split_raw/left/val/images"
+#label_dir = "data/split_raw/left/val/labels"
 
 # Pick a random image file
 img_file = random.choice(os.listdir(img_dir))

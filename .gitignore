@@ -10,8 +10,8 @@
 #recorded videos
 *.mp4
 #training images
-#*.png
-#*.jpg
+*.png
+*.jpg
 *.bag
 *unity.lock
 yolo*.pt
