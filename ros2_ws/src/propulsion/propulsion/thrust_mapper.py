@@ -98,7 +98,7 @@ class ThrusterMapper(Node):
             qos
         )
 
-        # --- Optional: small startup delay for hardware sync, but do it via a one-shot timer
+        # Small startup delay for hardware sync via a one-shot timer
         self._arming_timer = self.create_timer(1.0, self._do_arming_once)
         self._arming_done = False
 
@@ -182,11 +182,11 @@ class ThrusterMapper(Node):
         Sends the arming signal to the thrusters upon startup.
         """
         msg1 = Int16MultiArray(data=[1500] * 8)
-        msg2 = msg1 = Int16MultiArray(data=[1540] * 8)
+        msg2 = Int16MultiArray(data=[1540] * 8)
         self.pub_us.publish(msg1)
         time.sleep(0.5)
         self.pub_us.publish(msg2)
-        time.sleep(0.5)
+        time.sleep(3.0)
         self.pub_us.publish(msg1)
 
     def shutdown_thrusters(self):
