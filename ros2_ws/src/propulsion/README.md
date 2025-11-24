@@ -29,7 +29,7 @@ The [wrench](https://docs.ros.org/en/noetic/api/geometry_msgs/html/msg/Wrench.ht
 </p>
 
 
-- Parameters a, b, c, d, e, and alpha describe the distances and angular offsets between thrusters and the AUV’s center of gravity.
+- Parameters `a`, `b`, `c`, `d`, `e`, and `alpha` describe the distances and angular offsets between thrusters and the AUV’s center of gravity (point G on the skteches below). `dx`, `dy`, and `dz` represent samll offsets of the real CG from point G in the +X, +Y , +Z directions.
 
 - The *i-th* column corresponds to the contribution of thruster *i* to each element of the wrench vector.
 
