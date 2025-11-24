@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<launch>
+    <node pkg="vision" exec="front_cam_object_detection" name="front_cam_object_detection">
+        <param name="class_names" value="['gate', 'octagon_table', 'octagon_top', 'path_marker', 'sawfish', 'shark']"/>
+        <param name="frontcam_model_path" value="vision/model_pipeline/models/frontcam.pt"/>
+        <param name="frontcam_input_topic" value="/zed/zed_node/rgb/image_rect_color"/>
+        <param name="frontcam_output_topic" value="/vision/front_cam/object_detected"/>
+        <param name="queue_size" value="10"/>
+    </node>
+    <node pkg="vision" exec="down_cam_object_detection" name="down_cam_object_detection">
+        <param name="class_names" value="['gate', 'octagon_table', 'octagon_top', 'path_marker', 'sawfish', 'shark']"/>
+        <param name="downcam_model_path" value="vision/model_pipeline/models/downcam.pt"/>
+        <param name="downcam_input_topic" value="/zed/zed_node/rgb/image_rect_color"/>
+        <param name="downcam_output_topic" value="/vision/down_cam/object_detected"/>
+        <param name="queue_size" value="10"/>
+    </node>
+</launch>

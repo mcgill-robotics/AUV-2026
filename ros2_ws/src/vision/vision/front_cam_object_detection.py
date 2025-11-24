@@ -13,7 +13,7 @@ from auv_msgs.msg import VisionObject, VisionObjectArray
 
 class FrontCamDetectorNode(Node):
     def __init__(self):
-        super().__init__('front_cam_detector')
+        super().__init__('front_cam_object_detection')
 
         self.declare_parameter('class_names')
         self.declare_parameter('frontcam_model_path')
@@ -97,7 +97,7 @@ class FrontCamDetectorNode(Node):
                 obj.y = float(cy)
                 obj.z = 0.0
                 obj.theta_z = 0.0
-                obj.extra_field = ""
+                obj.extra_field = 0.0
                 obj.confidence = conf
 
                 det_objects.append(obj)
