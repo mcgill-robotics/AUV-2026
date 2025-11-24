@@ -21,15 +21,16 @@ class EnhancementAlgorithm(ABC):
 
 
 class ImageEnhancer:
-    '''Aggregation of enhancement algorithms'''
+    """Aggregation of enhancement algorithms
+    Applies no enhancement by default.
+    White balance and Guided Filter are commented out due to dependency issues
+    with OpenCV.
+    """
     def __init__(self, *algorithms):
         # Current combination and ordering of algorithms for image enhancement (one of each of the categories )
         if not algorithms:
             self.algorithms = [
-                WhiteBalance(),
-                DCPEnhancement(),
-                GuidedFilter(),
-                CLAHEEnhancement()
+                Identity(),
             ]
         else:
             self.algorithms = list(algorithms)
@@ -57,15 +58,15 @@ class Identity(EnhancementAlgorithm):
 
 # 1. COLOR CORRECTION ALGORITHMS
 
-class WhiteBalance(EnhancementAlgorithm):
-    """Apply white balance correction using gray world assumption."""
+# class WhiteBalance(EnhancementAlgorithm):
+#     """Apply white balance correction using gray world assumption."""
 
-    def apply_algorithm(self, image: np.ndarray) -> np.ndarray:
-        wb = cv2.xphoto.createGrayworldWB()
-        return wb.balanceWhite(image)
+#     def apply_algorithm(self, image: np.ndarray) -> np.ndarray:
+#         wb = cv2.xphoto.createGrayworldWB()
+#         return wb.balanceWhite(image)
 
-    def algorithm_name(self) -> str:
-        return "Color Correction - Gray World White Balance"
+#     def algorithm_name(self) -> str:
+#         return "Color Correction - Gray World White Balance"
 
 
 class RedChannelEnhancement(EnhancementAlgorithm):
@@ -145,27 +146,27 @@ class DCPEnhancement(EnhancementAlgorithm):
 
 # 3. EDGE PRESERVATION ALGORITHMS
 
-class GuidedFilter(EnhancementAlgorithm):
-    """Apply guided filter for edge-preserving smoothing using OpenCV implementation."""
+# class GuidedFilter(EnhancementAlgorithm):
+#     """Apply guided filter for edge-preserving smoothing using OpenCV implementation."""
 
-    def apply_algorithm(self, image: np.ndarray) -> np.ndarray:
-        # Default parameters
-        radius = 8
-        epsilon = 0.01
+#     def apply_algorithm(self, image: np.ndarray) -> np.ndarray:
+#         # Default parameters
+#         radius = 8
+#         epsilon = 0.01
 
-        # Convert to grayscale guide
-        if image.ndim == 3:
-            guide = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        else:
-            guide = image
+#         # Convert to grayscale guide
+#         if image.ndim == 3:
+#             guide = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+#         else:
+#             guide = image
 
-        # Apply guided filter using OpenCV
-        result = cv2.ximgproc.guidedFilter(guide, image, radius, epsilon)
+#         # Apply guided filter using OpenCV
+#         result = cv2.ximgproc.guidedFilter(guide, image, radius, epsilon)
 
-        return result
+#         return result
 
-    def algorithm_name(self) -> str:
-        return "Edge Preservation - Guided Filter"
+#     def algorithm_name(self) -> str:
+#         return "Edge Preservation - Guided Filter"
 
 
 # 4. CONTRAST ENHANCEMENT ALGORITHMS
