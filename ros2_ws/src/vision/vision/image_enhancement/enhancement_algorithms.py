@@ -46,6 +46,15 @@ class ImageEnhancer:
         algos = '\n\t'.join([f"{i}. {algo.algorithm_name()}" for i, algo in enumerate(self.algorithms,1)])
         return f"Image Enhancer with algorithms [\n\t{algos}\n]"
 
+class Identity(EnhancementAlgorithm):
+    """Applies no transformation"""
+
+    def apply_algorithm(self, image: np.ndarray) -> np.ndarray:
+        return image
+
+    def algorithm_name(self) -> str:
+        return "Identity - No transformation"
+
 # 1. COLOR CORRECTION ALGORITHMS
 
 class WhiteBalance(EnhancementAlgorithm):

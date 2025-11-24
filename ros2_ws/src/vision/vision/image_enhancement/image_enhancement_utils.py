@@ -2,7 +2,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import Image
 
 from cv_bridge import CvBridge
-import cv2.error
+from cv2 import error as cv2error
 
 from vision.image_enhancement import enhancement_algorithms as enhance
 
@@ -38,7 +38,7 @@ class EnhanceNode(Node):
         cv_image = self.br.imgmsg_to_cv2(msg, desired_encoding="bgr8")
         try:
             enhanced_image = self.enhancer.enhance(cv_image)
-        except cv2.error as e:
+        except cv2error as e:
             self.get_logger().error(
                 f"Error during image enhancement: {e}.\
                 Publishing original image to {self.output_topic}."
