@@ -14,9 +14,18 @@ class EnhanceNode(Node):
         self.declare_parameter("output_topic", output_topic)
 
         # Get parameters, include fallback to provided arguments
-        self.input_topic = self.get_parameter("input_topic").value or input_topic
-        self.output_topic = self.get_parameter("output_topic").value or output_topic
-
+        self.input_topic = self.get_parameter("input_topic").value
+        if not self.input_topic:
+            self.get_logger().warn(
+                f"No input_topic parameter provided, using default: {input_topic}"
+            )
+            self.input_topic = input_topic
+        self.output_topic = self.get_parameter("output_topic").value
+        if not self.output_topic:
+            self.get_logger().warn(
+                f"No output_topic parameter provided, using default: {output_topic}"
+            )
+            self.output_topic = output_topic
         self.subscription = self.create_subscription(
 			Image, # Image message type
 			self.input_topic, # Topic name
@@ -34,17 +43,17 @@ class EnhanceNode(Node):
         self.br = CvBridge()
         
     def enhancement_callback(self, msg):
-        # ROS2 -> OpenCV
-        cv_image = self.br.imgmsg_to_cv2(msg, desired_encoding="bgr8")
         try:
+            # ROS2 -> OpenCV
+            cv_image = self.br.imgmsg_to_cv2(msg, desired_encoding="bgr8")
             enhanced_image = self.enhancer.enhance(cv_image)
+            # OpenCV -> ROS2
+            enhanced_msg = self.br.cv2_to_imgmsg(enhanced_image, encoding="bgr8")
         except cv2error as e:
             self.get_logger().error(
                 f"Error during image enhancement: {e}.\
                 Publishing original image to {self.output_topic}."
             )
             enhanced_msg = msg  # Fallback to original message on error
-        # OpenCV -> ROS2
-        enhanced_msg = self.br.cv2_to_imgmsg(enhanced_image, encoding="bgr8")
-		# Publish enhanced image
+		# Publish enhanced image (or fallback)
         self.publisher.publish(enhanced_msg)
