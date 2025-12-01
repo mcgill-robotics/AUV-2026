@@ -222,7 +222,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
         python3.10-dev python3-numpy \
         libtbb2 libtbb-dev libjpeg-dev libpng-dev libtiff-dev \
-        libv4l-dev v4l-utils qv4l2 && \
+        libv4l-dev v4l-utils qv4l2 libunwind-dev && \
     rm -rf /var/lib/apt/lists/*
 
 # Download OpenCV and OpenCV contrib
