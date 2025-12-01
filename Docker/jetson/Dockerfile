@@ -199,6 +199,68 @@ RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
   ' -DCMAKE_CXX_FLAGS="-Wl,--allow-shlib-undefined"' \
   ' --no-warn-unused-cli' "
 
+
+# Re install opencv and cv_bridge so we can have opencv contrib algos for image enhancement, code from https://github.com/AastaNV/JEP/blob/master/script/install_opencv4.10.0_Jetpack6.1.sh
+RUN sudo apt -y purge *libopencv*
+
+# Set arguments for OpenCV version and folder
+ARG OPENCV_VERSION=4.10.0
+ARG OPENCV_FOLDER=/opt/opencv
+
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+ENV PYTHONPATH=/usr/local/lib/python3.10/site-packages/:$PYTHONPATH
+
+# Install required dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential cmake git curl unzip \
+        libgtk2.0-dev pkg-config \
+        libavcodec-dev libavformat-dev libswscale-dev \
+        libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+        python3.10-dev python3-numpy \
+        libtbb2 libtbb-dev libjpeg-dev libpng-dev libtiff-dev \
+        libv4l-dev v4l-utils qv4l2 && \
+    # Remove any previous OpenCV installations (non-interactive)
+    apt-get purge -y '*libopencv*' || true && \
+    rm -rf /var/lib/apt/lists/*
+
+# Download OpenCV and OpenCV contrib
+RUN mkdir -p ${OPENCV_FOLDER} && cd ${OPENCV_FOLDER} && \
+    curl -L https://github.com/opencv/opencv/archive/${OPENCV_VERSION}.zip -o opencv-${OPENCV_VERSION}.zip && \
+    curl -L https://github.com/opencv/opencv_contrib/archive/${OPENCV_VERSION}.zip -o opencv_contrib-${OPENCV_VERSION}.zip && \
+    unzip opencv-${OPENCV_VERSION}.zip && \
+    unzip opencv_contrib-${OPENCV_VERSION}.zip && \
+    rm opencv-${OPENCV_VERSION}.zip opencv_contrib-${OPENCV_VERSION}.zip
+
+# Build and install OpenCV
+RUN cd ${OPENCV_FOLDER}/opencv-${OPENCV_VERSION} && \
+    mkdir -p release && cd release && \
+    cmake -D WITH_CUDA=ON \
+          -D WITH_CUDNN=ON \
+          -D CUDA_ARCH_BIN="8.7" \
+          -D CUDA_ARCH_PTX="" \
+          -D OPENCV_GENERATE_PKGCONFIG=ON \
+          -D OPENCV_EXTRA_MODULES_PATH=${OPENCV_FOLDER}/opencv_contrib-${OPENCV_VERSION}/modules \
+          -D WITH_GSTREAMER=ON \
+          -D WITH_LIBV4L=ON \
+          -D BUILD_opencv_python3=ON \
+          -D BUILD_TESTS=OFF \
+          -D BUILD_PERF_TESTS=OFF \
+          -D BUILD_EXAMPLES=OFF \
+          -D CMAKE_BUILD_TYPE=RELEASE \
+          -D CMAKE_INSTALL_PREFIX=/usr/local .. && \
+    make -j$(nproc) && \
+    make install && \
+    ldconfig
+
+# Re install cv_bridge
+RUN pip3 uninstall cv_bridge cv-bridge
+WORKDIR /root/cv_bridge/src
+RUN git clone -b "humble" https://github.com/ros-perception/vision_opencv.git                  
+WORKDIR /root/cv_bridge/
+RUN colcon build --symlink-install
+
 # Get CUDA dependencies to install torch and torchvision
 WORKDIR /root
 RUN wget https://developer.download.nvidia.com/compute/cusparselt/0.8.1/local_installers/cusparselt-local-tegra-repo-ubuntu2204-0.8.1_0.8.1-1_arm64.deb && \
@@ -233,5 +295,5 @@ RUN pip install --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} notebook \
 	pip install --ignore-install --upgrade typing_extensions
 
 # Source env variables
-RUN echo "source /opt/ros/humble/install/setup.bash && source /root/dependencies_ws/install/setup.bash && source /root/AUV-2026/ros2_ws/install/setup.bash" >> ~/.bashrc
+RUN echo "source /opt/ros/humble/install/setup.bash && source /root/dependencies_ws/install/setup.bash && source /root/AUV-2026/ros2_ws/install/setup.bash && source /root/cv_bridge/install/setup.bash" >> ~/.bashrc
 CMD ["bash"]
