@@ -201,7 +201,7 @@ RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
 
 
 # Re install opencv and cv_bridge so we can have opencv contrib algos for image enhancement, code from https://github.com/AastaNV/JEP/blob/master/script/install_opencv4.10.0_Jetpack6.1.sh
-RUN RUN rm -rf /usr/lib/aarch64-linux-gnu/libopencv* \
+RUN rm -rf /usr/lib/aarch64-linux-gnu/libopencv* \
            /usr/include/opencv4
 #RUN sudo apt -y purge *libopencv*, try above way because in docker build, libopencv not detected by apt. only detected when inside container after build
 
