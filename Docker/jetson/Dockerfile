@@ -254,7 +254,8 @@ RUN mkdir /root/opencv_binary && cd ${OPENCV_FOLDER}/opencv-${OPENCV_VERSION} &&
           -D CMAKE_INSTALL_PREFIX=/root/opencv_binary .. && \
     make -j$(nproc) && \
     make install && \
-    ldconfig
+    ldconfig && \
+	sudo cp -rf /root/opencv_binary /usr/local/include/
 
 # Re install cv_bridge
 RUN pip3 uninstall cv_bridge cv-bridge
