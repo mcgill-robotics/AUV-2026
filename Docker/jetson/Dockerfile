@@ -263,7 +263,7 @@ RUN git clone -b "humble" https://github.com/ros-perception/vision_opencv.git
 WORKDIR /root/cv_bridge/
 RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
   source /opt/ros/$ROS_DISTRO/setup.bash && \
-  colcon build --parallel-workers $(nproc) --symlink-install 
+  colcon build --parallel-workers $(nproc) --symlink-install" 
 
 # Get CUDA dependencies to install torch and torchvision
 WORKDIR /root
