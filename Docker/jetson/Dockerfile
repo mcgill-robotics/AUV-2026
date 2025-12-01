@@ -261,7 +261,9 @@ RUN pip3 uninstall cv_bridge cv-bridge
 WORKDIR /root/cv_bridge/src
 RUN git clone -b "humble" https://github.com/ros-perception/vision_opencv.git                  
 WORKDIR /root/cv_bridge/
-RUN colcon build --symlink-install
+RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
+  source /opt/ros/$ROS_DISTRO/setup.bash && \
+  colcon build --parallel-workers $(nproc) --symlink-install 
 
 # Get CUDA dependencies to install torch and torchvision
 WORKDIR /root
