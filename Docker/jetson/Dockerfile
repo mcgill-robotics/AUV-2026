@@ -206,6 +206,7 @@ RUN rm -rf /usr/lib/aarch64-linux-gnu/libopencv* \
 #RUN sudo apt -y purge *libopencv*, try above way because in docker build, libopencv not detected by apt. only detected when inside container after build
 
 # Set arguments for OpenCV version and folder
+USER root
 ARG OPENCV_VERSION=4.10.0
 ARG OPENCV_FOLDER=/opt/opencv
 
@@ -227,6 +228,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Download OpenCV and OpenCV contrib
 RUN mkdir -p ${OPENCV_FOLDER} && cd ${OPENCV_FOLDER} && \
+    chmod -R 777 /usr/local/ && \
     curl -L https://github.com/opencv/opencv/archive/${OPENCV_VERSION}.zip -o opencv-${OPENCV_VERSION}.zip && \
     curl -L https://github.com/opencv/opencv_contrib/archive/${OPENCV_VERSION}.zip -o opencv_contrib-${OPENCV_VERSION}.zip && \
     unzip opencv-${OPENCV_VERSION}.zip && \
