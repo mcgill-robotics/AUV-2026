@@ -76,7 +76,10 @@ RUN curl -fsSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o
 
 # Re install opencv and cv_bridge so we can have opencv contrib algos for image enhancement, code from https://github.com/AastaNV/JEP/blob/master/script/install_opencv4.10.0_Jetpack6.1.sh
 RUN rm -rf /usr/lib/aarch64-linux-gnu/libopencv* \
-           /usr/include/opencv4
+           /usr/include/opencv4 \
+           /usr/local/include/opencv4 \
+           /usr/local/lib/libopencv* \
+           /usr/local/share/opencv4
 #RUN sudo apt -y purge *libopencv*, try above way because in docker build, libopencv not detected by apt. only detected when inside container after build
 
 # Set arguments for OpenCV version and folder
@@ -131,9 +134,7 @@ RUN mkdir -p release && cd release && \
 RUN cd release && make -j$(nproc)
 
 # Ensure proper permissions on /usr/local/ directory (remove sudo)
-RUN chown -R root:root /usr/local/include/opencv4 && \
-    chmod -R u+w /usr/local/include/ && \
-    cd release && \
+RUN cd release && \
     make install
 
 # Update dynamic linker run-time bindings
