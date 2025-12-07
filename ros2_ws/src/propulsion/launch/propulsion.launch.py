@@ -38,7 +38,7 @@ def generate_launch_description():
             Node(
                 package='micro_ros_agent',
                 executable='micro_ros_agent',
-                name='micro_ros_agent',
+                name='power_micro_ros_agent',
                 output='screen',
                 arguments=["serial", "--dev", "/dev/power", "--baud-rate", "115200"],
             ),
