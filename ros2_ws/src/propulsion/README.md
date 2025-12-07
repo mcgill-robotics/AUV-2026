@@ -103,7 +103,7 @@ The package provides a single ROS node: `thrust_mapper`.
 
 After build is complete, make the packages visible to ROS
 
-	source ../devel/setup.bash
+	source install/setup.bash
 
 ### Running
 
