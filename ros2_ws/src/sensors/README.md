@@ -155,7 +155,7 @@ $$
  C_{vi} =  C_{vs} C_{si} 
 $$
 
-Since $ C_{iv} = C_{vi}^T $, we can easily get $C_{iv}$ without re-calculating from the quaternion.
+Since $C_{iv} = C_{vi}^T$, we can easily get $C_{iv}$ without re-calculating from the quaternion.
 
 Finally,
 
