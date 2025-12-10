@@ -200,12 +200,29 @@ RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
   ' --no-warn-unused-cli' "
 
 # Re install opencv and cv_bridge so we can have opencv contrib algos for image enhancement, code from https://github.com/AastaNV/JEP/blob/master/script/install_opencv4.10.0_Jetpack6.1.sh
+# FULL PURGE
+# remove any exisitng opencv apt packages if they exist
+RUN apt purge -y '*opencv*' || true
+# remove python opencv
+RUN pip uninstall -y opencv-python opencv-contrib-python
+# look for all possible opencv installations
 RUN rm -rf /usr/lib/aarch64-linux-gnu/libopencv* \
            /usr/include/opencv4 \
            /usr/local/include/opencv4 \
+           /usr/local/include/opencv2 \
+           /usr/local/share/libopencv4 \
+           /usr/local/lib/pkgconfig/opencv4.pc \
+           /usr/local/bin/opencv4 \
+           /usr/local/python/cv2 \
+           /usr/include/opencv4 \
            /usr/local/lib/libopencv* \
-           /usr/local/share/opencv4
-#RUN sudo apt -y purge *libopencv*, try above way because in docker build, libopencv not detected by apt. only detected when inside container after build
+           /usr/local/share/opencv4 \
+           /usr/lib/python*/dist-packages/cv2 \
+           /usr/lib/python*/dist-packages/opencv* \
+           /usr/local/lib/python*/dist-packages/cv2 \
+           /usr/lib/python*/dist-packages/cv2
+
+RUN ldconfig
 
 # Set arguments for OpenCV version and folder
 USER root
@@ -299,6 +316,14 @@ RUN git clone https://github.com/ultralytics/ultralytics.git && \
 RUN pip install --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} notebook \
 	roboflow albumentations pandas && \
 	pip install --ignore-install --upgrade typing_extensions
+
+WORKDIR ${OPENCV_FOLDER}/opencv-${OPENCV_VERSION}/release
+# for some reason, the python installation is broken, but removing it and reinstalling it works (not in docker), to be investigated
+RUN rm -rf /usr/local/lib/python*/dist-packages/cv2 && \
+    make install && \
+# test if it even works
+    python -c "import cv2;print(f'Version {cv2.__version__}\nPath: {cv2.__file__}')"
+
 
 # Source env variables
 RUN echo "source /opt/ros/humble/install/setup.bash && source /root/dependencies_ws/install/setup.bash && source /root/AUV-2026/ros2_ws/install/setup.bash && source /root/cv_bridge/install/setup.bash" >> ~/.bashrc
