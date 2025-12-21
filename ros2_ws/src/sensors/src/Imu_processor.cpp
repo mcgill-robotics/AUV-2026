@@ -3,11 +3,11 @@
 namespace sensors
 {
 ImuRepublisher::ImuRepublisher(const quatd& q_sv, const quatd& q_in)
-    : q_sv_(q_sv), q_in_(q_in)
+    : q_vi_(quatd::Identity()), q_sv_(q_sv), q_in_(q_in)
 {
     // Gravity vector in inertial frame (down is negative z)
     g_i << 0.0, 0.0, -9.81;
-};
+}
 
 Vec3 ImuRepublisher::compute_free_acc(const Vec3& specific_force, const quatd& q_si) const
 {

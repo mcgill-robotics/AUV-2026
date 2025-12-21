@@ -20,13 +20,13 @@ class ImuRepublisher
 	public:
 		explicit ImuRepublisher(const quatd& q_sv, const quatd& q_in); // consult README for variable naming convention. 
 		imu_msg process(const imu_msg& imu_in);
+		quatd q_vi_; 
 
 	private:
 		Vec3 compute_free_acc(const Vec3& specific_force, const quatd& q_si) const;
 		Vec3 rotate_gyro(const Vec3& w_s, const quatd& q_sv) const;
 		quatd q_sv_; 
 		quatd q_in_;
-		quatd q_vi_; 
 		Vec3 g_i;		
 
 };

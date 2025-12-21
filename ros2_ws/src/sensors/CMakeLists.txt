@@ -21,35 +21,26 @@ find_package(Eigen3 REQUIRED)
 
 include_directories(${EIGEN3_INCLUDE_DIR})
 
-# --- Main Node: Movella Republisher ---
-add_executable(imu 
-        src/movella_republish.cpp
-        src/imuprocessing2.cpp)
+# --- Main Node: Sensor Node ---
+add_executable(sensor_node
+        src/Sensor_Node.cpp
+        src/Imu_processor.cpp
+        src/depth_processor.cpp)
 
-ament_target_dependencies(imu 
-        rclcpp 
-        std_msgs 
-        geometry_msgs 
-        sensor_msgs  
-        message_filters)
-
-target_include_directories(imu PUBLIC include/)
-
-# --- Test Node: IMU Processor Test ---
-add_executable(imu_test_node 
-        src/imu_test_node.cpp 
-        src/imuprocessing2.cpp)
-
-ament_target_dependencies(imu_test_node 
-        rclcpp 
-        sensor_msgs 
+ament_target_dependencies(sensor_node
+        rclcpp
+        std_msgs
+        geometry_msgs
+        sensor_msgs
+        message_filters
         Eigen3)
+
+target_include_directories(sensor_node PUBLIC include/)
 
 # --- Installation ---
 # Install both executables
 install(TARGETS
-        imu
-        imu_test_node
+        sensor_node
         DESTINATION lib/${PROJECT_NAME})
 
 install(DIRECTORY

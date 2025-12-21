@@ -19,7 +19,9 @@ class DepthRepublisher
 {
 	public:
 		explicit DepthRepublisher(const Vec3& r_vs); // consult README for variable naming convention. 
-		float64_msg process(const float64_msg& depth_in) const;		
+		float64_msg process(const float64_msg& depth_in, const quatd& q_vi) const;	
+	private:
+		Vec3 r_vs_v_; // Vector from sensor frame to vehicle frame, expressed in vehicle frame	
 
 };
 } // namespace sensors
