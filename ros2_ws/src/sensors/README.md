@@ -189,7 +189,11 @@ This package is not used directly by operators. It runs alongside the sensor dri
 
 ## Nodes
 
-TBD
+The package provides a single ROS node: `sensor_node`.
+
+- Input: subscribes to all raw sensor data topics. TBD on how DVL data will be read
+
+- Outputs: publishes all processed data to their respective topics
 
 ---
 
@@ -197,8 +201,8 @@ TBD
 
 | Topic | Message | Description |
 |-------|---------|-------------|
-| `/sensors/imu` | TBD | TBD |
-| `/sensors/depth` | TBD` | TBD |
+| `/processed/imu` | Imu | Processed imu data in `auv` frame. Free acceleration |
+| `/processed/depth` | Float64 | Processed depth data in `auv` frame |
 | `/sensors/dvl` | TBD | TBD |
 
 ---
@@ -207,8 +211,8 @@ TBD
 
 | Topic | Message | Description |
 |-------|---------|-------------|
-| `/raw/imu` | Vendor IMU message | TBD |
-| `/raw/depth` | Pressure sensor message | TBD |
+| `imu/data` | Vendor IMU message | Data in imu's body frame. Specific force  |
+| `/raw/depth` | Pressure sensor message | Depth of sensor probe |
 | `/raw/dvl` | Vendor DVL message | TBD |
 
 ---
@@ -218,6 +222,11 @@ TBD
 ### Dependencies
 
 - Eigenv3
+- rclcpp
+- std_msg
+- sensor_msgs
+- geometry_msgs
+- message_filters
 
 ---
 
@@ -226,14 +235,14 @@ TBD
 ```bash
 source /opt/ros/humble/setup.bash
 cd <AUV-2026>/ros2_ws
-colcon build --symlink-install
+colcon build --packages-select sensors
 ```
 
 ---
 
 ### Running
 
-TBD
+ros2 launch sensors sensor_node.launch.py
 
 ---
 
