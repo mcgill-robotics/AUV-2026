@@ -26,8 +26,7 @@ def generate_launch_description():
        Node(
             package='sensors',
             executable='sensor_node',
-            name='sensor_node',
-            condition=UnlessCondition(sim)
+            name='sensor_node'
             )
         ])
     

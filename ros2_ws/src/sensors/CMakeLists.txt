@@ -17,9 +17,10 @@ find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(message_filters REQUIRED)
+
+find_package(eigen3_cmake_module REQUIRED)
 find_package(Eigen3 REQUIRED)
 
-include_directories(${EIGEN3_INCLUDE_DIR})
 
 # --- Main Node: Sensor Node ---
 add_executable(sensor_node
