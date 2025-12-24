@@ -40,5 +40,3 @@ services:
               capabilities: [gpu]
     stdin_open: true
     tty: true
-    ports:
-      - "8765:8765"
