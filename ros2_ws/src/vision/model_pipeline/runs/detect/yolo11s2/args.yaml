@@ -2,7 +2,7 @@ task: detect
 mode: train
 model: yolo11s.pt
 data: /home/arthur/AUV-2026/ros2_ws/src/vision/model_pipeline/data.yaml
-epochs: 100
+epochs: 200
 time: null
 patience: 100
 batch: 16
