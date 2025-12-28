@@ -40,6 +40,7 @@ namespace controls
 
                         //Publish combined effort for propulsion package
                         rclcpp::Publisher<wrench_msg>::SharedPtr pub_effort_;
+                        rclcpp::TimerBase::SharedPtr publish_timer_;
                         
                         void imu_callback(const imu_msg::SharedPtr msg);
                         void depth_effort_callback(const wrench_msg::SharedPtr msg);
@@ -55,7 +56,8 @@ namespace controls
                         std::unique_ptr<double> effort_bias_force_z; 
                         std::unique_ptr<double> effort_bias_torque_x; 
                         std::unique_ptr<double> effort_bias_torque_y; 
-                        std::unique_ptr<double> effort_bias_torque_z; 
+                        std::unique_ptr<double> effort_bias_torque_z;
+                        double publish_hz_;
 
 
         };

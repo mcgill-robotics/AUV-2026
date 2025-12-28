@@ -43,7 +43,7 @@ namespace controls
                 Mat3 P_e_;
                 Mat3 P_w_;
 
-                // COntrol Loop Frequency
+                // Control Loop Frequency
                 double control_loop_hz_;
 
                 // AUV properties

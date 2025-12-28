@@ -33,12 +33,19 @@ namespace controls
        this->declare_parameter<double>("effort_bias_torque_x", 0.0);
        this->declare_parameter<double>("effort_bias_torque_y", 0.0);
        this->declare_parameter<double>("effort_bias_torque_z", 0.0);
+       this->declare_parameter<double>("publish_hz", 20.0); // publish frequency
        effort_bias_force_x = std::make_unique<double>(this->get_parameter("effort_bias_force_x").as_double());
        effort_bias_force_y = std::make_unique<double>(this->get_parameter("effort_bias_force_y").as_double());
        effort_bias_force_z = std::make_unique<double>(this->get_parameter("effort_bias_force_z").as_double());
        effort_bias_torque_x = std::make_unique<double>(this->get_parameter("effort_bias_torque_x").as_double());
        effort_bias_torque_y = std::make_unique<double>(this->get_parameter("effort_bias_torque_y").as_double());
        effort_bias_torque_z = std::make_unique<double>(this->get_parameter("effort_bias_torque_z").as_double());
+         publish_hz_ = this->get_parameter("publish_hz").as_double();
+
+        publish_timer_ = this->create_wall_timer(
+            std::chrono::milliseconds(static_cast<int64_t>(1000 / publish_hz_)),   // Control loop frequency
+            std::bind(&superimposer::publish_combined_effort, this)
+            );
 
    }
 
