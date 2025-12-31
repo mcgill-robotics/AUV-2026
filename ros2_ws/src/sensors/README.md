@@ -242,7 +242,9 @@ colcon build --packages-select sensors
 
 ### Running
 
-ros2 launch sensors sensor_node.launch.py
+Launch all sensor data processors
+
+    ros2 launch sensors sensor_node.launch.py
 
 ---
 
