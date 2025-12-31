@@ -52,7 +52,7 @@ namespace controls
    void superimposer::imu_callback(const imu_msg::SharedPtr msg)
    {
        // Extract orientation quaternion from IMU message
-       q_iv_ = quatd(
+       q_vi_ = quatd(
            msg->orientation.w,
            msg->orientation.x,
            msg->orientation.y,
@@ -62,32 +62,32 @@ namespace controls
 
    void superimposer::depth_effort_callback(const wrench_msg::SharedPtr msg)
    {
-       depth_effort_ = *msg;
+       depth_effort_ = *msg; // This is in the pool frame
    }
 
    void superimposer::attitude_effort_callback(const wrench_msg::SharedPtr msg)
    {
-       attitude_effort_ = *msg;
+       attitude_effort_ = *msg; // This already is in the AUV body frame
    }
 
    void superimposer::publish_combined_effort()
    {
        wrench_msg combined_effort;
 
-       // Combine efforts (simple summation)
-       combined_effort.force.x = depth_effort_.force.x + attitude_effort_.force.x +
-                                 *effort_bias_force_x;
-       combined_effort.force.y = depth_effort_.force.y + attitude_effort_.force.y +
-                                 *effort_bias_force_y;
-       combined_effort.force.z = depth_effort_.force.z + attitude_effort_.force.z +
-                                 *effort_bias_force_z;
-       combined_effort.torque.x = depth_effort_.torque.x + attitude_effort_.torque.x +
-                                  *effort_bias_torque_x;
-       combined_effort.torque.y = depth_effort_.torque.y + attitude_effort_.torque.y +
-                                  *effort_bias_torque_y;
-       combined_effort.torque.z = depth_effort_.torque.z + attitude_effort_.torque.z +
-                                  *effort_bias_torque_z;
+       // Transform depth effort from pool frame to body frame. 
+         Vec3 depth_force_pool(depth_effort_.force.x, depth_effort_.force.y, depth_effort_.force.z);
+         Vec3 total_force_pool = depth_force_pool; // No torque from depth controller. TODO: Add planar forces 
+         Vec3 total_force_body = q_vi_ * total_force_pool; // Rotate to body frame
 
+
+       // Combine efforts (simple summation)
+       combined_effort.force.x = total_force_body.x() + *effort_bias_force_x;
+       combined_effort.force.y = total_force_body.y() + *effort_bias_force_y;
+       combined_effort.force.z = total_force_body.z() + *effort_bias_force_z;
+       combined_effort.torque.x = attitude_effort_.torque.x + *effort_bias_torque_x;
+       combined_effort.torque.y = attitude_effort_.torque.y + *effort_bias_torque_y;
+       combined_effort.torque.z = attitude_effort_.torque.z + *effort_bias_torque_z;
+       
        // Publish combined effort
        pub_effort_->publish(combined_effort);
    }

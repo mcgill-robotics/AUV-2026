@@ -48,7 +48,7 @@ namespace controls
                         void publish_combined_effort();
                         
                         
-                        quatd q_iv_;
+                        quatd q_vi_;
                         wrench_msg depth_effort_; // Last received depth effort
                         wrench_msg attitude_effort_; // Last received attitude effort
                         std::unique_ptr<double> effort_bias_force_x; // Bias effort to be added to the combined effort (optional)

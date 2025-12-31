@@ -44,7 +44,7 @@ namespace controls
             std::bind(&AttitudeController::imu_callback, this, std::placeholders::_1)
         );
         sub_target_orientation_ = this->create_subscription<geometry_msgs::msg::Quaternion>(
-            "quaternion_setpoint",
+            "/controls/quaternion_setpoint",
             1,
             std::bind(&AttitudeController::target_orientation_callback, this, std::placeholders::_1)
         );
