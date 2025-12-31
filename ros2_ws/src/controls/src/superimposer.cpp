@@ -47,6 +47,9 @@ namespace controls
             std::bind(&superimposer::publish_combined_effort, this)
             );
 
+        // Initialize orientation quaternion to identity
+        q_vi_ = quatd(1.0, 0.0, 0.0, 0.0);
+
    }
 
    void superimposer::imu_callback(const imu_msg::SharedPtr msg)

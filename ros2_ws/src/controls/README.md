@@ -5,7 +5,7 @@ The **controls** package provides the AUV control loops for depth and attitude. 
 This process occurs in three stages:
 
 1. **Depth control** - compute a vertical force using a PID controller and a feedforward term.
-2. **Attitude control** - compute body torques from IMU orientation and target quaternion with a buoyancy feedforward term.
+2. **Attitude control** - compute body torques from IMU orientation and target quaternion with a buoyancy feedforward term. Refer to this [Control law derivation (PDF)](docs/Attitude_Controller.pdf) for more details.
 3. **Effort superposition** - Rotate the depth effort into the body frame. Sum the efforts (plus optional biases) into a combined wrench.
 
 
