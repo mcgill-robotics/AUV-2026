@@ -34,9 +34,9 @@ class EnhanceNode(Node):
 		)
         self.publisher = self.create_publisher(Image, self.output_topic, 10)
         self.get_logger().info(
-            f"EnhanceNode initialized with \
-            input topic: {self.input_topic} and \
-            output topic: {self.output_topic}"
+            (f"EnhanceNode initialized with "
+            f"input topic: {self.input_topic} and "
+            f"output topic: {self.output_topic}")
         )
         self.enhancer = enhancer
         self.get_logger().info(f"Using: {self.enhancer}")
@@ -51,8 +51,8 @@ class EnhanceNode(Node):
             enhanced_msg = self.br.cv2_to_imgmsg(enhanced_image, encoding="bgr8")
         except cv2error as e:
             self.get_logger().error(
-                f"Error during image enhancement: {e}.\
-                Publishing original image to {self.output_topic}."
+                (f"Error during image enhancement: {e}."
+                f" Publishing original image to {self.output_topic}.")
             )
             enhanced_msg = msg  # Fallback to original message on error
 		# Publish enhanced image (or fallback)
