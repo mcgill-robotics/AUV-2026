@@ -33,7 +33,7 @@ namespace sensors
             std::bind(&Sensor_Node::imu_callback, this, std::placeholders::_1)
         );
         depth_sub_ = this->create_subscription<float64_msg>(
-            "raw/depth",
+            "/sensors/depth/z",
             10,
             std::bind(&Sensor_Node::depth_callback, this, std::placeholders::_1)
         );

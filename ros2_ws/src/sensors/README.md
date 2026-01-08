@@ -11,18 +11,23 @@ These processed sensor streams are used downstream by the **EKF**, **controller*
 ---
 
 ## Table of Contents
-- [Overview](#overview)
-- [IMU Processing](#imu-processing)
-- [Depth Sensor Processing](#depth-sensor-processing)
-- [DVL Processing](#dvl-processing)
-- [Usage](#usage)
-- [Nodes](#nodes)
-  - [Published Topics](#published-topics)
-  - [Subscribed Topics](#subscribed-topics)
-- [Installation](#installation)
-  - [Dependencies](#dependencies)
-  - [Building](#building)
-  - [Running](#running)
+- [Sensor Data Processing](#sensor-data-processing)
+  - [Table of Contents](#table-of-contents)
+  - [Overview](#overview)
+  - [IMU Processing](#imu-processing)
+    - [**1. Gravity corrected accelerometion**](#1-gravity-corrected-accelerometion)
+    - [**2. Gyroscope angular rates**](#2-gyroscope-angular-rates)
+    - [**3. Orientation**](#3-orientation)
+  - [Depth Sensor Processing](#depth-sensor-processing)
+  - [DVL Processing](#dvl-processing)
+  - [Usage](#usage)
+  - [Nodes](#nodes)
+    - [Published Topics](#published-topics)
+    - [Subscribed Topics](#subscribed-topics)
+  - [Installation](#installation)
+    - [Dependencies](#dependencies)
+    - [Building](#building)
+    - [Running](#running)
 - [License](#license)
 
 ---
@@ -212,7 +217,7 @@ The package provides a single ROS node: `sensor_node`.
 | Topic | Message | Description |
 |-------|---------|-------------|
 | `imu/data` | Vendor IMU message | Data in imu's body frame. Specific force  |
-| `/raw/depth` | Pressure sensor message | Depth of sensor probe |
+| `/sensors/depth/z` | Pressure sensor message | Depth of sensor probe |
 | `/raw/dvl` | Vendor DVL message | TBD |
 
 ---
