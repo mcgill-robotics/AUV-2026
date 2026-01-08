@@ -8,7 +8,7 @@ namespace sensors
     Sensor_Node::Sensor_Node()
         : Node("sensor_node")
     {
-        this->declare_parameter<std::vector<double>>("q_sv", {1, 0.0, 0.0, 0.0}); // Default no rotation. TODO: Verify and chnage in MEDN. 
+        this->declare_parameter<std::vector<double>>("q_sv", {1, 0.0, 0.0, 0.0}); // Default no rotation. TODO: Verify and change in MEDN. 
         this->declare_parameter<std::vector<double>>("q_in", {1.0, 0.0, 0.0, 0.0}); // Default: no rotation
         this->declare_parameter<std::vector<double>>("r_vs_v", {0.0624, 0.0585, 0.0962}); // [m] Default: from CAD. 
 

@@ -36,7 +36,7 @@ namespace sensors
 
                 quatd q_sv_;
                 quatd q_in_;
-                Vec3 r_vs_v_;
+                Vec3 r_vs_v_; // Vector from depth sensor to vehicle, expressed in vehicle frame
         };
         
 
