@@ -15,7 +15,7 @@ These processed sensor streams are used downstream by the **EKF**, **controller*
   - [Table of Contents](#table-of-contents)
   - [Overview](#overview)
   - [IMU Processing](#imu-processing)
-    - [**1. Gravity corrected accelerometion**](#1-gravity-corrected-accelerometion)
+    - [**1. Gravity corrected acceleration**](#1-gravity-corrected-acceleration)
     - [**2. Gyroscope angular rates**](#2-gyroscope-angular-rates)
     - [**3. Orientation**](#3-orientation)
   - [Depth Sensor Processing](#depth-sensor-processing)
@@ -49,7 +49,7 @@ Different sensors follow different mathematical models (detailed below). The veh
 
 The IMU produces 3-axis **accelerometer**, **gyroscope**, and **magnetometer** readings. These are converted into body-frame free acceleration, angular velocity, and orientation estimates.
 
-### **1. Gravity corrected accelerometion**
+### **1. Gravity corrected acceleration**
 
 Raw accelerometer readings are the **specific force** in the sensor frame *s*: 
 
