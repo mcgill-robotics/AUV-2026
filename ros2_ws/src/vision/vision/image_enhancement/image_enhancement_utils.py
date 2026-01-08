@@ -30,19 +30,21 @@ class EnhanceNode(Node):
             self.output_topic = output_topic
             
         self.for_sim = self.get_parameter("sim").value
+        image_format = Image
         if self.for_sim:
+            image_format = CompressedImage
             self.get_logger().warn(
-                ("WARNING: EnhanceNode running in simulation mode."
-                 " Input topic is assumed to be in compressed format."
-                 " Output topic will be vertically flipped and in RGB8 encoding.")
+                ("WARNING: EnhanceNode running in simulation mode:"
+                 " input topic is assumed to be in compressed image format,"
+                 " output topic will also be compressed.")
             )
         self.subscription = self.create_subscription(
-			CompressedImage if self.for_sim else Image, # Image message type
+			image_format, # Image message type
 			self.input_topic, # Topic name
 			self.enhancement_callback, # Callback, called on message received
 			10 # QoS: if received messages > this #, start dropping oldest received ones
 		)
-        self.publisher = self.create_publisher(Image, self.output_topic, 10)
+        self.publisher = self.create_publisher(image_format, self.output_topic, 10)
         self.get_logger().info(
             (f"EnhanceNode initialized with "
             f"input topic: {self.input_topic} and "
@@ -51,18 +53,25 @@ class EnhanceNode(Node):
         self.enhancer = enhancer
         self.get_logger().info(f"Using: {self.enhancer}")
         self.br = CvBridge()
+        self.image_encoding = "bgr8"
         
     def enhancement_callback(self, msg):
-        encoding = "rgb8" if self.for_sim else msg.format
+        if (self.image_encoding!=msg.format):
+            self.get_logger().info(
+                (f"Setting encoding to {msg.format} from message.")
+            )
+            self.image_encoding = msg.format
         try:
             # ROS2 -> OpenCV
             if self.for_sim:
-                cv_image = self.br.compressed_imgmsg_to_cv2(msg, desired_encoding=encoding)
+                cv_image = self.br.compressed_imgmsg_to_cv2(msg, desired_encoding="bgr8")
+                enhanced_image = self.enhancer.enhance(cv_image)
+                enhanced_msg = self.br.cv2_to_compressed_imgmsg(enhanced_image)
             else:
-                cv_image = self.br.imgmsg_to_cv2(msg, desired_encoding=encoding)
-            enhanced_image = self.enhancer.enhance(cv_image)
+                cv_image = self.br.imgmsg_to_cv2(msg, desired_encoding="bgr8")
+                enhanced_image = self.enhancer.enhance(cv_image)
+                enhanced_msg = self.br.cv2_to_imgmsg(enhanced_image)
             # OpenCV -> ROS2
-            enhanced_msg = self.br.cv2_to_imgmsg(cv2.flip(enhanced_image, 0), encoding=encoding)
         except cv2.error as e:
             self.get_logger().error(
                 (f"Error during image enhancement: {e}."
