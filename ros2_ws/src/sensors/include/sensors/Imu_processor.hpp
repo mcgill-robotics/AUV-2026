@@ -24,8 +24,9 @@ class ImuRepublisher
 
 	private:
 		Vec3 compute_free_acc(const Vec3& specific_force, const quatd& q_si) const;
-		Vec3 rotate_gyro(const Vec3& w_s, const quatd& q_sv) const;
-		quatd q_sv_; 
+		Vec3 rotate_gyro(const Vec3& w_s) const;
+		quatd q_sv_;
+		quatd q_vs_; 
 		quatd q_in_;
 		Vec3 g_i;		
 

@@ -7,6 +7,8 @@ ImuRepublisher::ImuRepublisher(const quatd& q_sv, const quatd& q_in)
 {
     // Gravity vector in inertial frame (down is negative z)
     g_i << 0.0, 0.0, -9.81;
+
+    q_vs_ = q_sv_.inverse();
 }
 
 Vec3 ImuRepublisher::compute_free_acc(const Vec3& specific_force, const quatd& q_si) const
@@ -15,14 +17,14 @@ Vec3 ImuRepublisher::compute_free_acc(const Vec3& specific_force, const quatd& q
     Vec3 g_s = q_si * g_i; // This is an overload of the quaternion operator* for vectors.
 
     // Free acceleration 
-    Vec3 a_free = q_sv_.inverse() * (specific_force - g_s);
+    Vec3 a_free = q_vs_ * (specific_force - g_s);
     return a_free;
 }
 
-Vec3 ImuRepublisher::rotate_gyro(const Vec3& w_s, const quatd& q_sv) const
+Vec3 ImuRepublisher::rotate_gyro(const Vec3& w_s) const
 {
     // Rotate gyro measurements into vehicle frame
-    Vec3 w_v = q_sv.inverse() * w_s;
+    Vec3 w_v = q_vs_ * w_s;
     return w_v;
 }
 
@@ -49,7 +51,7 @@ imu_msg ImuRepublisher::process(const imu_msg& imu_in)
         imu_in.orientation.z
     ); // Assumption: IMU messages report world frame relative to sensor. 
 
-    q_vi_ = q_sv_.inverse() * q_si; // New orientation: world frame relative to vehicle frame
+    q_vi_ = q_vs_ * q_si; // New orientation: world frame relative to vehicle frame
     imu_out.orientation.w = q_vi_.w();
     imu_out.orientation.x = q_vi_.x();
     imu_out.orientation.y = q_vi_.y();
@@ -61,7 +63,7 @@ imu_msg ImuRepublisher::process(const imu_msg& imu_in)
         imu_in.angular_velocity.y,
         imu_in.angular_velocity.z
     );
-    Vec3 w_v = rotate_gyro(w_s, q_sv_);
+    Vec3 w_v = rotate_gyro(w_s);
     imu_out.angular_velocity.x = w_v(0);
     imu_out.angular_velocity.y = w_v(1);
     imu_out.angular_velocity.z = w_v(2);
