@@ -4,6 +4,7 @@ from sensor_msgs.msg import CompressedImage
 
 from cv_bridge import CvBridge
 import cv2
+import numpy as np
 
 from vision.image_enhancement import enhancement_algorithms as enhance
 
@@ -62,17 +63,8 @@ class EnhanceNode(Node):
             )
             self.image_encoding = msg.format
         try:
-            # ROS2 -> OpenCV
-            if self.for_sim:
-                cv_image = self.br.compressed_imgmsg_to_cv2(msg, desired_encoding="bgr8")
-                enhanced_image = self.enhancer.enhance(cv_image)
-                enhanced_msg = self.br.cv2_to_compressed_imgmsg(enhanced_image)
-            else:
-                cv_image = self.br.imgmsg_to_cv2(msg, desired_encoding="bgr8")
-                enhanced_image = self.enhancer.enhance(cv_image)
-                enhanced_msg = self.br.cv2_to_imgmsg(enhanced_image)
-            # OpenCV -> ROS2
-        except cv2.error as e:
+            enhanced_msg = self.apply_enhancer(msg)
+        except (cv2.error, FloatingPointError) as e:
             self.get_logger().error(
                 (f"Error during image enhancement: {e}."
                 f" Publishing original image to {self.output_topic}.")
@@ -80,3 +72,22 @@ class EnhanceNode(Node):
             enhanced_msg = msg  # Fallback to original message on error
 		# Publish enhanced image (or fallback)
         self.publisher.publish(enhanced_msg)
+    # may raise cv2.error or FloatingPointError
+    def apply_enhancer(self, msg) -> Image | CompressedImage:
+        if self.for_sim:
+            # ROS2 -> OpenCV
+            cv_image = self.br.compressed_imgmsg_to_cv2(msg, desired_encoding="bgr8")
+            # raise any floating point errors as exceptions instead of warnings
+            with np.errstate(invalid='raise'):
+                enhanced_image = self.enhancer.enhance(cv_image)
+            # OpenCV -> ROS2
+            enhanced_msg = self.br.cv2_to_compressed_imgmsg(enhanced_image)
+        else:
+            # ROS2 -> OpenCV
+            cv_image = self.br.imgmsg_to_cv2(msg, desired_encoding="bgr8")
+            # raise any floating point errors as exceptions instead of warnings
+            with np.errstate(invalid='raise'):
+                enhanced_image = self.enhancer.enhance(cv_image)
+            # OpenCV -> ROS2
+            enhanced_msg = self.br.cv2_to_imgmsg(enhanced_image)
+        return enhanced_msg
