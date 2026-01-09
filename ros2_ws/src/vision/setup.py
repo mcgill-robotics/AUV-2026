@@ -32,6 +32,7 @@ setup(
                 'image_collection = vision.image_collection:main',
                 'down_image_enhancement = vision.down_image_enhancement:main',
                 'front_image_enhancement = vision.front_image_enhancement:main',
+                'vision_3d = vision.vision_3d_node:main',
         ],
     },
 )

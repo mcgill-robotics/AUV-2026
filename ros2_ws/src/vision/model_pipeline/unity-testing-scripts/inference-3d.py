@@ -1,136 +1,146 @@
 #!/usr/bin/env python3
+"""
+Basic 3D Inference - YOLO + ZED SDK
+Just shows raw 3D object output from ZED without filtering/mapping.
+"""
+
 import pyzed.sl as sl
 from ultralytics import YOLO
 import numpy as np
-import time
 import cv2
 from pathlib import Path
 
-# BASE DIR for paths
+# ============================================================================
+# CONFIGURATION
+# ============================================================================
+
 SCRIPT_DIR = Path(__file__).parent.resolve()
 BASE_DIR = SCRIPT_DIR.parent
 
-test_time = 0  # seconds (set to 0 for infinite loop)
-model_path = BASE_DIR / "runs/detect/yolov11s_sim_dataset7/weights/best.pt"
-model = YOLO(str(model_path))
+MODEL_PATH = BASE_DIR / "runs/detect/yolov11s_sim_dataset7/weights/best.pt"
+CONFIDENCE_THRESHOLD = 0.5
+MAX_DETECTION_RANGE = 15.0
 
-# ZED initialization
-init_params = sl.InitParameters()
-init_params.camera_resolution = sl.RESOLUTION.SVGA
-init_params.camera_fps = 30
-init_params.coordinate_units = sl.UNIT.METER
-init_params.set_from_stream("127.0.0.1", 30000)  # Comment out if using physical camera
-
-zed = sl.Camera()
-err = zed.open(init_params)
-if err != sl.ERROR_CODE.SUCCESS:
-    print(f"Error opening ZED: {err}")
-    exit(1)
-
-# Enable positional tracking (required for object tracking and world coordinates)
-pos_param = sl.PositionalTrackingParameters()
-zed.enable_positional_tracking(pos_param)
-
-# Enable object detection with custom box mode
-obj_param = sl.ObjectDetectionParameters()
-obj_param.detection_model = sl.OBJECT_DETECTION_MODEL.CUSTOM_BOX_OBJECTS
-obj_param.enable_tracking = True  # Enables Kalman filtering for stability/false positive reduction
-zed.enable_object_detection(obj_param)
-
-runtime_params = sl.RuntimeParameters()
-obj_runtime_param = sl.ObjectDetectionRuntimeParameters()
-# obj_runtime_param.detection_confidence = 50  # Filter detections below 50%
-
-# For image retrieval
-image = sl.Mat()
-
-# Metrics
-num_images = 0
-total_time = 0.0
-
-# Custom class names from your model (edit based on your dataset)
-class_names = [
-    "gate",
-    "lane_marker",
-    "red_pipe",
-    "white_pipe",
-    "octagon",
-    "table",
-    "bin",
-    "board",
-    "shark",
-    "sawfish"
+CLASS_NAMES = [
+    "gate", "lane_marker", "red_pipe", "white_pipe", "octagon",
+    "table", "bin", "board", "shark", "sawfish"
 ]
 
-print("Starting inference with 3D integration... Press 'q' to quit.")
+# ============================================================================
+# ZED INITIALIZATION
+# ============================================================================
 
-loop_start_time = time.time()
-while True:
-    if test_time > 0 and (time.time() > loop_start_time + test_time):
-        break
+def init_zed():
+    init_params = sl.InitParameters()
+    init_params.camera_resolution = sl.RESOLUTION.SVGA
+    init_params.camera_fps = 30
+    init_params.coordinate_units = sl.UNIT.METER
+    init_params.coordinate_system = sl.COORDINATE_SYSTEM.RIGHT_HANDED_Z_UP_X_FWD
+    init_params.depth_mode = sl.DEPTH_MODE.NEURAL
+    init_params.depth_maximum_distance = MAX_DETECTION_RANGE
+    init_params.set_from_stream("127.0.0.1", 30000)  # Comment out for physical camera
 
-    if zed.grab(runtime_params) == sl.ERROR_CODE.SUCCESS:
-        # Retrieve left image
-        zed.retrieve_image(image, sl.VIEW.LEFT)
-        image_np = image.get_data()
-        image_bgr = cv2.cvtColor(image_np, cv2.COLOR_BGRA2BGR)
+    zed = sl.Camera()
+    err = zed.open(init_params)
+    if err != sl.ERROR_CODE.SUCCESS:
+        print(f"Error opening ZED: {err}")
+        exit(1)
+    
+    # Enable positional tracking
+    pos_param = sl.PositionalTrackingParameters()
+    pos_param.enable_imu_fusion = True
+    pos_param.enable_area_memory = True
+    pos_param.set_floor_as_origin = False
+    zed.enable_positional_tracking(pos_param)
+    
+    # Enable object detection with custom boxes
+    obj_param = sl.ObjectDetectionParameters()
+    obj_param.detection_model = sl.OBJECT_DETECTION_MODEL.CUSTOM_BOX_OBJECTS
+    obj_param.enable_tracking = True
+    obj_param.max_range = MAX_DETECTION_RANGE
+    zed.enable_object_detection(obj_param)
+    
+    return zed
 
-        # Run YOLO inference (>50% conf via param)
-        start_time = time.time()
-        results = model.predict(image_bgr, verbose=False, conf=0.5)
-        end_time = time.time()
-        total_time += end_time - start_time
-        num_images += 1
+# ============================================================================
+# MAIN
+# ============================================================================
 
-        # Prepare custom boxes for ingestion
-        custom_boxes = []
-        for r in results:
-            boxes = r.boxes
-            for box in boxes:
-                tmp = sl.CustomBoxObjectData()
-                # Bounding box corners (clockwise, in pixels)
-                x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
-                tmp.bounding_box_2d = np.array([[x1, y1], [x2, y1], [x2, y2], [x1, y2]])
-                tmp.label = int(box.cls)  # Class ID
-                tmp.probability = float(box.conf)  # Confidence
-                tmp.unique_object_id = sl.generate_unique_id()  # For tracking association
-                tmp.is_grounded = False  # Set True if objects are on floor plane
-                custom_boxes.append(tmp)
+def main():
+    model = YOLO(str(MODEL_PATH))
+    zed = init_zed()
+    
+    runtime_params = sl.RuntimeParameters()
+    obj_runtime_param = sl.ObjectDetectionRuntimeParameters()
+    obj_runtime_param.detection_confidence_threshold = 35
+    
+    image = sl.Mat()
+    cam_pose = sl.Pose()
+    
+    print("Starting basic 3D inference... Press 'q' to quit.")
+    
+    while True:
+        if zed.grab(runtime_params) == sl.ERROR_CODE.SUCCESS:
+            # Get image
+            zed.retrieve_image(image, sl.VIEW.LEFT)
+            image_bgr = cv2.cvtColor(image.get_data(), cv2.COLOR_BGRA2BGR)
+            
+            # YOLO inference
+            results = model.predict(image_bgr, verbose=False, conf=CONFIDENCE_THRESHOLD)
+            
+            # Prepare custom boxes for ZED
+            custom_boxes = []
+            for r in results:
+                for box in r.boxes:
+                    tmp = sl.CustomBoxObjectData()
+                    x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+                    tmp.bounding_box_2d = np.array([[x1, y1], [x2, y1], [x2, y2], [x1, y2]])
+                    tmp.label = int(box.cls)
+                    tmp.probability = float(box.conf)
+                    tmp.is_static = True
+                    custom_boxes.append(tmp)
+            
+            # Feed boxes to ZED
+            zed.ingest_custom_box_objects(custom_boxes)
+            
+            # Retrieve 3D objects
+            objects = sl.Objects()
+            zed.retrieve_objects(objects, obj_runtime_param)
+            
+            # Get camera position
+            state = zed.get_position(cam_pose, sl.REFERENCE_FRAME.WORLD)
+            cam_pos = cam_pose.get_translation().get() if state == sl.POSITIONAL_TRACKING_STATE.OK else [0, 0, 0]
+            
+            # Print output
+            print("\033[2J\033[H", end="")  # Clear
+            print(f"{'='*80}")
+            print(f"  BASIC 3D INFERENCE")
+            print(f"{'='*80}")
+            print(f"  Camera Position: [{cam_pos[0]:>7.2f}, {cam_pos[1]:>7.2f}, {cam_pos[2]:>7.2f}]")
+            print(f"  VIO Status: {state}")
+            print(f"  Objects Detected: {len(objects.object_list)}")
+            print(f"{'='*80}")
+            
+            if objects.object_list:
+                print(f"  {'ID':<6} {'Label':<15} {'X':>7} {'Y':>7} {'Z':>7} {'Conf':>5} {'Track State':<15}")
+                print(f"  {'-'*6} {'-'*15} {'-'*7} {'-'*7} {'-'*7} {'-'*5} {'-'*15}")
+                for obj in objects.object_list:
+                    pos = obj.position
+                    label = CLASS_NAMES[obj.raw_label] if obj.raw_label < len(CLASS_NAMES) else f"Class {obj.raw_label}"
+                    print(f"  {obj.id:<6} {label:<15} {pos[0]:>7.2f} {pos[1]:>7.2f} {pos[2]:>7.2f} {obj.confidence:>5.0f} {obj.tracking_state}")
+            else:
+                print("  No objects detected.")
+            
+            print(f"{'='*80}")
+            
+            # Display
+            annotated_frame = results[0].plot()
+            cv2.imshow("Basic 3D Inference", annotated_frame)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+    
+    cv2.destroyAllWindows()
+    zed.close()
 
-        # Ingest custom detections into ZED SDK
-        zed.ingest_custom_box_objects(custom_boxes)
-
-        # Retrieve 3D objects
-        objects = sl.Objects()
-        zed.retrieve_objects(objects, obj_runtime_param)
-
-        # Print 3D info for testing (position in meters relative to camera)
-        if objects.is_new and len(objects.object_list) > 0:
-            print(f"\n{'='*70}")
-            print(f"  DETECTED {len(objects.object_list)} OBJECT(S)")
-            print(f"{'='*70}")
-            print(f"  {'Label':<15} {'ID':>4}  {'X (m)':>8} {'Y (m)':>8} {'Z (m)':>8}  {'Conf':>5}")
-            print(f"  {'-'*15} {'-'*4}  {'-'*8} {'-'*8} {'-'*8}  {'-'*5}")
-            for obj in objects.object_list:
-                pos = obj.position  # 3D position (x, y, z)
-                label = class_names[obj.raw_label] if obj.raw_label < len(class_names) else f"Class {obj.raw_label}"
-                conf = obj.confidence
-                print(f"  {label:<15} {obj.id:>4}  {pos[0]:>8.3f} {pos[1]:>8.3f} {pos[2]:>8.3f}  {conf:>5.1f}%")
-            print(f"{'='*70}\n")
-
-        # Draw 2D annotations and display
-        annotated_frame = results[0].plot()
-        cv2.imshow("AUV Vision - YOLO + ZED 3D", annotated_frame)
-
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-
-# Cleanup
-cv2.destroyAllWindows()
-zed.disable_object_detection()
-zed.disable_positional_tracking()
-zed.close()
-
-print(f"Total images processed: {num_images}")
-print(f"Total time spent inferring: {total_time:.2f}s")
-print(f"Average inference time: {total_time / num_images * 1000:.2f} ms")
+if __name__ == "__main__":
+    main()
