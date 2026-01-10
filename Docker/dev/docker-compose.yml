@@ -1,0 +1,87 @@
+services:
+  # ==========================================
+  # SERVICE 1: CPU-Only (Universal)
+  # ==========================================
+  cpu:
+    build:
+      context: ../../
+      dockerfile: Docker/dev/Dockerfile
+    image: mcgillrobotics/auv_2026:dev-cpu
+    container_name: auv-dev-cpu
+    
+    network_mode: host
+    ipc: host
+    pid: host
+    privileged: true # Covers SYS_PTRACE, seccomp, apparmor
+
+    environment:
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+      - LIBGL_ALWAYS_SOFTWARE=1
+      - ROS_DOMAIN_ID=0
+      # Added to match original devcontainer features:
+      - WAYLAND_DISPLAY=${WAYLAND_DISPLAY}
+      - XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}
+      - PULSE_SERVER=${PULSE_SERVER}
+
+    volumes:
+      - ../../:/root/AUV-2026
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      # Map Wayland/Pulse sockets if they exist
+      - ${XDG_RUNTIME_DIR}:${XDG_RUNTIME_DIR}
+      - /dev:/dev
+
+    command: bash -c "tail -f /dev/null"
+    stdin_open: true
+    tty: true
+
+  # ==========================================
+  # SERVICE 2: NVIDIA GPU (Accelerated)
+  # ==========================================
+  nvidia:
+    build:
+      context: ../../
+      dockerfile: Docker/dev/Dockerfile.nvidia
+    image: mcgillrobotics/auv_2026:dev-nvidia
+    container_name: auv-dev-nvidia
+    
+    network_mode: host
+    ipc: host
+    pid: host
+    privileged: true
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+    environment:
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - NVIDIA_VISIBLE_DEVICES=all
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+      - ROS_DOMAIN_ID=0
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      # Added to match original devcontainer features:
+      - WAYLAND_DISPLAY=${WAYLAND_DISPLAY}
+      - XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}
+      - PULSE_SERVER=${PULSE_SERVER}
+
+    volumes:
+      - ../../:/root/AUV-2026
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - ${XDG_RUNTIME_DIR}:${XDG_RUNTIME_DIR}
+      - zed_settings:/usr/local/zed/settings/
+      - zed_resources:/usr/local/zed/resources/
+      - /dev:/dev
+
+    command: bash -c "tail -f /dev/null"
+    stdin_open: true
+    tty: true
+
+volumes:
+  zed_settings:
+  zed_resources:
