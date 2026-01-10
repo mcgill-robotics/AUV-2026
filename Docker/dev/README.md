@@ -53,6 +53,18 @@ docker compose up -d --build cpu
 docker exec -it auv-dev-cpu bash
 ```
 
+#### Speed up the setup (Optional)
+If you haven't modified the Dockerfiles and want to skip the build process, you can pull the latest pre-built image from our DockerHub (updated whenever `main` is updated):
+
+```bash
+# Pull the latest stable image
+docker compose pull nvidia  # or 'cpu'
+
+# Start the container using the pulled image
+docker compose up -d nvidia
+```
+*Note: If you have made changes to the Dockerfiles themselves, you must run `docker compose up -d --build` to see your changes.*
+
 ### Step 3: Build the Workspace
 Once inside the container, use the build script. It automatically detects if you have the ZED SDK and builds accordingly.
 

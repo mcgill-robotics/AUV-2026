@@ -6,9 +6,9 @@ services:
     build:
       context: ../../
       dockerfile: Docker/dev/Dockerfile
-    image: mcgillrobotics/auv_2026:dev-cpu
+    image: mcgillrobotics/auv_2026:dev-amd64
     container_name: auv-dev-cpu
-    
+
     network_mode: host
     ipc: host
     pid: host
@@ -42,9 +42,9 @@ services:
     build:
       context: ../../
       dockerfile: Docker/dev/Dockerfile.nvidia
-    image: mcgillrobotics/auv_2026:dev-nvidia
+    image: mcgillrobotics/auv_2026:dev-nvidia-amd64
     container_name: auv-dev-nvidia
-    
+
     network_mode: host
     ipc: host
     pid: host
@@ -56,7 +56,7 @@ services:
           devices:
             - driver: nvidia
               count: all
-              capabilities: [gpu]
+              capabilities: [ gpu ]
 
     environment:
       - NVIDIA_DRIVER_CAPABILITIES=all
