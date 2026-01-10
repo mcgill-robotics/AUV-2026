@@ -196,7 +196,7 @@ class GammaCorrection(EnhancementAlgorithm):
     """Apply gamma correction to adjust brightness and contrast."""
     def __init__(self, gamma: float = 1.5):
         inv_gamma = 1.0 / gamma
-        self.table = np.ndarray([((i / 255.0) ** inv_gamma) * 255 for i in range(256)]).astype("uint8")
+        self.table = np.array([((i / 255.0) ** inv_gamma) * 255 for i in range(256)]).astype("uint8")
 
     def apply_algorithm(self, image: np.ndarray) -> np.ndarray:
         # Apply gamma correction

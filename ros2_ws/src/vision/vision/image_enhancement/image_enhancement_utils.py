@@ -54,14 +54,8 @@ class EnhanceNode(Node):
         self.enhancer = enhancer
         self.get_logger().info(f"Using: {self.enhancer}")
         self.br = CvBridge()
-        self.image_encoding = "bgr8"
         
     def enhancement_callback(self, msg):
-        if (self.image_encoding!=msg.format):
-            self.get_logger().info(
-                (f"Setting encoding to {msg.format} from message.")
-            )
-            self.image_encoding = msg.format
         try:
             enhanced_msg = self.apply_enhancer(msg)
         except (cv2.error, FloatingPointError) as e:
@@ -70,6 +64,8 @@ class EnhanceNode(Node):
                 f" Publishing original image to {self.output_topic}.")
             )
             enhanced_msg = msg  # Fallback to original message on error
+        # ensure header timestamps and frame_ids are preserved
+        enhanced_msg.header = msg.header
 		# Publish enhanced image (or fallback)
         self.publisher.publish(enhanced_msg)
     # may raise cv2.error or FloatingPointError
