@@ -8,7 +8,7 @@ namespace sensors
     State_aggregator::State_aggregator()
         : Node("state_aggregator")
     {
-        this->declare_parameter<std::vector<double>>("publish_frequency", {50.0}); // Hz
+        this->declare_parameter<double>("publish_frequency", 50.0); // Hz
         this->get_parameter("publish_frequency", publish_frequency_);
 
 
