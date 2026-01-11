@@ -29,24 +29,31 @@ def generate_launch_description():
             ]
      )
 
-    sensors_node = GroupAction(
-            condition=UnlessCondition(LaunchConfiguration('sim')),
+    state_aggregator = GroupAction(
             actions=[
                 Node(
                     package='sensors',
-                    executable='sensor_node',
-                    name='sensor_node'
+                    executable='state_aggregator',
+                    name='state_aggregator'
                     )
                 ]
             )
+    
+    depth_processor = IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(['/root/AUV-2026/ros2_ws/src/sensors/launch', '/depth_processor.launch.py']))
+    
+    imu_processor = IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(['/root/AUV-2026/ros2_ws/src/sensors/launch', '/imu_processor.launch.py']))
     # Get the sim parameter value
     sim = LaunchConfiguration('sim')
 
     # Launch :D
     return LaunchDescription([
        sim_condition,
-       sensors_node,
+       state_aggregator,
        serial_group,
-       launch_Xsens_Driver
+       launch_Xsens_Driver,
+       depth_processor,
+        imu_processor
         ])
     

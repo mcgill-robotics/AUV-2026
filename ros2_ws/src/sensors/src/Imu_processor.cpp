@@ -2,16 +2,38 @@
 
 namespace sensors
 {
-ImuRepublisher::ImuRepublisher(const quatd& q_sv, const quatd& q_in)
-    : q_vi_(quatd::Identity()), q_sv_(q_sv), q_in_(q_in)
+ImuProcessor::ImuProcessor()
+    : Node("imu_processor"), q_vi_(quatd::Identity())
 {
+
+    imu_pub_ = this->create_publisher<imu_msg>(
+        "processed/imu",
+        10
+    );
+    imu_sub_ = this->create_subscription<imu_msg>(
+        "imu/data",
+        10,
+        std::bind(&ImuProcessor::imu_callback, this, std::placeholders::_1)
+    );
+
+    this->declare_parameter<std::vector<double>>("q_sv", {1, 0.0, 0.0, 0.0}); // Default no rotation. TODO: Verify and change in MEDN.
+    this->declare_parameter<std::vector<double>>("q_in", {1.0, 0.0, 0.0, 0.0}); // Default: no rotation
+    
+    std::vector<double> q_sv_vec;
+    std::vector<double> q_in_vec;
+    this->get_parameter("q_sv", q_sv_vec);
+    this->get_parameter("q_in", q_in_vec);
+
+    q_sv_ = quatd(q_sv_vec[0], q_sv_vec[1], q_sv_vec[2], q_sv_vec[3]);
+    q_in_ = quatd(q_in_vec[0], q_in_vec[1], q_in_vec[2], q_in_vec[3]);
+
     // Gravity vector in inertial frame (down is negative z)
     g_i << 0.0, 0.0, -9.81;
 
     q_vs_ = q_sv_.inverse();
 }
 
-Vec3 ImuRepublisher::compute_free_acc(const Vec3& specific_force, const quatd& q_si) const
+Vec3 ImuProcessor::compute_free_acc(const Vec3& specific_force, const quatd& q_si) const
 {
     // Rotate gravity into sensor frame
     Vec3 g_s = q_si * g_i; // This is an overload of the quaternion operator* for vectors.
@@ -21,21 +43,21 @@ Vec3 ImuRepublisher::compute_free_acc(const Vec3& specific_force, const quatd& q
     return a_free;
 }
 
-Vec3 ImuRepublisher::rotate_gyro(const Vec3& w_s) const
+Vec3 ImuProcessor::rotate_gyro(const Vec3& w_s) const
 {
     // Rotate gyro measurements into vehicle frame
     Vec3 w_v = q_vs_ * w_s;
     return w_v;
 }
 
-imu_msg ImuRepublisher::process(const imu_msg& imu_in) 
+void ImuProcessor::imu_callback(const imu_msg::SharedPtr imu_in) 
 {
-    imu_msg imu_out = imu_in; // Copy input to output
+    imu_msg imu_out = *imu_in; // Copy input to output
     imu_out.header.frame_id = "auv"; // All data will be processed into the AUV frame
 
     // Specific force vector from IMU
     Vec3 f_s;
-    f_s << imu_in.linear_acceleration.x, imu_in.linear_acceleration.y, imu_in.linear_acceleration.z;   
+    f_s << imu_in->linear_acceleration.x, imu_in->linear_acceleration.y, imu_in->linear_acceleration.z;   
     
     // Compute free acceleration
     Vec3 a_free = compute_free_acc(f_s, q_in_);
@@ -45,10 +67,10 @@ imu_msg ImuRepublisher::process(const imu_msg& imu_in)
 
     // Orientation remains unchanged but rotated to AUV frame
     quatd q_si(
-        imu_in.orientation.w,
-        imu_in.orientation.x,
-        imu_in.orientation.y,
-        imu_in.orientation.z
+        imu_in->orientation.w,
+        imu_in->orientation.x,
+        imu_in->orientation.y,
+        imu_in->orientation.z
     ); // Assumption: IMU messages report world frame relative to sensor. 
 
     q_vi_ = q_vs_ * q_si; // New orientation: world frame relative to vehicle frame
@@ -59,16 +81,25 @@ imu_msg ImuRepublisher::process(const imu_msg& imu_in)
 
     // Angular Velocity
     Vec3 w_s = Vec3(
-        imu_in.angular_velocity.x,
-        imu_in.angular_velocity.y,
-        imu_in.angular_velocity.z
+        imu_in->angular_velocity.x,
+        imu_in->angular_velocity.y,
+        imu_in->angular_velocity.z
     );
     Vec3 w_v = rotate_gyro(w_s);
     imu_out.angular_velocity.x = w_v(0);
     imu_out.angular_velocity.y = w_v(1);
     imu_out.angular_velocity.z = w_v(2);
 
-    // Return processed message
-    return imu_out;
+    // Publish processed message
+    imu_pub_->publish(imu_out);
 }
+}
+
+int main(int argc, char *argv[])
+{
+	rclcpp::init(argc, argv);
+	rclcpp::spin(std::make_shared<sensors::ImuProcessor>());
+	rclcpp::shutdown();
+
+	return 0;
 }

@@ -22,27 +22,38 @@ find_package(eigen3_cmake_module REQUIRED)
 find_package(Eigen3 REQUIRED)
 
 
-# --- Main Node: Sensor Node ---
-add_executable(sensor_node
-        src/Sensor_Node.cpp
-        src/Imu_processor.cpp
-        src/depth_processor.cpp)
+# --- Executables ---
+add_executable(state_aggregator src/State_aggregator.cpp)
+ament_target_dependencies(state_aggregator rclcpp std_msgs geometry_msgs sensor_msgs message_filters)
+target_link_libraries(state_aggregator Eigen3::Eigen)
+target_include_directories(state_aggregator PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
 
-ament_target_dependencies(sensor_node
-        rclcpp
-        std_msgs
-        geometry_msgs
-        sensor_msgs
-        message_filters
-        Eigen3)
+add_executable(imu_processor src/Imu_processor.cpp)
+ament_target_dependencies(imu_processor rclcpp std_msgs geometry_msgs sensor_msgs message_filters)
+target_link_libraries(imu_processor Eigen3::Eigen)
+target_include_directories(imu_processor PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
 
-target_include_directories(sensor_node PUBLIC include/)
+add_executable(depth_processor src/depth_processor.cpp)
+ament_target_dependencies(depth_processor rclcpp std_msgs geometry_msgs sensor_msgs sensor_msgs message_filters)
+target_link_libraries(depth_processor Eigen3::Eigen)
+target_include_directories(depth_processor PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
 
-# --- Installation ---
-# Install both executables
+# --- Install ---
 install(TARGETS
-        sensor_node
-        DESTINATION lib/${PROJECT_NAME})
+  state_aggregator
+  imu_processor
+  depth_processor
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 install(DIRECTORY
         launch/
