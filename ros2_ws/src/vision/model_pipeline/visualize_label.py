@@ -5,10 +5,12 @@ import cv2
 # Root paths
 #img_dir = "data/augmented/val/images"
 #label_dir = "data/augmented/val/labels"
-img_dir = "data/augmented/train/images"
-label_dir = "data/augmented/train/labels"
+#img_dir = "data/augmented/train/images"
+#label_dir = "data/augmented/train/labels"
 #img_dir = "data/split_raw/left/val/images"
 #label_dir = "data/split_raw/left/val/labels"
+img_dir = "data/raw_import/images"
+label_dir = "data/raw_import/labels"
 
 # Pick a random image file
 img_file = random.choice(os.listdir(img_dir))
