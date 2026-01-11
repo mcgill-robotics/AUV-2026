@@ -9,19 +9,16 @@ This process occurs in two stages:
 
 
 ## Table of Contents
-- [Propulsion](#propulsion)
-  - [Table of Contents](#table-of-contents)
-  - [Overview](#overview)
-  - [Usage](#usage)
-  - [Nodes](#nodes)
-    - [Published Topics](#published-topics)
-    - [Subscribed Topics](#subscribed-topics)
-  - [Installation](#installation)
-    - [Dependencies](#dependencies)
-    - [Building](#building)
-    - [Running](#running)
-    - [License](#license)
-
+- [Overview](#overview)
+- [Usage](#usage)
+- [Nodes](#nodes)
+  - [Published Topics](#published-topics)
+  - [Subscribed Topics](#subscribed-topics)
+- [Installation](#installation)
+  - [Dependencies](#dependencies)
+  - [Building](#building)
+  - [Running](#running)
+- [License](#license)
 
 ## Overview
 The [wrench](https://docs.ros.org/en/noetic/api/geometry_msgs/html/msg/Wrench.html) consists of forces AND torques on the X,Y,Z axes. These are distributed to the thrusters using the following allocation matrix:
