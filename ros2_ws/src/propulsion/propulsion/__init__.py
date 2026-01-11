@@ -1,0 +1,1 @@
+"""Propulsion package: contains ROS 2 nodes for AUV thruster control."""
