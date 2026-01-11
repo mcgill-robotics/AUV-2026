@@ -9,16 +9,18 @@ This process occurs in two stages:
 
 
 ## Table of Contents
-- [Overview](#overview)
-- [Usage](#usage)
-- [Nodes](#nodes)
-  - [Published Topics](#published-topics)
-  - [Subscribed Topics](#subscribed-topics)
-- [Installation](#installation)
-  - [Dependencies](#dependencies)
-  - [Building](#building)
-  - [Running](#running)
-- [License](#license)
+- [Propulsion](#propulsion)
+  - [Table of Contents](#table-of-contents)
+  - [Overview](#overview)
+  - [Usage](#usage)
+  - [Nodes](#nodes)
+    - [Published Topics](#published-topics)
+    - [Subscribed Topics](#subscribed-topics)
+  - [Installation](#installation)
+    - [Dependencies](#dependencies)
+    - [Building](#building)
+    - [Running](#running)
+    - [License](#license)
 
 
 ## Overview
@@ -56,7 +58,7 @@ The propulsion package is not for direct use, it is used through publishing effo
 Publishing a `geometry_msgs/Wrench` message onto `/controls/effort` topic:
 
 
-        ros2 topic pub /controls/effort geometry_msgs/msg/Wrench "{force: {x: 1.0, y: 0.0, z: 0.0}, torque: {x: 0.0, y: 0.0, z: 0.0}}" 1
+        ros2 topic pub /controls/effort geometry_msgs/msg/Wrench "{force: {x: 1.0, y: 0.0, z: 0.0}, torque: {x: 0.0, y: 0.0, z: 0.0}}" 
 
 
 ## Nodes
@@ -103,7 +105,7 @@ The package provides a single ROS node: `thrust_mapper`.
 
 After build is complete, make the packages visible to ROS
 
-	source ../devel/setup.bash
+	source install/setup.bash
 
 ### Running
 
