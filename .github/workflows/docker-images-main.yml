@@ -46,7 +46,7 @@ jobs:
         file: Docker/dev/Dockerfile
         platforms: linux/amd64
         push: ${{ github.event_name == 'workflow_dispatch' }}
-        tags: mcgillrobotics/auv_2026:${{ inputs.tag_name }}-amd64
+        tags: mcgillrobotics/auv_2026:${{ inputs.tag_name || 'dev' }}-amd64
 
   build-arm:
     runs-on: ubuntu-22.04-arm
@@ -77,7 +77,7 @@ jobs:
         file: Docker/dev/Dockerfile
         platforms: linux/arm64
         push: ${{ github.event_name == 'workflow_dispatch' }}
-        tags: mcgillrobotics/auv_2026:${{ inputs.tag_name }}-arm64
+        tags: mcgillrobotics/auv_2026:${{ inputs.tag_name || 'dev' }}-arm64
 
   build-jetson:
     runs-on: ubuntu-22.04-arm
@@ -111,4 +111,4 @@ jobs:
         file: Docker/jetson/Dockerfile
         platforms: linux/arm64
         push: ${{ github.event_name == 'workflow_dispatch' }}
-        tags: mcgillrobotics/auv_2026:${{ inputs.tag_name }}-jetson
+        tags: mcgillrobotics/auv_2026:${{ inputs.tag_name || 'dev' }}-jetson
