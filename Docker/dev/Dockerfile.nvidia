@@ -98,7 +98,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Initialize rosdep
 RUN rosdep init || true && rosdep update
 # Install backward-ros so colcon build succeeds
-apt update && apt install -y ros-humble-backward-ros
+RUN apt update && apt install -y ros-humble-backward-ros
 
 # ---------------------------------------------------------
 # 2. Install ZED SDK 5.1.1 (CUDA 12.8 / Ubuntu 22.04)
