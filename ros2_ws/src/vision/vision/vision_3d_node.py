@@ -18,217 +18,8 @@ from auv_msgs.msg import VisionObject, VisionObjectArray
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import Float64
 
-# Kalman Dependencies
-from filterpy.kalman import KalmanFilter
-from scipy.optimize import linear_sum_assignment
-
-
-# =========================================
-# INTERNAL TRACKER CLASS
-# =========================================
-class UnderwaterObjectTracker:
-    """
-    Global Nearest Neighbor (GNN) tracker with Mahalanobis gating.
-    Uses CONSTANT POSITION model (objects don't move).
-    
-    STRICT MODE: Requires consecutive detections at stable positions.
-    """
-    
-    def __init__(self):
-        self.tracks = [] 
-        self.track_id_counter = 1
-        
-        # Tuning Parameters
-        self.gating_threshold = 3.5   # Mahalanobis gate (~3 sigma)
-        self.min_hits = 30            # CONSECUTIVE frames to confirm
-        self.max_age = 8              # Frames to keep lost track
-        self.max_position_jump = 2.0  # Max jump (meters) - higher to handle VIO rotation errors
-        
-        # Known object limits (prevents creating too many tracks per class)
-        self.max_per_class = {
-            "gate": 1,
-            "lane_marker": 1,
-            "red_pipe": 3,
-            "white_pipe": 6,
-            "octagon": 1,
-            "table": 1,
-            "bin": 1,
-            "board": 1,
-            "shark": 2,
-            "sawfish": 2,
-        }
-        
-    def create_kf(self, initial_pos):
-        """Create 3D Constant Position Kalman Filter (no velocity states)."""
-        # Simplified: dim_x=3, dim_z=3 (position only, no velocity)
-        kf = KalmanFilter(dim_x=3, dim_z=3)
-        
-        # State: [x, y, z] - position only
-        kf.x = initial_pos.reshape(3, 1)
-        
-        # Transition Matrix: x_k+1 = x_k (object stays where it is)
-        kf.F = np.eye(3)
-        
-        # Measurement Function: we observe position directly
-        kf.H = np.eye(3)
-        
-        # Initial Uncertainty (moderate - we trust the first measurement somewhat)
-        kf.P = np.eye(3) * 1.0
-        
-        # Process Noise (low for static underwater objects)
-        # This controls how much we allow position to "drift" between frames
-        kf.Q = np.eye(3) * 0.01
-        
-        # Default Measurement Noise (will be overridden by ZED covariance)
-        kf.R = np.eye(3) * 0.1
-        
-        return kf
-
-    def update(self, measurements, measurement_covariances, classes):
-        """
-        Main tracker update step (no dt needed for Constant Position model).
-        
-        Args:
-            measurements: List of np.array([x,y,z]) world positions
-            measurement_covariances: List of 3x3 covariance matrices
-            classes: List of class labels (strings)
-            
-        Returns:
-            List of confirmed track dicts
-        """
-        # --- 1. PREDICT STEP (trivial for constant position: x stays same) ---
-        for track in self.tracks:
-            track['kf'].predict()
-
-        # --- 2. DATA ASSOCIATION ---
-        if len(measurements) == 0:
-            matches = []
-            unmatched_dets = []
-            unmatched_tracks = list(range(len(self.tracks)))
-        elif len(self.tracks) == 0:
-            matches = []
-            unmatched_dets = list(range(len(measurements)))
-            unmatched_tracks = []
-        else:
-            # Build cost matrix using Mahalanobis distance
-            cost_matrix = np.zeros((len(self.tracks), len(measurements)))
-            
-            for t, track in enumerate(self.tracks):
-                for m, meas in enumerate(measurements):
-                    # Hard Gate 1: Class mismatch = infinite cost
-                    if track['class'] != classes[m]:
-                        cost_matrix[t, m] = 1e6
-                        continue
-                    
-                    # Hard Gate 2: Position jump too large (noisy detection)
-                    euclidean_dist = np.linalg.norm(meas - track['kf'].x[:3].flatten())
-                    if euclidean_dist > self.max_position_jump:
-                        cost_matrix[t, m] = 1e6
-                        continue
-                    
-                    # Compute Mahalanobis distance
-                    S = track['kf'].H @ track['kf'].P @ track['kf'].H.T + measurement_covariances[m]
-                    try:
-                        inv_S = np.linalg.inv(S)
-                    except np.linalg.LinAlgError:
-                        inv_S = np.eye(3)
-                    
-                    diff = meas - track['kf'].x[:3].flatten()
-                    dist = np.sqrt(diff.T @ inv_S @ diff)
-                    
-                    # Soft Gate: Statistical outlier
-                    if dist > self.gating_threshold:
-                        cost_matrix[t, m] = 1e6
-                    else:
-                        cost_matrix[t, m] = dist
-
-            # Hungarian Algorithm for optimal assignment
-            row_inds, col_inds = linear_sum_assignment(cost_matrix)
-            
-            matches = []
-            unmatched_tracks = set(range(len(self.tracks)))
-            unmatched_dets = set(range(len(measurements)))
-            
-            for r, c in zip(row_inds, col_inds):
-                if cost_matrix[r, c] < 1e5:
-                    matches.append((r, c))
-                    if r in unmatched_tracks: unmatched_tracks.remove(r)
-                    if c in unmatched_dets: unmatched_dets.remove(c)
-
-        # --- 3. UPDATE MATCHED TRACKS ---
-        for t_idx, m_idx in matches:
-            track = self.tracks[t_idx]
-            track['kf'].update(measurements[m_idx], R=measurement_covariances[m_idx])
-            track['consecutive_hits'] += 1  # Increment consecutive counter
-            track['total_updates'] = track.get('total_updates', 0) + 1
-            track['age'] = 0
-            
-            # Only confirm if seen CONSECUTIVELY
-            if track['consecutive_hits'] >= self.min_hits:
-                track['state'] = 'CONFIRMED'
-
-        # --- 4. HANDLE UNMATCHED ---
-        # Age unmatched tracks AND RESET their consecutive hit counter
-        for t_idx in unmatched_tracks:
-            self.tracks[t_idx]['age'] += 1
-            self.tracks[t_idx]['total_updates'] = self.tracks[t_idx].get('total_updates', 0) + 1
-            self.tracks[t_idx]['consecutive_hits'] = 0  # RESET - must be consecutive
-            
-            # Downgrade confirmed tracks that lost detection
-            if self.tracks[t_idx]['state'] == 'CONFIRMED' and self.tracks[t_idx]['age'] > 2:
-                self.tracks[t_idx]['state'] = 'TENTATIVE'
-        
-        # Remove dead tracks:
-        # 1. Unmatched for too long (age > max_age)
-        # 2. Stuck in TENTATIVE for too long (total_updates > 20) without confirming
-        def is_track_alive(t):
-            if t['age'] >= self.max_age: return False
-            if t['state'] == 'TENTATIVE' and t.get('total_updates', 0) > self.min_hits+5: return False
-            return True
-
-        self.tracks = [t for t in self.tracks if is_track_alive(t)]
-
-        # Create new tracks for unmatched detections
-        # BUT: Skip if too close OR if we've hit the class limit
-        min_new_track_distance = 0.5  # Minimum meters between tracks of same class
-        
-        for m_idx in unmatched_dets:
-            new_pos = measurements[m_idx]
-            new_class = classes[m_idx]
-            
-            # Check 1: Class limit reached?
-            current_count = sum(1 for t in self.tracks if t['class'] == new_class)
-            max_allowed = self.max_per_class.get(new_class, 10)  # Default to 10 if unknown
-            if current_count >= max_allowed:
-                continue  # Skip - already tracking max objects of this class
-            
-            # Check 2: Too close to ANY existing track? (Prevent duplicate objects of different classes)
-            # e.g., don't create a Red Pipe track if a White Pipe track is already there
-            too_close = False
-            for existing_track in self.tracks:
-                existing_pos = existing_track['kf'].x[:3].flatten()
-                dist = np.linalg.norm(new_pos - existing_pos)
-                if dist < min_new_track_distance:
-                    too_close = True
-                    break
-            
-            if too_close:
-                continue  # Skip this detection, it's space is already occupied
-            
-            self.tracks.append({
-                'id': self.track_id_counter,
-                'class': new_class,
-                'kf': self.create_kf(new_pos),
-                'consecutive_hits': 1,
-                'hits': 1,
-                'age': 0,
-                'total_updates': 1,  # Track lifespan
-                'state': 'TENTATIVE'
-            })
-            self.track_id_counter += 1
-            
-        # Return only confirmed tracks
-        return [t for t in self.tracks if t['state'] == 'CONFIRMED']
+# Import extracted tracker
+from vision.underwater_object_tracker import UnderwaterObjectTracker
 
 
 # =========================================
@@ -256,6 +47,8 @@ class Vision3DNode(Node):
         self.declare_parameter('stream_ip', '127.0.0.1')
         self.declare_parameter('stream_port', 30000)
         self.declare_parameter('show_detections', True)  # Show YOLO bounding boxes
+        self.declare_parameter('debug_logs', False)       # Toggle heavy debug table
+        self.declare_parameter('min_new_track_distance', 0.5)
 
         model_path = self.get_parameter('model_path').value
         if not model_path:
@@ -264,6 +57,8 @@ class Vision3DNode(Node):
         self.conf_thresh = self.get_parameter('confidence_threshold').value
         self.max_range = self.get_parameter('max_range').value
         self.show_detections = self.get_parameter('show_detections').value
+        self.debug_logs = self.get_parameter('debug_logs').value
+        min_new_track_distance = self.get_parameter('min_new_track_distance').value
         
         # --- Publishers ---
         # Publishes confirmed TRACKS, not raw detections
@@ -291,7 +86,7 @@ class Vision3DNode(Node):
             Float64, '/sensors/depth/data', self._depth_callback, 10)
         
         # --- TRACKER ---
-        self.tracker = UnderwaterObjectTracker()
+        self.tracker = UnderwaterObjectTracker(min_new_track_distance=min_new_track_distance)
         self.last_time = self.get_clock().now()
 
         # --- Timer (30 FPS) ---
@@ -401,10 +196,6 @@ class Vision3DNode(Node):
             cv2.imshow("YOLO Detections", img_bgr)
             cv2.waitKey(1)
 
-        # Debug: Log what we are sending to ZED (MOVED TO TABLE BELOW)
-        # print("-" * 30)
-        # print(f"YOLO -> ZED: {[self.CLASS_NAMES[b.label] for b in custom_boxes]}")
-        
         self.zed.ingest_custom_box_objects(custom_boxes)
 
         # 3. Get VIO Pose
@@ -413,55 +204,27 @@ class Vision3DNode(Node):
             return
 
         # 4. Retrieve Raw 3D Objects
-        
         self.zed.retrieve_objects(self.objects, self.obj_runtime_param)
 
-        # 5. Prepare batch for tracker
+        # 5. Debug - Table Log (If enabled)
+        if self.debug_logs:
+            self._log_debug_table(custom_boxes, self.objects.object_list)
+
+        # 6. Prepare batch for tracker
         raw_measurements = []
         raw_covariances = []
         raw_classes = []
 
         rotation_matrix = self.cam_pose.get_rotation_matrix().r
         
-        # Debug: Collect valid detections for logging
-        valid_detections = []
-        
-        # Debug: Check ALL objects returned by ZED
-        zed_objs_labels = []
         for obj in self.objects.object_list:
-            lbl = self.CLASS_NAMES[obj.raw_label] if obj.raw_label < len(self.CLASS_NAMES) else str(obj.raw_label)
-            zed_objs_labels.append(lbl)
-            
-        # Print Side-by-Side Table for Input/Output Comparison
-        yolo_labels = [self.CLASS_NAMES[b.label] for b in custom_boxes]
-        
-        # # Clear screen and move cursor to top
-        # print("\033[2J\033[H", end="")
-        
-        # print("=" * 60)
-        # print(f"{'YOLO INPUT':<30} | {'ZED OUTPUT':<28}")
-        # print("-" * 60)
-        # max_len = max(len(yolo_labels), len(zed_objs_labels))
-        # for i in range(max_len):
-        #     y_lbl = yolo_labels[i] if i < len(yolo_labels) else ""
-        #     z_lbl = zed_objs_labels[i] if i < len(zed_objs_labels) else ""
-        #     print(f"{y_lbl:<30} | {z_lbl:<28}")
-        # print("=" * 60)
-        # print("\n")
-
-        for obj in self.objects.object_list:
-            # Skip if tracking state is not OK
-            # if obj.tracking_state != sl.OBJECT_TRACKING_STATE.OK:
-            #     continue
-                
             raw_pos = np.array(obj.position)
             if np.isnan(raw_pos).any() or np.isinf(raw_pos).any() or raw_pos[0] < 0:
                 continue
             
-            # Get label for logging
+            # Get label
             label_idx = obj.raw_label
             label_str = self.CLASS_NAMES[label_idx] if label_idx < len(self.CLASS_NAMES) else str(label_idx)
-            valid_detections.append((label_str, obj.confidence, raw_pos[0]))  # (class, conf, distance)
 
             # Transform position to World Frame
             world_pos = self._transform_pos_to_world(raw_pos, rotation_matrix)
@@ -478,34 +241,17 @@ class Vision3DNode(Node):
             if label_str in ("red_pipe", "white_pipe"):
                 # Distance from robot (camera position) to detection
                 dist_from_robot = np.linalg.norm(raw_pos)  # raw_pos is in camera frame
-                if dist_from_robot > 5.0:
+                if dist_from_robot > 7.0:
                     continue  # Skip far-away pipe detections
             
             raw_measurements.append(world_pos)
             raw_covariances.append(cov_world)
             raw_classes.append(label_str)
 
-        # Debug: Print valid detections in a formatted table
-        if valid_detections:
-            # Clear screen and move cursor to top
-            print("\033[2J\033[H", end="")
-            
-            # Print header
-            print("=" * 50)
-            print(f"{'CLASS':<15} {'CONF':>8} {'DIST':>10}")
-            print("-" * 50)
-            
-            # Sort by distance for readability
-            for c, conf, d in sorted(valid_detections, key=lambda x: x[2]):
-                print(f"{c:<15} {conf:>7.0f}% {d:>9.1f}m")
-            
-            print("=" * 50)
-            print(f"Total: {len(valid_detections)} detections")
-
-        # 6. UPDATE TRACKER (no dt needed for Constant Position model)
+        # 7. UPDATE TRACKER
         confirmed_tracks = self.tracker.update(raw_measurements, raw_covariances, raw_classes)
 
-        # 7. Publish Confirmed Tracks
+        # 8. Publish Confirmed Tracks
         msg = VisionObjectArray()
         for track in confirmed_tracks:
             vision_obj = VisionObject()
@@ -519,9 +265,6 @@ class Vision3DNode(Node):
             vision_obj.theta_z = 0.0
             vision_obj.extra_field = 0.0
             
-            # Use P matrix (3x3 in Constant Position model) as covariance
-            # vision_obj.covariance = track['kf'].P.flatten().tolist()
-            
             # Confirmed track = high confidence
             vision_obj.confidence = 1.0
 
@@ -531,6 +274,29 @@ class Vision3DNode(Node):
             self.tracks_pub.publish(msg)
             
         self._publish_pose()
+
+    def _log_debug_table(self, custom_boxes, zed_objects):
+        """Print side-by-side comparison of YOLO input and ZED output."""
+        yolo_labels = [self.CLASS_NAMES[b.label] for b in custom_boxes]
+        
+        zed_objs_labels = []
+        for obj in zed_objects:
+            lbl = self.CLASS_NAMES[obj.raw_label] if obj.raw_label < len(self.CLASS_NAMES) else str(obj.raw_label)
+            zed_objs_labels.append(lbl)
+            
+        # Clear screen and move cursor to top
+        print("\033[2J\033[H", end="")
+        
+        print("=" * 60)
+        print(f"{'YOLO INPUT (Raw)':<30} | {'ZED OUTPUT (3D)':<28}")
+        print("-" * 60)
+        max_len = max(len(yolo_labels), len(zed_objs_labels))
+        for i in range(max_len):
+            y_lbl = yolo_labels[i] if i < len(yolo_labels) else ""
+            z_lbl = zed_objs_labels[i] if i < len(zed_objs_labels) else ""
+            print(f"{y_lbl:<30} | {z_lbl:<28}")
+        print("=" * 60)
+        print("\n")
 
     def _transform_pos_to_world(self, local_pos: np.ndarray, rotation_matrix: np.ndarray) -> np.ndarray:
         """Transform camera-frame position to world frame with sensor depth override."""
