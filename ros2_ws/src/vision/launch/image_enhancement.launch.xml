@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <launch>
-    <arg name="front_cam_topic" default="/sensors/camera/front/image_raw"/>
-    <arg name="down_cam_topic" default="/sensors/camera/down/image_raw"/>
+    <arg name="front_cam_topic" default="/sensors/front_cam/image_raw"/>
+    <arg name="down_cam_topic" default="/sensors/down_cam/image_raw"/>
     <arg name="front_enhanced_topic" default="/vision/front_cam/image_enhanced"/>
     <arg name="down_enhanced_topic" default="/vision/down_cam/image_enhanced"/>
     <arg name="sim" default="false"/>
@@ -9,7 +9,6 @@
     <let name="front_cam_topic" value="$(var front_cam_topic)/compressed" if="$(var sim)"/>
     <let name="down_cam_topic" value="$(var down_cam_topic)/compressed" if="$(var sim)"/>
     <node pkg="vision" exec="front_image_enhancement" name="front_image_enhancement" output="screen">
-        <remap from="/zed/zed_node/left/image_rect_color" to="$(var front_cam_topic)"/>
         <param name="input_topic" value="$(var front_cam_topic)"/>
         <param name="output_topic" value="$(var front_enhanced_topic)"/>
         <param name="sim" value="$(var sim)"/>
