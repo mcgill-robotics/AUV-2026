@@ -1,0 +1,43 @@
+name: Unity PR Checks
+
+on:
+  pull_request:
+    branches: [ "main" ]
+
+concurrency:
+  group: unity-pr-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unity-editmode-tests:
+    name: Unity EditMode Tests (compile gate)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-tags: true
+          submodules: recursive
+          lfs: true
+
+      - name: Cache Unity Library
+        uses: actions/cache@v4
+        with:
+          path: sim/auv-sim-unity/Library
+          key: Library-${{ runner.os }}-unity-${{ hashFiles('sim/auv-sim-unity/Packages/manifest.json', 'sim/auv-sim-unity/Packages/packages-lock.json') }}
+          restore-keys: |
+            Library-${{ runner.os }}-unity-
+
+      - name: Run Unity EditMode tests
+        uses: game-ci/unity-test-runner@v4
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+        with:
+          unityVersion: 6000.0.62f1
+          projectPath: sim/auv-sim-unity
+          testMode: EditMode
+          artifactsPath: unity-test-results

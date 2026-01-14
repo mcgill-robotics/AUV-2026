@@ -1,0 +1,64 @@
+name: Unity Build (main)
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+concurrency:
+  group: unity-build-main
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build ${{ matrix.targetPlatform }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            targetPlatform: StandaloneWindows64
+          - os: ubuntu-latest
+            targetPlatform: StandaloneLinux64
+          - os: macos-latest
+            targetPlatform: StandaloneOSX
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-tags: true
+          submodules: recursive
+          lfs: true
+
+      - name: Cache Unity Library
+        uses: actions/cache@v4
+        with:
+          path: sim/auv-sim-unity/Library
+          key: Library-${{ runner.os }}-${{ matrix.targetPlatform }}-${{ hashFiles('sim/auv-sim-unity/Packages/manifest.json', 'sim/auv-sim-unity/Packages/packages-lock.json') }}
+          restore-keys: |
+            Library-${{ runner.os }}-${{ matrix.targetPlatform }}-
+            Library-${{ runner.os }}-
+
+      - name: Build Unity Player
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+        with:
+          unityVersion: 6000.0.62f1
+          projectPath: sim/auv-sim-unity
+          targetPlatform: ${{ matrix.targetPlatform }}
+          buildName: auv-sim
+          buildsPath: build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: auv-sim-${{ matrix.targetPlatform }}
+          path: build
+          retention-days: 7
