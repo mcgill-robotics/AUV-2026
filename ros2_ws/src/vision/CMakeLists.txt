@@ -6,10 +6,13 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 set(DEPS
-  ament_cmake
-  ament_cmake_python
-  rclcpp
-  rclpy
+    ament_cmake
+    ament_cmake_python
+    rclcpp
+    rclpy
+    auv_msgs
+    geometry_msgs
+    OpenCV
 )
 
 # find dependencies
@@ -19,7 +22,12 @@ endforeach()
 
 # C++ object map
 add_executable(object_map vision/object_map.cpp)
-ament_target_dependencies(object_map rclcpp)
+ament_target_dependencies(object_map 
+    rclcpp
+    auv_msgs 
+    geometry_msgs
+    OpenCV
+)
 target_include_directories(object_map PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
@@ -29,16 +37,16 @@ install(TARGETS object_map DESTINATION lib/${PROJECT_NAME})
 # Python nodes
 ament_python_install_package(${PROJECT_NAME})
 install(PROGRAMS
-  vision/down_image_enhancement.py
-  vision/front_image_enhancement.py
-  vision/image_collection.py
-  DESTINATION lib/${PROJECT_NAME}
+    vision/down_image_enhancement.py
+    vision/front_image_enhancement.py
+    vision/image_collection.py
+    DESTINATION lib/${PROJECT_NAME}
 )
 
 # Launch files
 install(DIRECTORY
-  launch
-  DESTINATION share/${PROJECT_NAME}/
+    launch
+    DESTINATION share/${PROJECT_NAME}/
 )
 
 ament_package()
