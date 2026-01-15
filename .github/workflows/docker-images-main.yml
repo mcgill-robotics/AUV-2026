@@ -12,103 +12,88 @@ on:
         description: 'Docker Tag (e.g., 2026-01 or dev)'
         required: true
         default: 'dev'
+      allow_overwrite:
+        description: 'Overwrite existing tag if found?'
+        type: boolean
+        default: false
 
   schedule:
     - cron: '0 0,12 * * *'
 
 jobs:
-  build-x86:
-    runs-on: ubuntu-22.04
+  build-and-push:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: x86
+            runner: ubuntu-22.04
+            context: Docker/dev
+            file: Docker/dev/Dockerfile
+            platform: linux/amd64
+            suffix: amd64
+          - name: arm
+            runner: ubuntu-22.04-arm
+            context: Docker/dev
+            file: Docker/dev/Dockerfile
+            platform: linux/arm64
+            suffix: arm64
+          - name: jetson
+            runner: ubuntu-22.04-arm
+            context: Docker/jetson
+            file: Docker/jetson/Dockerfile
+            platform: linux/arm64
+            suffix: jetson
 
     permissions:
       contents: read
       packages: write
 
     steps:
-    - name: checkout
-      uses: actions/checkout@v4
-      with:
-          fetch-tags: true
-          submodules: recursive    # if you vendor msgs/firmware/etc
-          lfs: true
-
-    - name: Login to DockerHub
-      if: github.event_name == 'workflow_dispatch'
-      uses: docker/login-action@v3
-      with:
-        username: ${{ vars.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
-        
-    - name: Build and optionally push image
-      uses: docker/build-push-action@v6
-      with:
-        context: Docker/dev
-        file: Docker/dev/Dockerfile
-        platforms: linux/amd64
-        push: ${{ github.event_name == 'workflow_dispatch' }}
-        tags: mcgillrobotics/auv_2026:${{ inputs.tag_name || 'dev' }}-amd64
-
-  build-arm:
-    runs-on: ubuntu-22.04-arm
-
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-    - name: Git checkout with LFS and submodules
-      uses: actions/checkout@v4
-      with:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
           fetch-tags: true
           submodules: recursive
           lfs: true
 
-    - name: Login to DockerHub
-      if: github.event_name == 'workflow_dispatch'
-      uses: docker/login-action@v3
-      with:
-        username: ${{ vars.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
-        
-    - name: Build and optionally push image
-      uses: docker/build-push-action@v6
-      with:
-        context: Docker/dev
-        file: Docker/dev/Dockerfile
-        platforms: linux/arm64
-        push: ${{ github.event_name == 'workflow_dispatch' }}
-        tags: mcgillrobotics/auv_2026:${{ inputs.tag_name || 'dev' }}-arm64
+      - name: Login to DockerHub
+        if: github.event_name == 'workflow_dispatch'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-  build-jetson:
-    runs-on: ubuntu-22.04-arm
-
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-    - name: Git checkout with LFS and submodules
-      uses: actions/checkout@v4
-      with:
-          fetch-tags: true
-          submodules: recursive
-          lfs: true
-
-    - name: Log in to Docker Hub
-      if: github.event_name == 'workflow_dispatch'
-      uses: docker/login-action@v3
-      with:
-        username: ${{ vars.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Check if Tag Exists
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          FULL_TAG="mcgillrobotics/auv_2026:${{ inputs.tag_name }}-${{ matrix.suffix }}"
+          ALLOW_OVERWRITE="${{ inputs.allow_overwrite }}"
           
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+          # Check if tag exists on Docker Hub
+          if docker manifest inspect "$FULL_TAG" > /dev/null 2>&1; then
+            if [ "$ALLOW_OVERWRITE" = "true" ]; then
+              echo "::warning::Tag '$FULL_TAG' already exists. Overwrite is ENABLED. Proceeding with building."
+            else
+              echo "::error::Tag '$FULL_TAG' already exists and 'allow_overwrite' is set to false. Aborting to prevent accidental overwrite."
+              exit 1
+            fi
+          else
+            echo "Tag '$FULL_TAG' does not exist. Proceeding with building."
+          fi
 
-    - name: Build and optionally push image
-      uses: docker/build-push-action@v6
-      with:
-        context: Docker/jetson
-        file: Docker/jetson/Dockerfile
-        platforms: linux/arm64
-        push: ${{ github.event_name == 'workflow_dispatch' }}
-        tags: mcgillrobotics/auv_2026:${{ inputs.tag_name || 'dev' }}-jetson
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and optionally push image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          platforms: ${{ matrix.platform }}
+          push: ${{ github.event_name == 'workflow_dispatch' }}
+          tags: mcgillrobotics/auv_2026:${{ inputs.tag_name || 'dev' }}-${{ matrix.suffix }}
