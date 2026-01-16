@@ -13,6 +13,18 @@ set(DEPS
     auv_msgs
     geometry_msgs
     OpenCV
+    # Required to ensure consistent Eigen3 environment variables
+    eigen3_cmake_module 
+    Eigen3
+)
+
+set(CPP_LIBS
+    rclcpp
+    auv_msgs
+    geometry_msgs
+    OpenCV
+    eigen3_cmake_module 
+    Eigen3
 )
 
 # find dependencies
@@ -21,12 +33,12 @@ foreach(dep IN LISTS DEPS)
 endforeach()
 
 # C++ object map
-add_executable(object_map vision/object_map.cpp)
+add_executable(object_map 
+  vision/object_map.cpp
+  vision/object_map/object_tracker.cpp
+)
 ament_target_dependencies(object_map 
-    rclcpp
-    auv_msgs 
-    geometry_msgs
-    OpenCV
+    ${CPP_LIBS}
 )
 target_include_directories(object_map PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
