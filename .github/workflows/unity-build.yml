@@ -36,8 +36,8 @@ jobs:
       - name: Cache Unity Library
         uses: actions/cache@v4
         with:
-          path: sim/auv-sim-unity/Library
-          key: Library-${{ runner.os }}-${{ matrix.targetPlatform }}-${{ hashFiles('sim/auv-sim-unity/Packages/manifest.json', 'sim/auv-sim-unity/Packages/packages-lock.json') }}
+          path: Library
+          key: Library-${{ runner.os }}-${{ matrix.targetPlatform }}-${{ hashFiles('Packages/manifest.json', 'Packages/packages-lock.json') }}
           restore-keys: |
             Library-${{ runner.os }}-${{ matrix.targetPlatform }}-
             Library-${{ runner.os }}-
@@ -50,15 +50,15 @@ jobs:
           UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
         with:
-          unityVersion: 6000.0.62f1
-          projectPath: sim/auv-sim-unity
+          unityVersion: 2022.3.9f1
+          projectPath: .
           targetPlatform: ${{ matrix.targetPlatform }}
           buildName: auv-sim
-          buildsPath: build
+          buildsPath: build/${{ matrix.targetPlatform }}
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: auv-sim-${{ matrix.targetPlatform }}
-          path: build
+          path: build/${{ matrix.targetPlatform }}
           retention-days: 7
