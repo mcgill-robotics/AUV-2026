@@ -4,7 +4,11 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/opt/ros/humble/include/**"
+                "/opt/ros/humble/include/**",
+                "/usr/include/opencv4/**",
+                "/usr/local/zed/include/**",
+                "/usr/local/cuda/include/**"
+
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",
