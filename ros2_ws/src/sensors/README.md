@@ -211,13 +211,20 @@ Where:
 The position of the vehicle's Center of Mass in the inertial frame, $r_i^{vi}$, is calculated by applying the transformation matrix to the physical offset vector:
 
 $$
-\left[ \begin{array}{c} r_i^{vi} \\ 1 \end{array} \right] = T_s^i \left[ \begin{array}{c} r_s^{vs} \\ 1 \end{array} \right]
+\begin{bmatrix}
+r_i^{vi} \\\\
+1
+\end{bmatrix} 
+= T_s^i 
+\begin{bmatrix}
+r_s^{vs} \\\\
+1
+\end{bmatrix}
 $$
 
 Where:
 - $r_i^{vi}$: Position of the vehicle Center of Mass in the pool inertial frame.
 - $r_s^{vs}$: Constant offset vector from the DVL sensor to the Center of Mass, expressed in the sensor's local frame (obtained from CAD).
-
 ---
 
 ## Usage
