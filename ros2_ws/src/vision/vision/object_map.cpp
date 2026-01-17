@@ -7,7 +7,9 @@
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "std_msgs/msg/float64.hpp"
 
+#ifdef HAS_ZED_SDK
 #include "object_map/zed_detection.hpp"
+#endif
 #include "object_map/object_tracker.hpp"
 
 using namespace std;
@@ -29,14 +31,17 @@ public:
 
 	bool zed_sdk;
 	this->get_parameter("zed_sdk", zed_sdk);
+	bool sdk_available = false;
+// compile time check for ZED SDK see CMakeLists.txt
 #ifdef HAS_ZED_SDK
-
+		sdk_available = true;
 #else
-		zed_sdk = false;
+		sdk_available = false;
 #endif
+	// final decision on using ZED SDK
+	zed_sdk &&= sdk_available;
 	if (!zed_sdk)
-	{
-		
+	{	
 		this->declare_parameter<string>("front_cam_detection_topic", "/vision/front_cam/object_detection");
 		string front_cam_detection_topic;
 		this->get_parameter("front_cam_detection_topic", front_cam_detection_topic);
@@ -112,7 +117,6 @@ public:
 		);
 	}
 
-
 	// Publishers
 	object_map_publisher = this->create_publisher<auv_msgs::msg::VisionObject>("/vision/object_map", 10);
 	pose_publisher = this->create_publisher<geometry_msgs::msg::PoseStamped>("/vision/vio_pose", 10);
@@ -123,24 +127,28 @@ public:
 
 
 	this->timer = this->create_wall_timer(
-		double_ms(1000.0 / frame_rate), std::bind(&ObjectMapNode::process_frame, this)
+		double_ms(1000.0 / frame_rate), std::bind(&ObjectMapNode::frame_callback, this)
 	);
 	RCLCPP_INFO(this->get_logger(), "Object Map Node has been initialized with frame rate %d.", frame_rate);
     }
 private:
-	void process_frame()
+	void frame_callback()
 	{
+#ifdef HAS_ZED_SDK
 		zed_detector.process_frame();
+#endif
 	}
 
 	void depth_callback(const std_msgs::msg::Float64::SharedPtr msg)
 	{
+#ifdef HAS_ZED_SDK
 		zed_detector.UpdateSensorDepth(msg->data);
+#endif
 	}
 
-// #ifdef HAS_ZED_SDK
+#ifdef HAS_ZED_SDK
 	ZEDDetection zed_detector;
-// #endif
+#endif
 	rclcpp::TimerBase::SharedPtr timer;
 
 	rclcpp::Publisher<auv_msgs::msg::VisionObject>::SharedPtr object_map_publisher;

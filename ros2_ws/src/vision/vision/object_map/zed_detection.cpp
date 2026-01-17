@@ -1,4 +1,3 @@
-
 #include "zed_detection.hpp"
 
 // --- CUSTOM EXCEPTIONS (UNUSED) ---
@@ -167,6 +166,11 @@ void ZEDDetection::process_frame()
 
 }
 
+std::tuple<vector<cv::Mat>, vector<cv::Mat>, vector<string>> GetData()
+{
+	return {measurements, covariances, classes};
+}
+
 ZEDDetection::~ZEDDetection()
 {
     if (zed.isOpened()) {
@@ -289,8 +293,6 @@ cv::Mat ZEDDetection::letter_box(const cv::Mat& source, int target_size)
 	return source;
 }
 
-
-
 vector<sl::CustomBoxObjectData> ZEDDetection::detections_to_zed_2D_boxes(const vector<DetectedObject>& detections, const cv::Mat& img_bgr)
 {
 	vector<sl::CustomBoxObjectData> custom_boxes;
@@ -326,17 +328,16 @@ vector<sl::CustomBoxObjectData> ZEDDetection::detections_to_zed_2D_boxes(const v
 	}
 }
 
-
-std::tuple<vector<cv::Mat>, vector<cv::Mat>, vector<string>> ZEDDetection::determine_world_position_zed_2D_boxes(const sl::Objects& zed_2D_boxes,const sl::Pose& cam_pose)
+void ZEDDetection::determine_world_position_zed_2D_boxes(const sl::Objects& zed_2D_boxes,const sl::Pose& cam_pose)
     {
 	// Retrieve 3D objects
 	sl::Objects objects;
 	zed.retrieveObjects(objects, obj_runtime_param);
 
 	// Process measurements for tracking
-	vector<cv::Mat> measurements;
-	vector<cv::Mat> covariances;
-	vector<string> classes;
+	measurements.clear();
+	covariances.clear();
+	classes.clear();
 	sl::Rotation rotation = cam_pose.getRotationMatrix();
 	sl::float3 translation = cam_pose.getTranslation();
 	for (const auto& obj : objects.object_list) {

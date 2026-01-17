@@ -3,11 +3,11 @@
 #include <vector>
 #include <string>
 #include <functional>
+#include <tuple>
 
 #include <opencv2/opencv.hpp>
 #include <opencv2/dnn.hpp>
 #include <sl/Camera.hpp>
-#include <Eigen/Dense>
 
 #include "object.hpp"
 
@@ -54,9 +54,11 @@ public:
     );
     void process_frame();
     void UpdateSensorDepth(double new_depth);
+    std::tuple<vector<cv::Mat>, vector<cv::Mat>, vector<string>> GetData();
+    
     ~ZEDDetection();
     
-    private:
+private:
     bool init_zed();
     
     void load_yolo_model(const string& model_path);
@@ -72,7 +74,7 @@ public:
 
     cv::Mat transform_to_world(const sl::float3& local_pos, const sl::Rotation& rotation_matrix, const sl::float3& translation_vector);
     
-    std::tuple<vector<cv::Mat>, vector<cv::Mat>, vector<string>> determine_world_position_zed_2D_boxes(const sl::Objects&,const sl::Pose& cam_pose);
+    void determine_world_position_zed_2D_boxes(const sl::Objects&,const sl::Pose& cam_pose);
 
     
     void LogDebugTable(const vector<sl::CustomBoxObjectData>& YOLO_detections, const sl::Objects& zed_detections);
@@ -91,17 +93,21 @@ public:
     
     double sensor_depth;
     double letter_box_scale;
-
+    
     function<void(const string&)> log_error;
     function<void(const string&)> log_info;
     function<void(const string&)> log_warn;
     function<void(const string&, int)> log_warn_throttle;    
     cv::dnn::Net yolo_net;
-
-
+    
+    
     sl::Camera zed;
     sl::RuntimeParameters runtime_params;
     sl::ObjectDetectionRuntimeParameters obj_runtime_param;
+    
+    vector<cv::Mat> measurements;
+	vector<cv::Mat> covariances;
+	vector<string> classes;
 };
 
 

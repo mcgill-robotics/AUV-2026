@@ -5,12 +5,23 @@
 #include <opencv2/core.hpp>
 
 // Object class enumeration
-enum ObjectClass {
-    GATE, LANE_MARKER, RED_PIPE, WHITE_PIPE, OCTAGON, TABLE, BIN, BOARD, SHARK, SAWFISH
+enum ObjectClass 
+{
+    GATE, 
+    LANE_MARKER, 
+    RED_PIPE, 
+    WHITE_PIPE, 
+    OCTAGON, 
+    TABLE, 
+    BIN, 
+    BOARD, 
+    SHARK, 
+    SAWFISH
 };
 
 // Detection struct
-struct DetectedObject {
+struct DetectedObject 
+{
     ObjectClass class_id;
     float confidence;
     cv::Rect bbox; // x, y, width, height

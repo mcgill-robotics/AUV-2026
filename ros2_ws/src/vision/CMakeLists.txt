@@ -62,7 +62,7 @@ add_executable(object_map ${SOURCES})
 ament_target_dependencies(object_map ${CPP_LIBS})
 
 if(HAS_ZED_SDK_DEPS)
-    message(STATUS "ZED SDK and CUDA found, building object map node with ZED SDK.")
+    # Define a compile-time flag to indicate ZED SDK is available
     target_compile_definitions(object_map PRIVATE HAS_ZED_SDK)
     target_link_libraries(object_map ${ZED_LIBRARIES} ${CUDAToolkit_LIBRARIES})
     # Treat external headers as system to suppress warnings
