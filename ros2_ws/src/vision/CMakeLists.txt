@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
+
 project(vision)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -12,6 +13,7 @@ set(DEPS
     rclpy
     auv_msgs
     geometry_msgs
+    std_msgs
     OpenCV
     # Required to ensure consistent Eigen3 environment variables
     eigen3_cmake_module 
@@ -33,6 +35,7 @@ foreach(dep IN LISTS DEPS)
 endforeach()
 
 set (SOURCES 
+    vision/object_map/object.cpp
     vision/object_map/object_tracker.cpp
     vision/object_map.cpp
 )
@@ -40,16 +43,32 @@ set (SOURCES
 find_package(CUDAToolkit QUIET)
 find_package(ZED QUIET)
 
+set(HAS_ZED_SDK_DEPS FALSE)
+
 if(CUDAToolkit_FOUND AND ZED_FOUND)
-    message(STATUS "ZED SDK and CUDA found, building ZED object map node.")
-    target_compile_definitions(object_map PRIVATE HAS_ZED_SDK)
-    target_link_libraries(object_map PRIVATE ZED CUDA)
+    message(STATUS "ZED SDK and CUDA found, building object map node with ZED SDK.")
+    set (HAS_ZED_SDK_DEPS TRUE)
+else()
+    message(STATUS "ZED SDK and/or CUDA not found, building object map node without ZED SDK.")
+endif()
+
+if(HAS_ZED_SDK_DEPS)
+    include_directories(include ${ZED_INCLUDE_DIRS} ${CUDAToolkit_INCLUDE_DIRS})
     list(APPEND SOURCES vision/object_map/zed_detection.cpp)
 endif()
 
 # C++ object map
 add_executable(object_map ${SOURCES})
 ament_target_dependencies(object_map ${CPP_LIBS})
+
+if(HAS_ZED_SDK_DEPS)
+    message(STATUS "ZED SDK and CUDA found, building object map node with ZED SDK.")
+    target_compile_definitions(object_map PRIVATE HAS_ZED_SDK)
+    target_link_libraries(object_map ${ZED_LIBRARIES} ${CUDAToolkit_LIBRARIES})
+    # Treat external headers as system to suppress warnings
+    target_include_directories(object_map SYSTEM PRIVATE ${ZED_INCLUDE_DIRS} ${CUDAToolkit_INCLUDE_DIRS})
+endif()
+
 
 target_include_directories(object_map PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

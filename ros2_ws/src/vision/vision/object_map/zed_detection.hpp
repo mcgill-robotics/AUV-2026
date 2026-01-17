@@ -9,6 +9,8 @@
 #include <sl/Camera.hpp>
 #include <Eigen/Dense>
 
+#include "object.hpp"
+
 using namespace std;
 // --- CUSTOM EXCEPTIONS (UNUSED) ---
 // class ZedInitException : public exception
@@ -29,34 +31,10 @@ using namespace std;
 //     string error_details = "";
 // };
 
-enum ObjectClass
-{
-    GATE, LANE_MARKER, RED_PIPE, WHITE_PIPE, OCTAGON, TABLE, BIN, BOARD, SHARK, SAWFISH
-};
-
-struct DetectedObject
-{
-    ObjectClass class_id;
-    float confidence;
-    cv::Rect bbox; // x, y, width, height
-};
-
-array<string, 10> ID_TO_LABEL = 
-{
-    "gate",
-    "lane_marker",
-    "red_pipe",
-    "white_pipe",
-    "octagon",
-    "table",
-    "bin",
-    "board",
-    "shark",
-    "sawfish"
-};
-
 class ZEDDetection
 {
+public:
+    ZEDDetection();
     ZEDDetection(
         const string & yolo_model_path,
         int yolo_input_size,
@@ -74,12 +52,14 @@ class ZEDDetection
         function<void(const string&)> log_warn,
         function<void(const string&, int)> log_warn_throttle
     );
-    void process_frame(double delta_time);
-    void load_yolo_model(const string& model_path);
+    void process_frame();
+    void UpdateSensorDepth(double new_depth);
     ~ZEDDetection();
-
-private:
+    
+    private:
     bool init_zed();
+    
+    void load_yolo_model(const string& model_path);
 
     bool check_zed_status();
 
@@ -90,11 +70,13 @@ private:
     vector<DetectedObject> run_yolo(const cv::Mat& img);
     cv::Mat letter_box(const cv::Mat& img, int target_size);
 
-    std::tuple<vector<cv::Mat>, vector<cv::Mat>, vector<string>> determine_world_position_zed_2D_boxes(const sl::Objects&,const sl::Pose& cam_pose);
-
     cv::Mat transform_to_world(const sl::float3& local_pos, const sl::Rotation& rotation_matrix, const sl::float3& translation_vector);
     
+    std::tuple<vector<cv::Mat>, vector<cv::Mat>, vector<string>> determine_world_position_zed_2D_boxes(const sl::Objects&,const sl::Pose& cam_pose);
+
+    
     void LogDebugTable(const vector<sl::CustomBoxObjectData>& YOLO_detections, const sl::Objects& zed_detections);
+
 
     int frame_rate;
     int YOLO_input_size;

@@ -11,6 +11,26 @@
 // {
 // 	return error_details.c_str();
 // }
+ZEDDetection::ZEDDetection() : ZEDDetection(
+        "",
+        640,
+        30,
+        0.5f,
+        20.0f,
+        0.5f,
+        false,
+        "",
+        0,
+        false,
+        false,
+        [](const string& msg){},
+        [](const string& msg){},
+        [](const string& msg){},
+        [](const string& msg, int){}
+    ) 
+{
+
+};
 
 ZEDDetection::ZEDDetection(
 		const string & yolo_model_path,
@@ -110,11 +130,8 @@ void ZEDDetection::load_yolo_model(const string& model_path)
     }
 }
 
-void ZEDDetection::process_frame(double delta_time)
+void ZEDDetection::process_frame()
 {
-	if (delta_time <= 0) {
-	    return; // Prevent division by zero on startup
-	}
 
 	if (!ZEDDetection::check_zed_status()) {
 	    return; // Skip processing if ZED health not OK
@@ -148,6 +165,13 @@ void ZEDDetection::process_frame(double delta_time)
 	    return;
 	}
 
+}
+
+ZEDDetection::~ZEDDetection()
+{
+    if (zed.isOpened()) {
+        zed.close();
+    }
 }
 
 bool ZEDDetection::check_zed_status()
@@ -327,7 +351,7 @@ std::tuple<vector<cv::Mat>, vector<cv::Mat>, vector<string>> ZEDDetection::deter
 
 		// Get label
 		int label_idx = obj.raw_label;
-		string label_str = (label_idx < ID_TO_LABEL.size()) ? ID_TO_LABEL[label_idx] : to_string(label_idx);
+		string label_str = (label_idx < ID_TO_LABEL.size()) ? string(ID_TO_LABEL[label_idx]) : to_string(label_idx);
 
 		// Transform to world frame
 		cv::Mat world_pos = transform_to_world(pos, rotation, translation);
@@ -354,6 +378,11 @@ void ZEDDetection::LogDebugTable(const vector<sl::CustomBoxObjectData>& YOLO_det
     // Implementation of the debug table logging
 }
 
+void ZEDDetection::UpdateSensorDepth(double new_depth)
+{
+	sensor_depth = new_depth;
+}
+
 cv::Mat ZEDDetection::transform_to_world(const sl::float3& local_pos, const sl::Rotation& rotation_matrix, const sl::float3& translation_vector)
 {
 	cv::Mat pos(3, 1, CV_64F);
@@ -376,14 +405,6 @@ cv::Mat ZEDDetection::transform_to_world(const sl::float3& local_pos, const sl::
     cv::Mat world_pos = t + R * pos;
     return world_pos;
 }
-
-ZEDDetection::~ZEDDetection()
-{
-    if (zed.isOpened()) {
-        zed.close();
-    }
-}
-
 
 cv::Mat sl_mat_to_cv_mat(sl::Mat& sl_image)
 {
