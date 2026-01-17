@@ -182,7 +182,7 @@ $r_v^{vs}$: the vector from the sensor to the vehicle frame, expressed in the ve
 ## DVL Processing
 
 
-The Water Linked DVL-A50 provides position data for the sensor's location relative to the pool frame. It utilizes an internal Kalman Filter to fuse IMU and acoustic velocity measurements for dead-reckoning position estimation. 
+The DVL provides position data for the sensor's location relative to the pool frame. It utilizes an internal Kalman Filter to fuse IMU and acoustic velocity measurements for dead-reckoning position estimation. 
 
 As mentioned above, we operate in three coordinate reference frames:
 - **Inertial Frame ($i$):** Fixed global reference (the pool).
@@ -213,6 +213,10 @@ The position of the vehicle's Center of Mass in the inertial frame, $r_i^{vi}$, 
 $$
 \begin{bmatrix} r_i^{vi} \\ 1 \end{bmatrix} = T_s^i \begin{bmatrix} r_s^{vs} \\ 1 \end{bmatrix}
 $$
+
+Where:
+- $r_i^{vi}$: Position of the vehicle Center of Mass in the pool inertial frame.
+- $r_s^{vs}$: Constant offset vector from the DVL sensor to the Center of Mass, expressed in the sensor's local frame (obtained from CAD).
 
 ---
 
