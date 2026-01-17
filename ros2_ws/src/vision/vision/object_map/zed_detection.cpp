@@ -163,12 +163,19 @@ void ZEDDetection::process_frame()
 	    log_warn_throttle("Error in VIO tracking", 1000);
 	    return;
 	}
-
+	determine_world_position_zed_2D_boxes(objects, cam_pose);
 }
 
-std::tuple<vector<cv::Mat>, vector<cv::Mat>, vector<string>> GetData()
+std::tuple<vector<Eigen::Vector3d>, vector<Eigen::Matrix3d>, vector<string>> ZEDDetection::GetDetections()
 {
 	return {measurements, covariances, classes};
+}
+
+std::tuple<Eigen::Vector3d,Eigen::Vector4d> ZEDDetection::GetCameraPose()
+{
+	Eigen::Vector3d position(pose_translation.x, pose_translation.y, pose_translation.z);
+	Eigen::Vector4d orientation(pose_orientation.w, pose_orientation.x, pose_orientation.y, pose_orientation.z);
+	return {position, orientation};
 }
 
 ZEDDetection::~ZEDDetection()
@@ -326,21 +333,20 @@ vector<sl::CustomBoxObjectData> ZEDDetection::detections_to_zed_2D_boxes(const v
 	    cv::imshow("YOLO Detections", img_bgr);
 	    cv::waitKey(1);
 	}
+	
 }
 
-void ZEDDetection::determine_world_position_zed_2D_boxes(const sl::Objects& zed_2D_boxes,const sl::Pose& cam_pose)
+void ZEDDetection::determine_world_position_zed_2D_boxes(const sl::Objects& zed_objects,const sl::Pose& cam_pose)
     {
-	// Retrieve 3D objects
-	sl::Objects objects;
-	zed.retrieveObjects(objects, obj_runtime_param);
 
 	// Process measurements for tracking
 	measurements.clear();
 	covariances.clear();
 	classes.clear();
 	sl::Rotation rotation = cam_pose.getRotationMatrix();
-	sl::float3 translation = cam_pose.getTranslation();
-	for (const auto& obj : objects.object_list) {
+	pose_translation = cam_pose.getTranslation();
+	pose_orientation = cam_pose.getOrientation();
+	for (const auto& obj : zed_objects.object_list) {
 		sl::float3 pos = obj.position;
 		
 		// Check for invalid positions
@@ -352,13 +358,13 @@ void ZEDDetection::determine_world_position_zed_2D_boxes(const sl::Objects& zed_
 
 		// Get label
 		int label_idx = obj.raw_label;
-		string label_str = (label_idx < ID_TO_LABEL.size()) ? string(ID_TO_LABEL[label_idx]) : to_string(label_idx);
+		string label_str = (static_cast<size_t>(label_idx) < ID_TO_LABEL.size()) ? string(ID_TO_LABEL[label_idx]) : to_string(label_idx);
 
 		// Transform to world frame
-		cv::Mat world_pos = transform_to_world(pos, rotation, translation);
+		Eigen::Vector3d world_pos = transform_to_world(pos, rotation, pose_translation);
 
 		// Get covariance in world frame
-		cv::Mat cov_world = get_world_covariance(obj.position_covariance, rotation);
+		Eigen::Matrix3d cov_world = get_world_covariance(obj.position_covariance, rotation);
 
 		// Filter: Skip far-away pipes
 		if (label_str == "red_pipe" || label_str == "white_pipe") {
@@ -384,26 +390,26 @@ void ZEDDetection::UpdateSensorDepth(double new_depth)
 	sensor_depth = new_depth;
 }
 
-cv::Mat ZEDDetection::transform_to_world(const sl::float3& local_pos, const sl::Rotation& rotation_matrix, const sl::float3& translation_vector)
+Eigen::Vector3d ZEDDetection::transform_to_world(const sl::float3& local_pos, const sl::Rotation& rotation_matrix, const sl::float3& translation_vector)
 {
-	cv::Mat pos(3, 1, CV_64F);
-    pos.at<double>(0) = local_pos.x;
-    pos.at<double>(1) = local_pos.y;
-    pos.at<double>(2) = local_pos.z;
+	Eigen::Vector3d pos;
+    pos(0) = local_pos.x;
+    pos(1) = local_pos.y;
+    pos(2) = local_pos.z;
 
-    cv::Mat R(3, 3, CV_64F);
+    Eigen::Matrix3d R;
     for (int i = 0; i < 3; i++) {
         for (int j = 0; j < 3; j++) {
-        R.at<double>(i, j) = rotation_matrix.r[i * 3 + j];
+        R(i, j) = rotation_matrix.r[i * 3 + j];
 	}
     }
 	
-    cv::Mat t(3, 1, CV_64F);
-    t.at<double>(0) = translation_vector.x;
-    t.at<double>(1) = translation_vector.y;
-    t.at<double>(2) = -sensor_depth; // Override Z with pressure sensor
+    Eigen::Vector3d t;
+    t(0) = translation_vector.x;
+    t(1) = translation_vector.y;
+    t(2) = -sensor_depth; // Override Z with pressure sensor
 	
-    cv::Mat world_pos = t + R * pos;
+    Eigen::Vector3d world_pos = t + R * pos;
     return world_pos;
 }
 
@@ -425,25 +431,25 @@ cv::Mat sl_mat_to_cv_mat(sl::Mat& sl_image)
 	cv::cvtColor(cv_image, bgr_image, cv::COLOR_BGRA2BGR);
 	return bgr_image;
 }
-cv::Mat get_world_covariance(const float position_covariance[6], const sl::Rotation& rotation_matrix)
+Eigen::Matrix3d get_world_covariance(const float position_covariance[6], const sl::Rotation& rotation_matrix)
 {
-	cv::Mat cov_cam(3, 3, CV_64F);
-	cov_cam.at<double>(0, 0) = position_covariance[0];
-	cov_cam.at<double>(0, 1) = position_covariance[1];
-	cov_cam.at<double>(0, 2) = position_covariance[2];
-	cov_cam.at<double>(1, 0) = position_covariance[1];
-	cov_cam.at<double>(1, 1) = position_covariance[3];
-	cov_cam.at<double>(1, 2) = position_covariance[4];
-	cov_cam.at<double>(2, 0) = position_covariance[2];
-	cov_cam.at<double>(2, 1) = position_covariance[4];
-	cov_cam.at<double>(2, 2) = position_covariance[5];
+	Eigen::Matrix3d cov_cam;
+	cov_cam(0, 0) = position_covariance[0];
+	cov_cam(0, 1) = position_covariance[1];
+	cov_cam(0, 2) = position_covariance[2];
+	cov_cam(1, 0) = position_covariance[1];
+	cov_cam(1, 1) = position_covariance[3];
+	cov_cam(1, 2) = position_covariance[4];
+	cov_cam(2, 0) = position_covariance[2];
+	cov_cam(2, 1) = position_covariance[4];
+	cov_cam(2, 2) = position_covariance[5];
 
-	cv::Mat R(3, 3, CV_64F);
+	Eigen::Matrix3d R;
 	for (int i = 0; i < 3; i++) {
 		for (int j = 0; j < 3; j++) {
-		R.at<double>(i, j) = rotation_matrix.r[i * 3 + j];
+		R(i, j) = rotation_matrix.r[i * 3 + j];
 		}
 	}
-	cv::Mat cov_world = R * cov_cam * R.t();
+	Eigen::Matrix3d cov_world = R * cov_cam * R.transpose();
 	return cov_world;
 }

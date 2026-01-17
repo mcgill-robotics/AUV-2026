@@ -8,6 +8,7 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/dnn.hpp>
 #include <sl/Camera.hpp>
+#include <Eigen/Dense>
 
 #include "object.hpp"
 
@@ -52,10 +53,15 @@ public:
         function<void(const string&)> log_warn,
         function<void(const string&, int)> log_warn_throttle
     );
+    /// @brief Process a single frame from the ZED camera, performing object detection and storing results internally.
     void process_frame();
+    /// @brief Update the sensor depth used for world position calculations.
+    /// @param new_depth The new depth of the sensor in meters.
     void UpdateSensorDepth(double new_depth);
-    std::tuple<vector<cv::Mat>, vector<cv::Mat>, vector<string>> GetData();
-    
+    /// @brief Retrieve the detected object data including positions, covariances, and class labels.
+    /// @return A tuple containing vectors of positions, covariances, and class labels.
+    std::tuple<vector<Eigen::Vector3d>, vector<Eigen::Matrix3d>, vector<string>> GetDetections();
+    std::tuple<Eigen::Vector3d,Eigen::Vector4d> GetCameraPose();
     ~ZEDDetection();
     
 private:
@@ -64,19 +70,24 @@ private:
     void load_yolo_model(const string& model_path);
 
     bool check_zed_status();
-
+    // Capture a frame from the ZED camera and convert it to an OpenCV Mat.
     cv::Mat get_cv_frame();
 
-    vector<sl::CustomBoxObjectData> detections_to_zed_2D_boxes(const vector<DetectedObject>& detections, const cv::Mat& img_bgr);
-
+    // Run YOLO object detection on the provided image.
     vector<DetectedObject> run_yolo(const cv::Mat& img);
+    // Resize and pad the image to fit the YOLO model's input size while maintaining aspect ratio.
     cv::Mat letter_box(const cv::Mat& img, int target_size);
 
-    cv::Mat transform_to_world(const sl::float3& local_pos, const sl::Rotation& rotation_matrix, const sl::float3& translation_vector);
-    
+    // Convert DetectedObject instances to ZED SDK CustomBoxObjectData format.
+    vector<sl::CustomBoxObjectData> detections_to_zed_2D_boxes(const vector<DetectedObject>& detections, const cv::Mat& img_bgr);
+
+    // Determine the world positions of detected objects using ZED SDK 2D boxes and camera pose.
     void determine_world_position_zed_2D_boxes(const sl::Objects&,const sl::Pose& cam_pose);
 
-    
+    // Transform local object positions to world coordinates using the camera's pose.
+    Eigen::Vector3d transform_to_world(const sl::float3& local_pos, const sl::Rotation& rotation_matrix, const sl::float3& translation_vector);
+
+    // TODO: implement debug table logging to compare YOLO and ZED detections
     void LogDebugTable(const vector<sl::CustomBoxObjectData>& YOLO_detections, const sl::Objects& zed_detections);
 
 
@@ -105,12 +116,14 @@ private:
     sl::RuntimeParameters runtime_params;
     sl::ObjectDetectionRuntimeParameters obj_runtime_param;
     
-    vector<cv::Mat> measurements;
-	vector<cv::Mat> covariances;
+    vector<Eigen::Vector3d> measurements;
+	vector<Eigen::Matrix3d> covariances;
 	vector<string> classes;
+	sl::float3 pose_translation;
+	sl::Orientation pose_orientation;
 };
 
 
 cv::Mat sl_mat_to_cv_mat(sl::Mat& sl_image);
 
-cv::Mat get_world_covariance(const float position_covariance[6], const sl::Rotation& rotation_matrix);
+Eigen::Matrix3d get_world_covariance(const float position_covariance[6], const sl::Rotation& rotation_matrix);
