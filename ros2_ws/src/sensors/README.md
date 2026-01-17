@@ -211,7 +211,7 @@ Where:
 The position of the vehicle's Center of Mass in the inertial frame, $r_i^{vi}$, is calculated by applying the transformation matrix to the physical offset vector:
 
 $$
-\begin{bmatrix} r_i^{vi} \\ 1 \end{bmatrix} = T_s^i \begin{bmatrix} r_s^{vs} \\ 1 \end{bmatrix}
+\left[ \begin{array}{c} r_i^{vi} \\ 1 \end{array} \right] = T_s^i \left[ \begin{array}{c} r_s^{vs} \\ 1 \end{array} \right]
 $$
 
 Where:
