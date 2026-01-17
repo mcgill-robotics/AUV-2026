@@ -182,7 +182,7 @@ $r_v^{vs}$: the vector from the sensor to the vehicle frame, expressed in the ve
 ## DVL Processing
 
 
-The DVL provides position data for the sensor's location relative to the pool frame. It utilizes an internal Kalman Filter to fuse IMU and acoustic velocity measurements for dead-reckoning position estimation. 
+The DVL provides position data for the sensor's location relative to the pool frame. It utilizes an internal Kalman Filter to fuse IMU and acoustic velocity measurements for dead-reckoning position estimation. All relevant documentation about the DVL a50 can be [here](https://docs.waterlinked.com/dvl/dvl-a50/) 
 
 As mentioned above, we operate in three coordinate reference frames:
 - **Inertial Frame ($i$):** Fixed global reference (the pool).
@@ -193,10 +193,10 @@ Because the DVL output represents the sensor location ($s$) and not the AUV's Ce
 
 ### **1. Homogeneous Transformation Logic**
 
-To map the sensor frame directly to the inertial frame, we define a $4 \times 4$ homogeneous transformation matrix, $T_s^i$. This matrix incorporates the rotation to align axes and the translation to shift the origin:
+To map the sensor frame directly to the inertial frame, we define a $4 \times 4$ homogeneous transformation matrix, $T_{is}$. This matrix incorporates the rotation to align axes and the translation to shift the origin:
 
 $$
-T_s^i = \begin{bmatrix} 
+T_{is} = \begin{bmatrix} 
 C_{is} & r_i^{si} \\
 0_{1\times3} & 1
 \end{bmatrix}
@@ -215,7 +215,7 @@ $$
 r_i^{vi} \\\\
 1
 \end{bmatrix} 
-= T_s^i 
+= T_{is} 
 \begin{bmatrix}
 r_s^{vs} \\\\
 1
