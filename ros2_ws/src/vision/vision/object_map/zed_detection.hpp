@@ -7,6 +7,7 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/dnn.hpp>
 #include <sl/Camera.hpp>
+#include <Eigen/Dense>
 
 using namespace std;
 // --- CUSTOM EXCEPTIONS (UNUSED) ---
@@ -58,6 +59,7 @@ class ZEDDetection
 {
     ZEDDetection(
         const string & yolo_model_path,
+        int yolo_input_size,
         int frame_rate,
         float confidence_threshold,
         float max_range,
@@ -78,13 +80,24 @@ class ZEDDetection
 
 private:
     bool init_zed();
+
     bool check_zed_status();
+
     cv::Mat get_cv_frame();
+
     vector<sl::CustomBoxObjectData> detections_to_zed_2D_boxes(const vector<DetectedObject>& detections, const cv::Mat& img_bgr);
+
     vector<DetectedObject> run_yolo(const cv::Mat& img);
+    cv::Mat letter_box(const cv::Mat& img, int target_size);
+
     std::tuple<vector<cv::Mat>, vector<cv::Mat>, vector<string>> determine_world_position_zed_2D_boxes(const sl::Objects&,const sl::Pose& cam_pose);
-    void LogDebugTable(const vector<sl::CustomBoxObjectData>& YOLO_detections, const sl::Objects& zed_detections);    
+
+    cv::Mat transform_to_world(const sl::float3& local_pos, const sl::Rotation& rotation_matrix, const sl::float3& translation_vector);
+    
+    void LogDebugTable(const vector<sl::CustomBoxObjectData>& YOLO_detections, const sl::Objects& zed_detections);
+
     int frame_rate;
+    int YOLO_input_size;
     float confidence_threshold;
     float max_range;
     float min_new_track_distance;
@@ -93,7 +106,9 @@ private:
     int stream_port;
     bool show_detections;
     bool debug_logs;
+    
     double sensor_depth;
+    double letter_box_scale;
 
     function<void(const string&)> log_error;
     function<void(const string&)> log_info;
@@ -106,4 +121,8 @@ private:
     sl::RuntimeParameters runtime_params;
     sl::ObjectDetectionRuntimeParameters obj_runtime_param;
 };
+
+
 cv::Mat sl_mat_to_cv_mat(sl::Mat& sl_image);
+
+cv::Mat get_world_covariance(const float position_covariance[6], const sl::Rotation& rotation_matrix);
