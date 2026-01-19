@@ -56,6 +56,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     x11-apps \
     libgl1-mesa-glx \
     libgl1-mesa-dri \
+    libeigen3-dev \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
