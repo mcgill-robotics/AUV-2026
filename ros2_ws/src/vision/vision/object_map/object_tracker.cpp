@@ -43,7 +43,7 @@ std::vector<Track> ObjectTracker::update(
     create_new_tracks(unmatched_dets, measurements, classes, orientations, confidences);
 
     return tracks;
-}   // TODO: Parameterize properly
+}  
 
 std::vector<std::vector<double>> ObjectTracker::compute_cost_matrix(
     const std::vector<Eigen::Vector3d>& measurements,
@@ -59,7 +59,7 @@ std::vector<std::pair<int, int>> ObjectTracker::match_tracks(
     std::set<int>& unmatched_tracks,
     std::set<int>& unmatched_dets
 ) {
-    // TODO: Implement matching logic (e.g., Hungarian Algorithm or Greedy Match)
+    // TODO: Implement matching logic (Hungarian Algorithm or Greedy Match)
     return {};
 }
 
@@ -78,7 +78,7 @@ void ObjectTracker::handle_unmatched_tracks(const std::set<int>& unmatched_track
 }
 
 void ObjectTracker::delete_dead_tracks() {
-    // TODO: Remove tracks that have exceeded max_age
+    // TODO: Remove tracks that have exceeded max_age or time_since_update thresholds
 }
 
 void ObjectTracker::create_new_tracks(

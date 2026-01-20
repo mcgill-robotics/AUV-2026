@@ -7,6 +7,7 @@
 #include <string>
 #include <set>
 #include <unordered_map>
+#include <chrono>
 
 #include <Eigen/Dense>
 
@@ -16,20 +17,23 @@ using double_ms = std::chrono::duration<double, std::milli>;
 
 enum class TrackState {
     TENTATIVE,
-    CONFIRMED
+    CONFIRMED,
+    DELETED
 };
 
 struct Track {
     int id;
     std::string label;
+    TrackState state;
+
+    int hits = 0;               // total number of matched measurements
+    int age = 0;                // total frames since creation
+    int time_since_updates = 0; // if this is > max_age, delete the track
+    
     KalmanFilter kf;
+
     double theta_z = 0.0;
     double confidence = 0.0;
-    int consecutive_hits = 0;
-    int hits = 0;
-    int age = 0;
-    int total_updates = 0;
-    TrackState state = TrackState::TENTATIVE;
 };
 
 
@@ -72,8 +76,8 @@ private:
     void update_matched_tracks(
         const std::vector<std::pair<int, int>>& matches,
         const std::vector<Eigen::Vector3d>& measurements,
-        const std::vector<doubles>& orientations,
-        const std::vector<doubles>& confidences
+        const std::vector<double>& orientations,
+        const std::vector<double>& confidences
     );
 
     // Step 4: Handle tracks that weren't seen this frame
@@ -81,14 +85,14 @@ private:
 
     // Step 5: Prune dead tracks
     void delete_dead_tracks();
-
+    
     // Step 6: Create new tracks from unmatched detections
     void create_new_tracks(
         const std::set<int>& unmatched_dets,
         const std::vector<Eigen::Vector3d>& measurements,
         const std::vector<std::string>& classes,
-        const std::vector<doubles>& orientations,
-        const std::vector<doubles>& confidences
+        const std::vector<double>& orientations,
+        const std::vector<double>& confidences
     );
 
 
