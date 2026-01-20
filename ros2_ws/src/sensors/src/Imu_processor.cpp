@@ -39,7 +39,7 @@ Vec3 ImuProcessor::compute_free_acc(const Vec3& specific_force, const quatd& q_s
     Vec3 g_s = q_si * g_i; // This is an overload of the quaternion operator* for vectors.
 
     // Free acceleration 
-    Vec3 a_free = q_vs_ * (specific_force - g_s);
+    Vec3 a_free = q_vs_ * (specific_force + g_s);
     return a_free;
 }
 
@@ -52,18 +52,12 @@ Vec3 ImuProcessor::rotate_gyro(const Vec3& w_s) const
 
 void ImuProcessor::imu_callback(const imu_msg::SharedPtr imu_in) 
 {
-    imu_msg imu_out = *imu_in; // Copy input to output
+    imu_msg imu_out = *imu_in;
     imu_out.header.frame_id = "auv"; // All data will be processed into the AUV frame
 
     // Specific force vector from IMU
     Vec3 f_s;
     f_s << imu_in->linear_acceleration.x, imu_in->linear_acceleration.y, imu_in->linear_acceleration.z;   
-    
-    // Compute free acceleration
-    Vec3 a_free = compute_free_acc(f_s, q_in_);
-    imu_out.linear_acceleration.x = a_free(0);
-    imu_out.linear_acceleration.y = a_free(1); 
-    imu_out.linear_acceleration.z = a_free(2);
 
     // Orientation remains unchanged but rotated to AUV frame
     quatd q_si(
@@ -71,9 +65,21 @@ void ImuProcessor::imu_callback(const imu_msg::SharedPtr imu_in)
         imu_in->orientation.x,
         imu_in->orientation.y,
         imu_in->orientation.z
-    ); // Assumption: IMU messages report world frame relative to sensor. 
+    ); // Assumption: IMU messages report sensor relative to world frame.     
+    
+    // Compute free acceleration
+    Vec3 a_free = compute_free_acc(f_s, q_si);
+    imu_out.linear_acceleration.x = a_free(0);
+    imu_out.linear_acceleration.y = a_free(1); 
+    imu_out.linear_acceleration.z = a_free(2);
+
 
     q_vi_ = q_vs_ * q_si; // New orientation: world frame relative to vehicle frame
+
+    if (q_vi_.w() < 0) {
+        q_vi_.coeffs() *= -1.0; // Ensure positive scalar part for consistency
+    }
+
     imu_out.orientation.w = q_vi_.w();
     imu_out.orientation.x = q_vi_.x();
     imu_out.orientation.y = q_vi_.y();
