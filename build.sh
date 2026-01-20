@@ -1,6 +1,12 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
+
+while getopts ":c" flag; do
+    case "${flag}" in
+        c) echo "Flag -c was set. ros2_ws packages will be built from scratch"
+    esac
+done
 # ---------------------------------------------------------
 # 0. Permission & User Detection
 # ---------------------------------------------------------
@@ -96,7 +102,13 @@ rosdep install --from-paths src --ignore-src -r -y \
 # ---------------------------------------------------------
 # 5. Build (colcon)
 # ---------------------------------------------------------
+
 echo -e "\n=== Building Workspace ==="
+
+if [ "$flag" = "c" ]; then
+    echo "    -> Removing ros2_ws/build ros_2/install ros2_ws/log for clean build"
+    rm -rf build log install
+fi
 
 colcon build \
     --symlink-install \
