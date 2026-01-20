@@ -23,6 +23,8 @@ struct Track {
     int id;
     std::string label;
     KalmanFilter kf;
+    double theta_z = 0.0;
+    double confidence = 0.0;
     int consecutive_hits = 0;
     int hits = 0;
     int age = 0;
@@ -44,7 +46,9 @@ public:
     std::vector<Track> update(
         const std::vector<Eigen::Vector3d>& measurements,
         const std::vector<Eigen::Matrix3d>& measurement_covariances,
-        const std::vector<std::string>& classes
+        const std::vector<std::string>& classes,
+        const std::vector<double>& orientations,
+        const std::vector<double>& confidences 
     ); 
 
 private:
@@ -67,7 +71,9 @@ private:
     // Step 3: Update existing tracks with matched measurements
     void update_matched_tracks(
         const std::vector<std::pair<int, int>>& matches,
-        const std::vector<Eigen::Vector3d>& measurements
+        const std::vector<Eigen::Vector3d>& measurements,
+        const std::vector<doubles>& orientations,
+        const std::vector<doubles>& confidences
     );
 
     // Step 4: Handle tracks that weren't seen this frame
@@ -80,7 +86,9 @@ private:
     void create_new_tracks(
         const std::set<int>& unmatched_dets,
         const std::vector<Eigen::Vector3d>& measurements,
-        const std::vector<std::string>& classes
+        const std::vector<std::string>& classes,
+        const std::vector<doubles>& orientations,
+        const std::vector<doubles>& confidences
     );
 
 
