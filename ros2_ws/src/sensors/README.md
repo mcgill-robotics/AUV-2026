@@ -181,8 +181,50 @@ $r_v^{vs}$: the vector from the sensor to the vehicle frame, expressed in the ve
 
 ## DVL Processing
 
-TBD
 
+The DVL provides position data for the sensor's location relative to the pool frame. It utilizes an internal Kalman Filter to fuse IMU and acoustic velocity measurements for dead-reckoning position estimation. All relevant documentation about the DVL a50 can be [here](https://docs.waterlinked.com/dvl/dvl-a50/) 
+
+As mentioned above, we operate in three coordinate reference frames:
+- **Inertial Frame ($i$):** Fixed global reference (the pool).
+- **Vehicle Frame ($v$):** origin at the AUV's **Center of Mass (CM)**.
+- **Sensor Frame ($s$):** origin at the DVL's physical mounting point.
+
+Because the DVL output represents the sensor location ($s$) and not the AUV's Center of Mass ($v$), the raw coordinates must be transformed into the inertial frame.
+
+### **1. Homogeneous Transformation Logic**
+
+To map the sensor frame directly to the inertial frame, we define a $4 \times 4$ homogeneous transformation matrix, $T_{is}$. This matrix incorporates the rotation to align axes and the translation to shift the origin:
+
+$$
+T_{is} = \begin{bmatrix} 
+C_{is} & r_i^{si} \\
+0_{1\times3} & 1
+\end{bmatrix}
+$$
+
+Where:
+- $C_{is}$: Rotation matrix from sensor to inertial frame (derived from IMU quaternion).
+- $r_i^{si}$: The raw $(x, y, z)$ position vector reported by the DVL.
+
+### **2. Mathematical Transformation Equation**
+
+The position of the vehicle's Center of Mass in the inertial frame, $r_i^{vi}$, is calculated by applying the transformation matrix to the physical offset vector:
+
+$$
+\begin{bmatrix}
+r_i^{vi} \\\\
+1
+\end{bmatrix} 
+= T_{is} 
+\begin{bmatrix}
+r_s^{vs} \\\\
+1
+\end{bmatrix}
+$$
+
+Where:
+- $r_i^{vi}$: Position of the vehicle Center of Mass in the pool inertial frame.
+- $r_s^{vs}$: Constant offset vector from the DVL sensor to the Center of Mass, expressed in the sensor's local frame (obtained from CAD).
 ---
 
 ## Usage
