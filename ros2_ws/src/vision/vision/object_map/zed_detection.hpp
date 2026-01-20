@@ -60,7 +60,9 @@ public:
     void UpdateSensorDepth(double new_depth);
     /// @brief Retrieve the detected object data including positions, covariances, and class labels.
     /// @return A tuple containing vectors of positions, covariances, and class labels.
-    std::tuple<vector<Eigen::Vector3d>, vector<Eigen::Matrix3d>, vector<string>> GetDetections();
+    std::tuple<vector<Eigen::Vector3d>, vector<Eigen::Matrix3d>, vector<string>,
+    vector<double>, vector<double>> GetDetections();
+    
     std::tuple<Eigen::Vector3d,Eigen::Vector4d> GetCameraPose();
     ~ZEDDetection();
     

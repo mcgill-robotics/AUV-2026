@@ -150,10 +150,16 @@ private:
 	{
 #ifdef HAS_ZED_SDK
 		zed_detector->process_frame();
-		const auto [measurements,covariances,classes] = zed_detector->GetDetections();
-		std::vector<Track> confirmed_tracks = object_tracker.update(measurements, covariances, classes);
-		publish_object_map(confirmed_tracks);
-		publish_pose(zed_detector->GetCameraPose());
+		const auto [measurements,covariances,classes,orientations,confidences] = zed_detector->GetDetections();
+		std::vector<Track> confirmed_tracks = object_tracker.update(
+			measurements, 
+			covariances, 
+			classes, 
+			orientations, 
+			confidences
+		);
+			publish_object_map(confirmed_tracks);
+			publish_pose(zed_detector->GetCameraPose());
 #endif
 
 	}

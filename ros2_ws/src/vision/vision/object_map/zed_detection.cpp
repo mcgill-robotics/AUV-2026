@@ -166,9 +166,10 @@ void ZEDDetection::process_frame()
 	determine_world_position_zed_2D_boxes(objects, cam_pose);
 }
 
-std::tuple<vector<Eigen::Vector3d>, vector<Eigen::Matrix3d>, vector<string>> ZEDDetection::GetDetections()
+std::tuple<vector<Eigen::Vector3d>, vector<Eigen::Matrix3d>, vector<string>, 
+vector<double>, vector <double>> ZEDDetection::GetDetections()
 {
-	return {measurements, covariances, classes};
+	return {measurements, covariances, classes, orientations, confidences};
 }
 
 std::tuple<Eigen::Vector3d,Eigen::Vector4d> ZEDDetection::GetCameraPose()
