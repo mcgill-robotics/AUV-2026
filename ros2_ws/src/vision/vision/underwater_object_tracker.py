@@ -122,7 +122,7 @@ class UnderwaterObjectTracker:
 
             # Hungarian Algorithm for optimal assignment
             row_inds, col_inds = linear_sum_assignment(cost_matrix)
-            
+                
             matches = []
             unmatched_tracks = set(range(len(self.tracks)))
             unmatched_dets = set(range(len(measurements)))
