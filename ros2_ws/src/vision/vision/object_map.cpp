@@ -52,12 +52,15 @@ public:
 	else
 	{
 		RCLCPP_INFO(this->get_logger(), "ZED SDK found, using ZED camera for object mapping.");
+		// TODO: refactor these 5 into a YOLO/Detector config file
 		// YOLO model path
 		this->declare_parameter("model_path", "");
 		// YOLO size set during training
 		this->declare_parameter("yolo_input_size", 640);
 		// probability threshold to consider a detection valid
-		this->declare_parameter("confidence_threshold", 0.5);
+		this->declare_parameter("YOLO_confidence_threshold", 0.5);
+		// Same as YOLO confidence but Intersection over Union metric
+		this->declare_parameter("YOLO_IOU_threshold", 0.1);
 		// maximum depth range to consider detections
 		this->declare_parameter("max_range", 10.0);
 		// minimum distance to consider a detection as a new object
@@ -104,7 +107,6 @@ public:
 			frame_rate,
 			confidence_threshold,
 			max_range_distance_threshold,
-			new_object_distance_threshold,
 			use_stream,
 			stream_ip,
 			stream_port,
@@ -119,6 +121,8 @@ public:
 #endif
 	}
 
+	// Object Tracker
+	object_tracker = new ObjectTracker(new_object_distance_threshold)
 	// Publishers
 	object_map_publisher = this->create_publisher<auv_msgs::msg::VisionObject>("/vision/object_map", 10);
 	pose_publisher = this->create_publisher<geometry_msgs::msg::PoseStamped>("/vision/vio_pose", 10);
@@ -149,6 +153,7 @@ private:
 	void frame_callback()
 	{
 #ifdef HAS_ZED_SDK
+		// TODO: add time checks, make sure time has actually passed before process frame, may lead to div by 0
 		zed_detector->process_frame();
 		const auto [measurements,covariances,classes,orientations,confidences] = zed_detector->GetDetections();
 		std::vector<Track> confirmed_tracks = object_tracker.update(
@@ -158,10 +163,9 @@ private:
 			orientations, 
 			confidences
 		);
-			publish_object_map(confirmed_tracks);
-			publish_pose(zed_detector->GetCameraPose());
+		publish_object_map(confirmed_tracks);
+		publish_pose(zed_detector->GetCameraPose());
 #endif
-
 	}
 
 	void depth_callback(const std_msgs::msg::Float64::SharedPtr msg)

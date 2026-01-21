@@ -40,7 +40,6 @@ public:
         int frame_rate,
         float confidence_threshold,
         float max_range,
-        float min_new_track_distance,
         bool use_stream,
         const string & stream_ip,
         int stream_port,
