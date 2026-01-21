@@ -1,5 +1,21 @@
+#!/bin/bash
 set -euo pipefail
 
+# ---------------------------------------------------------
+# 0. Permission & User Detection
+# ---------------------------------------------------------
+# If we are NOT root (e.g. running on Host), use sudo for system commands
+SUDO=""
+if [ $(id -u) -ne 0 ]; then
+    SUDO="sudo"
+    echo "Running on Host as user: $USER (will use sudo where needed)"
+else
+    echo "Running as Root (likely inside Docker)"
+fi
+
+# ---------------------------------------------------------
+# 1. Environment Setup
+# ---------------------------------------------------------
 ROS_DISTRO=humble
 ROS_INSTALL=/opt/ros/$ROS_DISTRO/setup.bash
 
@@ -13,26 +29,87 @@ else
   exit 1
 fi
 
-# Check if running on Jetson
-if [[ -f /proc/device-tree/model ]] && grep -qi "NVIDIA Jetson" /proc/device-tree/model; then
-  echo "Detected Jetson environment. Proceeding to build zed-ros2-wrapper."
-  # Place your zed-ros2-wrapper build commands here, e.g.:
-  # colcon build --packages-select zed-ros2-wrapper
+if [ -d "ros2_ws" ]; then
+    cd ros2_ws
 else
-  echo "Not running on Jetson. Skipping build of zed-ros2-wrapper."
+    echo "ERROR: 'ros2_ws' directory not found. Run this from the repo root." >&2
+    exit 1
 fi
 
-if [ -d "ros2_ws/src" ]; then
-  echo -e "\n=== Building all ROS2 packages in ros2_ws except zed-ros2-wrapper ==="
-  # Find all packages except zed-ros2-wrapper
-  EXCLUDE_PKGS=()
-  if [ -d "ros2_ws/src/zed-ros2-wrapper" ]; then
-    EXCLUDE_PKGS+=(--packages-skip zed-ros2-wrapper zed_ros2 zed_components zed_msgs zed_wrapper)
-  fi
-  cd ros2_ws
-  rosdep install --from-paths src --ignore-src -r -y --skip-keys="zed zed_msgs zed_components"
-  colcon build "${EXCLUDE_PKGS[@]}"
-  cd -
-else
-  echo "ERROR: ros2_ws/src directory not found. Skipping colcon build." >&2
+# ---------------------------------------------------------
+# 2. Hardware/SDK Detection
+# ---------------------------------------------------------
+ZED_DIR="src/zed-ros2-wrapper"
+CAN_BUILD_ZED=false
+
+# Check 1: Is this a Jetson? (Hardware check)
+if [[ -f /proc/device-tree/model ]] && grep -qi "NVIDIA Jetson" /proc/device-tree/model; then
+    echo "✅ Detected Jetson hardware."
+    CAN_BUILD_ZED=true
 fi
+
+# Check 2: Is ZED SDK installed? (Software check for x86 GPU)
+if [ -d "/usr/local/zed" ]; then
+    echo "✅ Detected ZED SDK installation."
+    CAN_BUILD_ZED=true
+fi
+
+# ---------------------------------------------------------
+# 3. Configure Ignore Rules
+# ---------------------------------------------------------
+if [ "$CAN_BUILD_ZED" = false ]; then
+    echo "⚠️  No ZED SDK or Jetson detected. Ignoring ZED packages."
+    if [ -d "$ZED_DIR" ]; then
+        touch "$ZED_DIR/AMENT_IGNORE"
+    fi
+else
+    echo "🚀 ZED Environment Ready. Including ZED packages."
+    if [ -f "$ZED_DIR/AMENT_IGNORE" ]; then
+        rm "$ZED_DIR/AMENT_IGNORE"
+    fi
+fi
+
+# ---------------------------------------------------------
+# 4. Dependency Installation (Rosdep)
+# ---------------------------------------------------------
+echo -e "\n=== Checking Rosdep ==="
+
+# 4a. Initialize if missing
+if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then
+    echo "   -> Initializing rosdep..."
+    $SUDO rosdep init
+fi
+
+# 4b. Update if needed
+# We run this as the current user (NO SUDO) so permissions stay correct
+echo "   -> Updating rosdep cache..."
+rosdep update
+
+echo -e "\n=== Installing Dependencies ==="
+# Uses sudo if on host, no sudo if in docker
+$SUDO apt-get update
+
+# Note: rosdep install handles sudo internally/interactively
+rosdep install --from-paths src --ignore-src -r -y \
+    --skip-keys="zed zed_msgs zed_components"
+
+# ---------------------------------------------------------
+# 5. Build (colcon)
+# ---------------------------------------------------------
+echo -e "\n=== Building Workspace ==="
+
+colcon build \
+    --symlink-install \
+    --parallel-workers $(nproc) \
+    --event-handlers console_direct+ \
+    --cmake-args -DCMAKE_BUILD_TYPE=Release
+
+# ---------------------------------------------------------
+# 6. Cleanup
+# ---------------------------------------------------------
+if [ "$CAN_BUILD_ZED" = false ] && [ -f "$ZED_DIR/AMENT_IGNORE" ]; then
+    rm "$ZED_DIR/AMENT_IGNORE"
+fi
+
+echo -e "\n✅ Build Complete. Don't forget to source:"
+echo "source ros2_ws/install/setup.bash"
