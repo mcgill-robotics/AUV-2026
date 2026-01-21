@@ -30,6 +30,7 @@ services:
       # Map Wayland/Pulse sockets if they exist
       # - ${XDG_RUNTIME_DIR}:${XDG_RUNTIME_DIR}
       - /dev:/dev
+      - ../../ros2_ws/src/vision/model_pipeline/data:/images
 
     command: bash -c "tail -f /dev/null"
     stdin_open: true
@@ -77,6 +78,7 @@ services:
       - zed_settings:/usr/local/zed/settings/
       - zed_resources:/usr/local/zed/resources/
       - /dev:/dev
+      - ../../ros2_ws/src/vision/model_pipeline/data:/images
 
     command: bash -c "tail -f /dev/null"
     stdin_open: true
