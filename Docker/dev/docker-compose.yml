@@ -28,7 +28,7 @@ services:
       - ../../:/root/AUV-2026
       - /tmp/.X11-unix:/tmp/.X11-unix
       # Map Wayland/Pulse sockets if they exist
-      - ${XDG_RUNTIME_DIR}:${XDG_RUNTIME_DIR}
+      # - ${XDG_RUNTIME_DIR}:${XDG_RUNTIME_DIR}
       - /dev:/dev
 
     command: bash -c "tail -f /dev/null"
