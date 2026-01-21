@@ -32,5 +32,14 @@
                 "zachflower.uncrustify"
             ]
         }
-    }
+    },
+    "mounts": [
+        {
+            "type": "bind",
+            "source": "${localWorkspaceFolder}",
+            "target": "/root/AUV-2026"
+        }
+    ],
+
+    "forwardPorts": [10000]
 }
