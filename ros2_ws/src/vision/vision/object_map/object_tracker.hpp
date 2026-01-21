@@ -58,10 +58,12 @@ public:
 private:
     // Breaking down the update() logic into specific steps
     // Step 1: Compute the cost matrix (MAHALANOBIS)
+
+    // TODO: Potentially update into a matrix return type instead?
     std::vector<std::vector<double>> compute_cost_matrix(
         const std::vector<Eigen::Vector3d>& measurements,
         const std::vector<std::string>& classes
-    );
+    );  
 
     // Step 2: Match tracks to detections (HUNGARIAN)
     // returns: matches, and modifies the unmatched sets by reference

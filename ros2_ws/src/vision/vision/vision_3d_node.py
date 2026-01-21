@@ -66,6 +66,8 @@ class Vision3DNode(Node):
         self.pose_pub = self.create_publisher(PoseStamped, '/vision/vio_pose', 10)
 
         # --- Init YOLO & ZED ---
+        
+        # TODO: Changes the hardware that YOLO uses based on CPU or GPU
         self.get_logger().info(f'Loading YOLO: {model_path}')
         self.model = YOLO(model_path)
         self.zed = self._init_zed()
@@ -96,6 +98,8 @@ class Vision3DNode(Node):
     def _init_zed(self) -> sl.Camera:
         """Initialize ZED camera with tracking DISABLED (we do our own)."""
         init_params = sl.InitParameters()
+        
+        # SVGA corresponds to 960 * 600
         init_params.camera_resolution = sl.RESOLUTION.SVGA
         init_params.camera_fps = 30
         init_params.coordinate_units = sl.UNIT.METER
@@ -134,6 +138,8 @@ class Vision3DNode(Node):
         """Main processing loop - detect, track, publish."""
         # Calculate dt
         current_time = self.get_clock().now()
+        
+        # QUESTION: Does this remain numerically accurate? Or does this result in issues
         dt = (current_time - self.last_time).nanoseconds / 1e9
         self.last_time = current_time
 
@@ -161,6 +167,8 @@ class Vision3DNode(Node):
         # 1. YOLO Inference
         self.zed.retrieve_image(self.image, sl.VIEW.LEFT)
         img_bgr = cv2.cvtColor(self.image.get_data(), cv2.COLOR_BGRA2BGR)
+        
+        # TODO: Allow IOU parameterization via a configuration file
         results = self.model.predict(img_bgr, verbose=False,iou=0.1, agnostic_nms=True, conf=self.conf_thresh)
 
         # 2. Ingest detections into ZED for 3D estimation
@@ -174,6 +182,8 @@ class Vision3DNode(Node):
                 tmp.probability = float(box.conf)
                 tmp.is_static = True
                 custom_boxes.append(tmp)
+                
+                # TODO: Integrate maximum tracking distance
                 
                 # Draw detection on image for visualization
                 if self.show_detections:
@@ -215,6 +225,7 @@ class Vision3DNode(Node):
         raw_covariances = []
         raw_classes = []
 
+        # Rotation represents in matrix form, ideal for operations
         rotation_matrix = self.cam_pose.get_rotation_matrix().r
         
         for obj in self.objects.object_list:
@@ -234,9 +245,11 @@ class Vision3DNode(Node):
                 cov_cam = np.array(obj.position_covariance).reshape(3, 3)
             except (AttributeError, ValueError):
                 cov_cam = np.eye(3) * 0.1  # Fallback
+                
+            # Covariance Matrix requires outer product transformation
+            # Refer to Variance in Expected Value definition for mathematical reason
             cov_world = rotation_matrix @ cov_cam @ rotation_matrix.T
 
-            
             # Filter: Skip pipes detected more than 5m away (unreliable at distance)
             if label_str in ("red_pipe", "white_pipe"):
                 # Distance from robot (camera position) to detection
@@ -302,6 +315,8 @@ class Vision3DNode(Node):
         """Transform camera-frame position to world frame with sensor depth override."""
         translation = self.cam_pose.get_translation().get()
         translation[2] = -self.sensor_depth  # Override VIO Z with pressure sensor
+        
+        # TODO: Note sure if this how you transform the matrix accurately
         return translation + (rotation_matrix @ local_pos)
 
     def _publish_pose(self):

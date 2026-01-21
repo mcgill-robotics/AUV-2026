@@ -11,7 +11,7 @@ ObjectTracker::ObjectTracker(const float min_new_track_distance = 0.5) {
 
 // destructor implicitly defined
 
-void create_kf() {
+void ObjectTracker::create_kf() {
 
 }   // TODO: Add Eigen 3D vector type to constructor
 
