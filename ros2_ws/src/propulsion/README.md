@@ -1,0 +1,117 @@
+# Propulsion
+
+The **propulsion** package handles low-level actuation for the AUV. It transforms high-level control efforts, expressed as [`geometry_msgs/Wrench`](https://docs.ros2.org/latest/api/geometry_msgs/msg/Wrench.html), into **PWM signals (µs)** for each thruster.
+
+This process occurs in two stages:
+
+1. **Thrust allocation** – map the wrench vector (forces and torques along X, Y, Z) into individual thruster forces using an allocation matrix.  
+2. **Force-to-PWM mapping** – convert thruster forces (in Newtons) into PWM signals (µs) using per-thruster calibration curves.  
+
+
+## Table of Contents
+- [Overview](#overview)
+- [Usage](#usage)
+- [Nodes](#nodes)
+  - [Published Topics](#published-topics)
+  - [Subscribed Topics](#subscribed-topics)
+- [Installation](#installation)
+  - [Dependencies](#dependencies)
+  - [Building](#building)
+  - [Running](#running)
+- [License](#license)
+
+
+## Overview
+The [wrench](https://docs.ros.org/en/noetic/api/geometry_msgs/html/msg/Wrench.html) consists of forces AND torques on the X,Y,Z axes. These are distributed to the thrusters using the following allocation matrix:
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/27314862-01d8-41d9-a60b-5a9c4279ef51" alt="Thruster Allocation Matrix" width="1000"/>
+</p>
+
+
+- Parameters `a`, `b`, `c`, `d`, `e`, and `alpha` describe the distances and angular offsets between thrusters and the AUV’s center of gravity (point G on the skteches below). `dx`, `dy`, and `dz` represent samll offsets of the real CG from point G in the +X, +Y , +Z directions.
+
+- The *i-th* column corresponds to the contribution of thruster *i* to each element of the wrench vector.
+
+- The *j-th* row corresponds to how all thrusters contribute to the *j-th* component of the wrench (force or torque along X, Y, Z).
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/0a652533-93e6-4891-999d-b0c9fdebbf2f" width="800"/>
+</p>
+
+---
+
+The resulting thruster forces (in Newtons) are converted to PWM microseconds using per-thruster calibration functions. These functions were obtained from a thruster test conducted by the Mech & Elec team in May 2025.
+
+Comparison of calibration curves across thrusters:
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/ce4abc5e-509c-4bb5-a4a2-2c947bb768be" alt="Thruster Allocation Matrix" width="800"/>
+</p>
+
+
+## Usage
+The propulsion package is not for direct use, it is used through publishing efforts on the 'effort' topic.
+
+Publishing a `geometry_msgs/Wrench` message onto `/controls/effort` topic:
+
+
+        ros2 topic pub /controls/effort geometry_msgs/msg/Wrench "{force: {x: 1.0, y: 0.0, z: 0.0}, torque: {x: 0.0, y: 0.0, z: 0.0}}" 
+
+
+## Nodes
+The package provides a single ROS node: `thrust_mapper`.
+
+- Input: subscribes to `/controls/effort`
+
+- Outputs: publishes thruster forces and PWM microseconds
+
+
+### Published Topics
+
+ Topic | Message | Description |
+| ------ | ------- | ---------- |
+| `/propulsion/forces` | `ThrusterForces` | Array of thruster forces (N) for each thruster  |
+| `/propulsion/microseconds` | `ThrusterMicroseconds` | Array of PWM signals (µs) sent to each thrusterr |
+
+
+
+### Subscribed Topics
+
+| Topic | Message | Description |
+| ------ | ------- | ---------- |
+| `/controls/effort` | `geometry_msgs/Wrench` | Forces and torques, relative to the robot's frame of reference to be applied at a given moment |
+
+
+## Installation
+
+### Dependencies
+
+- `rclpy` – ROS 2 Python client library
+
+- `geometry_msgs` – for `Wrench` messages
+
+- `auv_msgs` – custom AUV message definitions (`ThrusterForces`, `ThrusterMicroseconds`)
+
+- `numpy` – for matrix math
+
+### Building
+
+	source /opt/ros/humble/setup.bash
+	cd <AUV-2026>/ros2_ws
+	colcon build --symlink-install
+
+After build is complete, make the packages visible to ROS
+
+	source install/setup.bash
+
+### Running
+
+Launch all package nodes
+
+	ros2 launch propulsion thrust_mapper.launch.py
+
+
+### License
+
+The source code is released under a GPLv3 license.
