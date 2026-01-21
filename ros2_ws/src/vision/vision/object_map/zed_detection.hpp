@@ -10,8 +10,6 @@
 #include <sl/Camera.hpp>
 #include <Eigen/Dense>
 
-#include "object.hpp"
-
 using namespace std;
 // --- CUSTOM EXCEPTIONS (UNUSED) ---
 // class ZedInitException : public exception
@@ -76,12 +74,9 @@ private:
     cv::Mat get_cv_frame();
 
     // Run YOLO object detection on the provided image.
-    vector<DetectedObject> run_yolo(const cv::Mat& img);
+    vector<sl::CustomBoxObjectData> run_yolo(const cv::Mat& img);
     // Resize and pad the image to fit the YOLO model's input size while maintaining aspect ratio.
     cv::Mat letter_box(const cv::Mat& img, int target_size);
-
-    // Convert DetectedObject instances to ZED SDK CustomBoxObjectData format.
-    vector<sl::CustomBoxObjectData> detections_to_zed_2D_boxes(const vector<DetectedObject>& detections, const cv::Mat& img_bgr);
 
     // Determine the world positions of detected objects using ZED SDK 2D boxes and camera pose.
     void determine_world_position_zed_2D_boxes(const sl::Objects&,const sl::Pose& cam_pose);

@@ -139,16 +139,14 @@ void ZEDDetection::process_frame()
 	cv::Mat img_bgr = get_cv_frame();
 
 	// Run YOLO detection
-	vector<DetectedObject> detections = run_yolo(img_bgr);
+	vector<sl::CustomBoxObjectData> detections = run_yolo(img_bgr);
 	if (detections.empty()) {
 		log_warn_throttle("No detections from YOLO", 2000);
 	    return; // No detections
 	}
 	
-	vector<sl::CustomBoxObjectData> custom_boxes = detections_to_zed_2D_boxes(detections, img_bgr);
-	
 	// Ingest custom boxes
-	zed.ingestCustomBoxObjects(custom_boxes);
+	zed.ingestCustomBoxObjects(detections);
 
 	sl::Objects objects;
 	zed.retrieveObjects(objects, obj_runtime_param);
@@ -209,7 +207,7 @@ bool ZEDDetection::check_zed_status()
 	}
 
 	if (health.low_lighting) {
-	    log_warn_throttle("Low light condition", 5000);
+	    log_warn_throttle("Low light conditions", 5000);
 	    return false;
 	}
 	
@@ -226,14 +224,14 @@ cv::Mat ZEDDetection::get_cv_frame()
     return sl_mat_to_cv_mat(image);
 }
 
-vector<DetectedObject> ZEDDetection::run_yolo(const cv::Mat& img)
+vector<sl::CustomBoxObjectData> ZEDDetection::run_yolo(const cv::Mat& img)
 {
-	vector<DetectedObject> detections;
+	vector<sl::CustomBoxObjectData> detections;
 	
 	// letterbox the image to 640x640
 	cv::Mat resized_img = letter_box(img,YOLO_input_size);
-	// Prepare input blob, size should already be 640x640, swap to RGB for YOLO
-	cv::Mat blob = cv::dnn::blobFromImage(resized_img, 1.0/255.0, cv::Size(640, 640), cv::Scalar(), true, false);
+	// Prepare input blob, size should already be YOLO_input_size, swap to RGB for YOLO
+	cv::Mat blob = cv::dnn::blobFromImage(resized_img, 1.0/255.0, cv::Size(YOLO_input_size, YOLO_input_size), cv::Scalar(), true, false);
 	yolo_net.setInput(blob);
 	
 	// Forward pass
@@ -269,13 +267,39 @@ vector<DetectedObject> ZEDDetection::run_yolo(const cv::Mat& img)
 		int x = static_cast<int>(cx - w / 2);
 		int y = static_cast<int>(cy - h / 2);
 		
-		DetectedObject det;
-		det.class_id = static_cast<ObjectClass>(class_id_point.x);
-		det.confidence = max_confidence;
-		det.bbox = cv::Rect(x, y, static_cast<int>(w), static_cast<int>(h));
+		sl::CustomBoxObjectData box;
+	    box.unique_object_id = sl::generate_unique_id();
+		box.probability = max_confidence;
+		box.label = class_id_point.x;
+		box.is_grounded = false;
+		// detections -> bbox
+		std::vector<sl::floatt2> bbox_2d(4);
+		// (cx,cy) is in center, shift to 4 corners 
+		float halfwidth = w / 2;
+		float halfheight = h / 2;
+		bbox_2d[0] = sl::floatt2(cx - halfwidth, cy - halfheight);// top left
+		bbox_2d[1] = sl::floatt2(cx + halfwidth, cy - halfheight);// top right
+		bbox_2d[2] = sl::floatt2(cx + halfwidth, cy + halfheight);// bottom right
+		bbox_2d[3] = sl::floatt2(cx - halfwidth, cy + halfheight);// bottom left
+		box.bounding_box_2d = bbox_2d;
+
+		if (show_detections) {
+			// CV rectnagle drawing just requires top left corner + width height
+			top_left_x = static_cast<int>(bbox_2d[0][0]);
+			top_left_y = static_cast<int>(bbox_2d[0][1]);
+			detection_bbox = cv::Rect(top_left_x, top_left_y, static_cast<int>(w), static_cast<int>(h));
+			cv::rectangle(img_bgr, detection_bbox, cv::Scalar(0, 255, 0), 2);
+			string label = ID_TO_LABEL[det.class_id] + ": " + to_string(max_confidence).substr(0, 4);
+			cv::putText(img_bgr, label, cv::Point(top_left_x, top_left_y - 5),
+			    cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 2);
+		}
 		
-		detections.push_back(det);
+		detections.push_back(box);
 	    }
+		if (show_detections) {
+	    cv::imshow("YOLO Detections", img_bgr);
+	    cv::waitKey(1);
+		}
 	}
 	return detections;
 }
@@ -299,42 +323,6 @@ cv::Mat ZEDDetection::letter_box(const cv::Mat& source, int target_size)
 	cv::copyMakeBorder(source, source, 0, bottom_padding, 0, right_padding, cv::BORDER_CONSTANT, cv::Scalar(114, 114, 114));
 
 	return source;
-}
-
-vector<sl::CustomBoxObjectData> ZEDDetection::detections_to_zed_2D_boxes(const vector<DetectedObject>& detections, const cv::Mat& img_bgr)
-{
-	vector<sl::CustomBoxObjectData> custom_boxes;
-	for (const auto& det : detections) {
-	    sl::CustomBoxObjectData box;
-	    box.unique_object_id = sl::generate_unique_id();
-	    box.probability = det.confidence;
-	    box.label = static_cast<int>(det.class_id);
-	    box.is_grounded = false;
-	    
-	    // Convert cv::Rect to ZED bounding box
-	    std::vector<sl::uint2> bbox_2d(4);
-	    bbox_2d[0] = sl::uint2(det.bbox.x, det.bbox.y);
-	    bbox_2d[1] = sl::uint2(det.bbox.x + det.bbox.width, det.bbox.y);
-	    bbox_2d[2] = sl::uint2(det.bbox.x + det.bbox.width, det.bbox.y + det.bbox.height);
-	    bbox_2d[3] = sl::uint2(det.bbox.x, det.bbox.y + det.bbox.height);
-	    box.bounding_box_2d = bbox_2d;
-	    
-	    custom_boxes.push_back(box);
-
-	    // Visualize detections
-	    if (show_detections) {
-		cv::rectangle(img_bgr, det.bbox, cv::Scalar(0, 255, 0), 2);
-		string label = ID_TO_LABEL[det.class_id] + ": " + to_string(det.confidence).substr(0, 4);
-		cv::putText(img_bgr, label, cv::Point(det.bbox.x, det.bbox.y - 5),
-			    cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 2);
-	    }
-	}
-
-	if (show_detections) {
-	    cv::imshow("YOLO Detections", img_bgr);
-	    cv::waitKey(1);
-	}
-	
 }
 
 void ZEDDetection::determine_world_position_zed_2D_boxes(const sl::Objects& zed_objects,const sl::Pose& cam_pose)
@@ -414,7 +402,7 @@ Eigen::Vector3d ZEDDetection::transform_to_world(const sl::float3& local_pos, co
     return world_pos;
 }
 
-cv::Mat sl_mat_to_cv_mat(sl::Mat& sl_image)
+constexpr cv::Mat sl_mat_to_cv_mat(sl::Mat& sl_image)
 {
 	int cv_type;
 	switch (sl_image.getDataType()) {
