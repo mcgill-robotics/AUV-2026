@@ -1,8 +1,8 @@
 #include <object_tracker.hpp>
-#include <utils/hungarian.hpp>
+#include <hungarian.hpp>
 
 
-ObjectTracker::ObjectTracker(const float min_new_track_distance = 0.5) {
+ObjectTracker::ObjectTracker(const float min_new_track_distance) {
     this->tracks = std::vector<Track>();
     this->min_new_track_distance = min_new_track_distance;
 

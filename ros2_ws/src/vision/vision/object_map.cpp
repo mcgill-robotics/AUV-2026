@@ -10,9 +10,9 @@
 #include "std_msgs/msg/float64.hpp"
 
 #ifdef HAS_ZED_SDK
-	#include "object_map/zed_detection.hpp"
+	#include "zed_detection.hpp"
 #endif
-#include "object_map/object_tracker.hpp"
+#include "object_tracker.hpp"
 
 using namespace std;
 // alias for milliseconds with double precision

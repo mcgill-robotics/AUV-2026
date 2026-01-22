@@ -34,10 +34,20 @@ foreach(dep IN LISTS DEPS)
   find_package(${dep} REQUIRED)
 endforeach()
 
-set (SOURCES 
-    vision/object_map/object.cpp
-    vision/object_map/object_tracker.cpp
-    vision/object_map.cpp
+set (OBJECT_MAP_LIB_SOURCES 
+    ${PROJECT_NAME}/object_map/object_tracker.cpp
+    ${PROJECT_NAME}/utils/hungarian.cpp
+    ${PROJECT_NAME}/utils/kalman.cpp
+)
+
+set (CPP_NODE_SOURCES
+    ${PROJECT_NAME}/object_map.cpp
+)
+
+set (PYTHON_NODE_SOURCES
+    ${PROJECT_NAME}/down_image_enhancement.py
+    ${PROJECT_NAME}/front_image_enhancement.py
+    ${PROJECT_NAME}/image_collection.py
 )
 
 find_package(CUDAToolkit QUIET)
@@ -48,20 +58,39 @@ set(HAS_ZED_SDK_DEPS FALSE)
 if(CUDAToolkit_FOUND AND ZED_FOUND)
     message(STATUS "ZED SDK and CUDA found, building object map node with ZED SDK.")
     set (HAS_ZED_SDK_DEPS TRUE)
-else()
+    else()
     message(STATUS "ZED SDK and/or CUDA not found, building object map node without ZED SDK.")
 endif()
 
+# by default, assume we have ZED SDK, otherwise remove zed detection
 if(HAS_ZED_SDK_DEPS)
-    include_directories(include ${ZED_INCLUDE_DIRS} ${CUDAToolkit_INCLUDE_DIRS})
-    list(APPEND SOURCES vision/object_map/zed_detection.cpp)
+    list(APPEND OBJECT_MAP_LIB_SOURCES ${PROJECT_NAME}/object_map/zed_detection.cpp)
 endif()
 
 # C++ object map
-add_executable(object_map ${SOURCES})
+add_executable(object_map ${CPP_NODE_SOURCES})
 ament_target_dependencies(object_map ${CPP_LIBS})
 
+target_include_directories(object_map PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+
+# create library to build node
+add_library(object_map_lib SHARED ${OBJECT_MAP_LIB_SOURCES})
+
+ament_target_dependencies(object_map_lib ${CPP_LIBS})
+
+
+target_include_directories(object_map_lib PUBLIC
+$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/${PROJECT_NAME}>
+$<INSTALL_INTERFACE:include>)
+
+target_link_libraries(object_map object_map_lib)
+
 if(HAS_ZED_SDK_DEPS)
+    # include zed and cuda hpp
+    include_directories(include ${ZED_INCLUDE_DIRS} ${CUDAToolkit_INCLUDE_DIRS})
     # Define a compile-time flag to indicate ZED SDK is available
     target_compile_definitions(object_map PRIVATE HAS_ZED_SDK)
     target_link_libraries(object_map ${ZED_LIBRARIES} ${CUDAToolkit_LIBRARIES})
@@ -70,25 +99,25 @@ if(HAS_ZED_SDK_DEPS)
 endif()
 
 
-target_include_directories(object_map PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>)
+install(TARGETS object_map_lib
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION lib
+    RUNTIME DESTINATION bin
+)
 
-install(TARGETS object_map DESTINATION lib/${PROJECT_NAME})
+install(TARGETS object_map 
+    DESTINATION lib/${PROJECT_NAME}
+)
 
 # Python nodes
 ament_python_install_package(${PROJECT_NAME})
-install(PROGRAMS
-    vision/down_image_enhancement.py
-    vision/front_image_enhancement.py
-    vision/image_collection.py
-    DESTINATION lib/${PROJECT_NAME}
-)
+install(PROGRAMS ${PYTHON_NODE_SOURCES} DESTINATION lib/${PROJECT_NAME})
 
 # Launch files
 install(DIRECTORY
     launch
     DESTINATION share/${PROJECT_NAME}/
 )
+
 
 ament_package()

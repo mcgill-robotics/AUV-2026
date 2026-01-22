@@ -384,6 +384,7 @@ Eigen::Vector3d ZEDDetection::transform_to_world(const sl::float3& local_pos, co
     pos(1) = local_pos.y;
     pos(2) = local_pos.z;
 
+	// TODO: verify if this is actually valid
     Eigen::Matrix3d R;
     for (int i = 0; i < 3; i++) {
         for (int j = 0; j < 3; j++) {
