@@ -60,7 +60,7 @@ private:
     // Step 1: Compute the cost matrix (MAHALANOBIS)
 
     // TODO: Potentially update into a matrix return type instead?
-    std::vector<std::vector<double>> compute_cost_matrix(
+    Eigen::MatrixXd compute_cost_matrix(
         const std::vector<Eigen::Vector3d>& measurements,
         const std::vector<std::string>& classes
     );  
@@ -68,10 +68,10 @@ private:
     // Step 2: Match tracks to detections (HUNGARIAN)
     // returns: matches, and modifies the unmatched sets by reference
     std::vector<std::pair<int, int>> match_tracks(
-        const std::vector<std::vector<double>>& cost_matrix,
+        const Eigen::Ref<const Eigen::MatrixXd>& cost_matrix,
         size_t num_meas,
-        std::set<int>& unmatched_tracks,
-        std::set<int>& unmatched_dets
+        std::vector<int>& unmatched_tracks,
+        std::vector<int>& unmatched_detections
     );
 
     // Step 3: Update existing tracks with matched measurements
@@ -83,14 +83,14 @@ private:
     );
 
     // Step 4: Handle tracks that weren't seen this frame
-    void handle_unmatched_tracks(const std::set<int>& unmatched_tracks);
+    void handle_unmatched_tracks(const std::vector<int>& unmatched_tracks);
 
     // Step 5: Prune dead tracks
     void delete_dead_tracks();
     
     // Step 6: Create new tracks from unmatched detections
     void create_new_tracks(
-        const std::set<int>& unmatched_dets,
+        const std::vector<int>& unmatched_detections,
         const std::vector<Eigen::Vector3d>& measurements,
         const std::vector<std::string>& classes,
         const std::vector<double>& orientations,
@@ -109,6 +109,9 @@ private:
     int max_age = 8;                // Frames to keep lost track
     float max_position_jump = 2.0;  // Max jump (meters) - higher to handle VIO rotation errors
 
+    std::vector<int> matches;
+    std::vector<int> untracked_tracks;
+    std::vector<int> untracked_detections;
 
     // Known object limits (prevents creating too many tracks per class)
     std::unordered_map<std::string, int> MAX_PER_CLASS = {
