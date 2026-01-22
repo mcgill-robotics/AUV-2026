@@ -3,7 +3,7 @@
 namespace sensors
 {
 ImuProcessor::ImuProcessor()
-    : Node("imu_processor"), q_vi_(quatd::Identity())
+    : Node("imu_processor"), q_iv_(quatd::Identity())
 {
 
     imu_pub_ = this->create_publisher<imu_msg>(
@@ -74,7 +74,7 @@ void ImuProcessor::imu_callback(const imu_msg::SharedPtr imu_in)
     imu_out.linear_acceleration.z = a_free(2);
 
 
-    q_iv_ = q_is_ * q_sv_; // New orientation: world frame relative to vehicle frame
+    q_iv_ = q_is * q_sv_; // New orientation: world frame relative to vehicle frame
 
     if (q_iv_.w() < 0) {
         q_iv_.coeffs() *= -1.0; // Ensure positive scalar part for consistency
