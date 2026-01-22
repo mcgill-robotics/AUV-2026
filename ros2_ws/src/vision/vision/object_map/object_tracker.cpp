@@ -7,8 +7,6 @@ ObjectTracker::ObjectTracker(const float min_new_track_distance) {
     this->min_new_track_distance = min_new_track_distance;
 
     this->matches = std::vector<int>();
-    this->untracked_tracks = std::vector<int>();
-    this->untracked_detections = std::vector<int>();
 }
 
 // destructor implicitly defined
@@ -53,16 +51,22 @@ std::vector<Track> ObjectTracker::update(
     // Clear previous temp data
     this->unmatched_tracks.clear();
     this->unmatched_detections.clear();
-
     // 1. Compute cost matrix
     auto cost_matrix = compute_cost_matrix(measurements, classes);
+
+    std::vector<int> unmatched_tracks;
+    std::vector<int> unmatched_dets;
+    
+    // Initialize sets
+    for(size_t i = 0; i < tracks.size(); ++i) unmatched_tracks.insert(i);
+    for(size_t i = 0; i < measurements.size(); ++i) unmatched_dets.insert(i);
 
     // 2. Match tracks
     auto matches = match_tracks(
         cost_matrix, 
         measurements.size(), 
-        this->unmatched_tracks, 
-        this->unmatched_detections
+        unmatched_tracks, 
+        unmatched_dets
     );
 
     // 3. Update matched tracks
@@ -142,7 +146,9 @@ std::vector<std::pair<int, int>> ObjectTracker::match_tracks(
     std::vector<int>& unmatched_detections
 ) {
     // TODO: Implement matching logic (Hungarian Algorithm or Greedy Match)
-    
+    HungarianAlgorithm solver;
+
+    solver.Solve()
 
     return {};
 }

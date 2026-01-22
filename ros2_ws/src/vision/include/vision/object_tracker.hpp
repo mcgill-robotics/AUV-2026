@@ -109,8 +109,6 @@ private:
     float max_position_jump = 2.0;  // Max jump (meters) - higher to handle VIO rotation errors
 
     std::vector<int> matches;
-    std::vector<int> untracked_tracks;
-    std::vector<int> untracked_detections;
 
     // Known object limits (prevents creating too many tracks per class)
     std::unordered_map<std::string, int> MAX_PER_CLASS = {
