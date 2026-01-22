@@ -34,7 +34,7 @@ class ImuProcessor: public rclcpp::Node
 		quatd q_vs_; 
 		quatd q_in_;
 		Vec3 g_i;
-		quatd q_vi_;			
+		quatd q_iv_;			
 
 };
 } // namespace sensors

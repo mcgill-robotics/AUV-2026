@@ -16,7 +16,7 @@ ImuProcessor::ImuProcessor()
         std::bind(&ImuProcessor::imu_callback, this, std::placeholders::_1)
     );
 
-    this->declare_parameter<std::vector<double>>("q_sv", {1, 0.0, 0.0, 0.0}); // Default no rotation. TODO: Verify and change in MEDN.
+    this->declare_parameter<std::vector<double>>("q_sv", {1, 0.0, 0.0, 0.0}); // Default no rotation. 
     this->declare_parameter<std::vector<double>>("q_in", {1.0, 0.0, 0.0, 0.0}); // Default: no rotation
     
     std::vector<double> q_sv_vec;
@@ -60,30 +60,30 @@ void ImuProcessor::imu_callback(const imu_msg::SharedPtr imu_in)
     f_s << imu_in->linear_acceleration.x, imu_in->linear_acceleration.y, imu_in->linear_acceleration.z;   
 
     // Orientation remains unchanged but rotated to AUV frame
-    quatd q_si(
+    quatd q_is(
         imu_in->orientation.w,
         imu_in->orientation.x,
         imu_in->orientation.y,
         imu_in->orientation.z
-    ); // Assumption: IMU messages report sensor relative to world frame.     
+    ); 
     
     // Compute free acceleration
-    Vec3 a_free = compute_free_acc(f_s, q_si);
+    Vec3 a_free = compute_free_acc(f_s, q_is.inverse());
     imu_out.linear_acceleration.x = a_free(0);
     imu_out.linear_acceleration.y = a_free(1); 
     imu_out.linear_acceleration.z = a_free(2);
 
 
-    q_vi_ = q_vs_ * q_si; // New orientation: world frame relative to vehicle frame
+    q_iv_ = q_is_ * q_sv_; // New orientation: world frame relative to vehicle frame
 
-    if (q_vi_.w() < 0) {
-        q_vi_.coeffs() *= -1.0; // Ensure positive scalar part for consistency
+    if (q_iv_.w() < 0) {
+        q_iv_.coeffs() *= -1.0; // Ensure positive scalar part for consistency
     }
 
-    imu_out.orientation.w = q_vi_.w();
-    imu_out.orientation.x = q_vi_.x();
-    imu_out.orientation.y = q_vi_.y();
-    imu_out.orientation.z = q_vi_.z();
+    imu_out.orientation.w = q_iv_.w();
+    imu_out.orientation.x = q_iv_.x();
+    imu_out.orientation.y = q_iv_.y();
+    imu_out.orientation.z = q_iv_.z();
 
     // Angular Velocity
     Vec3 w_s = Vec3(
