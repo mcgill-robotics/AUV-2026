@@ -17,8 +17,7 @@ using double_ms = std::chrono::duration<double, std::milli>;
 
 enum class TrackState {
     TENTATIVE,
-    CONFIRMED,
-    DELETED
+    CONFIRMED
 };
 
 struct Track {
@@ -127,4 +126,4 @@ private:
         { "sawfish", 2 }
     };
 
-}
+};

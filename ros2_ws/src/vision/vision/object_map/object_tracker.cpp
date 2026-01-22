@@ -38,18 +38,21 @@ KalmanFilter ObjectTracker::create_kf(const Eigen::Vector3d& initial_pos) {
     KalmanFilter kf(dt,A, C, Q, R, P);
     
     // initialize with initial states at zero
-    kf.init()
+    kf.init();
 
-    return kf
+    return kf;
 }   
 
 std::vector<Track> ObjectTracker::update(
-    const std::const std::vector<Eigen::Vector3d>& measurements,
+    const std::vector<Eigen::Vector3d>& measurements,
     const std::vector<Eigen::Matrix3d>& measurement_covariances,
     const std::vector<std::string>& classes,
     const std::vector<double>& orientations, 
     const std::vector<double>& confidences  
 ) {
+    // Clear previous temp data
+    this->unmatched_tracks.clear();
+    this->unmatched_detections.clear();
 
     // 1. Compute cost matrix
     auto cost_matrix = compute_cost_matrix(measurements, classes);
@@ -66,13 +69,13 @@ std::vector<Track> ObjectTracker::update(
     update_matched_tracks(matches, measurements, orientations, confidences);
 
     // 4. Handle unmatched tracks
-    handle_unmatched_tracks(unmatched_tracks);
+    handle_unmatched_tracks(this->unmatched_tracks);
 
     // 5. Delete dead tracks
     delete_dead_tracks();
 
     // 6. Create new tracks
-    create_new_tracks(unmatched_detections, measurements, classes, orientations, confidences);
+    create_new_tracks(this->unmatched_detections, measurements, classes, orientations, confidences);
 
     return tracks;
 }  
@@ -147,19 +150,66 @@ std::vector<std::pair<int, int>> ObjectTracker::match_tracks(
 void ObjectTracker::update_matched_tracks(
     const std::vector<std::pair<int, int>>& matches,
     const std::vector<Eigen::Vector3d>& measurements,
-    const std::vector<std::string>& classes,
     const std::vector<double>& orientations,
     const std::vector<double>& confidences
 ) {
-    // TODO: Update KF state, reset age, update orientation/confidence, and promote tentative tracks
+    for (const auto& match : matches) {
+        int track_idx = match.first;
+        int meas_idx = match.second;
+
+        Track& track = tracks[track_idx];
+        
+        // Prepare measurement for kf
+        // there might be a dimension mismatch
+        Eigen::VectorXd meas(3);    
+        meas << measurements[meas_idx](0), measurements[meas_idx](1), measurements[meas_idx](2);
+
+        // Update Kalman Filter
+        track.kf.update(meas);
+
+        // Update Track Metadata
+        track.hits++;
+        track.age++;
+        track.time_since_updates = 0;
+        track.confidence = confidences[meas_idx];
+        track.theta_z = orientations[meas_idx]; 
+
+        
+        if (track.state == TrackState::TENTATIVE && track.hits >= min_hits) {
+            track.state = TrackState::CONFIRMED;
+        }
+    }
 }
 
 void ObjectTracker::handle_unmatched_tracks(const std::vector<int>& unmatched_tracks) {
-    // TODO: Increment age of tracks not seen in this frame
+    for (int track_idx : unmatched_tracks) {
+        Track& track = tracks[track_idx];
+        track.age++;
+        track.time_since_updates++;
+    }
 }
 
 void ObjectTracker::delete_dead_tracks() {
-    // TODO: Remove tracks that have exceeded max_age or time_since_update thresholds
+    auto it = tracks.begin();
+    while (it != tracks.end()) {
+        bool delete_track = false;
+
+        // time exceeded
+        if (it->time_since_updates > max_age) {
+            delete_track = true;
+        }
+        
+        // tentative for too long
+        if (it->state == TrackState::TENTATIVE && it->age > max_age * 2) {
+            delete_track = true;
+        }
+
+        if (delete_track) {
+            it = tracks.erase(it);
+        } else {
+            ++it;
+        }
+    }
 }
 
 void ObjectTracker::create_new_tracks(
@@ -169,5 +219,32 @@ void ObjectTracker::create_new_tracks(
     const std::vector<double>& orientations,
     const std::vector<double>& confidences
 ) {
-    // TODO: Initialize new tracks for unmatched detections (check MAX_PER_CLASS limits)
+    for (int det_idx : unmatched_detections) {
+        std::string label = classes[det_idx];
+
+        int current_count = 0;
+        for (const auto& t : tracks) {
+            if (t.label == label) current_count++;
+        }
+
+        if (MAX_PER_CLASS.find(label) != MAX_PER_CLASS.end()) {
+            if (current_count >= MAX_PER_CLASS[label]) {
+                continue;
+            }
+        }
+
+        Track new_track;
+        new_track.id = track_id_counter++;
+        new_track.label = label;
+        new_track.state = TrackState::TENTATIVE;
+        new_track.hits = 1;
+        new_track.age = 1;
+        new_track.time_since_updates = 0;
+        new_track.theta_z = orientations[det_idx];
+        new_track.confidence = confidences[det_idx];
+
+        new_track.kf = create_kf(measurements[det_idx]);
+
+        tracks.push_back(new_track);
+    }
 }
