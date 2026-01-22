@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <iostream>
 #include <memory.h>
 #include <format>
@@ -59,7 +60,7 @@ private:
     // Step 1: Compute the cost matrix (MAHALANOBIS)
 
     // TODO: Potentially update into a matrix return type instead?
-    Eigen::MatrixXd compute_cost_matrix(
+    std::vector<std::vector<double>> compute_cost_matrix(
         const std::vector<Eigen::Vector3d>& measurements,
         const std::vector<std::string>& classes
     );  
@@ -67,7 +68,7 @@ private:
     // Step 2: Match tracks to detections (HUNGARIAN)
     // returns: matches, and modifies the unmatched sets by reference
     std::vector<std::pair<int, int>> match_tracks(
-        const Eigen::Ref<const Eigen::MatrixXd>& cost_matrix,
+        const std::vector<std::vector<double>>& cost_matrix,
         size_t num_meas,
         std::vector<int>& unmatched_tracks,
         std::vector<int>& unmatched_detections

@@ -84,7 +84,7 @@ std::vector<Track> ObjectTracker::update(
     return tracks;
 }  
 
-Eigen::MatrixXd ObjectTracker::compute_cost_matrix(
+std::vector<std::vector<double>> ObjectTracker::compute_cost_matrix(
     const std::vector<Eigen::Vector3d>& measurements,
     const std::vector<std::string>& classes
 ) {
@@ -92,46 +92,49 @@ Eigen::MatrixXd ObjectTracker::compute_cost_matrix(
     size_t num_meas = measurements.size();
     size_t num_classes = classes.size();
 
-    // TODO: Implement cost matrix computation (Mahalanobis distance + Gating)
     if (num_meas != num_classes) {
         throw std::invalid_argument("Input vector sizes unequal. Fix argument.");
     }
 
-    // Default constructor sets the entire matrix to 0
-    Eigen::MatrixXd cost_matrix = Eigen::MatrixXd::Zero(num_tracks, num_meas);
+    // Initialize vector<vector<double>> with dimensions [num_tracks][num_meas], initialized to 0.0
+    std::vector<std::vector<double>> cost_matrix(num_tracks, std::vector<double>(num_meas, 0.0));
 
     // Compute the cost matrix
     if (num_meas > 0) {
-        for (int track_idx; track_idx < num_tracks; ++track_idx) {
+        for (size_t track_idx = 0; track_idx < num_tracks; ++track_idx) {
             const auto& curr_track = this->tracks[track_idx];
 
-            for (int meas_idx; meas_idx < num_meas; ++meas_idx) { 
+            for (size_t meas_idx = 0; meas_idx < num_meas; ++meas_idx) { 
                 const std::string& meas_label = classes[meas_idx];
 
+                // 1. Class mismatch check
                 if (curr_track.label != meas_label) {
-                    cost_matrix(track_idx, meas_idx) = 1e6;
+                    cost_matrix[track_idx][meas_idx] = 1e6;
                     continue;
                 }
 
                 Eigen::Vector3d meas = measurements[meas_idx];
-                Eigen::Vector3d diff = meas - curr_track.kf.state();
+                Eigen::Vector3d diff = meas - curr_track.kf.state(); // Assuming state() returns Vector3d compatible
                 double euclidean_distance = diff.norm();
 
+                // 2. Max position jump check
                 if (euclidean_distance > max_position_jump) {
-                    cost_matrix(track_idx, meas_idx) = 1e6;
+                    cost_matrix[track_idx][meas_idx] = 1e6;
                     continue;
                 }
 
-                // TODO: Compute Mahalanobis distance
-                Eigen::Matrix3d S = Eigen::Matrix3d::Ones();
+                // 3. Mahalanobis distance
+                // Note: In production, S should be (C*P*C^T + R) from the KF
+                Eigen::Matrix3d S = Eigen::Matrix3d::Ones(); 
                 Eigen::Matrix3d inv_S = S.inverse();
                 
                 double dist = diff.transpose() * inv_S * diff;
 
+                // 4. Gating and Assignment
                 if (dist > this->gating_threshold) {
-                    cost_matrix(track_idx, meas_idx) = 1e6;
+                    cost_matrix[track_idx][meas_idx] = 1e6;
                 } else {
-                    cost_matrix(track_idx, meas_idx) = 1e6;
+                    cost_matrix[track_idx][meas_idx] = dist;
                 }
             }
         }
@@ -139,18 +142,37 @@ Eigen::MatrixXd ObjectTracker::compute_cost_matrix(
     return cost_matrix;
 }
 
-std::vector<std::pair<int, int>> ObjectTracker::match_tracks(
-    const Eigen::Ref<const Eigen::MatrixXd>& cost_matrix,
+
+// Note: The Hungarian Algorithm library we are using only takes std::vector<std::vector>
+// FUTURE TASK POTENTIAL:
+// Implement a Hungarian Algorithm that takes MatrixXd cost matrix
+// and leverage the temporal CPU cache benefits that the MatrixXd exploits
+//
+// This will significantly improve computational speed.
+std::vector<int> ObjectTracker::match_tracks(
+    const std::vector<std::vector<double>>& cost_matrix,
     size_t num_meas,
     std::vector<int>& unmatched_tracks,
     std::vector<int>& unmatched_detections
 ) {
-    // TODO: Implement matching logic (Hungarian Algorithm or Greedy Match)
     HungarianAlgorithm solver;
 
-    solver.Solve()
+    std::vector<int> assignment;
+    // assignment is grown dynamically within the solver, no need to init with fixed size
+    double res = solver.Solve(cost_matrix, assignment);
 
-    return {};
+    // NOTE: at this point the unmatched detections and tracks are ordered lists
+    // Simply remove item as specific index
+    int num_assign = assignment.size();
+    for (int assign_idx; assign_idx < assignment.size(); ++assign_idx) {
+        int track_idx = assign_idx;
+        int det_idx = assignment[assign_idx];
+
+        // (track_idx, det_idx) forms the pairing
+        // TODO: Iterate through unmatched tracks and detections and remove from those lists
+    }
+
+    return res;
 }
 
 void ObjectTracker::update_matched_tracks(
