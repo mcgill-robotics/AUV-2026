@@ -28,9 +28,14 @@ public:
 	this->declare_parameter<bool>("zed_sdk", true);
 	// how often to process frames for object mapping, i.e. publishing rate
 	this->declare_parameter("frame_rate", 30);
+	// minimum distance to consider a detection as a new object
+	this->declare_parameter("new_object_min_distance_threshold", 0.5);
+	
+	// only needed in constructor
 	int frame_rate;
+	float new_object_distance_threshold;
 	this->get_parameter("frame_rate", frame_rate);
-
+	this->get_parameter("new_object_min_distance_threshold", new_object_distance_threshold);
 	this->get_parameter("zed_sdk", zed_sdk);
 	bool sdk_available = false;
 // compile time check for ZED SDK see CMakeLists.txt
@@ -63,8 +68,6 @@ public:
 		this->declare_parameter("YOLO_IOU_threshold", 0.1);
 		// maximum depth range to consider detections
 		this->declare_parameter("max_range", 10.0);
-		// minimum distance to consider a detection as a new object
-		this->declare_parameter("new_object_min_distance_threshold", 0.5);
 		// use UDP stream for input frames
 		this->declare_parameter("use_stream", true);
 		// UDP stream IP and port
@@ -79,7 +82,6 @@ public:
 		// only needed in constructor
 		string yolo_model_path;
 		int yolo_input_size;
-		float new_object_distance_threshold;
 		int frame_rate;
 		float confidence_threshold;
 		float max_range_distance_threshold;
@@ -92,7 +94,6 @@ public:
 		this->get_parameter("yolo_input_size", yolo_input_size);
 		this->get_parameter("frame_rate", frame_rate);
 		this->get_parameter("confidence_threshold", confidence_threshold);
-		this->get_parameter("new_object_min_distance_threshold", new_object_distance_threshold);
 		this->get_parameter("max_range", max_range_distance_threshold);
 		this->get_parameter("use_stream", use_stream);
 		this->get_parameter("stream_ip", stream_ip);
@@ -119,10 +120,9 @@ public:
 			[this](const string& msg, int throttle_duration_ms) { RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), throttle_duration_ms, "%s", msg.c_str()); }
 		);
 #endif
-	}
-
+}
 	// Object Tracker
-	object_tracker = new ObjectTracker(new_object_distance_threshold)
+	object_tracker = ObjectTracker(new_object_distance_threshold);
 	// Publishers
 	object_map_publisher = this->create_publisher<auv_msgs::msg::VisionObject>("/vision/object_map", 10);
 	pose_publisher = this->create_publisher<geometry_msgs::msg::PoseStamped>("/vision/vio_pose", 10);
