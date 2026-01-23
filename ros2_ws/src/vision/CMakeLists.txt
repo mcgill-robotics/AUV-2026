@@ -2,9 +2,12 @@ cmake_minimum_required(VERSION 3.8)
 
 project(vision)
 
+set(CMAKE_CXX_STANDARD 17)
+
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
+
 
 set(DEPS
     ament_cmake
@@ -82,9 +85,8 @@ ament_target_dependencies(object_map_lib ${CPP_LIBS})
 
 
 target_include_directories(object_map_lib PUBLIC
-$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/${PROJECT_NAME}>
-$<INSTALL_INTERFACE:include>)
+$<INSTALL_INTERFACE:include/${PROJECT_NAME}>)
 
 target_link_libraries(object_map object_map_lib)
 
