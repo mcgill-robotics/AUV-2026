@@ -1,4 +1,26 @@
 # Steps to train a model
+
+## Unity Synthetic Data Pipeline (Recommended for Sim Training)
+
+For training on synthetic data generated from Unity, follow this pipeline to ensure robust performance (sim-to-real gap bridge).
+
+1. **Collect Raw Data**: Put your Unity exports in `data/raw_import`. It should have `yolo_images/` and `yolo_labels/` folders.
+2. **Augment Data**: Apply heavy underwater augmentations (geometric, texture annihilation, turbidity).
+   ```bash
+   python3 augment_dataset.py --input data/raw_import --output data/augmented --multiplier 1
+   ```
+3. **Organize Dataset**: Split the data into train/val/test and generate `data.yaml`.
+   ```bash
+   python3 organize_dataset.py --input data/augmented --output data/processed_aug
+   ```
+4. **Train Model**: Run the training script on the processed dataset.
+   ```bash
+   python3 training-unity.py --model v11 --size s --data data/processed_aug/data.yaml
+   ```
+
+---
+
+## Real World Data Pipeline (Roboflow)
 If you only want to train an existing dataset and not add any new images to it, skip to step 6.
 1. Collect Image Samples (Sim or Real)
     1. Ideally, you should collect at least ~50 raw images for each class. 

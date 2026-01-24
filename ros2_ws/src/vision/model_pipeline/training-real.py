@@ -137,8 +137,8 @@ Examples:
     parser.add_argument(
         "--imgsz",
         type=int,
-        default=960,
-        help="Image size for training (default: 960, matching Unity resolution)"
+        default=640,
+        help="Image size for training (default: 640)"
     )
     parser.add_argument(
         "--workers",
