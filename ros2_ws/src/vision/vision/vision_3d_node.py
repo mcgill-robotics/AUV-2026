@@ -62,7 +62,7 @@ class Vision3DNode(Node):
         
         # --- Publishers ---
         # Publishes confirmed TRACKS, not raw detections
-        self.tracks_pub = self.create_publisher(VisionObjectArray, '/vision/objects_3d', 10)
+        self.tracks_pub = self.create_publisher(VisionObjectArray, '/vision/object_map', 10)
         self.pose_pub = self.create_publisher(PoseStamped, '/vision/vio_pose', 10)
 
         # --- Init YOLO & ZED ---
