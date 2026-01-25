@@ -1,5 +1,5 @@
 #include "zed_detection.hpp"
-
+#include "object.hpp"
 // --- CUSTOM EXCEPTIONS (UNUSED) ---
 // const char* ZedInitException::what() const noexcept
 // {
@@ -10,26 +10,6 @@
 // {
 // 	return error_details.c_str();
 // }
-ZEDDetection::ZEDDetection() : ZEDDetection(
-        "",
-        640,
-        30,
-        0.5f,
-        20.0f,
-        0.5f,
-        false,
-        "",
-        0,
-        false,
-        false,
-        [](const string& msg){},
-        [](const string& msg){},
-        [](const string& msg){},
-        [](const string& msg, int){}
-    ) 
-{
-
-};
 
 ZEDDetection::ZEDDetection(
 		const string & yolo_model_path,
@@ -149,7 +129,7 @@ void ZEDDetection::process_frame()
 	sl::Objects objects;
 	zed.retrieveObjects(objects, obj_runtime_param);
 	if (debug_logs) {
-	    LogDebugTable(custom_boxes, objects);
+	    LogDebugTable(detections, objects);
 	}
 	// Get VIO pose
 	sl::Pose cam_pose;
@@ -271,31 +251,31 @@ vector<sl::CustomBoxObjectData> ZEDDetection::run_yolo(const cv::Mat& img)
 		box.label = class_id_point.x;
 		box.is_grounded = false;
 		// detections -> bbox
-		std::vector<sl::floatt2> bbox_2d(4);
+		std::vector<sl::uint2> bbox_2d(4);
 		// (cx,cy) is in center, shift to 4 corners 
 		float halfwidth = w / 2;
 		float halfheight = h / 2;
-		bbox_2d[0] = sl::floatt2(cx - halfwidth, cy - halfheight);// top left
-		bbox_2d[1] = sl::floatt2(cx + halfwidth, cy - halfheight);// top right
-		bbox_2d[2] = sl::floatt2(cx + halfwidth, cy + halfheight);// bottom right
-		bbox_2d[3] = sl::floatt2(cx - halfwidth, cy + halfheight);// bottom left
+		bbox_2d[0] = sl::uint2(cx - halfwidth, cy - halfheight);// top left
+		bbox_2d[1] = sl::uint2(cx + halfwidth, cy - halfheight);// top right
+		bbox_2d[2] = sl::uint2(cx + halfwidth, cy + halfheight);// bottom right
+		bbox_2d[3] = sl::uint2(cx - halfwidth, cy + halfheight);// bottom left
 		box.bounding_box_2d = bbox_2d;
 
 		if (show_detections) {
 			// CV rectnagle drawing just requires top left corner + width height
-			top_left_x = static_cast<int>(bbox_2d[0][0]);
-			top_left_y = static_cast<int>(bbox_2d[0][1]);
-			detection_bbox = cv::Rect(top_left_x, top_left_y, static_cast<int>(w), static_cast<int>(h));
-			cv::rectangle(img_bgr, detection_bbox, cv::Scalar(0, 255, 0), 2);
-			string label = ID_TO_LABEL[det.class_id] + ": " + to_string(max_confidence).substr(0, 4);
-			cv::putText(img_bgr, label, cv::Point(top_left_x, top_left_y - 5),
+			int top_left_x = static_cast<int>(bbox_2d[0][0]);
+			int top_left_y = static_cast<int>(bbox_2d[0][1]);
+			cv::Rect detection_bbox = cv::Rect(top_left_x, top_left_y, static_cast<int>(w), static_cast<int>(h));
+			cv::rectangle(img, detection_bbox, cv::Scalar(0, 255, 0), 2);
+			string label = ID_TO_LABEL[class_id_point.x] + ": " + to_string(max_confidence).substr(0, 4);
+			cv::putText(img, label, cv::Point(top_left_x, top_left_y - 5),
 			    cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 2);
 		}
 		
 		detections.push_back(box);
 	    }
 		if (show_detections) {
-	    cv::imshow("YOLO Detections", img_bgr);
+	    cv::imshow("YOLO Detections", img);
 	    cv::waitKey(1);
 		}
 	}
@@ -364,6 +344,9 @@ void ZEDDetection::determine_world_position_zed_2D_boxes(const sl::Objects& zed_
 		measurements.push_back(world_pos);
 		covariances.push_back(cov_world);
 		classes.push_back(label_str);
+		// TODO: add orientation estimation, for now it's Axis Aligned so 0
+		orientations.push_back(0.0);
+		confidences.push_back(obj.confidence);
 	}
 }
 
@@ -384,13 +367,7 @@ Eigen::Vector3d ZEDDetection::transform_to_world(const sl::float3& local_pos, co
     pos(1) = local_pos.y;
     pos(2) = local_pos.z;
 
-	// TODO: verify if this is actually valid
-    Eigen::Matrix3d R;
-    for (int i = 0; i < 3; i++) {
-        for (int j = 0; j < 3; j++) {
-        R(i, j) = rotation_matrix.r[i * 3 + j];
-	}
-    }
+    Eigen::Matrix3d R = Zed_Rotation_to_Eigen(rotation_matrix);
 	
     Eigen::Vector3d t;
     t(0) = translation_vector.x;
@@ -401,7 +378,7 @@ Eigen::Vector3d ZEDDetection::transform_to_world(const sl::float3& local_pos, co
     return world_pos;
 }
 
-constexpr cv::Mat sl_mat_to_cv_mat(sl::Mat& sl_image)
+cv::Mat sl_mat_to_cv_mat(sl::Mat& sl_image)
 {
 	int cv_type;
 	switch (sl_image.getDataType()) {
@@ -432,12 +409,17 @@ Eigen::Matrix3d get_world_covariance(const float position_covariance[6], const s
 	cov_cam(2, 1) = position_covariance[4];
 	cov_cam(2, 2) = position_covariance[5];
 
-	Eigen::Matrix3d R;
-	for (int i = 0; i < 3; i++) {
-		for (int j = 0; j < 3; j++) {
-		R(i, j) = rotation_matrix.r[i * 3 + j];
-		}
-	}
+	Eigen::Matrix3d R = Zed_Rotation_to_Eigen(rotation_matrix);
+
 	Eigen::Matrix3d cov_world = R * cov_cam * R.transpose();
 	return cov_world;
+}
+
+Eigen::Matrix3d Zed_Rotation_to_Eigen(const sl::Rotation& rotation_matrix)
+{
+    Eigen::Matrix<float, 3, 3, Eigen::RowMajor> rowmajor =
+        Eigen::Map<const Eigen::Matrix<float, 3, 3, Eigen::RowMajor>>(rotation_matrix.r);
+	Eigen::Matrix3d mat = rowmajor.cast<double>();
+	
+    return mat; // converts to column-major Eigen::Matrix3f
 }

@@ -114,6 +114,8 @@ private:
     
     vector<Eigen::Vector3d> measurements;
 	vector<Eigen::Matrix3d> covariances;
+    vector<double> orientations;
+    vector<double> confidences;
 	vector<string> classes;
 	sl::float3 pose_translation;
 	sl::Orientation pose_orientation;
@@ -123,3 +125,5 @@ private:
 cv::Mat sl_mat_to_cv_mat(sl::Mat& sl_image);
 
 Eigen::Matrix3d get_world_covariance(const float position_covariance[6], const sl::Rotation& rotation_matrix);
+
+Eigen::Matrix3d Zed_Rotation_to_Eigen(const sl::Rotation& rotation_matrix);

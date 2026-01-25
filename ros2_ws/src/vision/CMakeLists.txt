@@ -61,7 +61,7 @@ set(HAS_ZED_SDK_DEPS FALSE)
 if(CUDAToolkit_FOUND AND ZED_FOUND)
     message(STATUS "ZED SDK and CUDA found, building object map node with ZED SDK.")
     set (HAS_ZED_SDK_DEPS TRUE)
-    else()
+else()
     message(STATUS "ZED SDK and/or CUDA not found, building object map node without ZED SDK.")
 endif()
 
@@ -88,18 +88,16 @@ target_include_directories(object_map_lib PUBLIC
 $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/${PROJECT_NAME}>
 $<INSTALL_INTERFACE:include/${PROJECT_NAME}>)
 
-target_link_libraries(object_map object_map_lib)
 
 if(HAS_ZED_SDK_DEPS)
-    # include zed and cuda hpp
-    include_directories(include ${ZED_INCLUDE_DIRS} ${CUDAToolkit_INCLUDE_DIRS})
     # Define a compile-time flag to indicate ZED SDK is available
-    target_compile_definitions(object_map PRIVATE HAS_ZED_SDK)
-    target_link_libraries(object_map ${ZED_LIBRARIES} ${CUDAToolkit_LIBRARIES})
+    target_compile_definitions(object_map_lib PRIVATE HAS_ZED_SDK)
+    target_link_libraries(object_map_lib ${ZED_LIBRARIES} ${CUDAToolkit_LIBRARIES})
     # Treat external headers as system to suppress warnings
-    target_include_directories(object_map SYSTEM PRIVATE ${ZED_INCLUDE_DIRS} ${CUDAToolkit_INCLUDE_DIRS})
+    target_include_directories(object_map_lib SYSTEM PRIVATE ${ZED_INCLUDE_DIRS} ${CUDAToolkit_INCLUDE_DIRS})
 endif()
 
+target_link_libraries(object_map object_map_lib)
 
 install(TARGETS object_map_lib
     ARCHIVE DESTINATION lib
