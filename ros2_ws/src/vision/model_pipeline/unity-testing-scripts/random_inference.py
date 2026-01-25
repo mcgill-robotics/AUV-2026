@@ -53,7 +53,7 @@ def main():
     parser.add_argument(
         "--conf", "-c",
         type=float,
-        default=0.1,
+        default=0.5,
         help="Confidence threshold (default: 0.5)"
     )
     args = parser.parse_args()
