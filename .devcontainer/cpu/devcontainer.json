@@ -1,6 +1,6 @@
 {
     "name": "AUV Dev (CPU)",
-    "dockerComposeFile": "../Docker/dev/docker-compose.yml",
+    "dockerComposeFile": "../../Docker/dev/docker-compose.yml",
     "service": "cpu",
     "runServices": ["cpu"],
 

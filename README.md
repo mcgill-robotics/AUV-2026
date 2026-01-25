@@ -18,7 +18,7 @@ Before setting up the dev environment, you should have the following software in
 ---
 
 ### Method 1: VS Code Dev Containers (CPU Only)
-*Best for: Quick logic changes, non-graphical coding, Windows/Mac users without NVIDIA GPUs.*
+
 
 If you have the software installed, follow these instructions:
 
@@ -33,13 +33,17 @@ If you have the software installed, follow these instructions:
 
 4. Select ***"Dev Containers: Reopen in container"***
    
-5. VS Code will automatically load necessary files and configure the dev environment. This can take minutes to load.
+5. Select the option that matches your hardware
+   -  `AUV Dev (CPU)`: CPU or Integrated Graphics
+   -  `AUV Dev (NVIDIA)`: NVIDIA Graphics Card
+
+6. VS Code will automatically load necessary files and configure the dev environment. This can take minutes to load.
 
 Once loading is complete, you're ready to develop! 
 
 
-### Method 2: Docker CLI (GPU & Advanced)
-*Best for: Running ZED simulations, neural networks (YOLO), visualization (RQT/Rviz), and Linux users.*
+### Method 2: Docker CLI (Advanced)
+*Use this when not using VS Code as your primary text editor*
 
 1.  **Navigate to the dev folder:**
     ```bash
