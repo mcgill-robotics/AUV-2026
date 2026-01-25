@@ -44,12 +44,16 @@ def train(args):
         return
     
     # Model setup
-    weights = get_model_weights(args.model, args.size)
-    print(f"\n{'='*50}")
-    print(f"Training YOLO{args.model}{args.size} ({weights})")
-    print(f"{'='*50}")
-    
-    model = YOLO(weights)
+    if (args.custom_model == "False"):
+        weights = get_model_weights(args.model, args.size)
+        print(f"\n{'='*50}")
+        print(f"Training YOLO{args.model}{args.size} ({weights})")
+        print(f"{'='*50}")
+        
+        model = YOLO(weights)
+
+    else:
+        model = YOLO(args.custom_model)
     
     # Training run name
     run_name = f"yolo{args.model}{args.size}_sim_dataset"
@@ -121,6 +125,12 @@ Examples:
         choices=["n", "s", "m", "l", "x"],
         default="n",
         help="Model size: nano, small, medium, large, xlarge (default: n)"
+    )
+    parser.add_argument(
+        "--custom-model", "-c",
+        type=str,
+        default="False",
+        help="Train from an existing YOLO model file (default: False)"
     )
     parser.add_argument(
         "--epochs", "-e",
