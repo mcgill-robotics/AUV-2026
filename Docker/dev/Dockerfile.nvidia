@@ -67,6 +67,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ros-${ROS_DISTRO}-foxglove-bridge \
         ros-${ROS_DISTRO}-joy \
         ros-${ROS_DISTRO}-joy-teleop \
+        ros-${ROS_DISTRO}-backward-ros \
         # Image & PointCloud Transport
         ros-${ROS_DISTRO}-image-transport \
         ros-${ROS_DISTRO}-image-transport-plugins \
@@ -93,13 +94,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3-colcon-common-extensions \
         python3-rosdep \
         python3-vcstools \
-        ros-${ROS_DISTRO}-backwards-ros \
         && rm -rf /var/lib/apt/lists/*
 
 # Initialize rosdep
 RUN rosdep init || true && rosdep update
-# Install backward-ros so colcon build succeeds
-RUN apt update && apt install -y ros-humble-backward-ros
 
 # ---------------------------------------------------------
 # 2. Install ZED SDK 5.1.1 (CUDA 12.8 / Ubuntu 22.04)

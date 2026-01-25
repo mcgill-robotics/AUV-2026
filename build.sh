@@ -2,11 +2,23 @@
 set -euo pipefail
 
 
+# Do we want to remove install/build/log directories before building?
+CLEAN_BUILD=false
+
 while getopts ":c" flag; do
     case "${flag}" in
-        c) echo "Flag -c was set. ros2_ws packages will be built from scratch"
+        c) 
+            echo "Flag -c was set. ros2_ws packages will be built from scratch"
+            CLEAN_BUILD=true
+            ;;
+        *)
+            echo "Usage: $0 [-c]"
+            exit 1
+            ;;
     esac
 done
+shift $((OPTIND -1)) 
+
 # ---------------------------------------------------------
 # 0. Permission & User Detection
 # ---------------------------------------------------------
@@ -105,8 +117,8 @@ rosdep install --from-paths src --ignore-src -r -y \
 
 echo -e "\n=== Building Workspace ==="
 
-if [ "$flag" = "c" ]; then
-    echo "    -> Removing ros2_ws/build ros_2/install ros2_ws/log for clean build"
+if [ "$CLEAN_BUILD" = true ]; then
+    echo "    -> Removing ros2_ws/build ros2_ws/install ros2_ws/log for clean build"
     rm -rf build log install
 fi
 
