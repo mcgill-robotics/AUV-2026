@@ -25,6 +25,13 @@ fi
 ROS_DISTRO=humble
 ROS_INSTALL=/opt/ros/$ROS_DISTRO/setup.bash
 
+# Initialize all git submodules
+git config --global --add safe.directory /root/AUV-2026
+git config --global --add safe.directory /root/AUV-2026/ros2_ws/src/Xsens_MTi_Driver
+git config --global --add safe.directory /root/AUV-2026/ros2_ws/src/ros-tcp-endpoint
+git config --global --add safe.directory /root/AUV-2026/ros2_ws/src/zed-ros2-wrapper
+git submodule update --init --recursive
+
 if [ -f "$ROS_INSTALL" ]; then
   echo -e "\n=== Sourcing ROS 2 base ($ROS_DISTRO) ==="
   set +u
