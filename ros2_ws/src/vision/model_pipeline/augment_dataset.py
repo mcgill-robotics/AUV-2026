@@ -58,7 +58,7 @@ def get_augmentation_pipeline(img_width: int = 640, img_height: int = 360):
             A.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.4, hue=0.1, p=1.0), # Most common in this block
             A.Solarize(threshold_range=(0.4, 0.6), p=0.2), # Much less frequent
             A.ChannelShuffle(p=0.3),
-        ], p=0.4), # Reduced overall probability from 0.6 to 0.4
+        ], p=0.6), # Reduced overall probability from 0.6 to 0.4
 
         A.OneOf([
             A.RandomBrightnessContrast(brightness_limit=(-0.1, 0.3), contrast_limit=0.3, p=1.0),

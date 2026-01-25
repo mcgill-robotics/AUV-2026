@@ -2,27 +2,38 @@ from pathlib import Path
 import yaml
 
 # Paths
-LABEL_DIR = Path("data/raw_import/labels")
-DATA_YAML = Path("data.yaml")
+LABEL_DIR = Path("data/real_images_import/labels")
+DATA_YAML = Path("data/real_images_import/data.yaml")
 
-# Old index -> New index mapping
+# Real Dataset (Source) -> Synthetic Dataset (Target)
+# 0: gate -> 0: gate
+# 1: octagon_table -> 5: table
+# 2: octagon_top -> 4: octagon
+# 3: path_marker -> 1: lane_marker
+# 4: sawfish -> 9: sawfish
+# 5: shark -> 8: shark
+
 CLASS_MAP = {
-    0: 0,  # gate
-    1: 3,  # octagon_table
-    2: 2,  # octagon_top
-    3: 1,  # path_marker
-    4: 5,  # sawfish
-    5: 4,  # shark
+    0: 0,  # gate -> gate
+    1: 5,  # octagon_table -> table
+    2: 4,  # octagon_top -> octagon
+    3: 1,  # path_marker -> lane_marker
+    4: 9,  # sawfish -> sawfish
+    5: 8,  # shark -> shark
 }
 
-# Final class names in NEW index order
+# Final class names (Must match synthetic dataset exactly)
 NEW_CLASS_NAMES = [
-    "gate",           # 0
-    "path_marker",    # 1
-    "octagon_top",    # 2
-    "octagon_table", # 3
-    "shark",          # 4
-    "sawfish",        # 5
+    "gate",         # 0
+    "lane_marker",  # 1
+    "red_pipe",     # 2
+    "white_pipe",   # 3
+    "octagon",      # 4
+    "table",        # 5
+    "bin",          # 6
+    "board",        # 7
+    "shark",        # 8
+    "sawfish"       # 9
 ]
 
 def remap_label_file(label_path: Path):
