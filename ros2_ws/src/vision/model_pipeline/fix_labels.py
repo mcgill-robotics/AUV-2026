@@ -2,7 +2,7 @@ from pathlib import Path
 import yaml
 
 # Paths
-LABEL_DIR = Path("data/raw_import/labels")
+LABEL_DIR = Path("data/labels")
 DATA_YAML = Path("data.yaml")
 
 # Old index -> New index mapping
