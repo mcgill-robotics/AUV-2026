@@ -36,11 +36,10 @@ def train(args):
     """Run YOLO training with the specified configuration."""
     
     # Paths
-    data_yaml = SCRIPT_DIR / "data_unity.yaml"
+    data_yaml = Path(args.data).resolve()
     
     if not data_yaml.exists():
         print(f"Error: {data_yaml} not found.")
-        print("Run 'python3 organize_dataset.py' first to generate it.")
         return
     
     # Model setup
@@ -135,8 +134,14 @@ Examples:
     parser.add_argument(
         "--imgsz",
         type=int,
-        default=960,
-        help="Image size for training (default: 960, matching Unity resolution)"
+        default=640,
+        help="Image size for training (default: 640)"
+    )
+    parser.add_argument(
+        "--data", "-d",
+        type=str,
+        default=str(SCRIPT_DIR / "data_unity.yaml"),
+        help="Path to the data.yaml file (default: data_unity.yaml)"
     )
     parser.add_argument(
         "--workers",

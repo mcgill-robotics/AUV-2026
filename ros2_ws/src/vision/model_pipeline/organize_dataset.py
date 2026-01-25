@@ -3,93 +3,84 @@
 Dataset Organization Script for YOLO Training
 
 This script:
-1. Scans data/raw_import for images and labels
-2. Splits them into train/val/test sets (70/20/10)
-3. Moves them to data/processed/{train,val,test}/{images,labels}
+1. Scans an input directory for images and labels (flexible structure)
+2. Splits them into train/val/test sets
+3. Moves them to a processed directory structure
 4. Generates data.yaml
 
 Usage:
-    python3 organize_dataset.py
+    python3 organize_dataset.py --input data/raw_import --output data/processed
+    python3 organize_dataset.py --input data/augmented --output data/processed_aug
 """
 
 import os
 import shutil
 import random
+import argparse
+import yaml
 from pathlib import Path
 
 # Configuration
 SCRIPT_DIR = Path(__file__).parent.resolve()
-RAW_IMPORT_DIR = SCRIPT_DIR / "data" / "raw_import"
-PROCESSED_DIR = SCRIPT_DIR / "data" / "processed"
-DATA_YAML_PATH = SCRIPT_DIR / "data.yaml"
+DATA_UNITY_YAML = SCRIPT_DIR / "data_unity.yaml"
 
-# Split ratios
-TRAIN_RATIO = 0.70
-VAL_RATIO = 0.20
-TEST_RATIO = 0.10
-
-# Class names (must match label IDs in your .txt files)
-CLASS_NAMES = [
-    "gate",
-    "lane_marker",
-    "red_pipe",
-    "white_pipe",
-    "octagon",
-    "table",
-    "bin",
-    "board",
-    "shark",
-    "sawfish"
+# Default class names if YAML not found
+DEFAULT_CLASS_NAMES = [
+    "gate", "lane_marker", "red_pipe", "white_pipe", "octagon",
+    "table", "bin", "board", "shark", "sawfish"
 ]
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp"}
 
+def get_class_names():
+    if DATA_UNITY_YAML.exists():
+        try:
+            with open(DATA_UNITY_YAML, 'r') as f:
+                data = yaml.safe_load(f)
+                return data.get('names', DEFAULT_CLASS_NAMES)
+        except Exception:
+            pass
+    return DEFAULT_CLASS_NAMES
 
-def find_image_label_pairs(raw_dir: Path) -> list[tuple[Path, Path]]:
-    """Find all image-label pairs in the raw import directory.
-    
-    Supports two structures:
-    1. Separate folders: raw_import/images/*.jpg + raw_import/labels/*.txt
-    2. Flat folder: raw_import/*.jpg + raw_import/*.txt (matching names)
-    """
+def find_image_label_pairs(input_dir: Path) -> list[tuple[Path, Path]]:
+    """Find all image-label pairs in the input directory with flexible detection."""
     pairs = []
     
-    # Check for separate images/labels folders structure
-    images_dir = raw_dir / "images"
-    labels_dir = raw_dir / "labels"
+    # Potential subdirectories
+    potential_img_dirs = [input_dir / "images", input_dir / "yolo_images", input_dir]
+    potential_lbl_dirs = [input_dir / "labels", input_dir / "yolo_labels", input_dir]
     
-    if images_dir.exists() and labels_dir.exists():
-        # Separate folders structure
-        print(f"Detected structure: {images_dir.name}/ + {labels_dir.name}/")
-        for img_path in images_dir.iterdir():
-            if img_path.suffix.lower() not in IMAGE_EXTENSIONS:
-                continue
-            
-            # Look for matching label file
-            label_path = labels_dir / (img_path.stem + ".txt")
-            if label_path.exists():
-                pairs.append((img_path, label_path))
-            else:
-                print(f"Warning: No label found for {img_path.name}")
-    else:
-        # Flat folder structure (images and labels in same directory)
-        print("Detected structure: flat folder (images + labels together)")
-        for img_path in raw_dir.iterdir():
-            if img_path.suffix.lower() not in IMAGE_EXTENSIONS:
-                continue
-            
-            label_path = img_path.with_suffix(".txt")
-            if label_path.exists():
-                pairs.append((img_path, label_path))
-            else:
-                print(f"Warning: No label found for {img_path.name}")
+    img_dir = None
+    lbl_dir = None
     
-    return pairs
+    for d in potential_img_dirs:
+        if d.exists() and (list(d.glob("*.jpg")) or list(d.glob("*.png"))):
+            img_dir = d
+            break
+            
+    for d in potential_lbl_dirs:
+        if d.exists() and list(d.glob("*.txt")):
+            lbl_dir = d
+            break
+            
+    if not img_dir or not lbl_dir:
+        return []
+        
+    print(f"Using images from: {img_dir.relative_to(SCRIPT_DIR.parent.parent.parent.parent.parent.parent) if img_dir.is_relative_to(SCRIPT_DIR.parent.parent.parent.parent.parent.parent) else img_dir}")
+    print(f"Using labels from: {lbl_dir.relative_to(SCRIPT_DIR.parent.parent.parent.parent.parent.parent) if lbl_dir.is_relative_to(SCRIPT_DIR.parent.parent.parent.parent.parent.parent) else lbl_dir}")
 
+    for img_path in img_dir.iterdir():
+        if img_path.suffix.lower() not in IMAGE_EXTENSIONS:
+            continue
+        
+        label_path = lbl_dir / (img_path.stem + ".txt")
+        if label_path.exists():
+            pairs.append((img_path, label_path))
+            
+    return pairs
 
 def create_directory_structure(processed_dir: Path):
     """Create the train/val/test directory structure."""
-    # Clean slate: remove any existing processed data
     if processed_dir.exists():
         shutil.rmtree(processed_dir)
         print(f"Cleared existing {processed_dir}")
@@ -98,14 +89,14 @@ def create_directory_structure(processed_dir: Path):
         (processed_dir / split / "images").mkdir(parents=True, exist_ok=True)
         (processed_dir / split / "labels").mkdir(parents=True, exist_ok=True)
 
-
-def split_and_move_data(pairs: list[tuple[Path, Path]], processed_dir: Path):
+def split_and_move_data(pairs: list[tuple[Path, Path]], processed_dir: Path, ratios: tuple):
     """Shuffle and split data into train/val/test sets."""
     random.shuffle(pairs)
     
+    train_ratio, val_ratio, _ = ratios
     n = len(pairs)
-    train_end = int(n * TRAIN_RATIO)
-    val_end = train_end + int(n * VAL_RATIO)
+    train_end = int(n * train_ratio)
+    val_end = train_end + int(n * val_ratio)
     
     splits = {
         "train": pairs[:train_end],
@@ -118,6 +109,7 @@ def split_and_move_data(pairs: list[tuple[Path, Path]], processed_dir: Path):
         lbl_dest = processed_dir / split_name / "labels"
         
         for img_path, lbl_path in split_pairs:
+            # Using copy2 to preserve metadata, but could use move if space is an issue
             shutil.copy2(img_path, img_dest / img_path.name)
             shutil.copy2(lbl_path, lbl_dest / lbl_path.name)
         
@@ -125,60 +117,59 @@ def split_and_move_data(pairs: list[tuple[Path, Path]], processed_dir: Path):
     
     return splits
 
-
-def generate_data_yaml(processed_dir: Path, yaml_path: Path):
-    """Generate the data.yaml file for YOLO training."""
-    content = f"""# Auto-generated by organize_dataset.py
-path: {processed_dir}
-train: train/images
-val: val/images
-test: test/images
-
-nc: {len(CLASS_NAMES)}
-names: {CLASS_NAMES}
-"""
-    yaml_path.write_text(content)
+def generate_data_yaml(processed_dir: Path, class_names: list):
+    """Generate the data.yaml file."""
+    yaml_path = processed_dir / "data.yaml"
+    content = {
+        'path': str(processed_dir.absolute()),
+        'train': 'train/images',
+        'val': 'val/images',
+        'test': 'test/images',
+        'nc': len(class_names),
+        'names': class_names
+    }
+    
+    with open(yaml_path, 'w') as f:
+        yaml.dump(content, f, sort_keys=False)
     print(f"\nGenerated {yaml_path}")
 
-
 def main():
+    parser = argparse.ArgumentParser(description="Organize YOLO Dataset with flexible structure")
+    parser.add_argument("--input", "-i", type=str, default="data/raw_import", help="Input directory")
+    parser.add_argument("--output", "-o", type=str, default="data/processed", help="Output directory")
+    parser.add_argument("--train", type=float, default=0.7, help="Train ratio (0-1)")
+    parser.add_argument("--val", type=float, default=0.2, help="Val ratio (0-1)")
+    
+    args = parser.parse_args()
+    
+    input_dir = Path(args.input)
+    output_dir = Path(args.output)
+    
     print("=" * 50)
     print("YOLO Dataset Organizer")
     print("=" * 50)
     
-    # Check raw import directory
-    if not RAW_IMPORT_DIR.exists():
-        print(f"\nError: {RAW_IMPORT_DIR} does not exist.")
-        print("Please create it and add your images + labels.")
+    if not input_dir.exists():
+        print(f"Error: {input_dir} not found.")
         return
-    
-    # Find pairs
-    print(f"\nScanning {RAW_IMPORT_DIR}...")
-    pairs = find_image_label_pairs(RAW_IMPORT_DIR)
-    
+        
+    pairs = find_image_label_pairs(input_dir)
     if not pairs:
         print("No image-label pairs found!")
-        print("Make sure your images (.jpg/.png) and labels (.txt) have matching names.")
         return
-    
+        
     print(f"Found {len(pairs)} image-label pairs.")
     
-    # Create structure
-    print(f"\nCreating directory structure in {PROCESSED_DIR}...")
-    create_directory_structure(PROCESSED_DIR)
+    create_directory_structure(output_dir)
+    split_and_move_data(pairs, output_dir, (args.train, args.val, 1.0 - args.train - args.val))
     
-    # Split and move
-    print("\nSplitting and copying files...")
-    split_and_move_data(pairs, PROCESSED_DIR)
-    
-    # Generate YAML
-    generate_data_yaml(PROCESSED_DIR, DATA_YAML_PATH)
+    class_names = get_class_names()
+    generate_data_yaml(output_dir, class_names)
     
     print("\n" + "=" * 50)
-    print("Done! Your dataset is ready for training.")
-    print(f"Next step: python3 training.py --model v8")
+    print("Done!")
+    print(f"Training command: python3 training-unity.py --data {output_dir}/data.yaml")
     print("=" * 50)
-
 
 if __name__ == "__main__":
     main()
