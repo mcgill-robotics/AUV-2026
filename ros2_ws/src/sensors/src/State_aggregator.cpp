@@ -11,15 +11,20 @@ namespace sensors
         this->declare_parameter<double>("publish_frequency", 50.0); // Hz
         this->get_parameter("publish_frequency", publish_frequency_);
 
+        this->declare_parameter<std::string>("frame_id_auv", "auv_link");
+        this->declare_parameter<std::string>("frame_id_global", "pool_link");
+        this->get_parameter("frame_id_auv", frame_id_auv_);
+        this->get_parameter("frame_id_global", frame_id_global_);
+
 
 
         imu_sub_ = this->create_subscription<imu_msg>(
-            "processed/imu",
+            "auv_frame/imu",
             1, // Use queue size 1 to get latest data
             std::bind(&State_aggregator::imu_callback, this, std::placeholders::_1)
         );
         depth_sub_ = this->create_subscription<float64_msg>(
-            "processed/depth",
+            "auv_frame/depth",
             1,
             std::bind(&State_aggregator::depth_callback, this, std::placeholders::_1)
         );
@@ -66,7 +71,7 @@ namespace sensors
     {
         geometry_msgs::msg::PoseStamped pose_msg;
         pose_msg.header.stamp = this->now();
-        pose_msg.header.frame_id = "auv";
+        pose_msg.header.frame_id = frame_id_global_;
 
         pose_msg.pose.orientation = current_orientation_;
         pose_msg.pose.position.x = current_position_(0);

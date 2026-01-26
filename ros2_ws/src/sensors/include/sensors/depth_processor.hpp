@@ -30,7 +30,7 @@ class DepthProcessor: public rclcpp::Node
                 rclcpp::Publisher<float64_msg>::SharedPtr depth_pub_;
                 rclcpp::Subscription<float64_msg>::SharedPtr depth_sub_;
 		rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
-		quatd q_vi_; // Current vehicle orientation 
+		quatd q_iv_; // Current vehicle orientation 
 
 };
 } // namespace sensors
