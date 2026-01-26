@@ -32,7 +32,6 @@
         "**/log": true
     },
     "cSpell.words": [
-        "RTPS",
         "athackst",
         "autopep",
         "cmake",
@@ -54,7 +53,8 @@
         "uncrustify",
         "Wextra",
         "Wpedantic",
-        "xmllint"
+        "xmllint",
+        "Xsens"
     ],
     "cSpell.allowCompoundWords": true,
     "cSpell.ignorePaths": [

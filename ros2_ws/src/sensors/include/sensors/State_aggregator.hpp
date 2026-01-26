@@ -9,6 +9,7 @@
 #include <memory>
 #include <vector>
 #include <functional>
+#include <string>
 
 
 #include "sensors/depth_processor.hpp"
@@ -36,14 +37,18 @@ namespace sensors
                 void depth_callback(const float64_msg::SharedPtr depth_in);
                 void publish_state();                
 
-                geometry_msgs::msg::PoseStamped current_pose_;
-                geometry_msgs::msg::Quaternion current_orientation_; // Imu
+                geometry_msgs::msg::PoseStamped current_pose_; //Final aggregated pose message
 
                 double publish_frequency_; // Hz
 
                 double current_depth_; // Depth Sensor
                 Vec3 current_position_; // X,Y,Z postion from DVL
                 Vec3 current_velocity_; // DVL
+                geometry_msgs::msg::Quaternion current_orientation_; // Imu
+
+                std::string frame_id_auv_;
+		std::string frame_id_global_;			
+
         };
         
 
