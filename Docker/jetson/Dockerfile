@@ -5,12 +5,15 @@ ARG IMAGE_NAME=dustynv/ros:humble-desktop-l4t-r36.4.0
 FROM ${IMAGE_NAME}
 
 ARG ZED_SDK_MAJOR=5
-ARG ZED_SDK_MINOR=0
+ARG ZED_SDK_MINOR=1
 ARG ZED_SDK_PATCH=0
 ARG L4T_MAJOR=36
 ARG L4T_MINOR=4
 # Optional: Override ZED SDK URL
 ARG CUSTOM_ZED_SDK_URL=""
+
+# ZED SDK link
+ENV ZED_SDK_URL=${CUSTOM_ZED_SDK_URL:-"https://download.stereolabs.com/zedsdk/${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}.${ZED_SDK_PATCH}/l4t${L4T_MAJOR}.${L4T_MINOR}/jetsons"}
 
 # ROS2 distribution
 ARG ROS2_DIST=humble
@@ -49,9 +52,6 @@ ENV LC_ALL=C.UTF-8
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Europe/Paris 
 ENV ROS_DISTRO=${ROS2_DIST}
-
-# ZED SDK link
-ENV ZED_SDK_URL="https://stereolabs.sfo2.cdn.digitaloceanspaces.com/zedsdk/5.0/ZED_SDK_Tegra_L4T36.4_v5.0.0.zstd.run"
 
 # Check that this SDK exists
 RUN if [ "$(curl -L -I "${ZED_SDK_URL}" -o /dev/null -s -w '%{http_code}\n' | head -n 1)" = "200" ]; then \
