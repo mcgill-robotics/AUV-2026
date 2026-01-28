@@ -1,8 +1,20 @@
 # ---------------------------------------------------------
-# Base Image: NVIDIA CUDA 12.8 Devel (Ubuntu 22.04)
+# Build Arguments
+# ---------------------------------------------------------
+ARG ZED_SDK_MAJOR=5
+ARG ZED_SDK_MINOR=1
+ARG ZED_SDK_PATCH=1
+ARG CUDA_MAJOR=12
+ARG CUDA_MINOR=8
+ARG UBUNTU_RELEASE=22
+ARG TENSORRT_MAJOR=10
+ARG TENSORRT_MINOR=9
+
+# ---------------------------------------------------------
+# Base Image: NVIDIA CUDA Devel
 # We use 'devel' because we need 'nvcc' to compile ZED ROS2 Wrapper
 # ---------------------------------------------------------
-ARG BASE_IMAGE=nvidia/cuda:12.8.0-devel-ubuntu22.04
+ARG BASE_IMAGE=nvidia/cuda:${CUDA_MAJOR}.${CUDA_MINOR}.0-devel-ubuntu${UBUNTU_RELEASE}.04
 FROM ${BASE_IMAGE}
 
 # Set environment variables
@@ -100,10 +112,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN rosdep init || true && rosdep update
 
 # ---------------------------------------------------------
-# 2. Install ZED SDK 5.1.1 (CUDA 12.8 / Ubuntu 22.04)
+# 2. Install ZED SDK (Parameterized)
 # ---------------------------------------------------------
-ARG ZED_SDK_URL="https://stereolabs.sfo2.cdn.digitaloceanspaces.com/zedsdk/5.1/ZED_SDK_Ubuntu22_cuda12.8_tensorrt10.9_v5.1.1.zstd.run"
-ARG ZED_SDK_RUN="ZED_SDK_Ubuntu22_cuda12.8_tensorrt10.9_v5.1.1.zstd.run"
+ARG ZED_SDK_URL="https://stereolabs.sfo2.cdn.digitaloceanspaces.com/zedsdk/${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}/ZED_SDK_Ubuntu${UBUNTU_RELEASE}_cuda${CUDA_MAJOR}.${CUDA_MINOR}_tensorrt${TENSORRT_MAJOR}.${TENSORRT_MINOR}_v${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}.${ZED_SDK_PATCH}.zstd.run"
+ARG ZED_SDK_RUN="ZED_SDK_installer.run"
 
 RUN cd /tmp && \
         wget -q --no-check-certificate -O ${ZED_SDK_RUN} ${ZED_SDK_URL} && \
