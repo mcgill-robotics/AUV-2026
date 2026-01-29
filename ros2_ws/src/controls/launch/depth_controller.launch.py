@@ -15,7 +15,7 @@ def generate_launch_description():
                     'KD': 1.0,
                     'KI': 0.5,
                     'I_MAX': 10.0,
-                    'net_buoyancy': 50.0, # Newtons. TODO: Get actual value
+                    'net_buoyancy': 13.7, # Newtons. TODO: Tune during pool test
                 }]
         )
         return LaunchDescription([
