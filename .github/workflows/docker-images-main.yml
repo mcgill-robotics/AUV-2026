@@ -36,7 +36,7 @@ jobs:
     - name: Build and optionally push image
       uses: docker/build-push-action@v6
       with:
-        context: Docker/dev
+        context: .
         file: Docker/dev/Dockerfile
         platforms: linux/amd64
         push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
@@ -67,7 +67,7 @@ jobs:
   #     - name: Build and optionally push NVIDIA image
   #       uses: docker/build-push-action@v6
   #       with:
-  #         context: Docker/dev
+  #         context: .
   #         file: Docker/dev/Dockerfile.nvidia
   #         platforms: linux/amd64
   #         push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
@@ -98,7 +98,7 @@ jobs:
     - name: Build and optionally push image
       uses: docker/build-push-action@v6
       with:
-        context: Docker/dev
+        context: .
         file: Docker/dev/Dockerfile
         platforms: linux/arm64
         push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
