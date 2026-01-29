@@ -22,9 +22,7 @@ class EnhancementAlgorithm(ABC):
 class ImageEnhancer(ABC):
     def __init__(self,device_type, *algorithms):
         if not algorithms:
-            self.algorithms = [
-                Identity(),
-            ]
+            self.algorithms = []
         else:
             self.algorithms = list(algorithms)
         self.type = device_type

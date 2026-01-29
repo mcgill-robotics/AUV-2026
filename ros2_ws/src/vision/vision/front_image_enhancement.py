@@ -6,7 +6,7 @@ from vision.image_enhancement  import enhancement_algorithms as enhance
 def main(args=None):
     rclpy.init(args=args)
 
-    enhancer = enhance.ImageEnhancer(
+    enhancer = enhance.CPUImageEnhancer(
         enhance.DCPEnhancement(),
         enhance.CLAHEEnhancement()
     )

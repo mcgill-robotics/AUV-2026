@@ -7,9 +7,10 @@ import cv2
 import numpy as np
 
 from vision.image_enhancement import enhancement_algorithms as enhance
+from vision.image_enhancement import enhancement_algorithms_GPU as GPUenhance
 
 class EnhanceNode(Node):
-    def __init__(self,node_name:str,input_topic:str,output_topic:str,enhancer:enhance.ImageEnhancer):
+    def __init__(self,node_name:str,input_topic:str,output_topic:str,enhancer:enhance.ImageEnhancer | GPUenhance.GPUImageEnhancer):
         super().__init__(node_name)
         
         self.declare_parameter("input_topic", input_topic)
