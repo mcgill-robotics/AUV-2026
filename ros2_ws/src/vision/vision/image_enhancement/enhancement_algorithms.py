@@ -4,7 +4,7 @@ from typing import Tuple
 from abc import ABC, abstractmethod
 
 class EnhancementAlgorithm(ABC):
-    '''Abstract Base Class containing various image enhancement algorithms for underwater images.'''
+    """Abstract Base Class containing various image enhancement algorithms for underwater images."""
     @abstractmethod
     def apply_algorithm(self, image: np.ndarray) -> np.ndarray:
         pass
@@ -19,33 +19,40 @@ class EnhancementAlgorithm(ABC):
     def __str__(self):
         return f"Enhancement Algorithm: {self.algorithm_name()}"
 
-
-class ImageEnhancer:
-    """Aggregation of enhancement algorithms
-    Applies no enhancement by default.
-    White balance and Guided Filter are commented out due to dependency issues
-    with OpenCV.
-    """
-    def __init__(self, *algorithms):
-        # Current combination and ordering of algorithms for image enhancement (one of each of the categories )
+class ImageEnhancer(ABC):
+    def __init__(self,device_type, *algorithms):
         if not algorithms:
             self.algorithms = [
                 Identity(),
             ]
         else:
             self.algorithms = list(algorithms)
+        self.type = device_type
+    
+    @abstractmethod
+    def enhance(self, image: np.ndarray) -> np.ndarray:
+        pass
+    
+    def __str__(self) -> str:
+        algos = '\n\t'.join([f"{i}. {algo.algorithm_name()}" for i, algo in enumerate(self.algorithms,1)])
+        return f"{self.type} Image Enhancer with algorithms [\n\t{algos}\n]"
+    
+    def __call__(self, image: np.ndarray) -> np.ndarray:
+        return self.enhance(image)
+
+class CPUImageEnhancer(ImageEnhancer):
+    """Aggregation of enhancement algorithms on CPU
+    Applies no enhancement by default.
+    White balance and Guided Filter are commented out due to dependency issues
+    with OpenCV.
+    """
+    def __init__(self, *algorithms):
+        super().__init__("CPU", *algorithms)
 
     def enhance(self, image: np.ndarray) -> np.ndarray:
         for algorithm in self.algorithms:
             image = algorithm(image)
         return image
-
-    def __call__(self, image: np.ndarray) -> np.ndarray:
-        return self.enhance(image)
-
-    def __str__(self) -> str:
-        algos = '\n\t'.join([f"{i}. {algo.algorithm_name()}" for i, algo in enumerate(self.algorithms,1)])
-        return f"Image Enhancer with algorithms [\n\t{algos}\n]"
 
 class Identity(EnhancementAlgorithm):
     """Applies no transformation"""
