@@ -2,13 +2,17 @@ import torch
 import kornia
 import numpy as np
 from abc import ABC, abstractmethod
-from enhancement_algorithms import ImageEnhancer
+from enhancement_algorithms import ImageEnhancer, EnhancementAlgorithm
 
-class EnhancementAlgorithmGPU(ABC):
+class EnhancementAlgorithmGPU(EnhancementAlgorithm):
     def __init__(self, device=None):
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
         self.device = torch.device(device)
+        super().__init__()
+    
+    def __str__(self):
+        return f"Enhancement Algorithm on GPU: {self.algorithm_name()}"
 
     @abstractmethod
     def apply_algorithm(self, image: torch.Tensor) -> torch.Tensor:
@@ -44,3 +48,20 @@ class GPUImageEnhancer(ImageEnhancer):
         # tensor (1,C,H,W) on GPU -> np array (H,W,C) on CPU
         enhanced_np = kornia.utils.tensor_to_image(tensor.squeeze(0).cpu())
         return (enhanced_np * 255).astype(np.uint8)
+
+# 1. COLOR CORRECTION ALGORITHMS
+
+# 2. Dehazing REDUCTION ALGORITHMS
+
+# 3. EDGE PRESERVATION ALGORITHMS
+
+# 4. CONTRAST ENHANCEMENT ALGORITHMS
+
+class CLAHEEnhancementGPU(EnhancementAlgorithmGPU):
+    def __init__(self, clip_limit=2.0, grid_size=(8, 8), device='cuda'):
+        self.clip_limit = clip_limit
+        self.grid_size = grid_size
+        super().__init__(device)
+        
+    def apply_algorithm(self, image: torch.Tensor) -> torch.Tensor:
+        return kornia.enhance.equalize_clahe(image, self.clip_limit, self.grid_size)

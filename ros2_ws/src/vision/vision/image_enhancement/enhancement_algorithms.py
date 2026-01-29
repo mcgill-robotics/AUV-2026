@@ -16,8 +16,9 @@ class EnhancementAlgorithm(ABC):
     def __call__(self, image: np.ndarray) -> np.ndarray:
         return self.apply_algorithm(image)
 
+    @abstractmethod
     def __str__(self):
-        return f"Enhancement Algorithm: {self.algorithm_name()}"
+        pass
 
 class ImageEnhancer(ABC):
     def __init__(self,device_type, *algorithms):
@@ -38,6 +39,11 @@ class ImageEnhancer(ABC):
     def __call__(self, image: np.ndarray) -> np.ndarray:
         return self.enhance(image)
 
+class CPUEnhancementAlgorithm(EnhancementAlgorithm):
+    def __str__(self):
+        return f"Enhancement Algorithm on CPU: {self.algorithm_name()}"
+    
+
 class CPUImageEnhancer(ImageEnhancer):
     """Aggregation of enhancement algorithms on CPU
     Applies no enhancement by default.
@@ -52,7 +58,7 @@ class CPUImageEnhancer(ImageEnhancer):
             image = algorithm(image)
         return image
 
-class Identity(EnhancementAlgorithm):
+class Identity(CPUEnhancementAlgorithm):
     """Applies no transformation"""
 
     def apply_algorithm(self, image: np.ndarray) -> np.ndarray:
@@ -63,7 +69,7 @@ class Identity(EnhancementAlgorithm):
 
 # 1. COLOR CORRECTION ALGORITHMS
 
-# class WhiteBalance(EnhancementAlgorithm):
+# class WhiteBalance(CPUEnhancementAlgorithm):
 #     """Apply white balance correction using gray world assumption."""
 
 #     def apply_algorithm(self, image: np.ndarray) -> np.ndarray:
@@ -74,7 +80,7 @@ class Identity(EnhancementAlgorithm):
 #         return "Color Correction - Gray World White Balance"
 
 
-class RedChannelEnhancement(EnhancementAlgorithm):
+class RedChannelEnhancement(CPUEnhancementAlgorithm):
     """Enhance red channel to counteract underwater blue/green dominance."""
     def __init__(self, enhancement_factor: float = 1.2):
         self.factor = enhancement_factor
@@ -89,7 +95,7 @@ class RedChannelEnhancement(EnhancementAlgorithm):
         return "Color Correction - Red Channel Enhancement"
 
 
-class UnderwaterColorCorrection(EnhancementAlgorithm):
+class UnderwaterColorCorrection(CPUEnhancementAlgorithm):
     """Apply underwater-specific color correction."""
     def apply_algorithm(self, image: np.ndarray) -> np.ndarray:
         # Underwater color correction matrix (approximate)
@@ -106,9 +112,9 @@ class UnderwaterColorCorrection(EnhancementAlgorithm):
         return "Color Correction - Underwater Color Correction"
 
 
-# 2. BACKSCATTER REDUCTION ALGORITHMS
+# 2. Dehazing ALGORITHMS
 
-class DCPEnhancement(EnhancementAlgorithm):
+class DCPEnhancement(CPUEnhancementAlgorithm):
     """Apply Dark Channel Prior (DCP) dehazing algorithm."""
     def __init__(self, window_size: int = 15, omega: float = 0.95, t0: float = 0.1):
         self.window_size = window_size
@@ -151,7 +157,7 @@ class DCPEnhancement(EnhancementAlgorithm):
 
 # 3. EDGE PRESERVATION ALGORITHMS
 
-# class GuidedFilter(EnhancementAlgorithm):
+# class GuidedFilter(CPUEnhancementAlgorithm):
 #     """Apply guided filter for edge-preserving smoothing using OpenCV implementation."""
 
 #     def apply_algorithm(self, image: np.ndarray) -> np.ndarray:
@@ -176,7 +182,7 @@ class DCPEnhancement(EnhancementAlgorithm):
 
 # 4. CONTRAST ENHANCEMENT ALGORITHMS
 
-class CLAHEEnhancement(EnhancementAlgorithm):
+class CLAHEEnhancement(CPUEnhancementAlgorithm):
     """Apply Contrast Limited Adaptive Histogram Equalization (CLAHE)."""
     def __init__(self, clip_limit: float = 2.0, tile_grid_size: Tuple[int, int] = (8, 8)):
         self._clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=tile_grid_size)
@@ -197,7 +203,7 @@ class CLAHEEnhancement(EnhancementAlgorithm):
         return "Contrast Enhancement - CLAHE"
 
 
-class GammaCorrection(EnhancementAlgorithm):
+class GammaCorrection(CPUEnhancementAlgorithm):
     """Apply gamma correction to adjust brightness and contrast."""
     def __init__(self, gamma: float = 1.5):
         inv_gamma = 1.0 / gamma
@@ -211,7 +217,7 @@ class GammaCorrection(EnhancementAlgorithm):
         return "Contrast Enhancement - Gamma Correction"
 
 
-class HistogramEqualization(EnhancementAlgorithm):
+class HistogramEqualization(CPUEnhancementAlgorithm):
     """Apply histogram equalization."""
     def apply_algorithm(self, image: np.ndarray) -> np.ndarray:
         # Apply histogram equalization directly using OpenCV
