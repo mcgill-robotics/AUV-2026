@@ -55,11 +55,11 @@ namespace controls
                 rclcpp::Subscription<geometry_msgs::msg::Quaternion>::SharedPtr sub_target_orientation_;
 
                 // State variables
-                quatd q_vi_;
-                Vec3 w_vi_;
+                quatd q_iv_;
+                Vec3 w_iv_;
 
                 //Target state variables
-                quatd q_vi2_; 
+                quatd q_iv2_; 
 
 
 
@@ -67,7 +67,7 @@ namespace controls
 
                 void imu_callback(const imu_msg::SharedPtr msg);
                 void target_orientation_callback(const geometry_msgs::msg::Quaternion::SharedPtr msg);
-                Vec3 feedback_effort(const quatd& q_vi2);
+                Vec3 feedback_effort(const quatd& q_iv2);
                 Vec3 feedforward_effort();
                 void control_loop_callback();
                 

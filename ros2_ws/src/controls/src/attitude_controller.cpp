@@ -24,9 +24,9 @@ namespace controls
         this->get_parameter("r_bv", r_bv_);
         this->get_parameter("control_loop_hz", control_loop_hz_);
 
-        q_vi_ = quatd::Identity(); // Initial orientation: identity quaternion
-        w_vi_ = Vec3::Zero(); // Initial angular velocity: zero vector
-        q_vi2_ = quatd::Identity(); // Initial target orientation: identity quaternion
+        q_iv_ = quatd::Identity(); // Initial orientation: identity quaternion
+        w_iv_ = Vec3::Zero(); // Initial angular velocity: zero vector
+        q_iv2_ = quatd::Identity(); // Initial target orientation: identity quaternion
 
         P_e_ << P_ex_, 0, 0,
                 0, P_ey_, 0,
@@ -39,7 +39,7 @@ namespace controls
 
         pub_effort_ = this->create_publisher<wrench_msg>("/controls/attitude_effort", 1);
         sub_imu_ = this->create_subscription<imu_msg>(
-            "processed/imu",
+            "auv_frame/imu",
             1,
             std::bind(&AttitudeController::imu_callback, this, std::placeholders::_1)
         );
@@ -58,7 +58,7 @@ namespace controls
     void AttitudeController::imu_callback(const imu_msg::SharedPtr msg)
     {
         // Extract orientation quaternion from IMU message
-        q_vi_ = quatd(
+        q_iv_ = quatd(
             msg->orientation.w,
             msg->orientation.x,
             msg->orientation.y,
@@ -66,7 +66,7 @@ namespace controls
         );
 
         // Extract angular velocity vector from IMU message
-        w_vi_ = Vec3(
+        w_iv_ = Vec3(
             msg->angular_velocity.x,
             msg->angular_velocity.y,
             msg->angular_velocity.z
@@ -75,7 +75,7 @@ namespace controls
 
     void AttitudeController::target_orientation_callback(const geometry_msgs::msg::Quaternion::SharedPtr msg)
     {
-        q_vi2_ = quatd(
+        q_iv2_ = quatd(
             msg->w,
             msg->x,
             msg->y,
@@ -84,11 +84,11 @@ namespace controls
     }
 
 
-    Vec3 AttitudeController::feedback_effort(const quatd& q_vi2)
+    Vec3 AttitudeController::feedback_effort(const quatd& q_iv2)
     {
-        quatd q_error = q_vi2 * q_vi_.conjugate();
+        quatd q_error = q_iv_.conjugate() * q_iv2;
         Vec3 error_vector = Vec3(q_error.x(), q_error.y(), q_error.z());
-        Vec3 feedback = P_e_ * error_vector - P_w_ * w_vi_; //TODO: Verify sign conventions
+        Vec3 feedback = P_e_ * error_vector - P_w_ * w_iv_; //TODO: Verify sign conventions
         return feedback;
     }
 
@@ -96,7 +96,7 @@ namespace controls
     {
         // Compute the torque due to buoyancy offset
         Vec3 r_bv_vec(r_bv_[0], r_bv_[1], r_bv_[2]);
-        Vec3 f_buoyancy = q_vi_ * Vec3(0, 0, buoyancy_);
+        Vec3 f_buoyancy = q_iv_.conjugate() * Vec3(0, 0, buoyancy_);
         Vec3 torque_buoyancy = r_bv_vec.cross(f_buoyancy);
         Vec3 feedforward = -1 * torque_buoyancy; // Negate to counteract
         return feedforward;
@@ -104,7 +104,7 @@ namespace controls
 
     wrench_msg AttitudeController::compute_control_effort()
     {
-        Vec3 feedback = feedback_effort(q_vi2_);
+        Vec3 feedback = feedback_effort(q_iv2_);
         Vec3 feedforward = feedforward_effort();
         Vec3 total_torque = feedback + feedforward;
 

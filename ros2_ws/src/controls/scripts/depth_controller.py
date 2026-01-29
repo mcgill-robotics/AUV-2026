@@ -25,7 +25,7 @@ class DepthController(Node):
         )
 
         self.pub_effort = self.create_publisher(Wrench, '/controls/depth_effort', qos)
-        self.sub_depth = self.create_subscription(Float64, '/processed/depth', self.depth_callback, qos)
+        self.sub_depth = self.create_subscription(Float64, 'auv_frame/depth', self.depth_callback, qos)
         self.setpoint_sub = self.create_subscription(Float64, '/controls/depth_setpoint', self.setpoint_callback, qos)
 
         self.declare_parameter('control_loop_hz', 10.0)
