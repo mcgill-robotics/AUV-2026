@@ -23,14 +23,15 @@ services:
       - WAYLAND_DISPLAY=${WAYLAND_DISPLAY}
       - XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}
       - PULSE_SERVER=${PULSE_SERVER}
-
+    
+    user: "ros"
     volumes:
-      - ../../:/root/AUV-2026
+      - ../../:/home/ros/AUV-2026
+      - ../../ros2_ws/src/vision/model_pipeline/data:/images
       - /tmp/.X11-unix:/tmp/.X11-unix
       # Map Wayland/Pulse sockets if they exist
-      # - ${XDG_RUNTIME_DIR}:${XDG_RUNTIME_DIR}
+      # - ${XDG_RUNTIME_DIR}:${XDG_RUNTIME_DIR }
       - /dev:/dev
-      - ../../ros2_ws/src/vision/model_pipeline/data:/images
 
     command: bash -c "tail -f /dev/null"
     stdin_open: true
@@ -58,7 +59,7 @@ services:
             - driver: nvidia
               count: all
               capabilities: [ gpu ]
-
+    
     environment:
       - NVIDIA_DRIVER_CAPABILITIES=all
       - NVIDIA_VISIBLE_DEVICES=all
@@ -71,14 +72,15 @@ services:
       - XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}
       - PULSE_SERVER=${PULSE_SERVER}
 
+    user: "ros"
     volumes:
-      - ../../:/root/AUV-2026
+      - ../../:/home/ros/AUV-2026
+      - ../../ros2_ws/src/vision/model_pipeline/data:/images
       - /tmp/.X11-unix:/tmp/.X11-unix
       - ${XDG_RUNTIME_DIR}:${XDG_RUNTIME_DIR}
       - zed_settings:/usr/local/zed/settings/
       - zed_resources:/usr/local/zed/resources/
       - /dev:/dev
-      - ../../ros2_ws/src/vision/model_pipeline/data:/images
 
     command: bash -c "tail -f /dev/null"
     stdin_open: true

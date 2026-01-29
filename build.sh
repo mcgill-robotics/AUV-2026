@@ -26,7 +26,7 @@ shift $((OPTIND -1))
 SUDO=""
 if [ $(id -u) -ne 0 ]; then
     SUDO="sudo"
-    echo "Running on Host as user: $USER (will use sudo where needed)"
+    echo "Running on Host as user: $(whoami) (will use sudo where needed)"
 else
     echo "Running as Root (likely inside Docker)"
 fi
@@ -38,10 +38,10 @@ ROS_DISTRO=humble
 ROS_INSTALL=/opt/ros/$ROS_DISTRO/setup.bash
 
 # Initialize all git submodules
-git config --global --add safe.directory /root/AUV-2026
-git config --global --add safe.directory /root/AUV-2026/ros2_ws/src/Xsens_MTi_Driver
-git config --global --add safe.directory /root/AUV-2026/ros2_ws/src/ros-tcp-endpoint
-git config --global --add safe.directory /root/AUV-2026/ros2_ws/src/zed-ros2-wrapper
+git config --global --add safe.directory "$(pwd)"
+# Recursively find all submodules and mark them safe too
+find . -type d -name ".git" -exec bash -c 'git config --global --add safe.directory "$(dirname "{}")"' \;
+
 git submodule update --init --recursive
 
 if [ -f "$ROS_INSTALL" ]; then

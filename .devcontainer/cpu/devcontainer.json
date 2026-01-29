@@ -4,9 +4,10 @@
     "service": "cpu",
     "runServices": ["cpu"],
 
-    "workspaceFolder": "/root/AUV-2026",
-    "remoteUser": "root",
-
+    // Use /home/ros instead of /root to follow standard Linux permissions
+    "workspaceFolder": "/home/ros/AUV-2026",
+    "remoteUser": "ros",
+    
     // This is vital for connecting to Unity on Windows/Mac
     // It maps localhost:10000 (Container) -> localhost:10000 (Host)
     // "forwardPorts": [10000],
@@ -37,9 +38,10 @@
         {
             "type": "bind",
             "source": "${localWorkspaceFolder}",
-            "target": "/root/AUV-2026"
+            "target": "/home/ros/AUV-2026"
         }
     ],
 
+    "postCreateCommand": "sudo chown -R ros:ros /home/ros/AUV-2026",
     "forwardPorts": [10000]
 }

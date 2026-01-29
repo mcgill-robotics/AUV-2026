@@ -138,24 +138,30 @@ RUN cd /tmp && ./${ZED_SDK_RUN} silent skip_cuda skip_python && \
 # 3. Install Python ML Libraries (Ultralytics/YOLO)
 # ---------------------------------------------------------
 # This will download the large PyTorch CUDA wheels automatically
-RUN pip3 install --no-cache-dir \
-        ultralytics \
-        pandas \
-        scipy \
-        notebook \
-        roboflow \
-        albumentations \
-        typing_extensions \
-        sympy \
-        cython
+COPY Docker/dev/requirements.txt Docker/dev/constraints.txt /tmp/
+RUN pip3 install --no-cache-dir -c /tmp/constraints.txt -r /tmp/requirements.txt
 
+ARG USERNAME=ros
+ARG USER_UID=1000
+ARG USER_GID=$USER_UID
 
-# ---------------------------------------------------------
-# 4. Environment Setup
-# ---------------------------------------------------------
+# 1. Create or rename the group
+RUN if getent group $USER_GID; then \
+        groupmod -n $USERNAME $(getent group $USER_GID | cut -d: -f1); \
+    else \
+        groupadd --gid $USER_GID $USERNAME; \
+    fi \
+    # 2. Create the user
+    && useradd --uid $USER_UID --gid $USER_GID -m -s /bin/bash $USERNAME \
+    && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
+    && chmod 0440 /etc/sudoers.d/$USERNAME \
+    && usermod -aG video,render -s /bin/bash $USERNAME
+
+USER $USERNAME
+WORKDIR /home/$USERNAME/AUV-2026
 # Add source commands to bashrc
-RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /root/.bashrc && \
-        echo "if [ -f /root/AUV-2026/ros2_ws/install/setup.bash ]; then source /root/AUV-2026/ros2_ws/install/setup.bash; fi" >> /root/.bashrc
+RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc && \
+    echo 'if [ -f "$HOME/AUV-2026/ros2_ws/install/setup.bash" ]; then source "$HOME/AUV-2026/ros2_ws/install/setup.bash"; fi' >> ~/.bashrc
 
 # Default directory
 WORKDIR /root/AUV-2026

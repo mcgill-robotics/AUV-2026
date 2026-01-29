@@ -98,26 +98,20 @@ RUN rosdep init || true && rosdep update
 # ---------------------------------------------------------
 # 3. Install Python ML & Vision Dependencies (CPU)
 # ---------------------------------------------------------
-RUN pip3 install --no-cache-dir \
-    ultralytics \
-    pandas \
-    scipy \
-    notebook \
-    roboflow \
-    albumentations \
-    typing_extensions \
-    sympy \
-    cython
+COPY Docker/dev/requirements.txt Docker/dev/constraints.txt /tmp/
+RUN pip3 install --no-cache-dir -c /tmp/constraints.txt -r /tmp/requirements.txt
 
 # ---------------------------------------------------------
 # 4. Environment Setup
 # ---------------------------------------------------------
+# The base image already has a 'ros' user with sudo. 
+USER ros
 # Add source commands to bashrc
-RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /root/.bashrc && \
-    echo "if [ -f /root/AUV-2026/ros2_ws/install/setup.bash ]; then source /root/AUV-2026/ros2_ws/install/setup.bash; fi" >> /root/.bashrc
+RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc && \
+    echo "if [ -f ~/AUV-2026/ros2_ws/install/setup.bash ]; then source ~/AUV-2026/ros2_ws/install/setup.bash; fi" >> ~/.bashrc
 
 # Default directory
-WORKDIR /root/AUV-2026
+WORKDIR /home/ros/AUV-2026
 
 # Keep container alive
 CMD ["bash"]

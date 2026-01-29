@@ -1,0 +1,9 @@
+ultralytics
+pandas
+scipy
+notebook
+roboflow
+albumentations
+typing_extensions
+sympy
+cython
