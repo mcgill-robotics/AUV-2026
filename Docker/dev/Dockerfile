@@ -99,7 +99,20 @@ RUN rosdep init || true && rosdep update
 # 3. Install Python ML & Vision Dependencies (CPU)
 # ---------------------------------------------------------
 COPY Docker/dev/requirements.txt Docker/dev/constraints.txt /tmp/
+
+# Upgrade pip/setuptools (Required to build modern ML wheels)
+RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel
+
+RUN pip3 install --no-cache-dir -c /tmp/constraints.txt torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+RUN pip3 install --no-cache-dir -c /tmp/constraints.txt "opencv-python==4.10.0.84"
+
+# Install other requirements (Pip will skip torch since it's already done)
 RUN pip3 install --no-cache-dir -c /tmp/constraints.txt -r /tmp/requirements.txt
+
+# DOWNGRADE Setuptools for ROS 2
+# Restores compatibility with 'colcon build'
+RUN pip3 install --no-cache-dir "setuptools==65.5.1"
 
 # ---------------------------------------------------------
 # 4. Environment Setup

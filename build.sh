@@ -39,8 +39,9 @@ ROS_INSTALL=/opt/ros/$ROS_DISTRO/setup.bash
 
 # Initialize all git submodules
 git config --global --add safe.directory "$(pwd)"
-# Recursively find all submodules and mark them safe too
-find . -type d -name ".git" -exec bash -c 'git config --global --add safe.directory "$(dirname "{}")"' \;
+git config --global --add safe.directory $(pwd)/ros2_ws/src/Xsens_MTi_Driver
+git config --global --add safe.directory $(pwd)/ros2_ws/src/ros-tcp-endpoint
+git config --global --add safe.directory $(pwd)/ros2_ws/src/zed-ros2-wrapper
 
 git submodule update --init --recursive
 

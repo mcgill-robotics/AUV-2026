@@ -2,15 +2,18 @@
 # Build Arguments
 # ---------------------------------------------------------
 ARG CUDA_MAJOR=12
-ARG CUDA_MINOR=8
+ARG CUDA_MINOR=6
+ARG CUDA_PATCH=2
 ARG UBUNTU_RELEASE=22
 
 # ---------------------------------------------------------
 # Base Image: NVIDIA CUDA Devel
 # We use 'devel' because we need 'nvcc' to compile ZED ROS2 Wrapper
 # ---------------------------------------------------------
-ARG BASE_IMAGE=nvidia/cuda:${CUDA_MAJOR}.${CUDA_MINOR}.0-devel-ubuntu${UBUNTU_RELEASE}.04
-FROM ${BASE_IMAGE}
+# ARG BASE_IMAGE=nvidia/cuda:${CUDA_MAJOR}.${CUDA_MINOR}.${CUDA_PATCH}-devel-ubuntu${UBUNTU_RELEASE}.04
+# FROM ${BASE_IMAGE}
+FROM tuttelikz/opencv-cuda:4.10.0-cuda12.6.3-arch8.9-ubuntu22.04
+
 
 # all arguments after pulling from base image are flushed, so we re-declare them
 ARG ZED_SDK_MAJOR=5
@@ -123,13 +126,13 @@ ARG ZED_SDK_URL="https://stereolabs.sfo2.cdn.digitaloceanspaces.com/zedsdk/${ZED
 ARG ZED_SDK_RUN="ZED_SDK_installer.run"
 
 RUN cd /tmp && \
-    echo "Downloading ZED SDK from: ${ZED_SDK_URL}" && \
-    wget --verbose --tries=5 --timeout=60 --no-check-certificate -O ${ZED_SDK_RUN} ${ZED_SDK_URL} && \
-    echo "Download complete. File size: $(du -h ${ZED_SDK_RUN} | cut -f1)" && \
-    chmod +x ${ZED_SDK_RUN}
-        # silent: No user interaction
-        # skip_cuda: Don't try to install CUDA Toolkit (Base image already has it)
-        # skip_python: Don't install pyzed (Wrapper uses C++, prevents pip conflicts)
+        echo "Downloading ZED SDK from: ${ZED_SDK_URL}" && \
+        wget --verbose --tries=5 --timeout=60 --no-check-certificate -O ${ZED_SDK_RUN} ${ZED_SDK_URL} && \
+        echo "Download complete. File size: $(du -h ${ZED_SDK_RUN} | cut -f1)" && \
+        chmod +x ${ZED_SDK_RUN}
+# silent: No user interaction
+# skip_cuda: Don't try to install CUDA Toolkit (Base image already has it)
+# skip_python: Don't install pyzed (Wrapper uses C++, prevents pip conflicts)
 RUN cd /tmp && ./${ZED_SDK_RUN} silent skip_cuda skip_python && \
         rm ${ZED_SDK_RUN} && \
         rm -rf /var/lib/apt/lists/*
@@ -137,9 +140,38 @@ RUN cd /tmp && ./${ZED_SDK_RUN} silent skip_cuda skip_python && \
 # ---------------------------------------------------------
 # 3. Install Python ML Libraries (Ultralytics/YOLO)
 # ---------------------------------------------------------
-# This will download the large PyTorch CUDA wheels automatically
+# 1. Upgrade pip/setuptools
+RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel
+
+# Base image already has opencv-python with CUDA support but pip doesn't recognize it since it 
+# wasn't installed via pip, so we fake-install empty packages to satisfy dependencies
+
+# Fake opencv-python
+RUN mkdir -p /tmp/fake_cv && \
+    echo 'from setuptools import setup; setup(name="opencv-python", version="4.10.0", packages=[])' > /tmp/fake_cv/setup.py && \
+    pip3 install --no-cache-dir /tmp/fake_cv && \
+    rm -rf /tmp/fake_cv
+
+# Fake opencv-contrib-python
+RUN mkdir -p /tmp/fake_cv_contrib && \
+    echo 'from setuptools import setup; setup(name="opencv-contrib-python", version="4.10.0", packages=[])' > /tmp/fake_cv_contrib/setup.py && \
+    pip3 install --no-cache-dir /tmp/fake_cv_contrib && \
+    rm -rf /tmp/fake_cv_contrib
+
+# Fake opencv-python-headless
+RUN mkdir -p /tmp/fake_cv_headless && \
+    echo 'from setuptools import setup; setup(name="opencv-python-headless", version="4.10.0", packages=[])' > /tmp/fake_cv_headless/setup.py && \
+    pip3 install --no-cache-dir /tmp/fake_cv_headless && \
+    rm -rf /tmp/fake_cv_headless
+
+# Install actual requirements
+# Ensure Docker/dev/constraints.txt DOES NOT contain opencv lines
 COPY Docker/dev/requirements.txt Docker/dev/constraints.txt /tmp/
-RUN pip3 install --no-cache-dir -c /tmp/constraints.txt -r /tmp/requirements.txt
+RUN pip3 install --no-cache-dir --ignore-installed  -c /tmp/constraints.txt -r /tmp/requirements.txt
+
+# DOWNGRADE Setuptools for ROS 2
+# ROS 2 Humble's colcon build system breaks with Setuptools >= 70.
+RUN pip3 install --no-cache-dir "setuptools==65.5.1"
 
 ARG USERNAME=ros
 ARG USER_UID=1000
@@ -148,20 +180,20 @@ ARG USER_GID=$USER_UID
 # 1. Create or rename the group
 RUN if getent group $USER_GID; then \
         groupmod -n $USERNAME $(getent group $USER_GID | cut -d: -f1); \
-    else \
+        else \
         groupadd --gid $USER_GID $USERNAME; \
-    fi \
-    # 2. Create the user
-    && useradd --uid $USER_UID --gid $USER_GID -m -s /bin/bash $USERNAME \
-    && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
-    && chmod 0440 /etc/sudoers.d/$USERNAME \
-    && usermod -aG video,render -s /bin/bash $USERNAME
+        fi \
+        # 2. Create the user
+        && useradd --uid $USER_UID --gid $USER_GID -m -s /bin/bash $USERNAME \
+        && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
+        && chmod 0440 /etc/sudoers.d/$USERNAME \
+        && usermod -aG video,render -s /bin/bash $USERNAME
 
 USER $USERNAME
 WORKDIR /home/$USERNAME/AUV-2026
 # Add source commands to bashrc
 RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc && \
-    echo 'if [ -f "$HOME/AUV-2026/ros2_ws/install/setup.bash" ]; then source "$HOME/AUV-2026/ros2_ws/install/setup.bash"; fi' >> ~/.bashrc
+        echo 'if [ -f "$HOME/AUV-2026/ros2_ws/install/setup.bash" ]; then source "$HOME/AUV-2026/ros2_ws/install/setup.bash"; fi' >> ~/.bashrc
 
 # Default directory
 WORKDIR /root/AUV-2026
