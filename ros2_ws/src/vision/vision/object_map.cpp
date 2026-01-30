@@ -124,7 +124,7 @@ public:
 	// Object Tracker
 	object_tracker = ObjectTracker(new_object_distance_threshold);
 	// Publishers
-	object_map_publisher = this->create_publisher<auv_msgs::msg::VisionObject>("/vision/object_map", 10);
+	object_map_publisher = this->create_publisher<auv_msgs::msg::VisionObjectArray>("/vision/object_map", 10);
 	pose_publisher = this->create_publisher<geometry_msgs::msg::PoseStamped>("/vision/vio_pose", 10);
 	// Subscriber for depth
 	depth_subscriber = this->create_subscription<std_msgs::msg::Float64 >(
@@ -154,6 +154,7 @@ private:
 	{
 #ifdef HAS_ZED_SDK
 		// TODO: add time checks, make sure time has actually passed before process frame, may lead to div by 0
+		frame_collection_time = this->now();
 		zed_detector->process_frame();
 		const auto [measurements,covariances,classes,orientations,confidences] = zed_detector->GetDetections();
 		std::vector<Track> confirmed_tracks = object_tracker.update(
@@ -188,13 +189,28 @@ private:
 	void publish_object_map(const std::vector<Track>& tracks)
 	{
 		// TODO: implement publishing logic, use object_map_publisher
-		return;
+		auv_msgs::msg::VisionObjectArray object_map_msg;
+		// for each track, publish as VisionObject
+		for (const auto& track : tracks)
+		{
+			auv_msgs::msg::VisionObject object_msg;
+			object_msg.label = track.label;
+			object_msg.id = track.id;
+			Eigen::Vector3d position = track.get_position();
+			object_msg.x = position(0);
+			object_msg.y = position(1);
+			object_msg.z = position(2);
+			object_msg.theta_z = 0.0; // TODO: set orientation if available
+			object_msg.confidence = track.confidence;
+			object_map_msg.array.push_back(object_msg);
+		}
+		object_map_publisher->publish(object_map_msg);
 	}
 
 	void publish_pose(const std::tuple<Eigen::Vector3d,Eigen::Vector4d>& pose)
 	{
 		geometry_msgs::msg::PoseStamped pose_msg;
-		pose_msg.header.stamp = this->now();
+		pose_msg.header.stamp = frame_collection_time;
 		pose_msg.header.frame_id = "world";
 		pose_msg.pose.position.x = std::get<0>(pose)(0);
 		pose_msg.pose.position.y = std::get<0>(pose)(1);
@@ -214,7 +230,8 @@ private:
 	rclcpp::TimerBase::SharedPtr timer;
 
 	bool zed_sdk;
-	rclcpp::Publisher<auv_msgs::msg::VisionObject>::SharedPtr object_map_publisher;
+	rclcpp::Time frame_collection_time;
+	rclcpp::Publisher<auv_msgs::msg::VisionObjectArray>::SharedPtr object_map_publisher;
 	rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pose_publisher;
 	rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr depth_subscriber;
 	// if zed SDK not in use

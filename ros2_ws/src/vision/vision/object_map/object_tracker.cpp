@@ -200,7 +200,7 @@ void ObjectTracker::update_matched_tracks(
         
         // Prepare measurement for kf
         // there might be a dimension mismatch
-        Eigen::VectorXd meas(3);    
+        Eigen::Vector3d meas;    
         meas << measurements[meas_idx](0), measurements[meas_idx](1), measurements[meas_idx](2);
 
         // Update Kalman Filter

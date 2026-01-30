@@ -33,6 +33,10 @@ struct Track {
 
     double theta_z = 0.0;
     double confidence = 0.0;
+
+    Eigen::Vector3d get_position() const {
+        return kf.state();
+    }
 };
 
 
