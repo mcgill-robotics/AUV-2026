@@ -242,8 +242,8 @@ vector<sl::CustomBoxObjectData> ZEDDetection::run_yolo(const cv::Mat& img)
 		float w = row.at<float>(2) / letter_box_scale;
 		float h = row.at<float>(3) / letter_box_scale;
 		
-		int x = static_cast<int>(cx - w / 2);
-		int y = static_cast<int>(cy - h / 2);
+		// int x = static_cast<int>(cx - w / 2);
+		// int y = static_cast<int>(cy - h / 2);
 		
 		sl::CustomBoxObjectData box;
 	    box.unique_object_id = sl::generate_unique_id();

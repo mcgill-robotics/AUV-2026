@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <iostream>
 #include <memory.h>
-#include <format>
 #include <vector>
 #include <string>
 #include <set>
@@ -67,30 +66,30 @@ private:
 
     // Step 2: Match tracks to detections (HUNGARIAN)
     // returns: matches, and modifies the unmatched sets by reference
-    std::vector<std::pair<int, int>> match_tracks(
-        const std::vector<std::vector<double>>& cost_matrix,
+    std::vector<std::pair<size_t, size_t>> match_tracks(
+        std::vector<std::vector<double>>& cost_matrix,
         size_t num_meas,
-        std::vector<int>& unmatched_tracks,
-        std::vector<int>& unmatched_detections
+        std::vector<size_t>& unmatched_tracks,
+        std::vector<size_t>& unmatched_detections
     );
 
     // Step 3: Update existing tracks with matched measurements
     void update_matched_tracks(
-        const std::vector<std::pair<int, int>>& matches,
+        const std::vector<std::pair<size_t, size_t>>& matches,
         const std::vector<Eigen::Vector3d>& measurements,
         const std::vector<double>& orientations,
         const std::vector<double>& confidences
     );
 
     // Step 4: Handle tracks that weren't seen this frame
-    void handle_unmatched_tracks(const std::vector<int>& unmatched_tracks);
+    void handle_unmatched_tracks(const std::vector<size_t>& unmatched_tracks);
 
     // Step 5: Prune dead tracks
     void delete_dead_tracks();
     
     // Step 6: Create new tracks from unmatched detections
     void create_new_tracks(
-        const std::vector<int>& unmatched_detections,
+        const std::vector<size_t>& unmatched_detections,
         const std::vector<Eigen::Vector3d>& measurements,
         const std::vector<std::string>& classes,
         const std::vector<double>& orientations,
@@ -109,7 +108,7 @@ private:
     int max_age = 8;                // Frames to keep lost track
     float max_position_jump = 2.0;  // Max jump (meters) - higher to handle VIO rotation errors
 
-    std::vector<int> matches;
+    std::vector<std::pair<size_t,size_t>> matches;
 
     // Known object limits (prevents creating too many tracks per class)
     std::unordered_map<std::string, int> MAX_PER_CLASS = {

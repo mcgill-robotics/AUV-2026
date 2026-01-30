@@ -6,7 +6,7 @@ ObjectTracker::ObjectTracker(const float min_new_track_distance) {
     this->tracks = std::vector<Track>();
     this->min_new_track_distance = min_new_track_distance;
 
-    this->matches = std::vector<int>();
+    this->matches = std::vector<std::pair<size_t, size_t>>();
 }
 
 // destructor implicitly defined
@@ -48,18 +48,17 @@ std::vector<Track> ObjectTracker::update(
     const std::vector<double>& orientations, 
     const std::vector<double>& confidences  
 ) {
-    // Clear previous temp data
-    this->unmatched_tracks.clear();
-    this->unmatched_detections.clear();
     // 1. Compute cost matrix
     auto cost_matrix = compute_cost_matrix(measurements, classes);
 
-    std::vector<int> unmatched_tracks;
-    std::vector<int> unmatched_dets;
+    std::vector<size_t> unmatched_tracks;
+    std::vector<size_t> unmatched_dets;
     
     // Initialize sets
-    for(size_t i = 0; i < tracks.size(); ++i) unmatched_tracks.insert(i);
-    for(size_t i = 0; i < measurements.size(); ++i) unmatched_dets.insert(i);
+    unmatched_tracks.reserve(tracks.size());
+    unmatched_dets.reserve(measurements.size());
+    for(size_t i = 0; i < tracks.size(); ++i) unmatched_tracks.push_back(i);
+    for(size_t i = 0; i < measurements.size(); ++i) unmatched_dets.push_back(i);
 
     // 2. Match tracks
     auto matches = match_tracks(
@@ -73,13 +72,13 @@ std::vector<Track> ObjectTracker::update(
     update_matched_tracks(matches, measurements, orientations, confidences);
 
     // 4. Handle unmatched tracks
-    handle_unmatched_tracks(this->unmatched_tracks);
+    handle_unmatched_tracks(unmatched_tracks);
 
     // 5. Delete dead tracks
     delete_dead_tracks();
 
     // 6. Create new tracks
-    create_new_tracks(this->unmatched_detections, measurements, classes, orientations, confidences);
+    create_new_tracks(unmatched_dets, measurements, classes, orientations, confidences);
 
     return tracks;
 }  
@@ -102,7 +101,9 @@ std::vector<std::vector<double>> ObjectTracker::compute_cost_matrix(
     // Compute the cost matrix
     if (num_meas > 0) {
         for (size_t track_idx = 0; track_idx < num_tracks; ++track_idx) {
-            const auto& curr_track = this->tracks[track_idx];
+            // we have to remove const here because the kalman filter state is not marked as const even though it returns what should be a read only reference
+            // TODO: Fix KalmanFilter class to have const correctness
+            auto& curr_track = this->tracks[track_idx];
 
             for (size_t meas_idx = 0; meas_idx < num_meas; ++meas_idx) { 
                 const std::string& meas_label = classes[meas_idx];
@@ -149,34 +150,49 @@ std::vector<std::vector<double>> ObjectTracker::compute_cost_matrix(
 // and leverage the temporal CPU cache benefits that the MatrixXd exploits
 //
 // This will significantly improve computational speed.
-std::vector<int> ObjectTracker::match_tracks(
-    const std::vector<std::vector<double>>& cost_matrix,
+// Ideally cost matrix is const, but the solver function signature requires non-const
+// (even though it doesn't modify it)
+// TODO: Modify the HungarianAlgorithm to accept const reference
+std::vector<std::pair<size_t, size_t>> ObjectTracker::match_tracks(
+    std::vector<std::vector<double>>& cost_matrix,
     size_t num_meas,
-    std::vector<int>& unmatched_tracks,
-    std::vector<int>& unmatched_detections
+    std::vector<size_t>& unmatched_tracks,
+    std::vector<size_t>& unmatched_detections
 ) {
     HungarianAlgorithm solver;
 
     std::vector<int> assignment;
     // assignment is grown dynamically within the solver, no need to init with fixed size
+    // res = overall cost of found optimal assignment
     double res = solver.Solve(cost_matrix, assignment);
 
     // NOTE: at this point the unmatched detections and tracks are ordered lists
     // Simply remove item as specific index
     int num_assign = assignment.size();
-    for (int assign_idx; assign_idx < assignment.size(); ++assign_idx) {
-        int track_idx = assign_idx;
+
+    for (size_t assign_idx = 0; assign_idx < assignment.size(); ++assign_idx) {
+        size_t track_idx = assign_idx;
         int det_idx = assignment[assign_idx];
 
         // (track_idx, det_idx) forms the pairing
-        // TODO: Iterate through unmatched tracks and detections and remove from those lists
+        // TODO: Iterate through unmatched tracks and detections and remove from those lists, tentative implementation below
+        // assignmnet is set to -1 if no assignment was made for that track
+        // otherwise we check if we cost threshold
+        if (det_idx != -1 && cost_matrix[track_idx][det_idx] <= gating_threshold) {
+            // Valid match, at this point det_idx must be positive i.e. valid size_t
+            matches.push_back(std::make_pair(track_idx, det_idx));
+
+            // Remove from unmatched lists
+            unmatched_tracks.erase(std::remove(unmatched_tracks.begin(), unmatched_tracks.end(), track_idx), unmatched_tracks.end());
+            unmatched_detections.erase(std::remove(unmatched_detections.begin(), unmatched_detections.end(), det_idx), unmatched_detections.end());
+        }
     }
 
-    return res;
+    return matches;
 }
 
 void ObjectTracker::update_matched_tracks(
-    const std::vector<std::pair<int, int>>& matches,
+    const std::vector<std::pair<size_t, size_t>>& matches,
     const std::vector<Eigen::Vector3d>& measurements,
     const std::vector<double>& orientations,
     const std::vector<double>& confidences
@@ -209,8 +225,8 @@ void ObjectTracker::update_matched_tracks(
     }
 }
 
-void ObjectTracker::handle_unmatched_tracks(const std::vector<int>& unmatched_tracks) {
-    for (int track_idx : unmatched_tracks) {
+void ObjectTracker::handle_unmatched_tracks(const std::vector<size_t>& unmatched_tracks) {
+    for (size_t track_idx : unmatched_tracks) {
         Track& track = tracks[track_idx];
         track.age++;
         track.time_since_updates++;
@@ -241,7 +257,7 @@ void ObjectTracker::delete_dead_tracks() {
 }
 
 void ObjectTracker::create_new_tracks(
-    const std::vector<int>& unmatched_detections,
+    const std::vector<size_t>& unmatched_detections,
     const std::vector<Eigen::Vector3d>& measurements,
     const std::vector<std::string>& classes,
     const std::vector<double>& orientations,
