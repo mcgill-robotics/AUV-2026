@@ -63,7 +63,7 @@ public:
   /**
   * Return the current state and time.
   */
-  Eigen::VectorXd state() { return x_hat; };
+  const Eigen::VectorXd& state() const { return x_hat; };
   double time() { return t; };
 
 private:

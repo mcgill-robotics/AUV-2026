@@ -23,7 +23,7 @@ class HungarianAlgorithm
 public:
 	HungarianAlgorithm();
 	~HungarianAlgorithm();
-	double Solve(vector <vector<double> >& DistMatrix, vector<int>& Assignment);
+	double Solve(const vector <vector<double> >& DistMatrix, vector<int>& Assignment);
 
 private:
 	void assignmentoptimal(int *assignment, double *cost, double *distMatrix, int nOfRows, int nOfColumns);

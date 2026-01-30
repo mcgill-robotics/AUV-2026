@@ -101,9 +101,7 @@ std::vector<std::vector<double>> ObjectTracker::compute_cost_matrix(
     // Compute the cost matrix
     if (num_meas > 0) {
         for (size_t track_idx = 0; track_idx < num_tracks; ++track_idx) {
-            // we have to remove const here because the kalman filter state is not marked as const even though it returns what should be a read only reference
-            // TODO: Fix KalmanFilter class to have const correctness
-            auto& curr_track = this->tracks[track_idx];
+            const auto& curr_track = this->tracks[track_idx];
 
             for (size_t meas_idx = 0; meas_idx < num_meas; ++meas_idx) { 
                 const std::string& meas_label = classes[meas_idx];
@@ -150,11 +148,8 @@ std::vector<std::vector<double>> ObjectTracker::compute_cost_matrix(
 // and leverage the temporal CPU cache benefits that the MatrixXd exploits
 //
 // This will significantly improve computational speed.
-// Ideally cost matrix is const, but the solver function signature requires non-const
-// (even though it doesn't modify it)
-// TODO: Modify the HungarianAlgorithm to accept const reference
 std::vector<std::pair<size_t, size_t>> ObjectTracker::match_tracks(
-    std::vector<std::vector<double>>& cost_matrix,
+    const std::vector<std::vector<double>>& cost_matrix,
     size_t num_meas,
     std::vector<size_t>& unmatched_tracks,
     std::vector<size_t>& unmatched_detections

@@ -67,7 +67,7 @@ private:
     // Step 2: Match tracks to detections (HUNGARIAN)
     // returns: matches, and modifies the unmatched sets by reference
     std::vector<std::pair<size_t, size_t>> match_tracks(
-        std::vector<std::vector<double>>& cost_matrix,
+        const std::vector<std::vector<double>>& cost_matrix,
         size_t num_meas,
         std::vector<size_t>& unmatched_tracks,
         std::vector<size_t>& unmatched_detections
