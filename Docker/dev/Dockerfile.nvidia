@@ -196,7 +196,7 @@ RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc && \
         echo 'if [ -f "$HOME/AUV-2026/ros2_ws/install/setup.bash" ]; then source "$HOME/AUV-2026/ros2_ws/install/setup.bash"; fi' >> ~/.bashrc
 
 # Default directory
-WORKDIR /root/AUV-2026
+WORKDIR /home/ros/AUV-2026
 
 # Keep container alive
 CMD ["bash"]

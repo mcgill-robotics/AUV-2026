@@ -34,14 +34,6 @@
             ]
         }
     },
-    "mounts": [
-        {
-            "type": "bind",
-            "source": "${localWorkspaceFolder}",
-            "target": "/home/ros/AUV-2026"
-        }
-    ],
 
     "postCreateCommand": "sudo chown -R ros:ros /home/ros/AUV-2026",
-    "forwardPorts": [10000]
 }
