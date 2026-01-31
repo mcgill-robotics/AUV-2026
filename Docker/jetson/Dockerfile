@@ -233,5 +233,5 @@ RUN pip install --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} notebook \
 	pip install --ignore-install --upgrade typing_extensions
 
 # Source env variables
-RUN echo "source /opt/ros/humble/install/setup.bash && source /root/dependencies_ws/install/setup.bash && source /root/AUV-2026/ros2_ws/install/setup.bash" >> ~/.bashrc
+RUN echo "source /opt/ros/humble/setup.bash && source /root/dependencies_ws/install/setup.bash && source /root/AUV-2026/ros2_ws/install/setup.bash" >> ~/.bashrc
 CMD ["bash"]
