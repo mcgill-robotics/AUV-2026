@@ -108,8 +108,11 @@ After build is complete, make the packages visible to ROS
 
 Launch all package nodes
 
-	ros2 launch propulsion thrust_mapper.launch.py
+	ros2 launch propulsion propulsion.launch.py
 
+| Argument | Default | Description |
+| :--- | :--- | :--- | 
+| `sim` | `false` | Run in simulation mode
 
 ### License
 
