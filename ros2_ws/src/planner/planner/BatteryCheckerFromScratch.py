@@ -29,7 +29,7 @@ class BatteryChecker(py_trees.behaviour.Behaviour):
 
 		# Make ROS2 node setups
 		self.sub_batteries_voltage = node.create_subscription(std_msgs/msg/Float32MultiArray,
-			/power/batteries/voltage, 
+			power/batteries/voltage, 
 			self.callback,
 			10
 		)
@@ -63,7 +63,7 @@ class BatteryChecker(py_trees.behaviour.Behaviour):
 		"""
 
 		# Check if any message at all, in case the Tree is initialized before ROS2 node
-		if (self.msg == None) 
+		if (self.msg == None):
 			return Status.RUNNING
 
 		# Extract the msg data and write it to the blackboard for other behaviours to use
@@ -73,8 +73,8 @@ class BatteryChecker(py_trees.behaviour.Behaviour):
 		# Check that both batteries are under the threshold (might make it a param (prob should)) 
 		# We check both because of elecs cool dual battery channel setup where one fall backs on the other
 
-		if (self.blackboard_client_battery.embedded.battery_level1 < 15.0 && \
-			self.blackboard_client_battery.embedded.battery_level2 < 15.0)
+		if (self.blackboard_client_battery.embedded.battery_level1 < 15.0 and \
+			self.blackboard_client_battery.embedded.battery_level2 < 15.0):
 			return Status.FAILURE # Status.FAILURE will crash the root, which we plan to be the whole tree or start a recovery action from Dougie to surface
 		
 		# If any publishers in the Behaviour, publish here

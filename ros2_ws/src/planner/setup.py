@@ -26,7 +26,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'basic_behaviour_tree = planner.basic_behaviour_tree:main'
+            'basic_behaviour_tree = planner.basic_behaviour_tree:main',
+            'yaw_behaviour_tree = planner.BehaviourTreeYaw:main'
         ],
     },
 )
