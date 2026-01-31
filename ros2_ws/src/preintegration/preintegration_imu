@@ -1,0 +1,103 @@
+
+//ros2 node and standard IMU message header
+#include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/msg/imu.hpp>
+
+
+//GTSAM headers for IMU preintegration, helps with gravity, noise etc.
+#include <gtsam/navigation/ImuFactor.h>
+#include <gtsam/navigation/PreintegrationParams.h>
+
+
+//for convention, to say the message is coming in as argument 1
+using std::placeholders::_1;
+
+//node definition
+class ImuPreintegratorNode : public rclcpp::Node
+{
+public:
+  ImuPreintegratorNode() : Node("imu_preintegrator")
+  {
+    // Set to correct imu input topic 
+    imu_topic_ = this->declare_parameter("imu_topic", "/imu");
+
+    //Set to 25 Hz for now, can be changed later, albert said 20-30Hz
+    ekf_rate_  = this->declare_parameter("ekf_rate", 25.0);
+
+
+    // Create GTSAM PreintegrationParams object with gravity set to 9.81 m/s^2
+    auto params = gtsam::PreintegrationParams::MakeSharedU(9.81);
+
+    // Set to correct IMU noise characteristics
+    params->accelerometerCovariance = gtsam::I_3x3 * 0.01;
+    params->gyroscopeCovariance     = gtsam::I_3x3 * 0.001;
+    params->integrationCovariance   = gtsam::I_3x3 * 1e-4;
+
+    // intially zero bias
+    gtsam::imuBias::ConstantBias bias;
+
+    // create the preintegrator object, will replace 5 raw imu msgs at 25Hz with one preintegrated measurement
+    preintegrator_ =
+    std::make_shared<gtsam::PreintegratedImuMeasurements>(params, bias);
+
+    // Subscribe to IMU topic
+    imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
+      imu_topic_, 200,
+      std::bind(&ImuPreintegratorNode::imuCallback, this, _1)
+    );
+
+    // Timer for EKF updates at the chosen rate
+    ekf_timer_ = this->create_wall_timer(
+      std::chrono::duration<double>(1.0 / ekf_rate_),
+      std::bind(&ImuPreintegratorNode::ekfTick, this)
+    );
+
+    RCLCPP_INFO(this->get_logger(), "IMU Preintegrator node started");
+  }
+
+  private:
+  void imuCallback(const sensor_msgs::msg::Imu::SharedPtr msg)
+  {
+    // makes sure there is a previous imu message to compare time with (can't integrate otherwise)
+    if (!last_imu_time_.has_value())
+    {
+      last_imu_time_ = msg->header.stamp;
+      return;
+    }
+
+    // Calculate time difference between current and last IMU message
+    double dt = (rclcpp::Time(msg->header.stamp) -
+                 rclcpp::Time(*last_imu_time_)).seconds();
+
+    last_imu_time_ = msg->header.stamp;
+
+    //get angular velocity and linear acceleration from the IMU message
+    gtsam::Vector3 accel(
+      msg->linear_acceleration.x,
+      msg->linear_acceleration.y,
+      msg->linear_acceleration.z
+    );
+
+    gtsam::Vector3 gyro(
+      msg->angular_velocity.x,
+      msg->angular_velocity.y,
+      msg->angular_velocity.z
+    );
+
+    // Integrate the IMU measurement
+    preintegrator_->integrateMeasurement(accel, gyro, dt);
+  }
+
+  void ekfTick()
+  {
+    // check there is at least one message to integrate
+    if (!last_imu_time_.has_value())
+      return;
+     
+  }
+
+  
+
+
+  
+};
