@@ -41,10 +41,10 @@ void DepthProcessor::imu_callback(const sensor_msgs::msg::Imu::SharedPtr imu_in)
 
 void DepthProcessor::depth_callback(const std_msgs::msg::Float64::SharedPtr depth_in) const
 {
-    Vec3 r_vs_i = q_iv_ * r_vs_v_;
-    double r_vi_i = depth_in->data + r_vs_i(2); // Add z-component of r_vs_i to depth measurement
+    const Vec3 r_vs_i = q_iv_ * r_vs_v_;
+    const double r_vi_i_z = -depth_in->data + r_vs_i(2); // Add z-component of r_vs_i to depth measurement
     float64_msg depth_out ;
-    depth_out.data = r_vi_i;
+    depth_out.data = -r_vi_i_z;
 
     depth_pub_->publish(depth_out);
 }; 
