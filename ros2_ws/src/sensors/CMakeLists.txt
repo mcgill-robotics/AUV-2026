@@ -47,11 +47,21 @@ target_include_directories(depth_processor PUBLIC
   $<INSTALL_INTERFACE:include>
 )
 
+add_executable(dvl_processor src/dvl_processor.cpp)
+ament_target_dependencies(dvl_processor rclcpp std_msgs geometry_msgs sensor_msgs message_filters)
+target_link_libraries(dvl_processor Eigen3::Eigen)
+target_include_directories(dvl_processor PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+
+
 # --- Install ---
 install(TARGETS
   state_aggregator
   imu_processor
   depth_processor
+  dvl_processor
   DESTINATION lib/${PROJECT_NAME}
 )
 
