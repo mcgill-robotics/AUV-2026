@@ -12,9 +12,7 @@ namespace sensors
     using Vec3  = Eigen::Vector3d;
     using quatd = Eigen::Quaterniond;
 
-    // ==========================================
-    // 1. The Math Class (Logic Only)
-    // ==========================================
+    // 1. The Mathematical Logic
     class DvlProcessor {
     public:
         // r_sd_v: Vector from Sensor to Vehicle CM in Body Frame
@@ -27,9 +25,8 @@ namespace sensors
         Vec3 r_sd_v_; // The fixed physical offset
     };
 
-    // ==========================================
-    // 2. The ROS Node (Communication)
-    // ==========================================
+    // 2. The ROS Node Implementation
+    
     class DvlNode : public rclcpp::Node {
     public:
         DvlNode();

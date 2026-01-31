@@ -2,9 +2,8 @@
 
 namespace sensors {
 
-// ==========================================
-// 1. Math Implementation
-// ==========================================
+
+// 1. Mathematical Implementation
 
 DvlProcessor::DvlProcessor(const Vec3& r_sd_v) 
     : r_sd_v_(r_sd_v) {}
@@ -15,9 +14,7 @@ Vec3 DvlProcessor::process(const Vec3& p_dvl_i, const quatd& q_vi) const {
 }
 
 
-// ==========================================
 // 2. ROS Node Implementation
-// ==========================================
 
 DvlNode::DvlNode() : Node("dvl_processor") {
     // A. Initialize Variables
@@ -76,9 +73,8 @@ void DvlNode::dvl_callback(const geometry_msgs::msg::PointStamped::SharedPtr msg
 } // namespace sensors
 
 
-// ==========================================
-// 3. Main Entry Point
-// ==========================================
+
+// 3.  Entry Point
 
 int main(int argc, char * argv[]) {
     rclcpp::init(argc, argv);
