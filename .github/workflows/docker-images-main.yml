@@ -157,6 +157,16 @@ jobs:
       packages: write
 
     steps:
+    - name: Clean up unnecessary packages to maximize build space
+      run: |
+        echo "=== Disk space before cleanup ==="
+        df -h
+        # Remove unnecessary tools to free space for large Jetson image
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache
+        sudo docker image prune -af || true
+        echo "=== Disk space after cleanup ==="
+        df -h
+
     - name: Git checkout with LFS and submodules
       uses: actions/checkout@v4
       with:
