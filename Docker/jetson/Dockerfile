@@ -250,6 +250,15 @@ RUN if getent group $USER_GID; then \
     && chmod 0440 /etc/sudoers.d/$USERNAME \
     && usermod -aG video,render -s /bin/bash $USERNAME
 
+# Install fixuid for dynamic UID/GID remapping at runtime
+ARG FIXUID_VERSION=0.6.0
+RUN ARCH="$(dpkg --print-architecture)" && \
+    curl -fsSL "https://github.com/boxboat/fixuid/releases/download/v${FIXUID_VERSION}/fixuid-${FIXUID_VERSION}-linux-${ARCH}.tar.gz" | tar -C /usr/local/bin -xzf - && \
+    chown root:root /usr/local/bin/fixuid && \
+    chmod 4755 /usr/local/bin/fixuid && \
+    mkdir -p /etc/fixuid && \
+    printf "user: $USERNAME\ngroup: $USERNAME\n" > /etc/fixuid/config.yml
+
 USER $USERNAME
 
 WORKDIR /home/$USERNAME/AUV-2026
@@ -257,5 +266,8 @@ WORKDIR /home/$USERNAME/AUV-2026
 # Source env variables
 # We use /opt/dependencies_ws which is readable by all
 RUN echo "source /opt/ros/humble/setup.bash && source /opt/dependencies_ws/install/setup.bash && source /home/$USERNAME/AUV-2026/ros2_ws/install/setup.bash" >> ~/.bashrc
+
+# Entrypoint uses fixuid to remap UID/GID if running with --user
+ENTRYPOINT ["fixuid", "-q"]
 
 CMD ["bash"]

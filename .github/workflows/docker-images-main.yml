@@ -45,7 +45,7 @@ jobs:
 
     - name: Verify Build
       run: |
-        docker run --rm -e CI=true -v ${{ github.workspace }}:/home/douglas/AUV-2026 mcgillrobotics/auv_2026:dev-amd64 /bin/bash -c "./build.sh"
+        docker run --rm --user $(id -u):$(id -g) -e CI=true -v ${{ github.workspace }}:/home/douglas/AUV-2026 mcgillrobotics/auv_2026:dev-amd64 /bin/bash -c "./build.sh"
 
     - name: Push image
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -91,9 +91,7 @@ jobs:
 
       - name: Verify Build
         run: |
-          # Use --gpus all if available, or just run without if runner has no GPU
-          # Verification focuses on build success, not runtime execution
-          docker run --rm -e CI=true -v ${{ github.workspace }}:/home/douglas/AUV-2026 mcgillrobotics/auv_2026:dev-nvidia-amd64 /bin/bash -c "./build.sh"
+          docker run --rm --user $(id -u):$(id -g) -e CI=true -v ${{ github.workspace }}:/home/douglas/AUV-2026 mcgillrobotics/auv_2026:dev-nvidia-amd64 /bin/bash -c "./build.sh"
 
       - name: Push NVIDIA image
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -139,7 +137,7 @@ jobs:
 
     - name: Verify Build
       run: |
-        docker run --rm -e CI=true --platform linux/arm64 -v ${{ github.workspace }}:/home/douglas/AUV-2026 mcgillrobotics/auv_2026:dev-arm64 /bin/bash -c "./build.sh"
+        docker run --rm --user $(id -u):$(id -g) -e CI=true --platform linux/arm64 -v ${{ github.workspace }}:/home/douglas/AUV-2026 mcgillrobotics/auv_2026:dev-arm64 /bin/bash -c "./build.sh"
 
     - name: Push image
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -188,7 +186,7 @@ jobs:
 
     - name: Verify Build
       run: |
-        docker run --rm -e CI=true --platform linux/arm64 -v ${{ github.workspace }}:/home/douglas/AUV-2026 mcgillrobotics/auv_2026:jetson /bin/bash -c "./build.sh"
+        docker run --rm --user $(id -u):$(id -g) -e CI=true --platform linux/arm64 -v ${{ github.workspace }}:/home/douglas/AUV-2026 mcgillrobotics/auv_2026:jetson /bin/bash -c "./build.sh"
 
     - name: Push image
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
