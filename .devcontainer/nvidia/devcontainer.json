@@ -4,8 +4,8 @@
     "service": "nvidia",
     "runServices": ["nvidia"],
 
-    "workspaceFolder": "/home/ros/AUV-2026",
-    "remoteUser": "ros",
+    "workspaceFolder": "/home/douglas/AUV-2026",
+    "remoteUser": "douglas",
 
     // This is vital for connecting to Unity on Windows/Mac
     // It maps localhost:10000 (Container) -> localhost:10000 (Host)
@@ -36,12 +36,5 @@
             ]
         }
     },
-    "mounts": [
-        {
-            "type": "bind",
-            "source": "${localWorkspaceFolder}",
-            "target": "/home/ros/AUV-2026"
-        }
-    ],
-    "postCreateCommand": "sudo chown -R ros:ros /home/ros/AUV-2026",    
+    "postCreateCommand": "sudo chown -R douglas:douglas /home/douglas/AUV-2026",    
 }

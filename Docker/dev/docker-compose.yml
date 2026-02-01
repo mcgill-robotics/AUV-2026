@@ -24,9 +24,9 @@ services:
       - XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}
       - PULSE_SERVER=${PULSE_SERVER}
     
-    user: "ros"
+    user: "douglas"
     volumes:
-      - ../../:/home/ros/AUV-2026
+      - ../../:/home/douglas/AUV-2026
       - ../../ros2_ws/src/vision/model_pipeline/data:/images
       - /tmp/.X11-unix:/tmp/.X11-unix
       # Map Wayland/Pulse sockets if they exist
@@ -72,9 +72,9 @@ services:
       - XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}
       - PULSE_SERVER=${PULSE_SERVER}
 
-    user: "ros"
+    user: "douglas"
     volumes:
-      - ../../:/home/ros/AUV-2026
+      - ../../:/home/douglas/AUV-2026
       - ../../ros2_ws/src/vision/model_pipeline/data:/images
       - /tmp/.X11-unix:/tmp/.X11-unix
       - ${XDG_RUNTIME_DIR}:${XDG_RUNTIME_DIR}
