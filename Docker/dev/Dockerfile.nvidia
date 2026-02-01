@@ -142,9 +142,6 @@ RUN cd /tmp && ./${ZED_SDK_RUN} silent skip_cuda skip_python && \
 # ---------------------------------------------------------
 # 3. Install Python ML Libraries (Ultralytics/YOLO)
 # ---------------------------------------------------------
-# 1. Upgrade pip/setuptools
-# RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel
-
 # Base image already has opencv-python with CUDA support but pip doesn't recognize it since it 
 # wasn't installed via pip, so we fake-install empty packages to satisfy dependencies
 
@@ -201,6 +198,12 @@ RUN ARCH="$(dpkg --print-architecture)" && \
         printf "user: $USERNAME\ngroup: $USERNAME\n" > /etc/fixuid/config.yml
 
 USER $USERNAME
+
+# set colcon home after adding user
+ENV COLCON_HOME=/home/$USERNAME/.colcon
+# move repo defaults.yaml to container
+COPY .colcon ${COLCON_HOME}/
+
 WORKDIR /home/$USERNAME/AUV-2026
 # Add source commands to bashrc
 RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc && \

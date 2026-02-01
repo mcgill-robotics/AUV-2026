@@ -54,7 +54,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Europe/Paris 
 ENV ROS_DISTRO=${ROS2_DIST}
 
-# Check that this SDK exists
+# Check that this SDK URL exists
 RUN if [ "$(curl -L -I "${ZED_SDK_URL}" -o /dev/null -s -w '%{http_code}\n' | head -n 1)" = "200" ]; then \
     echo "The URL points to something."; \
     else \
@@ -282,6 +282,11 @@ RUN ARCH="$(dpkg --print-architecture)" && \
     printf "user: $USERNAME\ngroup: $USERNAME\n" > /etc/fixuid/config.yml
 
 USER $USERNAME
+
+# set colcon home after adding user
+ENV COLCON_HOME=/home/$USERNAME/.colcon
+# move repo defaults.yaml to container, CI is run from Docker/jetson so need to go up 2 levels
+COPY ../../.colcon ${COLCON_HOME}/
 
 WORKDIR /home/$USERNAME/AUV-2026
 

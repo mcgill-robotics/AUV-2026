@@ -149,7 +149,6 @@ if [ "$CLEAN_BUILD" = true ]; then
 fi
 
 colcon build \
-    --symlink-install \
     --parallel-workers $(nproc) \
     --event-handlers console_direct+ \
     --cmake-args -DCMAKE_BUILD_TYPE=Release

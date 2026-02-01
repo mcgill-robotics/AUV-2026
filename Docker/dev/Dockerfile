@@ -140,6 +140,11 @@ RUN ARCH="$(dpkg --print-architecture)" && \
 
 USER $USERNAME
 
+# set colcon home after adding user
+ENV COLCON_HOME=/home/$USERNAME/.colcon
+# move repo defaults.yaml to container
+COPY .colcon ${COLCON_HOME}/
+
 WORKDIR /home/$USERNAME/AUV-2026
 
 # Add source commands to bashrc
