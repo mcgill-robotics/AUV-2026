@@ -118,13 +118,29 @@ RUN pip3 install --no-cache-dir "setuptools==65.5.1"
 # 4. Environment Setup
 # ---------------------------------------------------------
 # The base image already has a 'ros' user with sudo. 
-USER ros
+ARG USERNAME=douglas
+ARG USER_UID=1000
+ARG USER_GID=$USER_UID
+
+# 1. Create or rename the group
+RUN if getent group $USER_GID; then \
+    groupmod -n $USERNAME $(getent group $USER_GID | cut -d: -f1); \
+    else \
+    groupadd --gid $USER_GID $USERNAME; \
+    fi \
+    # 2. Create the user
+    && useradd --uid $USER_UID --gid $USER_GID -m -s /bin/bash $USERNAME \
+    && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
+    && chmod 0440 /etc/sudoers.d/$USERNAME \
+    && usermod -aG video,render -s /bin/bash $USERNAME
+
+USER $USERNAME
+
+WORKDIR /home/$USERNAME/AUV-2026
+
 # Add source commands to bashrc
 RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc && \
     echo "if [ -f ~/AUV-2026/ros2_ws/install/setup.bash ]; then source ~/AUV-2026/ros2_ws/install/setup.bash; fi" >> ~/.bashrc
-
-# Default directory
-WORKDIR /home/ros/AUV-2026
 
 # Keep container alive
 CMD ["bash"]

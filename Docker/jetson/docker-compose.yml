@@ -1,6 +1,6 @@
 services:
   douglas:
-    image: "mcgillrobotics/auv_2026:ros2"    
+    image: "mcgillrobotics/auv_2026:ros2"
     runtime: nvidia
     privileged: true
     network_mode: host
@@ -26,9 +26,9 @@ services:
       - /tmp:/tmp
       - /var/nvidia/nvcam/settings/:/var/nvidia/nvcam/settings/
       - /etc/systemd/system/zed_x_daemon.service:/etc/systemd/system/zed_x_daemon.service
-      - type: bind 
+      - type: bind
         source: ../../../AUV-2026
-        target: /root/AUV-2026
+        target: /home/douglas/AUV-2026
     command: bash -c ${OVERRIDE_COMMAND:-"tail -f /dev/null"}
     build: .
     deploy:
@@ -37,7 +37,7 @@ services:
           devices:
             - driver: nvidia
               count: 1
-              capabilities: [gpu]
+              capabilities: [ gpu ]
     stdin_open: true
     tty: true
     ports:

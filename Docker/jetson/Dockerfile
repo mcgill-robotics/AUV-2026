@@ -55,10 +55,10 @@ ENV ROS_DISTRO=${ROS2_DIST}
 
 # Check that this SDK exists
 RUN if [ "$(curl -L -I "${ZED_SDK_URL}" -o /dev/null -s -w '%{http_code}\n' | head -n 1)" = "200" ]; then \
-        echo "The URL points to something."; \
+    echo "The URL points to something."; \
     else \
-        echo "The URL does not point to a .run file or the file does not exist."; \
-        exit 1; \
+    echo "The URL does not point to a .run file or the file does not exist."; \
+    exit 1; \
     fi
 
 # Disable apt-get warnings
@@ -78,7 +78,7 @@ RUN apt-get update && apt-get install -y \
     && echo "PermitRootLogin yes" >> /etc/ssh/sshd_config \
     && echo 'root:jetson' | chpasswd \
     && rm -rf /var/lib/apt/lists/*
-    
+
 RUN echo "# R${L4T_MAJOR} (release), REVISION: ${L4T_MINOR}" > /etc/nv_tegra_release && \
     apt-get update -y || true && apt-get install -y --no-install-recommends \
     build-essential \
@@ -132,32 +132,32 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone &
 
 #Install graphics, video, c++ dev libraries
 RUN apt-get update && apt-get install -y --no-install-recommends \
-   g++ \
-   libc++-dev \
-   libavcodec-dev \
-   libavdevice-dev \
-   libavformat-dev \
-   libavutil-dev \
-   libegl1-mesa-dev \
-   libepoxy-dev \
-   libgl1-mesa-dev \
-   libglew-dev \
-   libjpeg-dev \
-   libpng-dev \
-   libswscale-dev \
-   libwayland-dev \
-   libxkbcommon-dev \
-   ninja-build \
-   v4l-utils \
-   && add-apt-repository ppa:deadsnakes/ppa -y \
-   && rm -rf /var/lib/apt/lists/* \
-   && apt-get clean
+    g++ \
+    libc++-dev \
+    libavcodec-dev \
+    libavdevice-dev \
+    libavformat-dev \
+    libavutil-dev \
+    libegl1-mesa-dev \
+    libepoxy-dev \
+    libgl1-mesa-dev \
+    libglew-dev \
+    libjpeg-dev \
+    libpng-dev \
+    libswscale-dev \
+    libwayland-dev \
+    libxkbcommon-dev \
+    ninja-build \
+    v4l-utils \
+    && add-apt-repository ppa:deadsnakes/ppa -y \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
 # copy our configs for zed2i
 COPY SN33688213.conf /usr/local/zed/settings/
 
 # Install missing dependencies and wanted packages from source
-WORKDIR /root/dependencies_ws/src
+WORKDIR /opt/dependencies_ws/src
 RUN wget https://github.com/ros/xacro/archive/refs/tags/${XACRO_VERSION}.tar.gz -O - | tar -xvz && mv xacro-${XACRO_VERSION} xacro && \
     wget https://github.com/ros/diagnostics/archive/refs/tags/${DIAGNOSTICS_VERSION}.tar.gz -O - | tar -xvz && mv diagnostics-${DIAGNOSTICS_VERSION} diagnostics && \
     wget https://github.com/ament/ament_lint/archive/refs/tags/${AMENT_LINT_VERSION}.tar.gz -O - | tar -xvz && mv ament_lint-${AMENT_LINT_VERSION} ament-lint && \
@@ -183,21 +183,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-$ROS_DISTRO-foxglove-bridge \
     ros-$ROS_DISTRO-joy \
     ros-$ROS_DISTRO-joy-teleop \
-   && rm -rf /var/lib/apt/lists/* \
-   && apt-get clean
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
 # Build the dependencies from source against NVIDIA OpenCV
 # There are 2 workspaces so that all the dependencies installed source
 # do not clutter our ros2_ws
-WORKDIR /root/dependencies_ws
+WORKDIR /opt/dependencies_ws
 
 RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
-  colcon build --parallel-workers $(nproc) --symlink-install \
-  --event-handlers console_direct+ --base-paths src \
-  --cmake-args ' -DCMAKE_BUILD_TYPE=Release' \
-  ' -DCMAKE_LIBRARY_PATH=/usr/local/cuda/lib64/stubs' \
-  ' -DCMAKE_CXX_FLAGS="-Wl,--allow-shlib-undefined"' \
-  ' --no-warn-unused-cli' "
+    colcon build --parallel-workers $(nproc) --symlink-install \
+    --event-handlers console_direct+ --base-paths src \
+    --cmake-args ' -DCMAKE_BUILD_TYPE=Release' \
+    ' -DCMAKE_LIBRARY_PATH=/usr/local/cuda/lib64/stubs' \
+    ' -DCMAKE_CXX_FLAGS="-Wl,--allow-shlib-undefined"' \
+    ' --no-warn-unused-cli' "
 
 # Get CUDA dependencies to install torch and torchvision
 WORKDIR /root
@@ -206,7 +206,7 @@ RUN wget https://developer.download.nvidia.com/compute/cusparselt/0.8.1/local_in
     cp /var/cusparselt-local-tegra-repo-ubuntu2204-0.8.1/cusparselt-*-keyring.gpg /usr/share/keyrings/ && \
     apt-get update && \
     apt-get -y install cusparselt-cuda-12 && \
-	rm -rf cusparselt-local-tegra-repo-ubuntu2204-0.8.1_0.8.1-1_arm64.deb
+    rm -rf cusparselt-local-tegra-repo-ubuntu2204-0.8.1_0.8.1-1_arm64.deb
 
 ARG CUSPARSE_SOLVER_NAME="libcudss-linux-sbsa-0.6.0.5_cuda12-archive"
 RUN mkdir -p tmp_cudss && cd tmp_cudss && \
@@ -214,24 +214,48 @@ RUN mkdir -p tmp_cudss && cd tmp_cudss && \
     tar xf ${CUSPARSE_SOLVER_NAME}.tar.xz && \
     cp -a ${CUSPARSE_SOLVER_NAME}/include/* /usr/local/cuda/include/ && \
     cp -a ${CUSPARSE_SOLVER_NAME}/lib/* /usr/local/cuda/lib64/ && \
-	rm -rf ${CUSPARSE_SOLVER_NAME} ${CUSPARSE_SOLVER_NAME}.tar.xz
+    rm -rf ${CUSPARSE_SOLVER_NAME} ${CUSPARSE_SOLVER_NAME}.tar.xz
 
 # Install ultralytics, avoid reinstalling numpy and opencv (torch, tensorflow and torchvision installed in the .toml file, cuda supported cause pip index is Jetpack6 one)
 RUN pip install --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} --ignore-install sympy \ 
-	cython --upgrade
+    cython --upgrade
 
 RUN git clone https://github.com/ultralytics/ultralytics.git && \
     cd ultralytics && \
-	sed -i '/"numpy>=1.23.0"/d; /"opencv-python>=4.6.0"/d; /"numpy<2.0.0"/d' pyproject.toml && \
-	pip install --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} -e . && \
+    sed -i '/"numpy>=1.23.0"/d; /"opencv-python>=4.6.0"/d; /"numpy<2.0.0"/d' pyproject.toml && \
+    pip install --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} -e . && \
     cd .. && \
-	rm -rf ultralytics
+    rm -rf ultralytics
 
 # Install dependencies for vision
 RUN pip install --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} notebook \
-	roboflow albumentations pandas && \
-	pip install --ignore-install --upgrade typing_extensions
+    roboflow albumentations pandas && \
+    pip install --ignore-install --upgrade typing_extensions
+
+
+# Environment Setup
+ARG USERNAME=douglas
+ARG USER_UID=1000
+ARG USER_GID=$USER_UID
+
+# 1. Create or rename the group
+RUN if getent group $USER_GID; then \
+    groupmod -n $USERNAME $(getent group $USER_GID | cut -d: -f1); \
+    else \
+    groupadd --gid $USER_GID $USERNAME; \
+    fi \
+    # 2. Create the user
+    && useradd --uid $USER_UID --gid $USER_GID -m -s /bin/bash $USERNAME \
+    && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
+    && chmod 0440 /etc/sudoers.d/$USERNAME \
+    && usermod -aG video,render -s /bin/bash $USERNAME
+
+USER $USERNAME
+
+WORKDIR /home/$USERNAME/AUV-2026
 
 # Source env variables
-RUN echo "source /opt/ros/humble/setup.bash && source /root/dependencies_ws/install/setup.bash && source /root/AUV-2026/ros2_ws/install/setup.bash" >> ~/.bashrc
+# We use /opt/dependencies_ws which is readable by all
+RUN echo "source /opt/ros/humble/setup.bash && source /opt/dependencies_ws/install/setup.bash && source /home/$USERNAME/AUV-2026/ros2_ws/install/setup.bash" >> ~/.bashrc
+
 CMD ["bash"]

@@ -38,10 +38,10 @@ ROS_DISTRO=humble
 ROS_INSTALL=/opt/ros/$ROS_DISTRO/setup.bash
 
 # Initialize all git submodules
-git config --global --add safe.directory "$(pwd)"
-git config --global --add safe.directory $(pwd)/ros2_ws/src/Xsens_MTi_Driver
-git config --global --add safe.directory $(pwd)/ros2_ws/src/ros-tcp-endpoint
-git config --global --add safe.directory $(pwd)/ros2_ws/src/zed-ros2-wrapper
+git config --global --add safe.directory "$(pwd)" || $SUDO git config --system --add safe.directory "$(pwd)"
+git config --global --add safe.directory $(pwd)/ros2_ws/src/Xsens_MTi_Driver || $SUDO git config --system --add safe.directory $(pwd)/ros2_ws/src/Xsens_MTi_Driver
+git config --global --add safe.directory $(pwd)/ros2_ws/src/ros-tcp-endpoint || $SUDO git config --system --add safe.directory $(pwd)/ros2_ws/src/ros-tcp-endpoint
+git config --global --add safe.directory $(pwd)/ros2_ws/src/zed-ros2-wrapper || $SUDO git config --system --add safe.directory $(pwd)/ros2_ws/src/zed-ros2-wrapper
 
 git submodule update --init --recursive
 
@@ -85,11 +85,14 @@ fi
 # ---------------------------------------------------------
 if [ "$CAN_BUILD_ZED" = false ]; then
     echo "⚠️  No ZED SDK or Jetson detected. Ignoring ZED packages."
+    SKIP_KEYS="zed zed_msgs zed_components"
     if [ -d "$ZED_DIR" ]; then
         touch "$ZED_DIR/AMENT_IGNORE"
     fi
 else
     echo "🚀 ZED Environment Ready. Including ZED packages."
+    # Skip OpenCV to avoid overwriting Jetson/CUDA optimized version
+    SKIP_KEYS="zed zed_msgs zed_components opencv libopencv-dev python3-opencv opencv-python"
     if [ -f "$ZED_DIR/AMENT_IGNORE" ]; then
         rm "$ZED_DIR/AMENT_IGNORE"
     fi
@@ -111,13 +114,14 @@ fi
 echo "   -> Updating rosdep cache..."
 rosdep update
 
-echo -e "\n=== Installing Dependencies ==="
-# Uses sudo if on host, no sudo if in docker
-$SUDO apt-get update
+# echo -e "\n=== Installing Dependencies ==="
+# # Uses sudo if on host, no sudo if in docker
+# $SUDO apt-get update
 
-# Note: rosdep install handles sudo internally/interactively
-rosdep install --from-paths src --ignore-src -r -y \
-    --skip-keys="zed zed_msgs zed_components"
+# # Note: rosdep install handles sudo internally/interactively
+# # Skipped as per user request (dependencies assumed present in Docker)
+# # rosdep install --from-paths src --ignore-src -r -y \
+# #    --skip-keys="$SKIP_KEYS"
 
 # ---------------------------------------------------------
 # 5. Build (colcon)

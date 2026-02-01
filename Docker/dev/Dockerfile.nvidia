@@ -148,21 +148,21 @@ RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel
 
 # Fake opencv-python
 RUN mkdir -p /tmp/fake_cv && \
-    echo 'from setuptools import setup; setup(name="opencv-python", version="4.10.0", packages=[])' > /tmp/fake_cv/setup.py && \
-    pip3 install --no-cache-dir /tmp/fake_cv && \
-    rm -rf /tmp/fake_cv
+        echo 'from setuptools import setup; setup(name="opencv-python", version="4.10.0", packages=[])' > /tmp/fake_cv/setup.py && \
+        pip3 install --no-cache-dir /tmp/fake_cv && \
+        rm -rf /tmp/fake_cv
 
 # Fake opencv-contrib-python
 RUN mkdir -p /tmp/fake_cv_contrib && \
-    echo 'from setuptools import setup; setup(name="opencv-contrib-python", version="4.10.0", packages=[])' > /tmp/fake_cv_contrib/setup.py && \
-    pip3 install --no-cache-dir /tmp/fake_cv_contrib && \
-    rm -rf /tmp/fake_cv_contrib
+        echo 'from setuptools import setup; setup(name="opencv-contrib-python", version="4.10.0", packages=[])' > /tmp/fake_cv_contrib/setup.py && \
+        pip3 install --no-cache-dir /tmp/fake_cv_contrib && \
+        rm -rf /tmp/fake_cv_contrib
 
 # Fake opencv-python-headless
 RUN mkdir -p /tmp/fake_cv_headless && \
-    echo 'from setuptools import setup; setup(name="opencv-python-headless", version="4.10.0", packages=[])' > /tmp/fake_cv_headless/setup.py && \
-    pip3 install --no-cache-dir /tmp/fake_cv_headless && \
-    rm -rf /tmp/fake_cv_headless
+        echo 'from setuptools import setup; setup(name="opencv-python-headless", version="4.10.0", packages=[])' > /tmp/fake_cv_headless/setup.py && \
+        pip3 install --no-cache-dir /tmp/fake_cv_headless && \
+        rm -rf /tmp/fake_cv_headless
 
 # Install actual requirements
 # Ensure Docker/dev/constraints.txt DOES NOT contain opencv lines
@@ -173,7 +173,7 @@ RUN pip3 install --no-cache-dir --ignore-installed  -c /tmp/constraints.txt -r /
 # ROS 2 Humble's colcon build system breaks with Setuptools >= 70.
 RUN pip3 install --no-cache-dir "setuptools==65.5.1"
 
-ARG USERNAME=ros
+ARG USERNAME=douglas
 ARG USER_UID=1000
 ARG USER_GID=$USER_UID
 
@@ -194,9 +194,6 @@ WORKDIR /home/$USERNAME/AUV-2026
 # Add source commands to bashrc
 RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc && \
         echo 'if [ -f "$HOME/AUV-2026/ros2_ws/install/setup.bash" ]; then source "$HOME/AUV-2026/ros2_ws/install/setup.bash"; fi' >> ~/.bashrc
-
-# Default directory
-WORKDIR /home/ros/AUV-2026
 
 # Keep container alive
 CMD ["bash"]
