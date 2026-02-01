@@ -134,6 +134,11 @@ RUN cd /tmp && \
 # skip_cuda: Don't try to install CUDA Toolkit (Base image already has it)
 # skip_python: Don't install pyzed (Wrapper uses C++, prevents pip conflicts)
 RUN cd /tmp && ./${ZED_SDK_RUN} silent skip_cuda skip_python && \
+        # since the installer installs to /usr/local/zed we need to set permissions for lib access
+        # a for all user r for read and X for conditional execute (only allow executing if it is an actual executable)
+        chmod -R a+rX /usr/local/zed && \
+        # Update library cache
+        ldconfig && \
         rm ${ZED_SDK_RUN} && \
         rm -rf /var/lib/apt/lists/*
 
