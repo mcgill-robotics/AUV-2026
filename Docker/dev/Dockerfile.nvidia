@@ -143,7 +143,7 @@ RUN cd /tmp && ./${ZED_SDK_RUN} silent skip_cuda skip_python && \
 # 3. Install Python ML Libraries (Ultralytics/YOLO)
 # ---------------------------------------------------------
 # 1. Upgrade pip/setuptools
-RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel
+# RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel
 
 # Base image already has opencv-python with CUDA support but pip doesn't recognize it since it 
 # wasn't installed via pip, so we fake-install empty packages to satisfy dependencies
@@ -173,7 +173,7 @@ RUN pip3 install --no-cache-dir --ignore-installed  -c /tmp/constraints.txt -r /
 
 # DOWNGRADE Setuptools for ROS 2
 # ROS 2 Humble's colcon build system breaks with Setuptools >= 70.
-RUN pip3 install --no-cache-dir "setuptools==65.5.1"
+RUN pip3 install --no-cache-dir --force-reinstall "setuptools==65.5.1"
 
 ARG USERNAME=douglas
 ARG USER_UID=1000
