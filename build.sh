@@ -60,6 +60,15 @@ else
   exit 1
 fi
 
+# Source dependencies workspace if available 
+DEPS_WS_SETUP="/opt/dependencies_ws/install/setup.bash"
+if [ -f "$DEPS_WS_SETUP" ]; then
+  echo "   -> Sourcing dependencies_ws ..."
+  set +u
+  source "$DEPS_WS_SETUP"
+  set -u
+fi
+
 if [ -d "ros2_ws" ]; then
     cd ros2_ws
 else

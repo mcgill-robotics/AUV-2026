@@ -199,6 +199,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-$ROS_DISTRO-foxglove-bridge \
     ros-$ROS_DISTRO-joy \
     ros-$ROS_DISTRO-joy-teleop \
+    ros-$ROS_DISTRO-rosidl-default-generators \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -208,13 +209,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /opt/dependencies_ws
 
 RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
-    colcon build --parallel-workers $(nproc) --symlink-install \
+    colcon build --parallel-workers $(nproc) \
     --event-handlers console_direct+ --base-paths src \
     --cmake-args ' -DCMAKE_BUILD_TYPE=Release' \
     ' -DCMAKE_LIBRARY_PATH=/usr/local/cuda/lib64/stubs' \
-    ' -DCMAKE_CXX_FLAGS="-Wl,--allow-shlib-undefined"' \
+    ' -DCMAKE_CXX_FLAGS=\"-Wl,--allow-shlib-undefined\"' \
     ' --no-warn-unused-cli' " && \
-    rm -rf build install logs || true
+    rm -rf build log
+
 
 # Get CUDA dependencies to install torch and torchvision
 WORKDIR /root
