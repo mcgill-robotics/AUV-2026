@@ -38,12 +38,17 @@ ROS_DISTRO=humble
 ROS_INSTALL=/opt/ros/$ROS_DISTRO/setup.bash
 
 # Initialize all git submodules
-git config --global --add safe.directory "$(pwd)" || $SUDO git config --system --add safe.directory "$(pwd)"
-git config --global --add safe.directory $(pwd)/ros2_ws/src/Xsens_MTi_Driver || $SUDO git config --system --add safe.directory $(pwd)/ros2_ws/src/Xsens_MTi_Driver
-git config --global --add safe.directory $(pwd)/ros2_ws/src/ros-tcp-endpoint || $SUDO git config --system --add safe.directory $(pwd)/ros2_ws/src/ros-tcp-endpoint
-git config --global --add safe.directory $(pwd)/ros2_ws/src/zed-ros2-wrapper || $SUDO git config --system --add safe.directory $(pwd)/ros2_ws/src/zed-ros2-wrapper
+# Skip in CI since GitHub Actions checkout already fetches submodules (avoids permission issues)
+if [ -z "$CI" ]; then
+    git config --global --add safe.directory "$(pwd)" || $SUDO git config --system --add safe.directory "$(pwd)"
+    git config --global --add safe.directory $(pwd)/ros2_ws/src/Xsens_MTi_Driver || $SUDO git config --system --add safe.directory $(pwd)/ros2_ws/src/Xsens_MTi_Driver
+    git config --global --add safe.directory $(pwd)/ros2_ws/src/ros-tcp-endpoint || $SUDO git config --system --add safe.directory $(pwd)/ros2_ws/src/ros-tcp-endpoint
+    git config --global --add safe.directory $(pwd)/ros2_ws/src/zed-ros2-wrapper || $SUDO git config --system --add safe.directory $(pwd)/ros2_ws/src/zed-ros2-wrapper
 
-git submodule update --init --recursive
+    git submodule update --init --recursive
+else
+    echo "Running in CI, skipping git submodule update (already handled by checkout action)."
+fi
 
 if [ -f "$ROS_INSTALL" ]; then
   echo -e "\n=== Sourcing ROS 2 base ($ROS_DISTRO) ==="

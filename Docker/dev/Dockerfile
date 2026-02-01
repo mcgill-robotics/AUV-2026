@@ -119,19 +119,16 @@ RUN pip3 install --no-cache-dir "setuptools==65.5.1"
 # ---------------------------------------------------------
 # The base image already has a 'ros' user with sudo. 
 ARG USERNAME=douglas
-ARG USER_UID=1001
+ARG USER_UID=1000
 ARG USER_GID=$USER_UID
 
-# 1. Create or rename the group
-RUN if getent group $USER_GID; then \
-    groupmod -n $USERNAME $(getent group $USER_GID | cut -d: -f1); \
-    else \
-    groupadd --gid $USER_GID $USERNAME; \
-    fi \
-    # 2. Create the user
-    && useradd --uid $USER_UID --gid $USER_GID -m -s /bin/bash $USERNAME \
+# Rename the default 'ros' user to our desired username/uid
+# We keep UID 1000 to match host permissions
+RUN groupmod --gid $USER_GID --new-name $USERNAME ros \
+    && usermod --uid $USER_UID --gid $USER_GID --login $USERNAME --move-home --home /home/$USERNAME ros \
     && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
     && chmod 0440 /etc/sudoers.d/$USERNAME \
+    && groupadd -f -r render \
     && usermod -aG video,render -s /bin/bash $USERNAME
 
 USER $USERNAME
