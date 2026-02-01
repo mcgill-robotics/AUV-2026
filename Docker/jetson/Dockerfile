@@ -14,6 +14,7 @@ ARG CUSTOM_ZED_SDK_URL=""
 
 # ZED SDK link
 ENV ZED_SDK_URL=${CUSTOM_ZED_SDK_URL:-"https://download.stereolabs.com/zedsdk/${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}.${ZED_SDK_PATCH}/l4t${L4T_MAJOR}.${L4T_MINOR}/jetsons"}
+ARG ZED_SDK_RUN="ZED_SDK_installer.run"
 
 # ROS2 distribution
 ARG ROS2_DIST=humble
@@ -64,7 +65,8 @@ RUN if [ "$(curl -L -I "${ZED_SDK_URL}" -o /dev/null -s -w '%{http_code}\n' | he
 # Disable apt-get warnings
 RUN curl -fsSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg && \
     apt-get update || true && apt-get install -y --no-install-recommends apt-utils dialog && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    apt-get clean
 
 # Install SSH server and set up SSH access
 # Hardcoding a password is not secure but eh
@@ -77,7 +79,9 @@ RUN apt-get update && apt-get install -y \
     && echo "Port 222" >> /etc/ssh/sshd_config \
     && echo "PermitRootLogin yes" >> /etc/ssh/sshd_config \
     && echo 'root:jetson' | chpasswd \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+    
 
 RUN echo "# R${L4T_MAJOR} (release), REVISION: ${L4T_MINOR}" > /etc/nv_tegra_release && \
     apt-get update -y || true && apt-get install -y --no-install-recommends \
@@ -97,13 +101,17 @@ RUN echo "# R${L4T_MAJOR} (release), REVISION: ${L4T_MINOR}" > /etc/nv_tegra_rel
     zlib1g-dev \
     zstd && \
     export PIP_INDEX_URL="${PIP_INDEX_FOR_NON_NVIDIA}" && \
-    pip install protobuf && \
-    wget -q --no-check-certificate -O ZED_SDK_Linux_JP.run \
-    ${ZED_SDK_URL} && \
-    chmod +x ZED_SDK_Linux_JP.run ; ./ZED_SDK_Linux_JP.run silent skip_python && \
-    rm -rf ZED_SDK_Linux_JP.run && \
-    rm -rf /var/lib/apt/lists/*
+    pip install  --no-cache-dir protobuf && \
+    rm -rf /var/lib/apt/lists/* && \
+    apt-get clean
 
+RUN cd /tmp && \
+    wget -q --no-check-certificate -O ${ZED_SDK_RUN} \
+    ${ZED_SDK_URL} && \
+    chmod +x ${ZED_SDK_RUN} && \
+    ./${ZED_SDK_RUN} silent skip_python skip_cuda && \
+    rm -rf ${ZED_SDK_RUN} && \
+    ldconfig
 # Install other common development tools
 # Keep these in alphabetical
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone && \ 
@@ -173,10 +181,13 @@ RUN wget https://github.com/ros/xacro/archive/refs/tags/${XACRO_VERSION}.tar.gz 
     wget https://github.com/ros-drivers/usb_cam/archive/refs/tags/${USB_CAM_VERSION}.tar.gz -O - | tar -xvz && mv usb_cam-${USB_CAM_VERSION} usb_cam && \
     wget https://github.com/mavlink/mavros/archive/refs/tags/${MAVROS_VERSION}.tar.gz -O - | tar -xvz && mv mavros-${MAVROS_VERSION} mavros && \
     wget https://github.com/ros-perception/image_common/archive/refs/tags/${IMAGE_COMMON_VERSION}.tar.gz -O - | tar -xvz && mv image_common-${IMAGE_COMMON_VERSION} image_common && \
+    # copy needed packages to src
     cp -r geographic-info/geographic_msgs/ . && \
     cp -r mavros/mavros_msgs/ . && \
+    # clean up unneeded source folders
+    rm -rf geographic-info && \
     rm -rf mavros && \
-    rm -rf geographic-info
+    rm -rf /opt/dependencies_ws/src/.cache
 
 # ROS packages that do not depend on OpenCV/that ZED wrapper doesn't depend on can be installed here
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -197,16 +208,20 @@ RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
     --cmake-args ' -DCMAKE_BUILD_TYPE=Release' \
     ' -DCMAKE_LIBRARY_PATH=/usr/local/cuda/lib64/stubs' \
     ' -DCMAKE_CXX_FLAGS="-Wl,--allow-shlib-undefined"' \
-    ' --no-warn-unused-cli' "
+    ' --no-warn-unused-cli' " && \
+    rm -rf build install logs || true
 
 # Get CUDA dependencies to install torch and torchvision
 WORKDIR /root
-RUN wget https://developer.download.nvidia.com/compute/cusparselt/0.8.1/local_installers/cusparselt-local-tegra-repo-ubuntu2204-0.8.1_0.8.1-1_arm64.deb && \
-    dpkg -i cusparselt-local-tegra-repo-ubuntu2204-0.8.1_0.8.1-1_arm64.deb && \
+RUN CUSPARSE_LIBRARY_NAME="cusparselt-local-tegra-repo-ubuntu2204-0.8.1_0.8.1-1_arm64.deb" && \
+    wget https://developer.download.nvidia.com/compute/cusparselt/0.8.1/local_installers/${CUSPARSE_LIBRARY_NAME} && \
+    dpkg -i ${CUSPARSE_LIBRARY_NAME} && \
     cp /var/cusparselt-local-tegra-repo-ubuntu2204-0.8.1/cusparselt-*-keyring.gpg /usr/share/keyrings/ && \
     apt-get update && \
     apt-get -y install cusparselt-cuda-12 && \
-    rm -rf cusparselt-local-tegra-repo-ubuntu2204-0.8.1_0.8.1-1_arm64.deb
+    rm -rf ${CUSPARSE_LIBRARY_NAME} && \
+    rm -rf /var/lib/apt/lists/* && \
+    apt-get clean
 
 ARG CUSPARSE_SOLVER_NAME="libcudss-linux-sbsa-0.6.0.5_cuda12-archive"
 RUN mkdir -p tmp_cudss && cd tmp_cudss && \
@@ -217,20 +232,20 @@ RUN mkdir -p tmp_cudss && cd tmp_cudss && \
     rm -rf ${CUSPARSE_SOLVER_NAME} ${CUSPARSE_SOLVER_NAME}.tar.xz
 
 # Install ultralytics, avoid reinstalling numpy and opencv (torch, tensorflow and torchvision installed in the .toml file, cuda supported cause pip index is Jetpack6 one)
-RUN pip install --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} --ignore-install sympy \ 
+RUN pip install --no-cache-dir --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} --ignore-install sympy \ 
     cython --upgrade
 
 RUN git clone https://github.com/ultralytics/ultralytics.git && \
     cd ultralytics && \
     sed -i '/"numpy>=1.23.0"/d; /"opencv-python>=4.6.0"/d; /"numpy<2.0.0"/d' pyproject.toml && \
-    pip install --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} -e . && \
+    pip install --no-cache-dir --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} -e . && \
     cd .. && \
     rm -rf ultralytics
 
 # Install dependencies for vision
-RUN pip install --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} notebook \
+RUN pip install --no-cache-dir --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} notebook \
     roboflow albumentations pandas && \
-    pip install --ignore-install --upgrade typing_extensions
+    pip install --no-cache-dir --ignore-install --upgrade typing_extensions
 
 
 # Environment Setup
@@ -252,11 +267,15 @@ RUN if getent group $USER_GID; then \
 
 # Install fixuid for dynamic UID/GID remapping at runtime
 ARG FIXUID_VERSION=0.6.0
+ARG ARCH="$(dpkg --print-architecture)"
 RUN ARCH="$(dpkg --print-architecture)" && \
-    curl -fsSL "https://github.com/boxboat/fixuid/releases/download/v${FIXUID_VERSION}/fixuid-${FIXUID_VERSION}-linux-${ARCH}.tar.gz" | tar -C /usr/local/bin -xzf - && \
+    FIX_UID_INSTALL_FILENAME="fixuid-${FIXUID_VERSION}-linux-${ARCH}.tar.gz" && \
+    cd /tmp && \
+    curl -fsSLo ${FIX_UID_INSTALL_FILENAME} "https://github.com/boxboat/fixuid/releases/download/v${FIXUID_VERSION}/${FIX_UID_INSTALL_FILENAME}" | tar -C /usr/local/bin -xzf - && \
     chown root:root /usr/local/bin/fixuid && \
     chmod 4755 /usr/local/bin/fixuid && \
     mkdir -p /etc/fixuid && \
+    rm -rf /tmp/${FIX_UID_INSTALL_FILENAME} && \
     printf "user: $USERNAME\ngroup: $USERNAME\n" > /etc/fixuid/config.yml
 
 USER $USERNAME
