@@ -235,7 +235,7 @@ RUN pip install --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} notebook \
 
 # Environment Setup
 ARG USERNAME=douglas
-ARG USER_UID=1000
+ARG USER_UID=1001
 ARG USER_GID=$USER_UID
 
 # 1. Create or rename the group

@@ -119,7 +119,7 @@ RUN pip3 install --no-cache-dir "setuptools==65.5.1"
 # ---------------------------------------------------------
 # The base image already has a 'ros' user with sudo. 
 ARG USERNAME=douglas
-ARG USER_UID=1000
+ARG USER_UID=1001
 ARG USER_GID=$USER_UID
 
 # 1. Create or rename the group
