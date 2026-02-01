@@ -81,7 +81,7 @@ RUN apt-get update && apt-get install -y \
     && echo 'root:jetson' | chpasswd \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
-    
+
 
 RUN echo "# R${L4T_MAJOR} (release), REVISION: ${L4T_MINOR}" > /etc/nv_tegra_release && \
     apt-get update -y || true && apt-get install -y --no-install-recommends \
@@ -267,15 +267,11 @@ RUN if getent group $USER_GID; then \
 
 # Install fixuid for dynamic UID/GID remapping at runtime
 ARG FIXUID_VERSION=0.6.0
-ARG ARCH="$(dpkg --print-architecture)"
 RUN ARCH="$(dpkg --print-architecture)" && \
-    FIX_UID_INSTALL_FILENAME="fixuid-${FIXUID_VERSION}-linux-${ARCH}.tar.gz" && \
-    cd /tmp && \
-    curl -fsSLo ${FIX_UID_INSTALL_FILENAME} "https://github.com/boxboat/fixuid/releases/download/v${FIXUID_VERSION}/${FIX_UID_INSTALL_FILENAME}" | tar -C /usr/local/bin -xzf - && \
+    curl -fsSL "https://github.com/boxboat/fixuid/releases/download/v${FIXUID_VERSION}/fixuid-${FIXUID_VERSION}-linux-${ARCH}.tar.gz" | tar -C /usr/local/bin -xzf - && \
     chown root:root /usr/local/bin/fixuid && \
     chmod 4755 /usr/local/bin/fixuid && \
     mkdir -p /etc/fixuid && \
-    rm -rf /tmp/${FIX_UID_INSTALL_FILENAME} && \
     printf "user: $USERNAME\ngroup: $USERNAME\n" > /etc/fixuid/config.yml
 
 USER $USERNAME
