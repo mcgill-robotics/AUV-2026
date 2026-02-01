@@ -110,6 +110,11 @@ RUN cd /tmp && \
     ${ZED_SDK_URL} && \
     chmod +x ${ZED_SDK_RUN} && \
     ./${ZED_SDK_RUN} silent skip_python skip_cuda && \
+    # since the installer installs to /usr/local/zed we need to set permissions for lib access
+    # a for all user r for read and X for conditional execute (only allow executing if it is an actual executable)
+    chmod -R a+rX /usr/local/zed && \
+    # Update library cache
+    ldconfig && \
     rm -rf ${ZED_SDK_RUN} && \
     ldconfig
 # Install other common development tools
