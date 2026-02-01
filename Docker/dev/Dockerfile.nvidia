@@ -116,9 +116,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3-vcstools \
         && rm -rf /var/lib/apt/lists/*
 
-# Initialize rosdep
-RUN rosdep init || true && rosdep update
-
 # ---------------------------------------------------------
 # 2. Install ZED SDK (Parameterized)
 # ---------------------------------------------------------

@@ -92,9 +92,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# Initialize rosdep
-RUN rosdep init || true && rosdep update
-
 # ---------------------------------------------------------
 # 3. Install Python ML & Vision Dependencies (CPU)
 # ---------------------------------------------------------

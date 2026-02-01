@@ -106,18 +106,18 @@ fi
 # ---------------------------------------------------------
 # 4. Dependency Installation (Rosdep)
 # ---------------------------------------------------------
-echo -e "\n=== Checking Rosdep ==="
+# echo -e "\n=== Checking Rosdep ==="
 
-# 4a. Initialize if missing
-if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then
-    echo "   -> Initializing rosdep..."
-    $SUDO rosdep init
-fi
+# # 4a. Initialize if missing
+# if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then
+#     echo "   -> Initializing rosdep..."
+#     $SUDO rosdep init
+# fi
 
 # 4b. Update if needed
 # We run this as the current user (NO SUDO) so permissions stay correct
-echo "   -> Updating rosdep cache..."
-rosdep update
+# echo "   -> Updating rosdep cache..."
+# rosdep update
 
 # echo -e "\n=== Installing Dependencies ==="
 # # Uses sudo if on host, no sudo if in docker
