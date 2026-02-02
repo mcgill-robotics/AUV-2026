@@ -165,16 +165,10 @@ fi
 
 if [ "$CLEAN_BUILD" = true ]; then
     PACKAGES_TO_CLEAN=""
-    if [ -n "$PACKAGE_TO_BUILD" ]; then
     echo "    -> Cleaning packages: ${PKGS[*]}"
     for pkg in "${PKGS[@]}"; do
         rm -rf "build/$pkg" "install/$pkg" "log/$pkg"
     done
-    else
-        echo "    -> Cleaning all packages"
-        colcon build --cmake-target clean
-        rm -rf build/ log/ install/
-    fi
 fi
 
 if [ "$DEBUG_BUILD" = true ]; then
