@@ -55,7 +55,7 @@ if [ -z "${CI:-}" ]; then
     git config --global --add safe.directory $(pwd)/ros2_ws/src/ros-tcp-endpoint || $SUDO git config --system --add safe.directory $(pwd)/ros2_ws/src/ros-tcp-endpoint
     git config --global --add safe.directory $(pwd)/ros2_ws/src/zed-ros2-wrapper || $SUDO git config --system --add safe.directory $(pwd)/ros2_ws/src/zed-ros2-wrapper
 
-    git submodule update --init --recursive
+    # git submodule update --init --recursive --rebase
 else
     echo "Running in CI, skipping git submodule update (already handled by checkout action)."
 fi
@@ -166,10 +166,10 @@ fi
 if [ "$CLEAN_BUILD" = true ]; then
     PACKAGES_TO_CLEAN=""
     if [ -n "$PACKAGE_TO_BUILD" ]; then
-        echo "    -> Cleaning packages: ${PKGS[*]}"
-        for pkg in "${PKGS[@]}"; do
-            rm -rf "build/$pkg" "install/$pkg" "log/$pkg"
-        done
+    echo "    -> Cleaning packages: ${PKGS[*]}"
+    for pkg in "${PKGS[@]}"; do
+        rm -rf "build/$pkg" "install/$pkg" "log/$pkg"
+    done
     else
         echo "    -> Cleaning all packages"
         colcon build --cmake-target clean
