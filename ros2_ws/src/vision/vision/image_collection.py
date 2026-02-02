@@ -4,9 +4,11 @@
 
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, CompressedImage
+from std_srvs.srv import SetBool
 from cv_bridge import CvBridge, CvBridgeError
 import cv2
+import numpy as np
 import os
 import subprocess
 from datetime import datetime
@@ -24,14 +26,16 @@ class ImageCollectionNode(Node):
         # Parameters
         self.declare_parameter('front_cam_data_dir', 'data_front_cam')
         self.declare_parameter('down_cam_data_dir', 'data_down_cam')
-        self.declare_parameter('front_cam_topic', '/zed/zed_node/stereo/image_rect_color')
+        self.declare_parameter('front_cam_topic', '/zed/zed_node/rgb/color/rect/image/compressed')
         self.declare_parameter('down_cam_topic', '/down_cam/image_raw')
+        self.declare_parameter('collection_interval', 2.0)
         
         # Get parameters
         self.front_cam_dir = self.get_parameter('front_cam_data_dir').value
         self.down_cam_dir = self.get_parameter('down_cam_data_dir').value
         front_topic = self.get_parameter('front_cam_topic').value
         down_topic = self.get_parameter('down_cam_topic').value
+        self.collection_interval = self.get_parameter('collection_interval').value
         
         # Create directories
         Path(self.front_cam_dir).mkdir(parents=True, exist_ok=True)
@@ -52,14 +56,24 @@ class ImageCollectionNode(Node):
         self.stats_lock = threading.Lock()
         
         # Subscribers
-        self.front_sub = self.create_subscription(
-            Image, front_topic, self.front_callback, 10)
+        if 'compressed' in front_topic:
+            self.front_sub = self.create_subscription(
+                CompressedImage, front_topic, self.front_callback, 10)
+        else:
+            self.front_sub = self.create_subscription(
+                Image, front_topic, self.front_callback, 10)
+                
         self.down_sub = self.create_subscription(
             Image, down_topic, self.down_callback, 10)
         
         # Automatic capture state
         self.auto_capture_active = False
         self.auto_timer = None
+
+        # Service controlled capture state
+        self.service_capture_timer = None
+        self.create_service(SetBool, '~/toggle_front_collection', self.toggle_front_collection_callback)
+        
         
         self.get_logger().info('Image Collection Node initialized')
         self.get_logger().info(f'Front cam dir: {self.front_cam_dir}')
@@ -89,8 +103,15 @@ class ImageCollectionNode(Node):
     
     def front_callback(self, msg):
         """Callback for front camera images"""
+        # print("Front camera image received")
         try:
-            cv_image = self.bridge.imgmsg_to_cv2(msg, 'bgr8')
+            if hasattr(msg, 'format') and 'compressed' in msg.format:
+                # Manual decoding to avoid cv_bridge issues with numpy 2.x
+                np_arr = np.frombuffer(msg.data, np.uint8)
+                cv_image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+            else:
+                cv_image = self.bridge.imgmsg_to_cv2(msg, 'bgr8')
+                
             with self.front_lock:
                 self.front_image = cv_image
         except CvBridgeError as e:
@@ -141,6 +162,36 @@ class ImageCollectionNode(Node):
         except Exception as e:
             self.get_logger().error(f'Error saving image: {e}')
             return False
+
+    def toggle_front_collection_callback(self, request, response):
+        """Service callback to toggle front camera collection"""
+        if request.data:
+            # Start collection
+            if self.service_capture_timer is not None:
+                response.success = True
+                response.message = 'Front collection already running'
+            else:
+                self.service_capture_timer = self.create_timer(
+                    self.collection_interval, 
+                    lambda: self.save_image('front')
+                )
+                response.success = True
+                response.message = f'Started front collection (every {self.collection_interval}s)'
+                self.get_logger().info(response.message)
+        else:
+            # Stop collection
+            if self.service_capture_timer is not None:
+                self.service_capture_timer.cancel()
+                self.service_capture_timer.destroy()
+                self.service_capture_timer = None
+                response.success = True
+                response.message = 'Stopped front collection'
+                self.get_logger().info(response.message)
+            else:
+                response.success = False
+                response.message = 'Front collection was not running'
+        
+        return response
     
     def show_latest_image(self, camera_type):
         """Display the latest image from specified camera"""
@@ -295,10 +346,8 @@ def user_input_thread(node):
             rclpy.shutdown()
             break
         except EOFError:
-            # Handle EOF (Ctrl+D)
-            print('\nShutting down...')
-            node.stop_auto_capture()
-            rclpy.shutdown()
+            # Handle EOF (Ctrl+D) or non-interactive mode
+            print('\nInput stream closed. Exiting input thread.')
             break
 
 
@@ -307,8 +356,8 @@ def main(args=None):
     node = ImageCollectionNode()
     
     # Start user input thread
-    input_thread = threading.Thread(target=user_input_thread, args=(node,), daemon=True)
-    input_thread.start()
+    # input_thread = threading.Thread(target=user_input_thread, args=(node,), daemon=True)
+    # input_thread.start()
     
     # Spin the node
     try:

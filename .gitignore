@@ -23,3 +23,9 @@
 
 #xsens ros2 driver lib 
 ros2_ws/src/xsens_mti_ros2_driver/lib/**
+
+sim_unity_sensors_cams.zip
+
+sim_unity_sensors_cams/metadata.yaml
+
+sim_unity_sensors_cams/sim_unity_sensors_cams_0.db3

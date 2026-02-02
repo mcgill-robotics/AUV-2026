@@ -12,7 +12,7 @@ def main(args=None):
     )
     enhance_node = image_enhancement_utils.EnhanceNode(
         node_name="front_image_enhancement",
-        input_topic="sensors/zed/zed_node/stereo/image_rect_color",
+        input_topic="/zed/zed_node/rgb/color/rect/image/compressed",
         output_topic="vision/front_cam/image_enhanced",
         enhancer=enhancer
     )
