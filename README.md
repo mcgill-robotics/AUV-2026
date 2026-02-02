@@ -6,7 +6,7 @@ Ahoy! This project contains software intended to run on the custom-built Douglas
 
 This project is maintained by the McGill Robotics Club and was developed by its members - students of McGill University.
 
-## Setting Up the Dev Environment
+## 1. Setting Up the Dev Environment
 
 ### Prerequisites
 Before setting up the dev environment, you should have the following software installed:
@@ -75,7 +75,9 @@ Once loading is complete, you're ready to develop!
     # For CPU
     docker exec -it auv-dev-cpu bash
     ```
+For more details, see [Docker/dev/README.md](Docker/dev/README.md).
 
+## 2. Building ROS Packages
 Once inside the container, use the build script. It automatically detects if you have the ZED SDK and builds accordingly.
 
 ```bash
@@ -84,4 +86,10 @@ Once inside the container, use the build script. It automatically detects if you
     source ros2_ws/install/setup.bash
 ```
 
-For more details, see [Docker/dev/README.md](Docker/dev/README.md).
+Multiple build flags are available:
+-  `./build.sh` : Default Release Build, should work in most cases
+-  `./build.sh -c` : Clean Build, removes previous build artifacts (`build/`, `install/`, `log/` folders)
+-  `./build.sh -d` : Debug Build, compiles with debug symbols and no optimizations and serial compilation
+-  `./build.sh -p <package_name>` : Build specified package and required dependencies only
+
+Since the debug `-d` build is single-threaded for easier debugging, it may take very long to compile. As such it should only be used in tandem with the `-p` flag to build specific packages. A typically debug build command would be `./build.sh -cd -p <package_name>`

@@ -4,15 +4,25 @@ set -euo pipefail
 
 # Do we want to remove install/build/log directories before building?
 CLEAN_BUILD=false
+DEBUG_BUILD=false
+PACKAGE_TO_BUILD=""
 
-while getopts ":c" flag; do
+while getopts ":cdp:" flag; do
     case "${flag}" in
         c) 
             echo "Flag -c was set. ros2_ws packages will be built from scratch"
             CLEAN_BUILD=true
             ;;
+        d)
+            echo "Flag -d was set. Debug build enabled."
+            DEBUG_BUILD=true
+            ;;
+        p)
+            echo "Flag -p was set. Building up to package: ${OPTARG}"
+            PACKAGE_TO_BUILD="${OPTARG}"
+            ;;
         *)
-            echo "Usage: $0 [-c]"
+            echo "Usage: $0 [-c] [-d] [-p <package_name>]"
             exit 1
             ;;
     esac
@@ -148,10 +158,29 @@ if [ "$CLEAN_BUILD" = true ]; then
     rm -rf build log install
 fi
 
-colcon build \
-    --parallel-workers $(nproc) \
-    --event-handlers console_direct+ \
-    --cmake-args -DCMAKE_BUILD_TYPE=Release
+if [ "$DEBUG_BUILD" = true ]; then
+    echo "    -> Performing Debug Build"
+    # Output to console, interleaving build output for better visibility
+    # Generate compile commands for use with linters e.g. VSCode
+    # Run everything sequentially to find exact failure point
+    colcon build \
+        --event-handlers console_direct+ \
+        --cmake-args \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo  \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+        --executor sequential \
+        $([ -n "$PACKAGE_TO_BUILD" ] && echo "--packages-up-to $PACKAGE_TO_BUILD")
+else
+    echo "    -> Performing Release Build"
+    # Output with cohesion, groups output by package
+    # Utilize all available CPU cores
+    colcon build \
+        --cmake-args -DCMAKE_BUILD_TYPE=Release \
+        --event-handlers console_cohesion+ \
+        --parallel-workers $(nproc) \
+        $([ -n "$PACKAGE_TO_BUILD" ] && echo "--packages-up-to $PACKAGE_TO_BUILD")
+fi
+
 
 # ---------------------------------------------------------
 # 6. Cleanup
