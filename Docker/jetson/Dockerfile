@@ -167,7 +167,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean
 
 # copy our configs for zed2i
-COPY SN33688213.conf /usr/local/zed/settings/
+COPY Docker/jetson/SN33688213.conf /usr/local/zed/settings/
 
 # Install missing dependencies and wanted packages from source
 WORKDIR /opt/dependencies_ws/src
@@ -286,7 +286,7 @@ USER $USERNAME
 # set colcon home after adding user
 ENV COLCON_HOME=/home/$USERNAME/.colcon
 # move repo defaults.yaml to container, CI is run from Docker/jetson so need to go up 2 levels
-COPY ../../.colcon ${COLCON_HOME}/
+COPY .colcon ${COLCON_HOME}/
 
 WORKDIR /home/$USERNAME/AUV-2026
 
