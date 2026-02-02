@@ -153,9 +153,28 @@ fi
 
 echo -e "\n=== Building Workspace ==="
 
+if [ -n "$PACKAGE_TO_BUILD" ]; then
+    echo "    -> Building up to package: $PACKAGE_TO_BUILD"
+    # Determine dependencies + packages to build, colcon build mapped to PKGS bash array
+    mapfile -t PKGS < <( colcon list --packages-up-to "$PACKAGE_TO_BUILD" --names-only )
+else
+    # Set PKGS to all packages
+    mapfile -t PKGS < <( colcon list --names-only )
+fi
+
+
 if [ "$CLEAN_BUILD" = true ]; then
-    echo "    -> Removing ros2_ws/build ros2_ws/install ros2_ws/log for clean build"
-    rm -rf build log install
+    PACKAGES_TO_CLEAN=""
+    if [ -n "$PACKAGE_TO_BUILD" ]; then
+        echo "    -> Cleaning packages: ${PKGS[*]}"
+        for pkg in "${PKGS[@]}"; do
+            rm -rf "build/$pkg" "install/$pkg" "log/$pkg"
+        done
+    else
+        echo "    -> Cleaning all packages"
+        colcon build --cmake-target clean
+        rm -rf build/ log/ install/
+    fi
 fi
 
 if [ "$DEBUG_BUILD" = true ]; then

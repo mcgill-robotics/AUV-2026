@@ -87,9 +87,9 @@ Once inside the container, use the build script. It automatically detects if you
 ```
 
 Multiple build flags are available:
--  `./build.sh` : Default Release Build, should work in most cases
+-  `./build.sh` : Default Release Build, works for most cases
 -  `./build.sh -c` : Clean Build, removes previous build artifacts (`build/`, `install/`, `log/` folders)
 -  `./build.sh -d` : Debug Build, compiles with debug symbols and no optimizations and serial compilation
--  `./build.sh -p <package_name>` : Build specified package and required dependencies only
+-  `./build.sh -p <package_name>` : Build a specific package and its required dependencies (as determined by colcon)
 
-Since the debug `-d` build is single-threaded for easier debugging, it may take very long to compile. As such it should only be used in tandem with the `-p` flag to build specific packages. A typically debug build command would be `./build.sh -cd -p <package_name>`
+Since the debug `-d` build is single-threaded for easier debugging, it may take very long to compile. As such, it should only be used in tandem with the `-p` flag to build a specific package. A typical debug build command would be `./build.sh -cd -p <package_name>`. Note that the `-c` will only clean the build artifacts for the specified package and its dependencies.
