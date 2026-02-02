@@ -24,7 +24,7 @@ namespace controls
        );
 
        // Initialize publisher
-       pub_effort_ = this->create_publisher<wrench_msg>("/controls/combined_effort", 1);
+       pub_effort_ = this->create_publisher<wrench_msg>("/controls/total_effort", 1);
 
        // Initialize effort bias if needed
        this->declare_parameter<double>("effort_bias_force_x", 0.0);
