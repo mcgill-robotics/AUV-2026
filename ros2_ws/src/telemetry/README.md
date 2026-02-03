@@ -3,7 +3,7 @@
 Foxglove Studio layouts and telemetry configuration for AUV monitoring during pool tests and competition.
 
 # Launch Foxglove Bridge
-ros2 launch auv_dashboard dashboard.launch.py
+ros2 launch telemetry dashboard.launch.py
 
 ## Layouts
 
@@ -28,10 +28,10 @@ All topic names are centralized in `config/topics.yaml`. Reference this file whe
 
 ```bash
 # Custom port
-ros2 launch auv_dashboard dashboard.launch.py port:=9090
+ros2 launch telemetry dashboard.launch.py port:=9090
 
 # Bind to specific address
-ros2 launch auv_dashboard dashboard.launch.py address:=192.168.1.100
+ros2 launch telemetry dashboard.launch.py address:=192.168.1.100
 ```
 
 ## Sharing Layouts
