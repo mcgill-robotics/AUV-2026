@@ -1,0 +1,143 @@
+{
+        "globalVariables": {},
+        "userNodes": {},
+        "playbackConfig": {
+                "speed": 1
+        },
+        "layout": {
+                "first": {
+                        "first": "Tab!imu",
+                        "second": "Tab!depth",
+                        "direction": "row",
+                        "splitPercentage": 50
+                },
+                "second": {
+                        "first": "Tab!dvl",
+                        "second": "Tab!pose",
+                        "direction": "row",
+                        "splitPercentage": 50
+                },
+                "direction": "column",
+                "splitPercentage": 50
+        },
+        "configById": {
+                "Tab!imu": {
+                        "activeTabIdx": 1,
+                        "tabs": [
+                                {
+                                        "title": "IMU (Raw)",
+                                        "layout": "RawMessages!imu_raw"
+                                },
+                                {
+                                        "title": "IMU (Processed)",
+                                        "layout": "RawMessages!imu_proc"
+                                }
+                        ]
+                },
+                "RawMessages!imu_raw": {
+                        "topicPath": "/imu/data"
+                },
+                "RawMessages!imu_proc": {
+                        "topicPath": "/processed/imu"
+                },
+                "Tab!depth": {
+                        "activeTabIdx": 1,
+                        "tabs": [
+                                {
+                                        "title": "Depth (Raw)",
+                                        "layout": "RawMessages!depth_raw"
+                                },
+                                {
+                                        "title": "Depth (Processed)",
+                                        "layout": "RawMessages!depth_proc"
+                                }
+                        ]
+                },
+                "RawMessages!depth_raw": {
+                        "topicPath": "/sensors/depth/z"
+                },
+                "RawMessages!depth_proc": {
+                        "topicPath": "/processed/depth"
+                },
+                "Tab!dvl": {
+                        "activeTabIdx": 0,
+                        "tabs": [
+                                {
+                                        "title": "Velocity",
+                                        "layout": "RawMessages!dvl_vel"
+                                },
+                                {
+                                        "title": "Dead Reckoning",
+                                        "layout": "RawMessages!dvl_dr"
+                                },
+                                {
+                                        "title": "Odometry",
+                                        "layout": "RawMessages!dvl_odom"
+                                }
+                        ]
+                },
+                "RawMessages!dvl_vel": {
+                        "topicPath": "/dvl/velocity"
+                },
+                "RawMessages!dvl_dr": {
+                        "topicPath": "/dvl/dead_reckoning"
+                },
+                "RawMessages!dvl_odom": {
+                        "topicPath": "/dvl/odometry"
+                },
+                "Tab!pose": {
+                        "activeTabIdx": 1,
+                        "tabs": [
+                                {
+                                        "title": "3D Path",
+                                        "layout": "3D!pose_viz"
+                                },
+                                {
+                                        "title": "Raw Data",
+                                        "layout": "RawMessages!pose_raw"
+                                }
+                        ]
+                },
+                "RawMessages!pose_raw": {
+                        "topicPath": "/state/pose"
+                },
+                "3D!pose_viz": {
+                        "cameraState": {
+                                "perspective": true,
+                                "distance": 8,
+                                "phi": 60,
+                                "theta": 45,
+                                "target": [
+                                        0,
+                                        0,
+                                        0
+                                ],
+                                "targetOffset": [
+                                        0,
+                                        0,
+                                        0
+                                ]
+                        },
+                        "followMode": "follow-pose",
+                        "followTf": "base_link",
+                        "topics": {
+                                "/tf": {
+                                        "visible": true
+                                },
+                                "/state/pose": {
+                                        "visible": true
+                                }
+                        },
+                        "layers": {
+                                "grid": {
+                                        "layerId": "foxglove.Grid",
+                                        "position": [
+                                                0,
+                                                0,
+                                                0
+                                        ]
+                                }
+                        }
+                }
+        }
+}
