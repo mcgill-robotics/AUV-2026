@@ -6,7 +6,7 @@ namespace controls
    {
        // Initialize subscriptions
        sub_imu_ = this->create_subscription<imu_msg>(
-           "processed/imu",
+           "auv_frame/imu",
            1,
            std::bind(&superimposer::imu_callback, this, std::placeholders::_1)
        );
@@ -48,14 +48,31 @@ namespace controls
             );
 
         // Initialize orientation quaternion to identity
-        q_vi_ = quatd(1.0, 0.0, 0.0, 0.0);
+        q_iv_ = quatd(1.0, 0.0, 0.0, 0.0);
+
+        // Initialize effort messages
+        depth_effort_ = wrench_msg();
+        depth_effort_.force.x = 0.0;
+        depth_effort_.force.y = 0.0;
+        depth_effort_.force.z = 0.0;
+        depth_effort_.torque.x = 0.0;
+        depth_effort_.torque.y = 0.0;
+        depth_effort_.torque.z = 0.0;
+
+        attitude_effort_ = wrench_msg();
+        attitude_effort_.force.x = 0.0;
+        attitude_effort_.force.y = 0.0;
+        attitude_effort_.force.z = 0.0;
+        attitude_effort_.torque.x = 0.0;
+        attitude_effort_.torque.y = 0.0;
+        attitude_effort_.torque.z = 0.0;    
 
    }
 
    void superimposer::imu_callback(const imu_msg::SharedPtr msg)
    {
        // Extract orientation quaternion from IMU message
-       q_vi_ = quatd(
+       q_iv_ = quatd(
            msg->orientation.w,
            msg->orientation.x,
            msg->orientation.y,
@@ -80,7 +97,7 @@ namespace controls
        // Transform depth effort from pool frame to body frame. 
          Vec3 depth_force_pool(depth_effort_.force.x, depth_effort_.force.y, depth_effort_.force.z);
          Vec3 total_force_pool = depth_force_pool; // No torque from depth controller. TODO: Add planar forces 
-         Vec3 total_force_body = q_vi_ * total_force_pool; // Rotate to body frame
+         Vec3 total_force_body = q_iv_.inverse() * total_force_pool; // Rotate to body frame
 
 
        // Combine efforts (simple summation)

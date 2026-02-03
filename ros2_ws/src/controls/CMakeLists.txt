@@ -69,7 +69,7 @@ install(DIRECTORY include/
   DESTINATION include)
 
 install(DIRECTORY launch
-  DESTINATION share/${PROJECT_NAME})
+  DESTINATION share/${PROJECT_NAME}/launch)
 
 install(PROGRAMS
   scripts/depth_controller.py
