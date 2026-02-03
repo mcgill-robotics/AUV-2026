@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>auv_dashboard</name>
+  <version>0.1.0</version>
+  <description>Foxglove Studio layouts and telemetry configuration for AUV monitoring</description>
+  <maintainer email="kaidalisohaib@gmail.com">Sohaib Kaidal</maintainer>
+  <license>GPL-3.0-or-later</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  
+  <exec_depend>foxglove_bridge</exec_depend>
+  <exec_depend>ros2launch</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

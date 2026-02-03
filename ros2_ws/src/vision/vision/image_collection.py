@@ -72,7 +72,9 @@ class ImageCollectionNode(Node):
 
         # Service controlled capture state
         self.service_capture_timer = None
+        self.service_capture_timer_down = None
         self.create_service(SetBool, '~/toggle_front_collection', self.toggle_front_collection_callback)
+        self.create_service(SetBool, '~/toggle_down_collection', self.toggle_down_collection_callback)
         
         
         self.get_logger().info('Image Collection Node initialized')
@@ -190,6 +192,36 @@ class ImageCollectionNode(Node):
             else:
                 response.success = False
                 response.message = 'Front collection was not running'
+        
+        return response
+    
+    def toggle_down_collection_callback(self, request, response):
+        """Service callback to toggle down camera collection"""
+        if request.data:
+            # Start collection
+            if self.service_capture_timer_down is not None:
+                response.success = True
+                response.message = 'Down collection already running'
+            else:
+                self.service_capture_timer_down = self.create_timer(
+                    self.collection_interval, 
+                    lambda: self.save_image('down')
+                )
+                response.success = True
+                response.message = f'Started down collection (every {self.collection_interval}s)'
+                self.get_logger().info(response.message)
+        else:
+            # Stop collection
+            if self.service_capture_timer_down is not None:
+                self.service_capture_timer_down.cancel()
+                self.service_capture_timer_down.destroy()
+                self.service_capture_timer_down = None
+                response.success = True
+                response.message = 'Stopped down collection'
+                self.get_logger().info(response.message)
+            else:
+                response.success = False
+                response.message = 'Down collection was not running'
         
         return response
     
