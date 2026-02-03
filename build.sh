@@ -44,6 +44,9 @@ fi
 # ---------------------------------------------------------
 # 1. Environment Setup
 # ---------------------------------------------------------
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Set ROS distribution and install path
 ROS_DISTRO=humble
 ROS_INSTALL=/opt/ros/$ROS_DISTRO/setup.bash
 
@@ -79,10 +82,12 @@ if [ -f "$DEPS_WS_SETUP" ]; then
   set -u
 fi
 
+# move into script directory
+cd "$SCRIPT_DIR"
 if [ -d "ros2_ws" ]; then
     cd ros2_ws
 else
-    echo "ERROR: 'ros2_ws' directory not found. Run this from the repo root." >&2
+    echo "ERROR: ros2_ws directory not found in $SCRIPT_DIR." >&2
     exit 1
 fi
 
@@ -172,7 +177,7 @@ if [ "$CLEAN_BUILD" = true ]; then
 fi
 
 if [ "$DEBUG_BUILD" = true ]; then
-    echo "    -> Performing Debug Build"
+    echo "    -> Performing Debug Build of packages: ${PKGS[*]}"
     # Output to console, interleaving build output for better visibility
     # Generate compile commands for use with linters e.g. VSCode
     # Run everything sequentially to find exact failure point
@@ -184,7 +189,7 @@ if [ "$DEBUG_BUILD" = true ]; then
         --executor sequential \
         $([ -n "$PACKAGE_TO_BUILD" ] && echo "--packages-up-to $PACKAGE_TO_BUILD")
 else
-    echo "    -> Performing Release Build"
+    echo "    -> Performing Release Build of packages: ${PKGS[*]}"
     # Output with cohesion, groups output by package
     # Utilize all available CPU cores
     colcon build \
