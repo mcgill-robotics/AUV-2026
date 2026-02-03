@@ -15,12 +15,12 @@ class BehaviourTreeYaw(Node):
         check_yaw = YawReader(self)
         move_yaw = YawMovement(self)
 
-        parallel = py_trees.composites.Parallel(
+        selector = py_trees.composites.Selector(
                 "RotateUntilReached",
-                policy=py_trees.common.ParallelPolicy.SuccessOnOne()
+                memory=False
             )
-        parallel.add_children([check_yaw, move_yaw])
-        self.root.add_children([set_yaw, parallel])
+        selector.add_children([check_yaw, move_yaw])
+        self.root.add_children([set_yaw, selector  ])
         
         # Wrap in BehaviourTree
         self.tree = py_trees.trees.BehaviourTree(self.root)

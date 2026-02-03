@@ -12,7 +12,8 @@ class YawMovement(py_trees.behaviour.Behaviour):
 	def __init__(self, node, name="YawMovement"):
 		super().__init__(name)
 		self.node = node
-		self.Kp = 1.0
+		self.Kp = 2.0
+		self.Kd = 0.1
 
 		self.blackboard_odom = py_trees.blackboard.Client(name=self.name)
 		

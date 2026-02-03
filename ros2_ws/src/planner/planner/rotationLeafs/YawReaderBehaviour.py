@@ -111,7 +111,7 @@ class YawReader(py_trees.behaviour.Behaviour):
 			return py_trees.common.Status.SUCCESS
 
 		self.blackboard_odom.goal.yaw_error = error
-		return py_trees.common.Status.RUNNING
+		return py_trees.common.Status.FAILURE
 
 
 
