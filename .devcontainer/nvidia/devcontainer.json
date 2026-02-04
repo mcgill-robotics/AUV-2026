@@ -1,0 +1,40 @@
+{
+    "name": "AUV Dev (NVIDIA)",
+    "dockerComposeFile": "../../Docker/dev/docker-compose.yml",
+    "service": "nvidia",
+    "runServices": ["nvidia"],
+
+    "workspaceFolder": "/home/douglas/AUV-2026",
+    "remoteUser": "douglas",
+
+    // This is vital for connecting to Unity on Windows/Mac
+    // It maps localhost:10000 (Container) -> localhost:10000 (Host)
+    // "forwardPorts": [10000],
+
+    // Everything else (Env, Mounts, Privileged) is now inherited 
+    // from docker-compose.yml, so we don't repeat it here.
+
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "terminal.integrated.defaultProfile.linux": "bash"
+            },
+            "extensions": [
+                "althack.ament-task-provider",
+                "betwo.b2-catkin-tools",
+                "DotJoshJohnson.xml",
+                "ms-azuretools.vscode-docker",
+                "ms-iot.vscode-ros",
+                "ms-python.python",
+                "ms-vscode.cpptools",
+                "redhat.vscode-yaml",
+                "smilerobotics.urdf",
+                "streetsidesoftware.code-spell-checker",
+                "twxs.cmake",
+                "yzhang.markdown-all-in-one",
+                "zachflower.uncrustify"
+            ]
+        }
+    },
+    "postCreateCommand": "sudo chown -R douglas:douglas /home/douglas/AUV-2026",    
+}

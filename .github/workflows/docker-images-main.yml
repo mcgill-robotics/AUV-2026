@@ -33,14 +33,75 @@ jobs:
         username: ${{ vars.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
         
-    - name: Build and optionally push image
+    - name: Build and Load image
       uses: docker/build-push-action@v6
       with:
-        context: Docker/dev
+        context: .
         file: Docker/dev/Dockerfile
         platforms: linux/amd64
-        push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        load: true
+        push: false
         tags: mcgillrobotics/auv_2026:dev-amd64
+
+    - name: Verify Build
+      run: |
+        docker run --rm --user $(id -u):$(id -g) -e CI=true -v ${{ github.workspace }}:/home/douglas/AUV-2026 mcgillrobotics/auv_2026:dev-amd64 /bin/bash -c "./build.sh"
+
+    - name: Push image
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        file: Docker/dev/Dockerfile
+        platforms: linux/amd64
+        push: true
+        tags: mcgillrobotics/auv_2026:dev-amd64
+
+  build-nvidia-x86:
+    runs-on: ubuntu-22.04
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-tags: true
+          submodules: recursive
+          lfs: true
+
+      - name: Login to DockerHub
+        if: github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and Load NVIDIA image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Docker/dev/Dockerfile.nvidia
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: mcgillrobotics/auv_2026:dev-nvidia-amd64
+
+      - name: Verify Build
+        run: |
+          docker run --rm --user $(id -u):$(id -g) -e CI=true -v ${{ github.workspace }}:/home/douglas/AUV-2026 mcgillrobotics/auv_2026:dev-nvidia-amd64 /bin/bash -c "./build.sh"
+
+      - name: Push NVIDIA image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Docker/dev/Dockerfile.nvidia
+          platforms: linux/amd64
+          push: true
+          tags: mcgillrobotics/auv_2026:dev-nvidia-amd64
 
   build-arm:
     runs-on: ubuntu-22.04-arm
@@ -64,13 +125,28 @@ jobs:
         username: ${{ vars.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
         
-    - name: Build and optionally push image
+    - name: Build and Load image
       uses: docker/build-push-action@v6
       with:
-        context: Docker/dev
+        context: .
         file: Docker/dev/Dockerfile
         platforms: linux/arm64
-        push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        load: true
+        push: false
+        tags: mcgillrobotics/auv_2026:dev-arm64
+
+    - name: Verify Build
+      run: |
+        docker run --rm --user $(id -u):$(id -g) -e CI=true --platform linux/arm64 -v ${{ github.workspace }}:/home/douglas/AUV-2026 mcgillrobotics/auv_2026:dev-arm64 /bin/bash -c "./build.sh"
+
+    - name: Push image
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        file: Docker/dev/Dockerfile
+        platforms: linux/arm64
+        push: true
         tags: mcgillrobotics/auv_2026:dev-arm64
 
   build-jetson:
@@ -81,6 +157,16 @@ jobs:
       packages: write
 
     steps:
+    - name: Clean up unnecessary packages to maximize build space
+      run: |
+        echo "=== Disk space before cleanup ==="
+        df -h
+        # Remove unnecessary tools to free space for large Jetson image
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache
+        sudo docker image prune -af || true
+        echo "=== Disk space after cleanup ==="
+        df -h
+
     - name: Git checkout with LFS and submodules
       uses: actions/checkout@v4
       with:
@@ -98,11 +184,26 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
-    - name: Build and optionally push image
+    - name: Build and Load image
       uses: docker/build-push-action@v6
       with:
-        context: Docker/jetson
+        context: .
         file: Docker/jetson/Dockerfile
         platforms: linux/arm64
-        push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        load: true
+        push: false
+        tags: mcgillrobotics/auv_2026:jetson
+
+    - name: Verify Build
+      run: |
+        docker run --rm --user $(id -u):$(id -g) -e CI=true --platform linux/arm64 -v ${{ github.workspace }}:/home/douglas/AUV-2026 mcgillrobotics/auv_2026:jetson /bin/bash -c "./build.sh"
+
+    - name: Push image
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        file: Docker/jetson/Dockerfile
+        platforms: linux/arm64
+        push: true
         tags: mcgillrobotics/auv_2026:jetson
