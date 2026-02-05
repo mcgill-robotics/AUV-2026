@@ -4,6 +4,7 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/image.hpp"
+
 using std::placeholders::_1;
 
 struct ZED_IPC_Consumer : public rclcpp::Node
@@ -17,7 +18,7 @@ public:
     this->get_parameter("input_topic", input_topic);
     sub_ = this->create_subscription<sensor_msgs::msg::Image>(
       input_topic,
-      10,
+      1, // only take the latest image
       std::bind(&ZED_IPC_Consumer::process_message, this, _1)
     );
   }
