@@ -1,5 +1,6 @@
 # Vision Object class
 string label
+int32 id
 #pose info
 float64 x
 float64 y
