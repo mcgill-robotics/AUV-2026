@@ -17,6 +17,7 @@ set(DEPS
     auv_msgs
     geometry_msgs
     std_msgs
+    sensor_msgs
     OpenCV
     # Required to ensure consistent Eigen3 environment variables
     eigen3_cmake_module 
@@ -106,6 +107,14 @@ install(TARGETS object_map_lib
 )
 
 install(TARGETS object_map 
+    DESTINATION lib/${PROJECT_NAME}
+)
+
+# IPC Test Node
+add_executable(IPC_test ${PROJECT_NAME}/IPC_test.cpp)
+ament_target_dependencies(IPC_test rclcpp sensor_msgs)
+
+install(TARGETS IPC_test 
     DESTINATION lib/${PROJECT_NAME}
 )
 
