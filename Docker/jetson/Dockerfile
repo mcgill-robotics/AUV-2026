@@ -293,6 +293,7 @@ WORKDIR /home/$USERNAME/AUV-2026
 # Source env variables
 # We use /opt/dependencies_ws which is readable by all
 RUN echo "source /opt/ros/humble/setup.bash && source /opt/dependencies_ws/install/setup.bash && source /home/$USERNAME/AUV-2026/ros2_ws/install/setup.bash" >> ~/.bashrc 
+RUN echo 'AMENT_PREFIX_PATH=$(echo $AMENT_PREFIX_PATH | sed "s|\(.*:\)\([^:]*\):\([^:]*\)$|\1\3:\2|")' >> ~/.bashrc
 
 # Entrypoint uses fixuid to remap UID/GID if running with --user
 ENTRYPOINT ["fixuid", "-q"]
