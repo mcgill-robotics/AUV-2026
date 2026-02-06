@@ -1,0 +1,16 @@
+name: Cleanup disk
+description: Github actions contains many packages we don't need for our docker builds (e.g. .NET, Android SDK, GHC, hosted toolcache). This action removes them to free up disk space.
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      name: C
+      run: |
+        echo "=== Disk space before cleanup ==="
+        df -h
+        # Remove unnecessary tools to free space for large Jetson image
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache
+        sudo docker image prune -af || true
+        echo "=== Disk space after cleanup ==="
+        df -h
