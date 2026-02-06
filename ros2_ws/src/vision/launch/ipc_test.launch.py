@@ -8,7 +8,7 @@ from launch_ros.descriptions import ComposableNode
 
 def generate_launch_description():
     zed_pkg_dir = get_package_share_directory("zed_wrapper")
-    common_camera_config_path = os.path.join(zed_pkg_dir, "config", "common.yaml")
+    common_camera_config_path = os.path.join(zed_pkg_dir,"config", "common_stereo.yaml")
     camera_model = "zed2i"
     specific_camera_config_path = os.path.join(zed_pkg_dir, "config", f"{camera_model}.yaml")
     DeclareLaunchArgument("zed_input_topic", default_value="/zed2/left/image_rect_color", description="Input topic for the IPC consumer node")
@@ -26,7 +26,7 @@ def generate_launch_description():
                 # the actual node definitions are in zed components packages
                 package="zed_components",
                 plugin='stereolabs::ZedCamera',
-                name="zed_producer",
+                name="zed_node",
                 parameters=[
                     common_camera_config_path,
                     specific_camera_config_path,

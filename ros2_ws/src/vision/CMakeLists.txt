@@ -18,6 +18,7 @@ set(DEPS
     geometry_msgs
     std_msgs
     sensor_msgs
+    rclcpp_components
     OpenCV
     # Required to ensure consistent Eigen3 environment variables
     eigen3_cmake_module 
@@ -111,13 +112,18 @@ install(TARGETS object_map
 )
 
 # IPC Test Node
-add_executable(IPC_test ${PROJECT_NAME}/IPC_test.cpp)
-ament_target_dependencies(IPC_test rclcpp sensor_msgs)
+add_library(IPC_test SHARED ${PROJECT_NAME}/IPC_test.cpp)
 
-install(TARGETS IPC_test 
-    DESTINATION lib/${PROJECT_NAME}
+ament_target_dependencies(IPC_test rclcpp rclcpp_components sensor_msgs)
+
+rclcpp_components_register_nodes(IPC_test
+  "ZED_IPC_Consumer"
 )
-
+install(TARGETS IPC_test
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
+)
 # Python nodes
 ament_python_install_package(${PROJECT_NAME})
 install(PROGRAMS ${PYTHON_NODE_SOURCES} DESTINATION lib/${PROJECT_NAME})
