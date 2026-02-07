@@ -71,7 +71,7 @@ class DepthController(Node):
         # Publish effort command
         effort_msg = Wrench()
         effort_msg.force.z = effort_output + self.feed_forward  
-        self.pub_effort.publish(effort_msg)  # Published effort is in pool frame
+        #self.pub_effort.publish(effort_msg)  # Published effort is in pool frame
 
 
 def main():

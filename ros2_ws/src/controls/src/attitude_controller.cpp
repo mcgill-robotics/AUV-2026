@@ -89,6 +89,7 @@ namespace controls
         quatd q_error = q_iv_.conjugate() * q_iv2;
         Vec3 error_vector = Vec3(q_error.x(), q_error.y(), q_error.z());
         Vec3 feedback = P_e_ * error_vector - P_w_ * w_iv_; //TODO: Verify sign conventions
+        RCLCPP_INFO(this->get_logger(), "Feedback Torque: [%.3f, %.3f, %.3f]", feedback.x(), feedback.y(), feedback.z());
         return feedback;
     }
 
