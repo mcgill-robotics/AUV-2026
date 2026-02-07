@@ -198,12 +198,14 @@ std::vector<std::pair<size_t, size_t>> ObjectTracker::match_tracks(
 
         // (track_idx, det_idx) forms the pairing
         // TODO: Iterate through unmatched tracks and detections and remove from those lists, tentative implementation below
-        // assignmnet is set to -1 if no assignment was made for that track
+        // assignment is set to -1 if no assignment was made for that track
         // otherwise we check if we cost threshold
         if (det_idx != -1 && cost_matrix[track_idx][det_idx] <= gating_threshold) {
             // Valid match, at this point det_idx must be positive i.e. valid size_t
             matches.push_back(std::make_pair(track_idx, det_idx));
 
+            // TODO: Refactor unmatching function to client-side to prevent
+            // monolithic function
             // Remove from unmatched lists
             unmatched_tracks.erase(std::remove(unmatched_tracks.begin(), unmatched_tracks.end(), track_idx), unmatched_tracks.end());
             unmatched_detections.erase(std::remove(unmatched_detections.begin(), unmatched_detections.end(), det_idx), unmatched_detections.end());
@@ -224,7 +226,7 @@ void ObjectTracker::update_matched_tracks(
         int track_idx = match.first;
         int meas_idx = match.second;
 
-        Track& track = tracks[track_idx];
+        Track& track = this->tracks[track_idx];
         
         // Prepare measurement for kf
         Eigen::Vector3d meas = measurements[meas_idx];
@@ -234,9 +236,14 @@ void ObjectTracker::update_matched_tracks(
         track.kf.update(meas, meas_cov);
 
         // Update Track Metadata
+        // ref: track metadata in .hpp file
         track.hits++;
         track.consecutive_hits++;
+
+        // TODO: Refactor age increasing of tracks into the main loop
         track.age++;
+
+        // TODO: Update to the time data type instead of using ints
         track.time_since_updates = 0;
         track.confidence = confidences[meas_idx];
         track.theta_z = orientations[meas_idx]; 
@@ -250,10 +257,10 @@ void ObjectTracker::update_matched_tracks(
 
 void ObjectTracker::handle_unmatched_tracks(const std::vector<size_t>& unmatched_tracks) {
     for (size_t track_idx : unmatched_tracks) {
-        Track& track = tracks[track_idx];
+        Track& track = this->tracks[track_idx];
+
         track.age++;
         track.time_since_updates++;
-
         // STRICT MODE: Reset consecutive hits if track is missed
         track.consecutive_hits = 0; 
         
@@ -302,6 +309,7 @@ void ObjectTracker::create_new_tracks(
             if (t.label == label) current_count++;
         }
 
+        // If we already have number of tracks for that class, skip creation
         if (MAX_PER_CLASS.find(label) != MAX_PER_CLASS.end()) {
             if (current_count >= MAX_PER_CLASS[label]) {
                 continue;
