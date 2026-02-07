@@ -5,12 +5,31 @@ runs:
   using: composite
   steps:
     - shell: bash
-      name: C
+      name: Cleanup
       run: |
-        echo "=== Disk space before cleanup ==="
+        echo "=== Before Cleanup ==="
         df -h
-        # Remove unnecessary tools to free space for large Jetson image
-        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache
-        sudo docker image prune -af || true
-        echo "=== Disk space after cleanup ==="
+
+        # 1. Android Library
+        sudo rm -rf /usr/local/lib/android
+
+        # 2. .NET Runtime
+        sudo rm -rf /usr/share/dotnet
+
+        # 3. Haskell / GHC
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /usr/local/.ghcup
+
+        # 4. CodeQL Analysis
+        sudo rm -rf /opt/hostedtoolcache/CodeQL
+
+        # 5. Swift & Java
+        sudo rm -rf /usr/share/swift
+        sudo rm -rf /usr/lib/jvm
+
+        # 6. Docker Cache (Pre-loaded images)
+        sudo docker image prune -af
+        sudo docker builder prune -af
+
+        echo "=== After Cleanup ==="
         df -h

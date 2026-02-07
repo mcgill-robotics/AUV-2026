@@ -166,7 +166,8 @@ RUN mkdir -p /tmp/fake_cv_headless && \
 # Install actual requirements
 # Ensure Docker/dev/constraints.txt DOES NOT contain opencv lines
 COPY Docker/dev/requirements.txt Docker/dev/constraints.txt /tmp/
-RUN pip3 install --no-cache-dir --ignore-installed  -c /tmp/constraints.txt -r /tmp/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+        pip3 install --ignore-installed -c /tmp/constraints.txt -r /tmp/requirements.txt
 
 # DOWNGRADE Setuptools for ROS 2
 # ROS 2 Humble's colcon build system breaks with Setuptools >= 70.

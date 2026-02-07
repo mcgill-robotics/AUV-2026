@@ -105,7 +105,8 @@ RUN pip3 install --no-cache-dir -c /tmp/constraints.txt torch torchvision --inde
 RUN pip3 install --no-cache-dir -c /tmp/constraints.txt "opencv-python==4.10.0.84"
 
 # Install other requirements (Pip will skip torch since it's already done)
-RUN pip3 install --no-cache-dir -c /tmp/constraints.txt -r /tmp/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip3 install --ignore-installed -c /tmp/constraints.txt -r /tmp/requirements.txt
 
 # DOWNGRADE Setuptools for ROS 2
 # Restores compatibility with 'colcon build'
