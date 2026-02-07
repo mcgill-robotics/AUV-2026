@@ -36,7 +36,7 @@ def train(args):
     """Run YOLO training with the specified configuration."""
     
     # Paths
-    data_yaml = SCRIPT_DIR / "data_real.yaml"
+    data_yaml = SCRIPT_DIR / "data/processed/data.yaml"
     
     if not data_yaml.exists():
         print(f"Error: {data_yaml} not found.")
@@ -69,6 +69,7 @@ def train(args):
         cache=args.cache,
         workers=args.workers,
         name=run_name,
+        lr0=args.learning_rate,
         # Augmentation parameters (tuned for Unity-generated data)
         # Unity already handled color randomization, so disable HSV augs
         hsv_h=0.01,
@@ -160,6 +161,12 @@ Examples:
         "--cache",
         action="store_true",
         help="Cache images for faster training"
+    )
+    parser.add_argument(
+        "--learning-rate", "-lr0",
+        type=float,
+        default=0.01,
+        help="Initial learning rate"
     )
     
     args = parser.parse_args()
