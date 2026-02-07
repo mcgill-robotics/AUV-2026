@@ -97,9 +97,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # ---------------------------------------------------------
 COPY Docker/dev/requirements.txt Docker/dev/constraints.txt /tmp/
 
-# Upgrade pip/setuptools (Required to build modern ML wheels)
-RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel
-
 RUN pip3 install --no-cache-dir -c /tmp/constraints.txt torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
 RUN pip3 install --no-cache-dir -c /tmp/constraints.txt "opencv-python==4.10.0.84"
@@ -110,7 +107,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 # DOWNGRADE Setuptools for ROS 2
 # Restores compatibility with 'colcon build'
-RUN pip3 install --no-cache-dir "setuptools==65.5.1"
+RUN pip3 install --no-cache-dir --force-reinstall "setuptools==65.5.1"
 
 # ---------------------------------------------------------
 # 4. Environment Setup
