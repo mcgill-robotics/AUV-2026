@@ -59,11 +59,18 @@ public:
   * using the given time step and dynamics matrix.
   */
   void update(const Eigen::VectorXd& y, double dt, const Eigen::MatrixXd A);
+  
+  /**
+  * Update the estimated state based on measured values,
+  * using a dynamic measurement noise covariance matrix.
+  */
+  void update(const Eigen::VectorXd& y, const Eigen::MatrixXd& R);
 
   /**
   * Return the current state and time.
   */
   const Eigen::VectorXd& state() const { return x_hat; };
+  const Eigen::MatrixXd& covariance() const { return P; };
   double time() { return t; };
 
 private:

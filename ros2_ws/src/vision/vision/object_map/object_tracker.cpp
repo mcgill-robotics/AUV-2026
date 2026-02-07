@@ -12,8 +12,8 @@ ObjectTracker::ObjectTracker(const float min_new_track_distance) {
 // destructor implicitly defined
 
 KalmanFilter ObjectTracker::create_kf(const Eigen::Vector3d& initial_pos) {
-    int n = 3; // Number of states
-    int m = 1; // Number of measurements
+    int n = 3; // Number of states (x, y, z)
+    int m = 3; // Number of measurements (x, y, z) - FIXED from 1
 
     double dt = 1.0/30; // Time step
 
@@ -23,20 +23,37 @@ KalmanFilter ObjectTracker::create_kf(const Eigen::Vector3d& initial_pos) {
     Eigen::MatrixXd R(m, m); // Measurement noise covariance
     Eigen::MatrixXd P(n, n); // Estimate error covariance
 
-    A << 1, 0, 0, 0, 1, 0, 0, 0, 1;
-    C << 1, 0, 0;
+    // State transition: x' = x (static object model)
+    A << 1, 0, 0, 
+         0, 1, 0, 
+         0, 0, 1;
+         
+    // Measurement matrix: y = x (direct measurement)
+    C << 1, 0, 0,
+         0, 1, 0,
+         0, 0, 1;
 
     // Reasonable covariance matrices
-    // TODO: Reset with actual measurement covariance from YOLO
-    Q << .05, .05, .0, .05, .05, .0, .0, .0, .0;
-    R << 5;
-    P << .1, .1, .1, .1, 10000, 10, .1, 10, 100;
+    // Q (Process Noise): Small for static objects
+    Q << 0.05, 0, 0, 
+         0, 0.05, 0, 
+         0, 0, 0.05;
+         
+    // R (Measurement Noise): Initial placeholder, will be overwritten by ZED cov
+    R << 0.1, 0, 0, 
+         0, 0.1, 0, 
+         0, 0, 0.1;
+         
+    // P (Initial Error): High uncertainty initially
+    P << 1.0, 0, 0, 
+         0, 1.0, 0, 
+         0, 0, 1.0;
 
 
     KalmanFilter kf(dt,A, C, Q, R, P);
     
     // initialize with initial states at zero
-    kf.init();
+    kf.init(0.0, initial_pos);
 
     return kf;
 }   
@@ -49,7 +66,7 @@ std::vector<Track> ObjectTracker::update(
     const std::vector<double>& confidences  
 ) {
     // 1. Compute cost matrix
-    auto cost_matrix = compute_cost_matrix(measurements, classes);
+    auto cost_matrix = compute_cost_matrix(measurements, measurement_covariances, classes);
 
     std::vector<size_t> unmatched_tracks;
     std::vector<size_t> unmatched_dets;
@@ -69,7 +86,7 @@ std::vector<Track> ObjectTracker::update(
     );
 
     // 3. Update matched tracks
-    update_matched_tracks(matches, measurements, orientations, confidences);
+    update_matched_tracks(matches, measurements, measurement_covariances, orientations, confidences);
 
     // 4. Handle unmatched tracks
     handle_unmatched_tracks(unmatched_tracks);
@@ -85,6 +102,7 @@ std::vector<Track> ObjectTracker::update(
 
 std::vector<std::vector<double>> ObjectTracker::compute_cost_matrix(
     const std::vector<Eigen::Vector3d>& measurements,
+    const std::vector<Eigen::Matrix3d>& measurement_covariances,
     const std::vector<std::string>& classes
 ) {
     size_t num_tracks = this->tracks.size();
@@ -123,8 +141,12 @@ std::vector<std::vector<double>> ObjectTracker::compute_cost_matrix(
                 }
 
                 // 3. Mahalanobis distance
-                // Note: In production, S should be (C*P*C^T + R) from the KF
-                Eigen::Matrix3d S = Eigen::Matrix3d::Ones(); 
+                // S = C*P*C^T + R
+                // Since C is Identity, S = P + R
+                Eigen::Matrix3d P = curr_track.kf.covariance();
+                Eigen::Matrix3d R_meas = measurement_covariances[meas_idx];
+                Eigen::Matrix3d S = P + R_meas;
+                
                 Eigen::Matrix3d inv_S = S.inverse();
                 
                 double dist = diff.transpose() * inv_S * diff;
@@ -155,15 +177,20 @@ std::vector<std::pair<size_t, size_t>> ObjectTracker::match_tracks(
     std::vector<size_t>& unmatched_detections
 ) {
     HungarianAlgorithm solver;
+	
+	// FIX: Clear matches from previous frame!
+	matches.clear(); 
+	
+	// Suppress unused warning
+	(void)num_meas;
 
     std::vector<int> assignment;
     // assignment is grown dynamically within the solver, no need to init with fixed size
     // res = overall cost of found optimal assignment
-    double res = solver.Solve(cost_matrix, assignment);
+    solver.Solve(cost_matrix, assignment);
 
     // NOTE: at this point the unmatched detections and tracks are ordered lists
     // Simply remove item as specific index
-    int num_assign = assignment.size();
 
     for (size_t assign_idx = 0; assign_idx < assignment.size(); ++assign_idx) {
         size_t track_idx = assign_idx;
@@ -189,6 +216,7 @@ std::vector<std::pair<size_t, size_t>> ObjectTracker::match_tracks(
 void ObjectTracker::update_matched_tracks(
     const std::vector<std::pair<size_t, size_t>>& matches,
     const std::vector<Eigen::Vector3d>& measurements,
+    const std::vector<Eigen::Matrix3d>& measurement_covariances,
     const std::vector<double>& orientations,
     const std::vector<double>& confidences
 ) {
@@ -199,22 +227,22 @@ void ObjectTracker::update_matched_tracks(
         Track& track = tracks[track_idx];
         
         // Prepare measurement for kf
-        // there might be a dimension mismatch
-        Eigen::Vector3d meas;    
-        meas << measurements[meas_idx](0), measurements[meas_idx](1), measurements[meas_idx](2);
+        Eigen::Vector3d meas = measurements[meas_idx];
+        Eigen::Matrix3d meas_cov = measurement_covariances[meas_idx];
 
-        // Update Kalman Filter
-        track.kf.update(meas);
+        // Update Kalman Filter with dynamic covariance
+        track.kf.update(meas, meas_cov);
 
         // Update Track Metadata
         track.hits++;
+        track.consecutive_hits++;
         track.age++;
         track.time_since_updates = 0;
         track.confidence = confidences[meas_idx];
         track.theta_z = orientations[meas_idx]; 
 
         
-        if (track.state == TrackState::TENTATIVE && track.hits >= min_hits) {
+        if (track.state == TrackState::TENTATIVE && track.consecutive_hits >= min_hits) {
             track.state = TrackState::CONFIRMED;
         }
     }
@@ -225,6 +253,14 @@ void ObjectTracker::handle_unmatched_tracks(const std::vector<size_t>& unmatched
         Track& track = tracks[track_idx];
         track.age++;
         track.time_since_updates++;
+
+        // STRICT MODE: Reset consecutive hits if track is missed
+        track.consecutive_hits = 0; 
+        
+        // Downgrade confirmed tracks that lost detection
+        if (track.state == TrackState::CONFIRMED && track.time_since_updates > conf_to_tent_threshold) {
+             track.state = TrackState::TENTATIVE;
+        }
     }
 }
 
@@ -238,8 +274,8 @@ void ObjectTracker::delete_dead_tracks() {
             delete_track = true;
         }
         
-        // tentative for too long
-        if (it->state == TrackState::TENTATIVE && it->age > max_age * 2) {
+        // tentative for too long 
+        if (it->state == TrackState::TENTATIVE && it->age > min_hits + tent_init_buffer) {
             delete_track = true;
         }
 
@@ -277,6 +313,7 @@ void ObjectTracker::create_new_tracks(
         new_track.label = label;
         new_track.state = TrackState::TENTATIVE;
         new_track.hits = 1;
+        new_track.consecutive_hits = 1;
         new_track.age = 1;
         new_track.time_since_updates = 0;
         new_track.theta_z = orientations[det_idx];

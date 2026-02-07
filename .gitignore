@@ -15,6 +15,7 @@
 *.bag
 *unity.lock
 yolo*.pt
+yolo*.onnx
 
 #builds
 **/bin/

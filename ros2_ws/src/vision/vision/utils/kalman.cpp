@@ -63,3 +63,20 @@ void KalmanFilter::update(const Eigen::VectorXd& y, double dt, const Eigen::Matr
   this->dt = dt;
   update(y);
 }
+
+void KalmanFilter::update(const Eigen::VectorXd& y, const Eigen::MatrixXd& R_meas) {
+
+  if(!initialized)
+    throw std::runtime_error("Filter is not initialized!");
+
+  x_hat_new = A * x_hat;
+  P = A*P*A.transpose() + Q;
+  
+  // Use dynamic measurement covariance R_meas instead of stored R
+  K = P*C.transpose()*(C*P*C.transpose() + R_meas).inverse();
+  x_hat_new += K * (y - C*x_hat_new);
+  P = (I - K*C)*P;
+  x_hat = x_hat_new;
+
+  t += dt;
+}

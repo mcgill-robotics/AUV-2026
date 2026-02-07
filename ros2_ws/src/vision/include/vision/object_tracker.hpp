@@ -26,6 +26,7 @@ struct Track {
     TrackState state;
 
     int hits = 0;               // total number of matched measurements
+    int consecutive_hits = 0;   // CONSECUTIVE matched frames (resets on miss)
     int age = 0;                // total frames since creation
     int time_since_updates = 0; // if this is > max_age, delete the track
     
@@ -65,6 +66,7 @@ private:
     // TODO: Potentially update into a matrix return type instead?
     std::vector<std::vector<double>> compute_cost_matrix(
         const std::vector<Eigen::Vector3d>& measurements,
+        const std::vector<Eigen::Matrix3d>& measurement_covariances,
         const std::vector<std::string>& classes
     );  
 
@@ -81,6 +83,7 @@ private:
     void update_matched_tracks(
         const std::vector<std::pair<size_t, size_t>>& matches,
         const std::vector<Eigen::Vector3d>& measurements,
+        const std::vector<Eigen::Matrix3d>& measurement_covariances,
         const std::vector<double>& orientations,
         const std::vector<double>& confidences
     );
@@ -111,20 +114,24 @@ private:
     int min_hits = 20;              // CONSECUTIVE frames to confirm
     int max_age = 8;                // Frames to keep lost track
     float max_position_jump = 2.0;  // Max jump (meters) - higher to handle VIO rotation errors
+    
+    // Track State Transition Parameters
+    int conf_to_tent_threshold = 10; // Misses before downgrading CONFIRMED -> TENTATIVE
+    int tent_init_buffer = 5;       // Extra frames allowed for initialization before zombie cull
 
     std::vector<std::pair<size_t,size_t>> matches;
 
     // Known object limits (prevents creating too many tracks per class)
     std::unordered_map<std::string, int> MAX_PER_CLASS = {
-        { "gate", 3 },
+        { "gate", 1 },
         { "lane_marker", 2 }, 
-        { "red_pipe", 2 }, 
-        { "white_pipe", 2 }, 
-        { "octagon", 2 },
+        { "red_pipe", 3 }, 
+        { "white_pipe", 6 }, 
+        { "octagon", 1 },
         { "table", 1 }, 
         { "bin", 1 }, 
         { "board", 1 }, 
-        { "shark", 1 },
+        { "shark", 2 },
         { "sawfish", 2 }
     };
 

@@ -181,6 +181,7 @@ private:
 
 	void front_cam_callback(const auv_msgs::msg::VisionObjectArray::SharedPtr msg)
 	{
+		(void)msg;
 		// Fallback is a no-op for now
 		// we can add determining depth and publishing if we ever choose to not use ZED_SDK 
 		// this is added for compilation on both nvidia and non-nvidia machines 

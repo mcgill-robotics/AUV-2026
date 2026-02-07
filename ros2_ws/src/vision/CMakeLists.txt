@@ -91,10 +91,10 @@ $<INSTALL_INTERFACE:include/${PROJECT_NAME}>)
 
 if(HAS_ZED_SDK_DEPS)
     # Define a compile-time flag to indicate ZED SDK is available
-    target_compile_definitions(object_map_lib PRIVATE HAS_ZED_SDK)
+    target_compile_definitions(object_map_lib PUBLIC HAS_ZED_SDK)
     target_link_libraries(object_map_lib ${ZED_LIBRARIES} ${CUDAToolkit_LIBRARIES})
     # Treat external headers as system to suppress warnings
-    target_include_directories(object_map_lib SYSTEM PRIVATE ${ZED_INCLUDE_DIRS} ${CUDAToolkit_INCLUDE_DIRS})
+    target_include_directories(object_map_lib SYSTEM PUBLIC ${ZED_INCLUDE_DIRS} ${CUDAToolkit_INCLUDE_DIRS})
 endif()
 
 target_link_libraries(object_map object_map_lib)

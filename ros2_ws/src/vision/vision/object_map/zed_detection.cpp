@@ -150,7 +150,7 @@ vector<double>, vector <double>> ZEDDetection::GetDetections()
 
 std::tuple<Eigen::Vector3d,Eigen::Vector4d> ZEDDetection::GetCameraPose()
 {
-	Eigen::Vector3d position(pose_translation.x, pose_translation.y, pose_translation.z);
+	Eigen::Vector3d position(pose_translation.x, pose_translation.y, -sensor_depth);
 	Eigen::Vector4d orientation(pose_orientation.w, pose_orientation.x, pose_orientation.y, pose_orientation.z);
 	return {position, orientation};
 }
@@ -214,7 +214,24 @@ vector<sl::CustomBoxObjectData> ZEDDetection::run_yolo(const cv::Mat& img)
 	
 	// Forward pass
 	vector<cv::Mat> outputs;
-	yolo_net.forward(outputs, yolo_net.getUnconnectedOutLayersNames());
+    try {
+	    yolo_net.forward(outputs, yolo_net.getUnconnectedOutLayersNames());
+    } catch (const cv::Exception& e) {
+        log_warn("YOLO inference failed on current backend: " + string(e.what()));
+        log_warn("Switching to standard CPU backend...");
+        
+        yolo_net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
+        yolo_net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
+        
+        // Retry on CPU
+        try {
+            yolo_net.forward(outputs, yolo_net.getUnconnectedOutLayersNames());
+            log_info("Recovered on CPU backend.");
+        } catch (const cv::Exception& e2) {
+             log_error("YOLO inference failed on CPU fallback: " + string(e2.what()));
+             return detections;
+        }
+    }
 	
 	// Parse YOLO output (YOLOv11 format)
 	// Output shape: [1, 84, 8400] for 10 classes
@@ -228,6 +245,11 @@ vector<sl::CustomBoxObjectData> ZEDDetection::run_yolo(const cv::Mat& img)
 	cv::transpose(output, output); // Transpose to [8400, 84]
 	
 	
+	// Lists to hold candidates for NMS
+	std::vector<int> classIds;
+	std::vector<float> confidences;
+	std::vector<cv::Rect> boxes;
+
 	for (int i = 0; i < output.rows; i++) {
 	    cv::Mat row = output.row(i);
 	    cv::Mat class_scores = row.colRange(4, 14); // 10 classes
@@ -242,43 +264,54 @@ vector<sl::CustomBoxObjectData> ZEDDetection::run_yolo(const cv::Mat& img)
 		float w = row.at<float>(2) / letter_box_scale;
 		float h = row.at<float>(3) / letter_box_scale;
 		
-		// int x = static_cast<int>(cx - w / 2);
-		// int y = static_cast<int>(cy - h / 2);
+		int left = static_cast<int>(cx - w / 2);
+		int top = static_cast<int>(cy - h / 2);
+		int width = static_cast<int>(w);
+		int height = static_cast<int>(h);
 		
-		sl::CustomBoxObjectData box;
-	    box.unique_object_id = sl::generate_unique_id();
-		box.probability = max_confidence;
-		box.label = class_id_point.x;
-		box.is_grounded = false;
-		// detections -> bbox
-		std::vector<sl::uint2> bbox_2d(4);
-		// (cx,cy) is in center, shift to 4 corners 
-		float halfwidth = w / 2;
-		float halfheight = h / 2;
-		bbox_2d[0] = sl::uint2(cx - halfwidth, cy - halfheight);// top left
-		bbox_2d[1] = sl::uint2(cx + halfwidth, cy - halfheight);// top right
-		bbox_2d[2] = sl::uint2(cx + halfwidth, cy + halfheight);// bottom right
-		bbox_2d[3] = sl::uint2(cx - halfwidth, cy + halfheight);// bottom left
-		box.bounding_box_2d = bbox_2d;
-
-		if (show_detections) {
-			// CV rectnagle drawing just requires top left corner + width height
-			int top_left_x = static_cast<int>(bbox_2d[0][0]);
-			int top_left_y = static_cast<int>(bbox_2d[0][1]);
-			cv::Rect detection_bbox = cv::Rect(top_left_x, top_left_y, static_cast<int>(w), static_cast<int>(h));
-			cv::rectangle(img, detection_bbox, cv::Scalar(0, 255, 0), 2);
-			string label = ID_TO_LABEL[class_id_point.x] + ": " + to_string(max_confidence).substr(0, 4);
-			cv::putText(img, label, cv::Point(top_left_x, top_left_y - 5),
-			    cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 2);
-		}
-		
-		detections.push_back(box);
+		classIds.push_back(class_id_point.x);
+		confidences.push_back((float)max_confidence);
+		boxes.push_back(cv::Rect(left, top, width, height));
 	    }
-		if (show_detections) {
+	}
+
+	// --- APPLY NMS ---
+	std::vector<int> indices;
+	float nms_threshold = 0.45;
+	cv::dnn::NMSBoxes(boxes, confidences, confidence_threshold, nms_threshold, indices);
+	
+	for (int idx : indices) {
+	    sl::CustomBoxObjectData box;
+	    box.unique_object_id = sl::generate_unique_id();
+	    box.probability = confidences[idx];
+	    box.label = classIds[idx];
+	    box.is_grounded = false;
+	    
+	    cv::Rect r = boxes[idx];
+
+	    // detections -> bbox
+	    std::vector<sl::uint2> bbox_2d(4);
+	    bbox_2d[0] = sl::uint2(r.x, r.y);
+	    bbox_2d[1] = sl::uint2(r.x + r.width, r.y);
+	    bbox_2d[2] = sl::uint2(r.x + r.width, r.y + r.height);
+	    bbox_2d[3] = sl::uint2(r.x, r.y + r.height);
+	    box.bounding_box_2d = bbox_2d;
+
+	    if (show_detections) {
+			cv::rectangle(img, r, cv::Scalar(0, 255, 0), 2);
+			string label = ID_TO_LABEL[classIds[idx]] + ": " + to_string(confidences[idx]).substr(0, 4);
+			cv::putText(img, label, cv::Point(r.x, r.y - 5),
+			    cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 2);
+	    }
+	    
+	    detections.push_back(box);
+	}
+
+	if (show_detections) {
 	    cv::imshow("YOLO Detections", img);
 	    cv::waitKey(1);
-		}
 	}
+
 	return detections;
 }
 
@@ -293,14 +326,19 @@ cv::Mat ZEDDetection::letter_box(const cv::Mat& source, int target_size)
 
 	// if image already target size, no change to longer dimension
 	if (letter_box_scale != 1.0)
-        cv::resize(source, source, cv::Size(), letter_box_scale, letter_box_scale, cv::INTER_LINEAR);
+        cv::resize(source, resized, cv::Size(), letter_box_scale, letter_box_scale, cv::INTER_LINEAR);
+    else {
+        source.copyTo(resized);
+    }
+
 	// padding
-	int bottom_padding = target_size - source.rows;
-	int right_padding = target_size - source.cols;
+	int bottom_padding = target_size - resized.rows;
+	int right_padding = target_size - resized.cols;
 
-	cv::copyMakeBorder(source, source, 0, bottom_padding, 0, right_padding, cv::BORDER_CONSTANT, cv::Scalar(114, 114, 114));
+    cv::Mat output;
+	cv::copyMakeBorder(resized, output, 0, bottom_padding, 0, right_padding, cv::BORDER_CONSTANT, cv::Scalar(114, 114, 114));
 
-	return source;
+	return output;
 }
 
 void ZEDDetection::determine_world_position_zed_2D_boxes(const sl::Objects& zed_objects,const sl::Pose& cam_pose)
@@ -320,7 +358,7 @@ void ZEDDetection::determine_world_position_zed_2D_boxes(const sl::Objects& zed_
 		if (std::isnan(pos.x) || std::isnan(pos.y) || std::isnan(pos.z) ||
 		std::isinf(pos.x) || std::isinf(pos.y) || std::isinf(pos.z) ||
 		pos.x < 0) {
-		continue;
+			continue;
 		}
 
 		// Get label
@@ -335,10 +373,10 @@ void ZEDDetection::determine_world_position_zed_2D_boxes(const sl::Objects& zed_
 
 		// Filter: Skip far-away pipes
 		if (label_str == "red_pipe" || label_str == "white_pipe") {
-		float dist = std::sqrt(pos.x * pos.x + pos.y * pos.y + pos.z * pos.z);
-		if (dist > 7.0) {
-			continue;
-		}
+			float dist = std::sqrt(pos.x * pos.x + pos.y * pos.y + pos.z * pos.z);
+			if (dist > 7.0) {
+				continue;
+			}
 		}
 
 		measurements.push_back(world_pos);
@@ -353,6 +391,8 @@ void ZEDDetection::determine_world_position_zed_2D_boxes(const sl::Objects& zed_
 void ZEDDetection::LogDebugTable(const vector<sl::CustomBoxObjectData>& YOLO_detections, const sl::Objects& zed_detections)
 {
     // Implementation of the debug table logging
+    (void)YOLO_detections;
+    (void)zed_detections;
 }
 
 void ZEDDetection::UpdateSensorDepth(double new_depth)
