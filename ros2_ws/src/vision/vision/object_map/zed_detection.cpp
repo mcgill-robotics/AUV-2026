@@ -12,8 +12,6 @@
 // }
 
 ZEDDetection::ZEDDetection(
-		const string & yolo_model_path,
-		int yolo_input_size,
 		int frame_rate,
 		float confidence_threshold,
 		float max_range,
@@ -28,7 +26,6 @@ ZEDDetection::ZEDDetection(
 		function<void(const string&, int)> log_warn_throttle
 	): 
 		frame_rate(frame_rate),
-		YOLO_input_size(yolo_input_size),
 		confidence_threshold(confidence_threshold),
 		max_range(max_range),
 		use_stream(use_stream),
@@ -45,7 +42,6 @@ ZEDDetection::ZEDDetection(
 		log_error("Failed to initialize ZED camera");
 		throw runtime_error("ZED initialization failed");
 	}
-    ZEDDetection::load_yolo_model(yolo_model_path);
 }
 
 bool ZEDDetection::init_zed()
@@ -93,35 +89,15 @@ bool ZEDDetection::init_zed()
 	return true;
 }
 
-void ZEDDetection::load_yolo_model(const string& model_path)
-{
-	// Initialize YOLO
-	log_info("Loading YOLO model from " + model_path);
-    try {
-        yolo_net = cv::dnn::readNetFromONNX(model_path);
-        yolo_net.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
-        yolo_net.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA);
-		log_info("YOLO model loaded successfully");
-    } catch (const cv::Exception& e) {
-		log_error("Failed to load YOLO model: " + string(e.what()));
-    }
-}
+// REMOVED: load_yolo_model
 
-void ZEDDetection::process_frame()
+void ZEDDetection::process_detections(const std::vector<sl::CustomBoxObjectData>& detections)
 {
-
 	if (!ZEDDetection::check_zed_status()) {
 	    return; // Skip processing if ZED health not OK
 	}
 
-	cv::Mat img_bgr = get_cv_frame();
 
-	// Run YOLO detection
-	vector<sl::CustomBoxObjectData> detections = run_yolo(img_bgr);
-	if (detections.empty()) {
-		log_warn_throttle("No detections from YOLO", 2000);
-	    return; // No detections
-	}
 	
 	// Ingest custom boxes
 	zed.ingestCustomBoxObjects(detections);
@@ -192,154 +168,11 @@ bool ZEDDetection::check_zed_status()
 	return true;
 }
 
-cv::Mat ZEDDetection::get_cv_frame()
-{
-	sl::Mat image;
-    // Retrieve image
-    zed.retrieveImage(image, sl::VIEW::LEFT);
-    
-    // Convert to OpenCV Mat
-    return sl_mat_to_cv_mat(image);
-}
+// REMOVED: get_cv_frame
 
-vector<sl::CustomBoxObjectData> ZEDDetection::run_yolo(const cv::Mat& img)
-{
-	vector<sl::CustomBoxObjectData> detections;
-	
-	// letterbox the image to 640x640
-	cv::Mat resized_img = letter_box(img,YOLO_input_size);
-	// Prepare input blob, size should already be YOLO_input_size, swap to RGB for YOLO
-	cv::Mat blob = cv::dnn::blobFromImage(resized_img, 1.0/255.0, cv::Size(YOLO_input_size, YOLO_input_size), cv::Scalar(), true, false);
-	yolo_net.setInput(blob);
-	
-	// Forward pass
-	vector<cv::Mat> outputs;
-    try {
-	    yolo_net.forward(outputs, yolo_net.getUnconnectedOutLayersNames());
-    } catch (const cv::Exception& e) {
-        log_warn("YOLO inference failed on current backend: " + string(e.what()));
-        log_warn("Switching to standard CPU backend...");
-        
-        yolo_net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
-        yolo_net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
-        
-        // Retry on CPU
-        try {
-            yolo_net.forward(outputs, yolo_net.getUnconnectedOutLayersNames());
-            log_info("Recovered on CPU backend.");
-        } catch (const cv::Exception& e2) {
-             log_error("YOLO inference failed on CPU fallback: " + string(e2.what()));
-             return detections;
-        }
-    }
-	
-	// Parse YOLO output (YOLOv11 format)
-	// Output shape: [1, 84, 8400] for 10 classes
-	// [x, y, w, h, class_0_conf, class_1_conf, ..., class_9_conf]
-	if (outputs.empty()) return detections;
-	
-	// only one image in batch
-	cv::Mat output = outputs[0];
+// REMOVED: run_yolo
 
-	output = output.reshape(1, output.size[1]); // Reshape to [num_predictions, 84]
-	cv::transpose(output, output); // Transpose to [8400, 84]
-	
-	
-	// Lists to hold candidates for NMS
-	std::vector<int> classIds;
-	std::vector<float> confidences;
-	std::vector<cv::Rect> boxes;
-
-	for (int i = 0; i < output.rows; i++) {
-	    cv::Mat row = output.row(i);
-	    cv::Mat class_scores = row.colRange(4, 14); // 10 classes
-	    
-	    cv::Point class_id_point;
-	    double max_confidence;
-	    cv::minMaxLoc(class_scores, nullptr, &max_confidence, nullptr, &class_id_point);
-	    
-	    if (max_confidence > confidence_threshold) {
-		float cx = row.at<float>(0) / letter_box_scale;
-		float cy = row.at<float>(1) / letter_box_scale;
-		float w = row.at<float>(2) / letter_box_scale;
-		float h = row.at<float>(3) / letter_box_scale;
-		
-		int left = static_cast<int>(cx - w / 2);
-		int top = static_cast<int>(cy - h / 2);
-		int width = static_cast<int>(w);
-		int height = static_cast<int>(h);
-		
-		classIds.push_back(class_id_point.x);
-		confidences.push_back((float)max_confidence);
-		boxes.push_back(cv::Rect(left, top, width, height));
-	    }
-	}
-
-	// --- APPLY NMS ---
-	std::vector<int> indices;
-	float nms_threshold = 0.45;
-	cv::dnn::NMSBoxes(boxes, confidences, confidence_threshold, nms_threshold, indices);
-	
-	for (int idx : indices) {
-	    sl::CustomBoxObjectData box;
-	    box.unique_object_id = sl::generate_unique_id();
-	    box.probability = confidences[idx];
-	    box.label = classIds[idx];
-	    box.is_grounded = false;
-	    
-	    cv::Rect r = boxes[idx];
-
-	    // detections -> bbox
-	    std::vector<sl::uint2> bbox_2d(4);
-	    bbox_2d[0] = sl::uint2(r.x, r.y);
-	    bbox_2d[1] = sl::uint2(r.x + r.width, r.y);
-	    bbox_2d[2] = sl::uint2(r.x + r.width, r.y + r.height);
-	    bbox_2d[3] = sl::uint2(r.x, r.y + r.height);
-	    box.bounding_box_2d = bbox_2d;
-
-	    if (show_detections) {
-			cv::rectangle(img, r, cv::Scalar(0, 255, 0), 2);
-			string label = ID_TO_LABEL[classIds[idx]] + ": " + to_string(confidences[idx]).substr(0, 4);
-			cv::putText(img, label, cv::Point(r.x, r.y - 5),
-			    cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 2);
-	    }
-	    
-	    detections.push_back(box);
-	}
-
-	if (show_detections) {
-	    cv::imshow("YOLO Detections", img);
-	    cv::waitKey(1);
-	}
-
-	return detections;
-}
-
-cv::Mat ZEDDetection::letter_box(const cv::Mat& source, int target_size)
-{
-	int col = source.cols;
-    int row = source.rows;
-    int _max = MAX(col, row);
-	// resize the longest dimension to target_size
-	cv::Mat resized;
-    letter_box_scale = (float)target_size / _max;
-
-	// if image already target size, no change to longer dimension
-	if (letter_box_scale != 1.0)
-        cv::resize(source, resized, cv::Size(), letter_box_scale, letter_box_scale, cv::INTER_LINEAR);
-    else {
-        source.copyTo(resized);
-    }
-
-	// padding
-	int bottom_padding = target_size - resized.rows;
-	int right_padding = target_size - resized.cols;
-
-    cv::Mat output;
-	cv::copyMakeBorder(resized, output, 0, bottom_padding, 0, right_padding, cv::BORDER_CONSTANT, cv::Scalar(114, 114, 114));
-
-	return output;
-}
+// REMOVED: letter_box
 
 void ZEDDetection::determine_world_position_zed_2D_boxes(const sl::Objects& zed_objects,const sl::Pose& cam_pose)
     {
