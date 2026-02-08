@@ -78,6 +78,21 @@ source ros2_ws/install/setup.bash
 
 This setup uses **Host Networking**, meaning the container shares `localhost` with your computer.
 
+### Windows Users (WSL 2)
+
+To ensure the container can communicate with the simulation running on Windows, you must update your networking settings.
+
+1.  **Enable Host Networking in Docker Desktop:**
+    
+    ![windows-docker-desktop-network-settings](https://github.com/user-attachments/assets/158a659b-9e18-4b9b-9e66-2231692e144a)
+
+2.  **Set Networking Mode to Mirrored & Enable Host Address Loopback:**
+    
+    ![windows-wsl-network-settings](https://github.com/user-attachments/assets/ca6500b4-c4c0-4e9c-a0c6-30b789014e84)
+
+### Instructions
+
+
 1.  **Start Unity** on your host machine.
 2.  **Inside Docker**, launch the TCP Endpoint:
     ```bash

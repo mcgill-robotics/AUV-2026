@@ -200,6 +200,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-$ROS_DISTRO-joy \
     ros-$ROS_DISTRO-joy-teleop \
     ros-$ROS_DISTRO-rosidl-default-generators \
+    ros-$ROS_DISTRO-vision-msgs \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
