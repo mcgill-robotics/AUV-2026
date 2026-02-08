@@ -11,7 +11,7 @@ namespace controls
         this->declare_parameter<double>("P_wy", 1.0);
         this->declare_parameter<double>("P_wz", 1.0);
         this->declare_parameter<double>("buoyancy", 278.0); // Newtons
-        this->declare_parameter<std::vector<double>>("r_bv", {0.0, 0.0, 0.023}); // [m] From CAD Model
+        this->declare_parameter<std::vector<double>>("r_bv_v", {0.0, 0.0, 0.023}); // [m] From CAD Model
         this->declare_parameter<double>("control_loop_hz", 10.0); // Control loop frequency
 
         this->get_parameter("P_ex", P_ex_);
@@ -21,7 +21,7 @@ namespace controls
         this->get_parameter("P_wy", P_wy_);
         this->get_parameter("P_wz", P_wz_);
         this->get_parameter("buoyancy", buoyancy_);
-        this->get_parameter("r_bv", r_bv_);
+        this->get_parameter("r_bv_v", r_bv_v_);
         this->get_parameter("control_loop_hz", control_loop_hz_);
 
         q_iv_ = quatd::Identity(); // Initial orientation: identity quaternion
@@ -96,10 +96,11 @@ namespace controls
     Vec3 AttitudeController::feedforward_effort()
     {
         // Compute the torque due to buoyancy offset
-        Vec3 r_bv_vec(r_bv_[0], r_bv_[1], r_bv_[2]);
+        Vec3 r_bv_vec(r_bv_v_[0], r_bv_v_[1], r_bv_v_[2]);
         Vec3 f_buoyancy = q_iv_.conjugate() * Vec3(0, 0, buoyancy_);
         Vec3 torque_buoyancy = r_bv_vec.cross(f_buoyancy);
         Vec3 feedforward = -1 * torque_buoyancy; // Negate to counteract
+        RCLCPP_INFO(this->get_logger(), "Feedforward Torque: [%.3f, %.3f, %.3f]", feedforward.x(), feedforward.y(), feedforward.z());
         return feedforward;
     }
 

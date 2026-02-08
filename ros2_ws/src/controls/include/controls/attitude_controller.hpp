@@ -48,7 +48,7 @@ namespace controls
 
                 // AUV properties
                 double buoyancy_;
-                std::vector<double> r_bv_; // Position vector from body frame to vehicle center of buoyancy
+                std::vector<double> r_bv_v_; // Position vector from body frame to center of buoyancy, expressed in body frame. 
 
 
                 rclcpp::Subscription<imu_msg>::SharedPtr sub_imu_;
