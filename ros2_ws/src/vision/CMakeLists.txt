@@ -17,6 +17,7 @@ set(DEPS
     auv_msgs
     geometry_msgs
     std_msgs
+    vision_msgs
     OpenCV
     # Required to ensure consistent Eigen3 environment variables
     eigen3_cmake_module 
@@ -27,6 +28,7 @@ set(CPP_LIBS
     rclcpp
     auv_msgs
     geometry_msgs
+    vision_msgs
     OpenCV
     eigen3_cmake_module 
     Eigen3
@@ -51,6 +53,8 @@ set (PYTHON_NODE_SOURCES
     ${PROJECT_NAME}/down_image_enhancement.py
     ${PROJECT_NAME}/front_image_enhancement.py
     ${PROJECT_NAME}/image_collection.py
+    ${PROJECT_NAME}/front_cam_object_detection.py
+    ${PROJECT_NAME}/down_cam_object_detection.py
 )
 
 find_package(CUDAToolkit QUIET)

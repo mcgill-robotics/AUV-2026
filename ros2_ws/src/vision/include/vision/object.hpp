@@ -28,7 +28,7 @@ struct DetectedObject
 };
 
 // Labels for object classes
-extern const std::array<std::string, 10> ID_TO_LABEL = {
+inline const std::array<std::string, 10> ID_TO_LABEL = {
 	"gate",
 	"lane_marker",
 	"red_pipe",
