@@ -1,0 +1,10 @@
+# Datasets - too large for git
+data/
+
+# Training runs and model weights: actually don't
+#runs/
+#*.pt
+
+# Temp files
+__pycache__/
+*.pyc
