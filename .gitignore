@@ -14,7 +14,6 @@
 *.jpg
 *.bag
 *unity.lock
-yolo*.pt
 
 #builds
 **/bin/
