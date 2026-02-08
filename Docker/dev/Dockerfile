@@ -75,6 +75,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-nmea-msgs \
     ros-${ROS_DISTRO}-marine-sensor-msgs \
     ros-${ROS_DISTRO}-marine-acoustic-msgs \
+    ros-${ROS_DISTRO}-vision-msgs \
     # Image & Transport
     ros-${ROS_DISTRO}-image-transport \
     ros-${ROS_DISTRO}-image-transport-plugins \
