@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <launch>
-    <arg name="front_cam_topic" default="/sensors/front_cam/image_raw"/>
-    <arg name="down_cam_topic" default="/sensors/down_cam/image_raw"/>
+    <arg name="front_cam_topic" default="/zed/zed_node/left/image_rect_color"/>
+    <arg name="down_cam_topic" default="/down_cam/image_raw"/>
     <arg name="front_enhanced_topic" default="/vision/front_cam/image_enhanced"/>
     <arg name="down_enhanced_topic" default="/vision/down_cam/image_enhanced"/>
     <arg name="sim" default="false"/>
