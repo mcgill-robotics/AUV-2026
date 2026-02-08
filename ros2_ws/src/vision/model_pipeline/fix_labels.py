@@ -2,8 +2,8 @@ from pathlib import Path
 import yaml
 
 # Paths
-LABEL_DIR = Path("data/real_images_import/labels")
-DATA_YAML = Path("data/real_images_import/data.yaml")
+LABEL_DIR = Path("data/raw_import/labels")
+DATA_YAML = Path("data/raw_import/data.yaml")
 
 # Real Dataset (Source) -> Synthetic Dataset (Target)
 # 0: gate -> 0: gate
