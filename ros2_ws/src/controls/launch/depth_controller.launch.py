@@ -18,8 +18,8 @@ def generate_launch_description():
     sim = LaunchConfiguration("sim")
 
     pkg_share = get_package_share_directory("controls")
-    sim_yaml  = os.path.join(pkg_share, "params", "DepthController_params_sim.yaml")
-    real_yaml = os.path.join(pkg_share, "params", "DepthController_params_real.yaml")
+    sim_yaml  = os.path.join(pkg_share, "params", "Controller_params_sim.yaml")
+    real_yaml = os.path.join(pkg_share, "params", "Controller_params_real.yaml")
 
     # Depth controller (sim)
     depth_controller_sim = Node(

@@ -45,7 +45,7 @@ class DepthController(Node):
 
         self.pid = PID(self.KP, self.KD, self.KI, self.I_MAX)
 
-        self.setpoint_depth = 0.0  # Desired depth in meters. TODO: Change default value to AUV float depth
+        self.setpoint_depth = 0.25  # Desired depth in meters. TODO: Change default value to AUV float depth
         self.current_depth = 0.0   # Current depth in meters
         self.previous_depth = 0.0  # Previous depth for derivative calculation
         self.time_step = 1.0 / self.control_loop_hz
@@ -65,13 +65,13 @@ class DepthController(Node):
 
     def control_loop_callback(self):
         # Compute PID errors
-        self.pid.compute_errors(self.setpoint_depth, self.current_depth, self.previous_depth, self.time_step)
+        self.pid.compute_errors(-self.setpoint_depth, -self.current_depth, -self.previous_depth, self.time_step) # +Z is up, so invert depth values for PID calculations
         effort_output = self.pid.compute_output()
 
         # Publish effort command
         effort_msg = Wrench()
-        effort_msg.force.z = effort_output + self.feed_forward  
-        #self.pub_effort.publish(effort_msg)  # Published effort is in pool frame
+        effort_msg.force.z = effort_output + self.feed_forward 
+        self.pub_effort.publish(effort_msg)  # Published effort is in pool frame
 
 
 def main():

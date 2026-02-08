@@ -17,4 +17,4 @@ depth_controller:
     KD: 1.0
     KI: 1.0
     I_MAX: 10.0
-    net_buoyancy: 13.7 # Newtons. TODO: Tune during pool test
+    net_buoyancy: 9.0 # Newtons

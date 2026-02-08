@@ -13,9 +13,15 @@ class PID:
                 self.position_error = 0.0
                 self.integral_error = 0.0
                 self.derivative_error = 0.0
+
+                self.last_setpoint = 0.0
                 
 
         def compute_errors(self, setpoint, position, previous_position, time_step):
+                if setpoint != self.last_setpoint: # Reset integral term for a new setpoint
+                        self.integral_error = 0.0
+                        self.last_setpoint = setpoint
+
                 self.position_error = setpoint - position
 
 

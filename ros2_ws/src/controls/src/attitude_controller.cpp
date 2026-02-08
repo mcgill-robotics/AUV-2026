@@ -89,7 +89,6 @@ namespace controls
         quatd q_error = q_iv_.conjugate() * q_iv2;
         Vec3 error_vector = Vec3(q_error.x(), q_error.y(), q_error.z());
         Vec3 feedback = P_e_ * error_vector - P_w_ * w_iv_; //TODO: Verify sign conventions
-        RCLCPP_INFO(this->get_logger(), "Feedback Torque: [%.3f, %.3f, %.3f]", feedback.x(), feedback.y(), feedback.z());
         return feedback;
     }
 
@@ -100,7 +99,6 @@ namespace controls
         Vec3 f_buoyancy = q_iv_.conjugate() * Vec3(0, 0, buoyancy_);
         Vec3 torque_buoyancy = r_bv_vec.cross(f_buoyancy);
         Vec3 feedforward = -1 * torque_buoyancy; // Negate to counteract
-        RCLCPP_INFO(this->get_logger(), "Feedforward Torque: [%.3f, %.3f, %.3f]", feedforward.x(), feedforward.y(), feedforward.z());
         return feedforward;
     }
 
