@@ -1,5 +1,33 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
+
+
+# Do we want to remove install/build/log directories before building?
+CLEAN_BUILD=false
+DEBUG_BUILD=false
+PACKAGE_TO_BUILD=""
+
+while getopts ":cdp:" flag; do
+    case "${flag}" in
+        c) 
+            echo "Flag -c was set. ros2_ws packages will be built from scratch"
+            CLEAN_BUILD=true
+            ;;
+        d)
+            echo "Flag -d was set. Debug build enabled."
+            DEBUG_BUILD=true
+            ;;
+        p)
+            echo "Flag -p was set. Building up to package: ${OPTARG}"
+            PACKAGE_TO_BUILD="${OPTARG}"
+            ;;
+        *)
+            echo "Usage: $0 [-c] [-d] [-p <package_name>]"
+            exit 1
+            ;;
+    esac
+done
+shift $((OPTIND -1)) 
 
 # ---------------------------------------------------------
 # 0. Permission & User Detection
@@ -8,7 +36,7 @@ set -euo pipefail
 SUDO=""
 if [ $(id -u) -ne 0 ]; then
     SUDO="sudo"
-    echo "Running on Host as user: $USER (will use sudo where needed)"
+    echo "Running on Host as user: $(whoami) (will use sudo where needed)"
 else
     echo "Running as Root (likely inside Docker)"
 fi
@@ -16,8 +44,24 @@ fi
 # ---------------------------------------------------------
 # 1. Environment Setup
 # ---------------------------------------------------------
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Set ROS distribution and install path
 ROS_DISTRO=humble
 ROS_INSTALL=/opt/ros/$ROS_DISTRO/setup.bash
+
+# Initialize all git submodules
+# Skip in CI since GitHub Actions checkout already fetches submodules (avoids permission issues)
+if [ -z "${CI:-}" ]; then
+    git config --global --add safe.directory "$(pwd)" || $SUDO git config --system --add safe.directory "$(pwd)"
+    git config --global --add safe.directory $(pwd)/ros2_ws/src/Xsens_MTi_Driver || $SUDO git config --system --add safe.directory $(pwd)/ros2_ws/src/Xsens_MTi_Driver
+    git config --global --add safe.directory $(pwd)/ros2_ws/src/ros-tcp-endpoint || $SUDO git config --system --add safe.directory $(pwd)/ros2_ws/src/ros-tcp-endpoint
+    git config --global --add safe.directory $(pwd)/ros2_ws/src/zed-ros2-wrapper || $SUDO git config --system --add safe.directory $(pwd)/ros2_ws/src/zed-ros2-wrapper
+
+    # git submodule update --init --recursive --rebase
+else
+    echo "Running in CI, skipping git submodule update (already handled by checkout action)."
+fi
 
 if [ -f "$ROS_INSTALL" ]; then
   echo -e "\n=== Sourcing ROS 2 base ($ROS_DISTRO) ==="
@@ -29,10 +73,21 @@ else
   exit 1
 fi
 
+# Source dependencies workspace if available 
+DEPS_WS_SETUP="/opt/dependencies_ws/install/setup.bash"
+if [ -f "$DEPS_WS_SETUP" ]; then
+  echo "   -> Sourcing dependencies_ws ..."
+  set +u
+  source "$DEPS_WS_SETUP"
+  set -u
+fi
+
+# move into script directory
+cd "$SCRIPT_DIR"
 if [ -d "ros2_ws" ]; then
     cd ros2_ws
 else
-    echo "ERROR: 'ros2_ws' directory not found. Run this from the repo root." >&2
+    echo "ERROR: ros2_ws directory not found in $SCRIPT_DIR." >&2
     exit 1
 fi
 
@@ -59,11 +114,14 @@ fi
 # ---------------------------------------------------------
 if [ "$CAN_BUILD_ZED" = false ]; then
     echo "⚠️  No ZED SDK or Jetson detected. Ignoring ZED packages."
+    SKIP_KEYS="zed zed_msgs zed_components"
     if [ -d "$ZED_DIR" ]; then
         touch "$ZED_DIR/AMENT_IGNORE"
     fi
 else
     echo "🚀 ZED Environment Ready. Including ZED packages."
+    # Skip OpenCV to avoid overwriting Jetson/CUDA optimized version
+    SKIP_KEYS="zed zed_msgs zed_components opencv libopencv-dev python3-opencv opencv-python"
     if [ -f "$ZED_DIR/AMENT_IGNORE" ]; then
         rm "$ZED_DIR/AMENT_IGNORE"
     fi
@@ -72,37 +130,75 @@ fi
 # ---------------------------------------------------------
 # 4. Dependency Installation (Rosdep)
 # ---------------------------------------------------------
-echo -e "\n=== Checking Rosdep ==="
+# echo -e "\n=== Checking Rosdep ==="
 
-# 4a. Initialize if missing
-if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then
-    echo "   -> Initializing rosdep..."
-    $SUDO rosdep init
-fi
+# # 4a. Initialize if missing
+# if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then
+#     echo "   -> Initializing rosdep..."
+#     $SUDO rosdep init
+# fi
 
 # 4b. Update if needed
 # We run this as the current user (NO SUDO) so permissions stay correct
-echo "   -> Updating rosdep cache..."
-rosdep update
+# echo "   -> Updating rosdep cache..."
+# rosdep update
 
-echo -e "\n=== Installing Dependencies ==="
-# Uses sudo if on host, no sudo if in docker
-$SUDO apt-get update
+# echo -e "\n=== Installing Dependencies ==="
+# # Uses sudo if on host, no sudo if in docker
+# $SUDO apt-get update
 
-# Note: rosdep install handles sudo internally/interactively
-rosdep install --from-paths src --ignore-src -r -y \
-    --skip-keys="zed zed_msgs zed_components"
+# # Note: rosdep install handles sudo internally/interactively
+# # Skipped as per user request (dependencies assumed present in Docker)
+# # rosdep install --from-paths src --ignore-src -r -y \
+# #    --skip-keys="$SKIP_KEYS"
 
 # ---------------------------------------------------------
 # 5. Build (colcon)
 # ---------------------------------------------------------
+
 echo -e "\n=== Building Workspace ==="
 
-colcon build \
-    --symlink-install \
-    --parallel-workers $(nproc) \
-    --event-handlers console_direct+ \
-    --cmake-args -DCMAKE_BUILD_TYPE=Release
+if [ -n "$PACKAGE_TO_BUILD" ]; then
+    echo "    -> Building up to package: $PACKAGE_TO_BUILD"
+    # Determine dependencies + packages to build, colcon build mapped to PKGS bash array
+    mapfile -t PKGS < <( colcon list --packages-up-to "$PACKAGE_TO_BUILD" --names-only )
+else
+    # Set PKGS to all packages
+    mapfile -t PKGS < <( colcon list --names-only )
+fi
+
+
+if [ "$CLEAN_BUILD" = true ]; then
+    PACKAGES_TO_CLEAN=""
+    echo "    -> Cleaning packages: ${PKGS[*]}"
+    for pkg in "${PKGS[@]}"; do
+        rm -rf "build/$pkg" "install/$pkg" "log/$pkg"
+    done
+fi
+
+if [ "$DEBUG_BUILD" = true ]; then
+    echo "    -> Performing Debug Build of packages: ${PKGS[*]}"
+    # Output to console, interleaving build output for better visibility
+    # Generate compile commands for use with linters e.g. VSCode
+    # Run everything sequentially to find exact failure point
+    colcon build \
+        --event-handlers console_direct+ \
+        --cmake-args \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo  \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+        --executor sequential \
+        $([ -n "$PACKAGE_TO_BUILD" ] && echo "--packages-up-to $PACKAGE_TO_BUILD")
+else
+    echo "    -> Performing Release Build of packages: ${PKGS[*]}"
+    # Output with cohesion, groups output by package
+    # Utilize all available CPU cores
+    colcon build \
+        --cmake-args -DCMAKE_BUILD_TYPE=Release \
+        --event-handlers console_cohesion+ \
+        --parallel-workers $(nproc) \
+        $([ -n "$PACKAGE_TO_BUILD" ] && echo "--packages-up-to $PACKAGE_TO_BUILD")
+fi
+
 
 # ---------------------------------------------------------
 # 6. Cleanup

@@ -6,7 +6,7 @@ Ahoy! This project contains software intended to run on the custom-built Douglas
 
 This project is maintained by the McGill Robotics Club and was developed by its members - students of McGill University.
 
-## Setting Up the Dev Environment
+## 1. Setting Up the Dev Environment
 
 ### Prerequisites
 Before setting up the dev environment, you should have the following software installed:
@@ -18,7 +18,7 @@ Before setting up the dev environment, you should have the following software in
 ---
 
 ### Method 1: VS Code Dev Containers (CPU Only)
-*Best for: Quick logic changes, non-graphical coding, Windows/Mac users without NVIDIA GPUs.*
+
 
 If you have the software installed, follow these instructions:
 
@@ -33,13 +33,17 @@ If you have the software installed, follow these instructions:
 
 4. Select ***"Dev Containers: Reopen in container"***
    
-5. VS Code will automatically load necessary files and configure the dev environment. This can take minutes to load.
+5. Select the option that matches your hardware
+   -  `AUV Dev (CPU)`: CPU or Integrated Graphics
+   -  `AUV Dev (NVIDIA)`: NVIDIA Graphics Card
+
+6. VS Code will automatically load necessary files and configure the dev environment. This can take minutes to load.
 
 Once loading is complete, you're ready to develop! 
 
 
-### Method 2: Docker CLI (GPU & Advanced)
-*Best for: Running ZED simulations, neural networks (YOLO), visualization (RQT/Rviz), and Linux users.*
+### Method 2: Docker CLI (Advanced)
+*Use this when not using VS Code as your primary text editor*
 
 1.  **Navigate to the dev folder:**
     ```bash
@@ -71,13 +75,23 @@ Once loading is complete, you're ready to develop!
     # For CPU
     docker exec -it auv-dev-cpu bash
     ```
+For more details, see [Docker/dev/README.md](Docker/dev/README.md).
 
+## 2. Building ROS Packages
 Once inside the container, use the build script. It automatically detects if you have the ZED SDK and builds accordingly.
 
 ```bash
-    cd /root/AUV-2026
+    cd /home/douglas/AUV-2026
     ./build.sh
     source ros2_ws/install/setup.bash
 ```
 
-For more details, see [Docker/dev/README.md](Docker/dev/README.md).
+Note the script can be run from anywhere in the container and will always build inside the `AUV-2026/ros2_ws` folder.
+
+Multiple build flags are available:
+-  `./build.sh` : Default Release Build, works for most cases
+-  `./build.sh -c` : Clean Build, removes previous build artifacts (`build/`, `install/`, `log/` folders)
+-  `./build.sh -d` : Debug Build, compiles with debug symbols and no optimizations and serial compilation
+-  `./build.sh -p <package_name>` : Build a specific package and its required dependencies (as determined by colcon)
+
+Since the debug `-d` build is single-threaded for easier debugging, it may take very long to compile. As such, it should only be used in tandem with the `-p` flag to build a specific package. A typical debug build command would be `./build.sh -cd -p <package_name>`. Note that the `-c` will only clean the build artifacts for the specified package and its dependencies.
