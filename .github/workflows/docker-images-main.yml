@@ -5,62 +5,54 @@ on:
     branches: [ "main", "pooltest/*", "dev/*" ]
   pull_request:
     branches: [ "main", "pooltest/*" ]
+    
   workflow_dispatch:
-  # Note: keeps our Dockerhub up to date with latest working images
+    inputs:
+      tag_name:
+        description: 'Docker Tag (e.g., 2026-01 or dev)'
+        required: true
+        default: 'dev'
+      allow_overwrite:
+        description: 'Overwrite existing tag if found?'
+        type: boolean
+        default: false
+
   schedule:
     - cron: '0 0,12 * * *'
 
 jobs:
-  build-x86:
-    runs-on: ubuntu-22.04
-
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-    - name: checkout
-      uses: actions/checkout@v4
-      with:
-          fetch-tags: true
-          submodules: recursive    # if you vendor msgs/firmware/etc
-          lfs: true
-
-    - uses: ./.github/actions/cleanup_disk
-
-    - name: Login to DockerHub
-      if: github.ref == 'refs/heads/main'
-      uses: docker/login-action@v3
-      with:
-        username: ${{ vars.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
-        
-    - name: Build and Load image
-      uses: docker/build-push-action@v6
-      with:
-        context: .
-        file: Docker/dev/Dockerfile
-        platforms: linux/amd64
-        load: true
-        push: false
-        tags: mcgillrobotics/auv_2026:dev-amd64
-
-    - name: Verify Build
-      run: |
-        docker run --rm --user $(id -u):$(id -g) -e CI=true -v ${{ github.workspace }}:/home/douglas/AUV-2026 mcgillrobotics/auv_2026:dev-amd64 /bin/bash -c "./build.sh -d"
-
-    - name: Push image
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      uses: docker/build-push-action@v6
-      with:
-        context: .
-        file: Docker/dev/Dockerfile
-        platforms: linux/amd64
-        push: true
-        tags: mcgillrobotics/auv_2026:dev-amd64
-
-  build-nvidia-x86:
-    runs-on: ubuntu-22.04
+  build-and-push:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: x86
+            runner: ubuntu-22.04
+            context: .
+            file: Docker/dev/Dockerfile
+            platform: linux/amd64
+            suffix: amd64
+          - name: nvidia
+            runner: ubuntu-22.04
+            context: .
+            file: Docker/dev/Dockerfile.nvidia
+            platform: linux/amd64
+            suffix: nvidia-amd64
+          - name: arm
+            runner: ubuntu-22.04-arm
+            context: .
+            file: Docker/dev/Dockerfile
+            platform: linux/arm64
+            suffix: arm64
+          - name: jetson
+            runner: ubuntu-22.04-arm
+            context: .
+            file: Docker/jetson/Dockerfile
+            platform: linux/arm64
+            suffix: jetson
 
     permissions:
       contents: read
@@ -77,131 +69,54 @@ jobs:
       - uses: ./.github/actions/cleanup_disk
 
       - name: Login to DockerHub
-        if: github.ref == 'refs/heads/main'
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and Load NVIDIA image
+      - name: Check if Tag Exists
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          FULL_TAG="mcgillrobotics/auv_2026:${{ inputs.tag_name }}-${{ matrix.suffix }}"
+          ALLOW_OVERWRITE="${{ inputs.allow_overwrite }}"
+          
+          # Check if tag exists on Docker Hub
+          if docker manifest inspect "$FULL_TAG" > /dev/null 2>&1; then
+            if [ "$ALLOW_OVERWRITE" = "true" ]; then
+              echo "::warning::Tag '$FULL_TAG' already exists. Overwrite is ENABLED. Proceeding with building."
+            else
+              echo "::error::Tag '$FULL_TAG' already exists and 'allow_overwrite' is set to false. Aborting to prevent accidental overwrite."
+              exit 1
+            fi
+          else
+            echo "Tag '$FULL_TAG' does not exist. Proceeding with building."
+          fi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Load image
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: Docker/dev/Dockerfile.nvidia
-          platforms: linux/amd64
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          platforms: ${{ matrix.platform }}
           load: true
           push: false
-          tags: mcgillrobotics/auv_2026:dev-nvidia-amd64
+          tags: mcgillrobotics/auv_2026:${{ inputs.tag_name || 'dev' }}-${{ matrix.suffix }}
 
       - name: Verify Build
         run: |
-          docker run --rm --user $(id -u):$(id -g) -e CI=true -v ${{ github.workspace }}:/home/douglas/AUV-2026 mcgillrobotics/auv_2026:dev-nvidia-amd64 /bin/bash -c "./build.sh -d"
+          docker run --rm --user $(id -u):$(id -g) -e CI=true -v ${{ github.workspace }}:/home/douglas/AUV-2026 mcgillrobotics/auv_2026:${{ inputs.tag_name || 'dev' }}-${{ matrix.suffix }} /bin/bash -c "./build.sh -d"
 
-      - name: Push NVIDIA image
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      - name: Push image
+        if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: Docker/dev/Dockerfile.nvidia
-          platforms: linux/amd64
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          platforms: ${{ matrix.platform }}
           push: true
-          tags: mcgillrobotics/auv_2026:dev-nvidia-amd64
-
-  build-arm:
-    runs-on: ubuntu-22.04-arm
-
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-    - name: Git checkout with LFS and submodules
-      uses: actions/checkout@v4
-      with:
-          fetch-tags: true
-          submodules: recursive    # if you vendor msgs/firmware/etc
-          lfs: true
-
-    - uses: ./.github/actions/cleanup_disk
-
-    - name: Login to DockerHub
-      if: github.ref == 'refs/heads/main'
-      uses: docker/login-action@v3
-      with:
-        username: ${{ vars.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
-        
-    - name: Build and Load image
-      uses: docker/build-push-action@v6
-      with:
-        context: .
-        file: Docker/dev/Dockerfile
-        platforms: linux/arm64
-        load: true
-        push: false
-        tags: mcgillrobotics/auv_2026:dev-arm64
-
-    - name: Verify Build
-      run: |
-        docker run --rm --user $(id -u):$(id -g) -e CI=true --platform linux/arm64 -v ${{ github.workspace }}:/home/douglas/AUV-2026 mcgillrobotics/auv_2026:dev-arm64 /bin/bash -c "./build.sh -d"
-
-    - name: Push image
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      uses: docker/build-push-action@v6
-      with:
-        context: .
-        file: Docker/dev/Dockerfile
-        platforms: linux/arm64
-        push: true
-        tags: mcgillrobotics/auv_2026:dev-arm64
-
-  build-jetson:
-    runs-on: ubuntu-22.04-arm
-
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-    - name: Git checkout with LFS and submodules
-      uses: actions/checkout@v4
-      with:
-          fetch-tags: true
-          submodules: recursive    # if you vendor msgs/firmware/etc
-          lfs: true
-
-    - uses: ./.github/actions/cleanup_disk
-
-    - name: Log in to Docker Hub
-      if: github.ref == 'refs/heads/main'
-      uses: docker/login-action@v3
-      with:
-        username: ${{ vars.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
-          
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-
-    - name: Build and Load image
-      uses: docker/build-push-action@v6
-      with:
-        context: .
-        file: Docker/jetson/Dockerfile
-        platforms: linux/arm64
-        load: true
-        push: false
-        tags: mcgillrobotics/auv_2026:jetson
-
-    - name: Verify Build
-      run: |
-        docker run --rm --user $(id -u):$(id -g) -e CI=true --platform linux/arm64 -v ${{ github.workspace }}:/home/douglas/AUV-2026 mcgillrobotics/auv_2026:jetson /bin/bash -c "./build.sh -d"
-
-    - name: Push image
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      uses: docker/build-push-action@v6
-      with:
-        context: .
-        file: Docker/jetson/Dockerfile
-        platforms: linux/arm64
-        push: true
-        tags: mcgillrobotics/auv_2026:jetson
+          tags: mcgillrobotics/auv_2026:${{ inputs.tag_name || 'dev' }}-${{ matrix.suffix }}
