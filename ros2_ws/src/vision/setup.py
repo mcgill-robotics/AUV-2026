@@ -32,6 +32,8 @@ setup(
             'image_collection = vision.image_collection:main',
             'front_cam_object_detection = vision.front_cam_object_detection:main',
             'down_cam_object_detection = vision.down_cam_object_detection:main',
+            'down_image_enhancement = vision.down_image_enhancement:main',
+            'front_image_enhancement = vision.front_image_enhancement:main',
         ],
     },
 )
