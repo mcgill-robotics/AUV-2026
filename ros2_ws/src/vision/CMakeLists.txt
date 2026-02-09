@@ -35,17 +35,27 @@ foreach(dep IN LISTS CPP_LIBS)
 endforeach()
 
 # Find optional ZED SDK and CUDA dependencies
-find_package(CUDAToolkit QUIET)
-find_package(ZED QUIET)
-
 set(HAS_ZED_SDK_DEPS FALSE)
-if(CUDAToolkit_FOUND AND ZED_FOUND)
-    message(STATUS "ZED SDK and CUDA found, building object map node with ZED SDK.")
-    set(HAS_ZED_SDK_DEPS TRUE)
-    # Add to CMake-based dependency list for ament to handle
-    list(APPEND CPP_LIBS ZED CUDAToolkit)
+
+# add CMake option that will be passed by the build script
+option(IS_JETSON_CI "Running on a Jetson device for CI" OFF)
+
+# Skip ZED SDK in JETSON CI environments (no GPU hardware and cannot use stubs)
+if(IS_JETSON_CI)
+    message(STATUS "CI Jetson environment detected - skipping ZED SDK (no NVIDIA stubs available for Jetson ZED SDK dependencies).")
 else()
-    message(STATUS "ZED SDK and/or CUDA not found, building object map node without ZED SDK.")
+    find_package(CUDAToolkit QUIET)
+    find_package(ZED QUIET)
+    
+    if(CUDAToolkit_FOUND AND ZED_FOUND)
+        message(STATUS "ZED SDK and CUDA found, building object map node with ZED SDK.")
+        set(HAS_ZED_SDK_DEPS TRUE)
+        # Add to CMake-based dependency list for ament to handle
+        list(APPEND CPP_LIBS ZED CUDAToolkit)
+    else()
+        message(STATUS "ZED SDK and/or CUDA not found, building object map node without ZED SDK.")
+        set(HAS_ZED_SDK_DEPS FALSE)
+    endif()
 endif()
 
 # ---Object Map library---
