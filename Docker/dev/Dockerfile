@@ -17,7 +17,8 @@ ENV CI=${CI}
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     DEBIAN_FRONTEND=noninteractive \
-    ROS_DISTRO=humble
+    ROS_DISTRO=humble \
+    IS_JETSON=false
 
 # ---------------------------------------------------------
 # 1. Install System Dependencies & Tools

@@ -33,7 +33,8 @@ ENV LANG=C.UTF-8 \
         ROS_DISTRO=humble \
         # Critical for ZED SDK to access hardware
         NVIDIA_DRIVER_CAPABILITIES=all \
-        TZ=Europe/Paris
+        TZ=Europe/Paris \
+        IS_JETSON=false
 
 # ---------------------------------------------------------
 # 1. Install System Dependencies & ROS 2 Setup

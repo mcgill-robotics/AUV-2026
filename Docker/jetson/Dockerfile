@@ -19,6 +19,10 @@ ARG ZED_SDK_RUN="ZED_SDK_installer.run"
 # ROS2 distribution
 ARG ROS2_DIST=humble
 
+# UBUNTU Versions
+ARG UBUNTU_RELEASE=22
+ARG UBUNTU_MINOR_RELEASE=04
+
 # ZED ROS2 Wrapper dependencies version
 ARG XACRO_VERSION=2.0.8
 ARG DIAGNOSTICS_VERSION=4.0.0
@@ -63,6 +67,8 @@ ENV LC_ALL=C.UTF-8
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Europe/Paris 
 ENV ROS_DISTRO=${ROS2_DIST}
+# assume anything trying to build this container is for jetson, whether CI or physical jetson hardware
+ENV IS_JETSON=true
 
 # Check that this SDK URL exists
 RUN if [ "$(curl -L -I "${ZED_SDK_URL}" -o /dev/null -s -w '%{http_code}\n' | head -n 1)" = "200" ]; then \
@@ -231,10 +237,10 @@ RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
 
 # Get CUDA dependencies to install torch and torchvision
 WORKDIR /root
-RUN CUSPARSE_LIBRARY_NAME="cusparselt-local-tegra-repo-ubuntu2204-0.8.1_0.8.1-1_arm64.deb" && \
+RUN CUSPARSE_LIBRARY_NAME="cusparselt-local-tegra-repo-ubuntu${UBUNTU_RELEASE}${UBUNTU_MINOR_RELEASE}-0.8.1_0.8.1-1_arm64.deb" && \
     wget https://developer.download.nvidia.com/compute/cusparselt/0.8.1/local_installers/${CUSPARSE_LIBRARY_NAME} && \
     dpkg -i ${CUSPARSE_LIBRARY_NAME} && \
-    cp /var/cusparselt-local-tegra-repo-ubuntu2204-0.8.1/cusparselt-*-keyring.gpg /usr/share/keyrings/ && \
+    cp /var/cusparselt-local-tegra-repo-ubuntu${UBUNTU_RELEASE}${UBUNTU_MINOR_RELEASE}-0.8.1/cusparselt-*-keyring.gpg /usr/share/keyrings/ && \
     apt-get update && \
     apt-get -y install cusparselt-cuda-12 && \
     rm -rf ${CUSPARSE_LIBRARY_NAME} && \
