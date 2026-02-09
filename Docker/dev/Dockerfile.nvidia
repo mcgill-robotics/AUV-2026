@@ -22,6 +22,7 @@ ARG ZED_SDK_PATCH=1
 ARG CUDA_MAJOR=12
 ARG CUDA_MINOR=8
 ARG UBUNTU_RELEASE=22
+ARG UBUNTU_MINOR_RELEASE=04
 ARG TENSORRT_MAJOR=10
 ARG TENSORRT_MINOR=9
 
@@ -32,7 +33,8 @@ ENV LANG=C.UTF-8 \
         ROS_DISTRO=humble \
         # Critical for ZED SDK to access hardware
         NVIDIA_DRIVER_CAPABILITIES=all \
-        TZ=Europe/Paris
+        TZ=Europe/Paris \
+        IS_JETSON=false
 
 # ---------------------------------------------------------
 # 1. Install System Dependencies & ROS 2 Setup
@@ -78,7 +80,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Add ROS 2 Humble Repository
 RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg && \
         echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null
-
+# Note that the CI does not have access to NVIDIA hardware, so we manually install the stubs only on CI to satisfy the linker when building ZED dependent packages
+ARG CI
+RUN if [ "$CI" = "true" ]; then \
+        echo "Installing ZED stubs for CI"; \
+        # Install CUDA keyring to access NVIDIA packages (needed for stubs), sed to remove '.' 22.04 -> 2204
+        curl -fsSL https://developer.download.nvidia.com/compute/cuda/repos/ubuntu${UBUNTU_RELEASE}${UBUNTU_MINOR_RELEASE}/x86_64/cuda-keyring_1.1-1_all.deb -o /tmp/cuda-keyring.deb && \
+        sudo dpkg -i /tmp/cuda-keyring.deb && \
+        # Install NVIDIA driver stubs (allows linker to find CUDA symbols when building ZED dependent packages, even though we won't actually be able to run them in CI). There is a third package 'libcuda.so' but it these two depend on libcuda and so apt installs it for us
+        apt-get update && apt-get install -y \
+        libnvidia-decode-550 \
+        libnvidia-encode-550 && \
+        rm /tmp/cuda-keyring.deb && \
+        rm -rf /var/lib/apt/lists/* && \
+        apt-get clean; \
+    else \
+        echo "Building container locally"; \
+    fi
+# set it as env var so build scripts can see it
+ENV CI=${CI}
 # Install ROS 2 Desktop (Includes Rviz, RQT, etc.)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ros-${ROS_DISTRO}-desktop \

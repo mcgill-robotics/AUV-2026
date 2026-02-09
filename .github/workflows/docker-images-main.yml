@@ -133,10 +133,12 @@ jobs:
           load: true
           push: false
           tags: ${{ env.PRIMARY_TAG }}
+          build-args: |
+            CI=true
 
       - name: Verify Build
         run: |
-          docker run --rm --user $(id -u):$(id -g) -e CI=true -v ${{ github.workspace }}:/home/douglas/AUV-2026 ${{ env.PRIMARY_TAG }} /bin/bash -c "./build.sh -d"
+          docker run --rm --user $(id -u):$(id -g) -v ${{ github.workspace }}:/home/douglas/AUV-2026 ${{ env.PRIMARY_TAG }} /bin/bash -c "./build.sh -d"
 
       - name: Push image
         if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}

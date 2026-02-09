@@ -109,6 +109,14 @@ if [ -d "/usr/local/zed" ]; then
     CAN_BUILD_ZED=true
 fi
 
+# the jetson container CI cannot have the ZED SDK installed since it the SDK will looks for symbols that are jetson specific which we cannot replicate in CI, so we just skip, so we define a variable that the CMakeLists can check to skip trying to find the ZED SDK in that case 
+# IS_JETSON is defined in the Dockerfile for the jetson container builds
+IS_JETSON_CI=false
+if [ -n "${CI:-}" ] && [ "$IS_JETSON" = true ]; then
+    echo "⚠️  CI jetson environment detected. Skipping linking ZED SDK to any packages since it cannot be installed in CI (zed-ros-wrapper will still be built)."
+    IS_JETSON_CI=true
+fi
+
 # ---------------------------------------------------------
 # 3. Configure Ignore Rules
 # ---------------------------------------------------------
@@ -186,6 +194,7 @@ if [ "$DEBUG_BUILD" = true ]; then
         --cmake-args \
             -DCMAKE_BUILD_TYPE=RelWithDebInfo  \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DIS_JETSON_CI=$IS_JETSON_CI \
         --executor sequential \
         $([ -n "$PACKAGE_TO_BUILD" ] && echo "--packages-up-to $PACKAGE_TO_BUILD")
 else
@@ -193,7 +202,9 @@ else
     # Output with cohesion, groups output by package
     # Utilize all available CPU cores
     colcon build \
-        --cmake-args -DCMAKE_BUILD_TYPE=Release \
+        --cmake-args \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DIS_JETSON_CI=$IS_JETSON_CI \
         --event-handlers console_cohesion+ \
         --parallel-workers $(nproc) \
         $([ -n "$PACKAGE_TO_BUILD" ] && echo "--packages-up-to $PACKAGE_TO_BUILD")
