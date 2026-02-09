@@ -37,6 +37,16 @@ ARG ROBOT_STATE_PUBLISHER_VERSION=3.5.2
 ARG USB_CAM_VERSION=0.8.1
 ARG IMAGE_COMMON_VERSION=3.1.12
 ARG MAVROS_VERSION=2.10.1
+# CI has a different runner than the jetson (notably git permissions are different and there is no GPU)
+# Unlike the nvidia dev container, we cannot just install stubs to satisfy the linker, so we just forego installing the zed sdk in CI for the jetson, which is fine since we should test it locally anyways
+ARG CI
+RUN if [ "$CI" = "true" ]; then \
+        echo "Building container for CI"; \
+    else \
+        echo "Building container locally"; \
+    fi
+# set it as env var so build scripts can see it
+ENV CI=${CI}
 
 # Make pip work
 ENV PYPI_URL=https://pypi.jetson-ai-lab.io/jp6/cu126

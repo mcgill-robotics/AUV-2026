@@ -4,6 +4,15 @@
 # ---------------------------------------------------------
 FROM althack/ros2:humble-dev
 
+# CI has a different runner than the jetson (notably git permissions are different and there is no GPU)
+ARG CI
+RUN if [ "$CI" = "true" ]; then \
+        echo "Building container for CI"; \
+    else \
+        echo "Building container locally"; \
+    fi
+# set it as env var so build scripts can see it
+ENV CI=${CI}
 # Set environment variables
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
