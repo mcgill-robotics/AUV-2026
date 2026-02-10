@@ -19,6 +19,9 @@ This repository contains a Dockerized ROS 2 Humble development environment for t
     docker exec -it jetson-douglas-1 bash
     ```
 
+### Network Configuration
+We standardize **`ROS_DOMAIN_ID=0`** across all our Docker containers. This is pre-configured in the `docker-compose.yml` environment variables. Ensure any external machines communicating with the Jetson also use `ROS_DOMAIN_ID=0`.
+
 ## 🏗️ Building from Source 
 
 This container is built upon the [`dustynv/ros:humble-desktop-l4t-r36.4.0`](https://hub.docker.com/layers/dustynv/ros/humble-desktop-l4t-r36.4.0/images/sha256-b8ee30b1ae189cfeeea755a7fd6b8aea74267f5c1bc0cfa4f19a6acec9d941e5) image. The core of our setup is derived from the [ZED ROS2 Wrapper Dockerfile](https://github.com/stereolabs/zed-ros2-wrapper/blob/master/docker/Dockerfile.l4t-humble), which we have extended with our own packages.
