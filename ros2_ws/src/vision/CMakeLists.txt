@@ -118,5 +118,7 @@ ament_python_install_package(${PROJECT_NAME})
 install(PROGRAMS ${PYTHON_NODE_SOURCES} DESTINATION lib/${PROJECT_NAME})
 # Launch files
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME}/)
+# Model files
+install(DIRECTORY model_pipeline/models DESTINATION share/${PROJECT_NAME}/)
 
 ament_package()
