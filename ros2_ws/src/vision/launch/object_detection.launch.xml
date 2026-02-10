@@ -1,19 +1,23 @@
 <launch>
     <arg name="front_model" default="$(find-pkg-share vision)/models/frontcam.pt"/>
     <arg name="down_model" default="$(find-pkg-share vision)/models/downcam.pt"/>
+    <arg name="front_enhanced_topic" default="/vision/front_cam/image_enhanced"/>
+    <arg name="down_enhanced_topic" default="/vision/down_cam/image_enhanced"/>
+    <arg name="front_detections_topic" default="/vision/front_cam/detections"/>
+    <arg name="down_detections_topic" default="/vision/down_cam/detections"/>
 
     <node pkg="vision" exec="front_cam_object_detection.py" name="front_cam_object_detection">
         <param name="class_names" value="['gate', 'lane_marker', 'red_pipe', 'white_pipe', 'octagon', 'table', 'bin', 'board', 'shark', 'sawfish']"/>
         <param name="model_path" value="$(var front_model)"/>
-        <param name="input_topic" value="/vision/front_cam/image_enhanced"/>
-        <param name="output_topic" value="/vision/front_cam/detections"/>
+        <param name="input_topic" value="$(var front_enhanced_topic)"/>
+        <param name="output_topic" value="$(var front_detections_topic)"/>
         <param name="queue_size" value="10"/>
     </node>
     <node pkg="vision" exec="down_cam_object_detection.py" name="down_cam_object_detection">
         <param name="class_names" value="['gate', 'octagon_table', 'octagon_top', 'path_marker', 'sawfish', 'shark']"/>
         <param name="model_path" value="$(var down_model)"/>
-        <param name="input_topic" value="/vision/down_cam/image_enhanced"/>
-        <param name="output_topic" value="/vision/down_cam/detections"/>
+        <param name="input_topic" value="$(var down_enhanced_topic)"/>
+        <param name="output_topic" value="$(var down_detections_topic)"/>
         <param name="queue_size" value="10"/>
     </node>
 </launch>
