@@ -7,7 +7,6 @@ from rclpy.time import Time
 import os
 
 import torch
-import cv2
 from cv_bridge import CvBridge
 from ultralytics import YOLO
 
@@ -128,9 +127,8 @@ class ObjectDetectorNode():
         self.pub_detections.publish(det_msg)
 
         if det_objects:
-            self.node.get_logger().info(f"Published {len(det_objects)} detections")
+            # self.node.get_logger().debug(f"Published {len(det_objects)} detections")
             stamp_time = Time.from_msg(msg.header.stamp)
             current_time = self.node.get_clock().now()
             time_diff = (current_time - stamp_time).nanoseconds / 1e9
-            self.node.get_logger().info(f"Stamp time (ns): {stamp_time:.6f}, Current time (ns): {current_time:.6f}")
-            self.node.get_logger().info(f"Detection latency: {time_diff:.9f} seconds")
+            # self.node.get_logger().debug(f"Detection latency: {time_diff:.9f} seconds")

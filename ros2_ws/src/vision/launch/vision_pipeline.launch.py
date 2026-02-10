@@ -19,6 +19,11 @@ def generate_launch_description():
             "are assumed to be in compressed image format and use_sim_time is enabled."
         )
     )
+    debug_arg = DeclareLaunchArgument(
+        "debug_logs",
+        default_value="false",
+        description="Whether to enable debug logs for vision nodes."
+    )
     
     front_model_arg = DeclareLaunchArgument(
         "front_model_path",
@@ -80,6 +85,8 @@ def generate_launch_description():
             "stream_ip": "127.0.0.1",
             "stream_port": "30000",
             "show_detections": "true",
+            "debug_logs": LaunchConfiguration("debug_logs"),
+            "--log-level": "debug" if LaunchConfiguration("debug_logs") else "info"
         }.items(),
         parameters=[
             {"use_sim_time": LaunchConfiguration("sim")}
@@ -87,6 +94,7 @@ def generate_launch_description():
     )
     return LaunchDescription([
         sim_arg,
+        debug_arg,
         front_model_arg,
         down_model_arg,
         SetParameter(name="use_sim_time", value=LaunchConfiguration("sim")),

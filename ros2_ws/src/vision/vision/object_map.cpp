@@ -155,8 +155,8 @@ private:
 			orientations, 
 			confidences
 		);
-		publish_object_map(confirmed_tracks);
 		publish_pose(zed_detector->GetCameraPose());
+		publish_object_map(confirmed_tracks);
 #endif
 	}
 
@@ -197,6 +197,11 @@ private:
 			object_map_msg.array.push_back(object_msg);
 		}
 		object_map_publisher->publish(object_map_msg);
+		// RCLCPP_DEBUG(this->get_logger(), "Published object map with %zu objects", tracks.size());
+		RCLCPP_DEBUG(this->get_logger(), "Published object map with %zu objects", tracks.size());
+		rclcpp::Time pipeline_end_time = this->now();
+		rclcpp::Duration time_diff = pipeline_end_time - frame_collection_time;
+		RCLCPP_DEBUG(this->get_logger(), "Object map pipeline latency: %.9f seconds", time_diff.seconds());
 	}
 
 	void publish_pose(const std::tuple<Eigen::Vector3d,Eigen::Vector4d>& pose)
