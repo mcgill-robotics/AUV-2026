@@ -118,7 +118,9 @@ ament_python_install_package(${PROJECT_NAME})
 install(PROGRAMS ${PYTHON_NODE_SOURCES} DESTINATION lib/${PROJECT_NAME})
 # Launch files
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME}/)
-# Model files
-install(DIRECTORY model_pipeline/models DESTINATION share/${PROJECT_NAME}/)
+# Model files, only if the filesystem has models
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/model_pipeline/models")
+    install(DIRECTORY model_pipeline/models DESTINATION share/${PROJECT_NAME}/)
+endif()
 
 ament_package()
