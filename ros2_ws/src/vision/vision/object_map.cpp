@@ -140,63 +140,8 @@ private:
 	{
 #ifdef HAS_ZED_SDK
 		if(!zed_detector) return;
-
+		std::vector<sl::CustomBoxObjectData> zed_detections = extract_ZED_detections(msg);
 		// Convert ROS message to ZED SDK CustomBoxObjectData
-		std::vector<sl::CustomBoxObjectData> zed_detections;
-		
-		for(const auto& detection : msg->detections) {
-			sl::CustomBoxObjectData box;
-			box.unique_object_id = sl::generate_unique_id();
-			
-			// 2D Bounding Box
-			// vision_msgs/BoundingBox2D is centered (cx, cy, w, h)
-			// ZED SDK expects corners: top-left ?? No, let's check CustomBoxObjectData
-			// "bounding_box_2d: 2D bounding box of the object in the image (4 corners)"
-			
-			float cx = detection.bbox.center.position.x;
-			float cy = detection.bbox.center.position.y;
-			float w = detection.bbox.size_x;
-			float h = detection.bbox.size_y;
-			
-			float left = cx - w / 2.0f;
-			float top = cy - h / 2.0f;
-			float right = cx + w / 2.0f;
-			float bottom = cy + h / 2.0f;
-			
-			std::vector<sl::uint2> bbox_2d(4);
-			bbox_2d[0] = sl::uint2(static_cast<unsigned int>(left), static_cast<unsigned int>(top));     // Top-Left
-			bbox_2d[1] = sl::uint2(static_cast<unsigned int>(right), static_cast<unsigned int>(top));    // Top-Right
-			bbox_2d[2] = sl::uint2(static_cast<unsigned int>(right), static_cast<unsigned int>(bottom)); // Bottom-Right
-			bbox_2d[3] = sl::uint2(static_cast<unsigned int>(left), static_cast<unsigned int>(bottom));  // Bottom-Left
-			box.bounding_box_2d = bbox_2d;
-			
-			// Label & Confidence (taking top hypothesis)
-			if (!detection.results.empty()) {
-				box.probability = detection.results[0].hypothesis.score;
-                
-                std::string label = detection.results[0].hypothesis.class_id;
-                auto it = std::find(ID_TO_LABEL.begin(), ID_TO_LABEL.end(), label);
-                if (it != ID_TO_LABEL.end()) {
-                    box.label = std::distance(ID_TO_LABEL.begin(), it);
-                } else {
-                    // Fallback or skip?
-                    // For now, let's keep it as is or default to something?
-                    // If ZED receives an invalid label ID, it might crash or ignore.
-                    // Let's assume 0 ("gate") or continue?
-                    // Ideally we should skip this detection if label is unknown.
-                    // But maybe we can just set a safe default.
-                    box.label = -1; // Unknown
-                    // But we should probably skip adding it to zed_detections if it's invalid.
-                }
-			}
-			
-            if (box.label != -1) {
-			    box.is_grounded = false;
-			    zed_detections.push_back(box);
-            }
-		}
-
-		frame_collection_time = this->now();
 		zed_detector->process_detections(zed_detections);
 		const auto [measurements,covariances,classes,orientations,confidences] = zed_detector->GetDetections();
 		
@@ -269,6 +214,65 @@ private:
 		pose_publisher->publish(pose_msg);
 	}
 
+	std::vector<sl::CustomBoxObjectData> extract_ZED_detections(const vision_msgs::msg::Detection2DArray::SharedPtr msg)
+	{
+		std::vector<sl::CustomBoxObjectData> zed_detections;
+		
+		for(const auto& detection : msg->detections) {
+			sl::CustomBoxObjectData box;
+			box.unique_object_id = sl::generate_unique_id();
+			
+			// 2D Bounding Box
+			// vision_msgs/BoundingBox2D is centered (cx, cy, w, h)
+			// ZED SDK expects corners: top-left ?? No, let's check CustomBoxObjectData
+			// "bounding_box_2d: 2D bounding box of the object in the image (4 corners)"
+			
+			float cx = detection.bbox.center.position.x;
+			float cy = detection.bbox.center.position.y;
+			float w = detection.bbox.size_x;
+			float h = detection.bbox.size_y;
+			
+			float left = cx - w / 2.0f;
+			float top = cy - h / 2.0f;
+			float right = cx + w / 2.0f;
+			float bottom = cy + h / 2.0f;
+			
+			std::vector<sl::uint2> bbox_2d(4);
+			bbox_2d[0] = sl::uint2(static_cast<unsigned int>(left), static_cast<unsigned int>(top));     // Top-Left
+			bbox_2d[1] = sl::uint2(static_cast<unsigned int>(right), static_cast<unsigned int>(top));    // Top-Right
+			bbox_2d[2] = sl::uint2(static_cast<unsigned int>(right), static_cast<unsigned int>(bottom)); // Bottom-Right
+			bbox_2d[3] = sl::uint2(static_cast<unsigned int>(left), static_cast<unsigned int>(bottom));  // Bottom-Left
+			box.bounding_box_2d = bbox_2d;
+			
+			// Label & Confidence (taking top hypothesis)
+			if (!detection.results.empty()) {
+				box.probability = detection.results[0].hypothesis.score;
+                
+                std::string label = detection.results[0].hypothesis.class_id;
+                auto it = std::find(ID_TO_LABEL.begin(), ID_TO_LABEL.end(), label);
+                if (it != ID_TO_LABEL.end()) {
+                    box.label = std::distance(ID_TO_LABEL.begin(), it);
+                } else {
+                    // Fallback or skip?
+                    // For now, let's keep it as is or default to something?
+                    // If ZED receives an invalid label ID, it might crash or ignore.
+                    // Let's assume 0 ("gate") or continue?
+                    // Ideally we should skip this detection if label is unknown.
+                    // But maybe we can just set a safe default.
+                    box.label = -1; // Unknown
+                    // But we should probably skip adding it to zed_detections if it's invalid.
+                }
+			}
+			
+            if (box.label != -1) {
+			    box.is_grounded = false;
+			    zed_detections.push_back(box);
+            }
+		}
+
+		frame_collection_time = this->now();
+		return zed_detections;
+	}
 #ifdef HAS_ZED_SDK
 	std::unique_ptr<ZEDDetection> zed_detector;
 #endif
