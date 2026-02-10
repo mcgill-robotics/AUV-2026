@@ -2,6 +2,7 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.parameter import Parameter
+from rclpy.time import Time
 
 import os
 
@@ -128,3 +129,8 @@ class ObjectDetectorNode():
 
         if det_objects:
             self.node.get_logger().info(f"Published {len(det_objects)} detections")
+            stamp_time = Time.from_msg(msg.header.stamp)
+            current_time = self.node.get_clock().now()
+            time_diff = (current_time - stamp_time).nanoseconds / 1e9
+            self.node.get_logger().info(f"Stamp time (ns): {stamp_time:.6f}, Current time (ns): {current_time:.6f}")
+            self.node.get_logger().info(f"Detection latency: {time_diff:.9f} seconds")

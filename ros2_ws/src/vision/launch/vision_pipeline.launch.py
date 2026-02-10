@@ -4,6 +4,7 @@ from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument
+from launch_ros.actions import SetParameter
 from launch_xml.launch_description_sources import XMLLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 
@@ -15,7 +16,7 @@ def generate_launch_description():
         default_value="false",
         description=(
             "Whether to run in simulation mode. In simulation mode, input topics "
-            "are assumed to be in compressed image format."
+            "are assumed to be in compressed image format and use_sim_time is enabled."
         )
     )
     
@@ -35,6 +36,7 @@ def generate_launch_description():
         # use dictionary unpacking to convert from dict to list of tuples for better readability
         launch_arguments={
             "sim": LaunchConfiguration("sim"),
+            "use_sim_time": LaunchConfiguration("sim"),
         }.items()
     )
     
@@ -42,6 +44,7 @@ def generate_launch_description():
         XMLLaunchDescriptionSource(os.path.join(vision_dir, "launch", "object_detection.launch.xml")),
         launch_arguments={
             "sim": LaunchConfiguration("sim"),
+            "use_sim_time": LaunchConfiguration("sim"),
             "front_model": LaunchConfiguration("front_model_path"),
             "down_model": LaunchConfiguration("down_model_path"),
         }.items()
@@ -50,6 +53,7 @@ def generate_launch_description():
         sim_arg,
         front_model_arg,
         down_model_arg,
+        SetParameter(name="use_sim_time", value=LaunchConfiguration("sim")),
         enhancement_launch,
         object_detection_launch,
     ])
