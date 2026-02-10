@@ -218,7 +218,7 @@ private:
 		pose_msg.pose.orientation.z = std::get<1>(pose)(3);
 		pose_publisher->publish(pose_msg);
 	}
-
+#ifdef HAS_ZED_SDK
 	std::vector<sl::CustomBoxObjectData> extract_ZED_detections(const vision_msgs::msg::Detection2DArray::SharedPtr msg)
 	{
 		std::vector<sl::CustomBoxObjectData> zed_detections;
@@ -278,6 +278,7 @@ private:
 		frame_collection_time = this->now();
 		return zed_detections;
 	}
+#endif
 #ifdef HAS_ZED_SDK
 	std::unique_ptr<ZEDDetection> zed_detector;
 #endif
