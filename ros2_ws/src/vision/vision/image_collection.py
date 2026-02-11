@@ -103,9 +103,9 @@ class ImageCollectionNode(Node):
     
     def front_callback(self, msg):
         """Callback for front camera images"""
-        # print("Front camera image received")
+        print("Front camera image received")
         try:
-            if hasattr(msg, 'format') and 'compressed' in msg.format:
+            if isinstance(msg, CompressedImage):
                 # Manual decoding to avoid cv_bridge issues with numpy 2.x
                 np_arr = np.frombuffer(msg.data, np.uint8)
                 cv_image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
