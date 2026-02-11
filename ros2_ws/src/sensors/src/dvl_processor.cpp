@@ -32,8 +32,8 @@ DvlNode::DvlNode() : Node("dvl_processor") {
     // C. Initialize Math Processor
     processor_ = std::make_unique<DvlProcessor>(Vec3(x, y, z));
 
-    // D. Setup Pubs and Subs
-    // NOTE: Check your topic names ("imu/data", "dvl/position") matches your other nodes
+// D. Setup Pubs and Subs
+//Creating subscriptions to the IMU and DVL topics, and a publisher for the state estimation output
     imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
         "imu/data", 10, std::bind(&DvlNode::imu_callback, this, std::placeholders::_1));
 
@@ -45,14 +45,19 @@ DvlNode::DvlNode() : Node("dvl_processor") {
     RCLCPP_INFO(this->get_logger(), "DvlProcessor started with Offset: [%.3f, %.3f, %.3f]", x, y, z);
 }
 
+// Imu_callback runs every time the IMU sends data and it updates the 
+// current_orientation_ variable so the math processor always knows the latest attitude.
+
 void DvlNode::imu_callback(const sensor_msgs::msg::Imu::SharedPtr msg) {
-    // Store orientation for use when DVL data arrives
+    // Stores orientation for use when DVL data arrives
     current_orientation_.w() = msg->orientation.w;
     current_orientation_.x() = msg->orientation.x;
     current_orientation_.y() = msg->orientation.y;
     current_orientation_.z() = msg->orientation.z;
 }
 
+// Dvl_callback runs every time the dvl sends location data, it "adds" the orientation x offset 
+// and it published the dvl COM position to state_pub_w
 void DvlNode::dvl_callback(const geometry_msgs::msg::PointStamped::SharedPtr msg) {
     // 1. Extract Position
     Vec3 p_dvl(msg->point.x, msg->point.y, msg->point.z);

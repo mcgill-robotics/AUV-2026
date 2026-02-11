@@ -27,7 +27,7 @@ dvl_processor:
   ros__parameters:
     frame_id: "dvl_link"
     # Update these to match the C++ parameters
-    dvl_offset_x: 0.0
+    dvl_offset_x: 1.0
     dvl_offset_y: 0.0
     dvl_offset_z: 0.0
     # Orientation offset as quaternion from sensor to AUV frame. (w,x,y,z)
