@@ -19,6 +19,7 @@ import random
 import argparse
 import yaml
 from pathlib import Path
+from typing import List, Tuple
 
 # Configuration
 SCRIPT_DIR = Path(__file__).parent.resolve()
@@ -32,6 +33,13 @@ DEFAULT_CLASS_NAMES = [
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp"}
 
+
+def safe_relative(path: Path, base: Path) -> Path:
+    try:
+        return path.relative_to(base)
+    except ValueError:
+        return path
+
 def get_class_names():
     if DATA_UNITY_YAML.exists():
         try:
@@ -42,7 +50,7 @@ def get_class_names():
             pass
     return DEFAULT_CLASS_NAMES
 
-def find_image_label_pairs(input_dir: Path) -> list[tuple[Path, Path]]:
+def find_image_label_pairs(input_dir: Path) -> List[Tuple[Path, Path]]:
     """Find all image-label pairs in the input directory with flexible detection."""
     pairs = []
     
@@ -66,8 +74,10 @@ def find_image_label_pairs(input_dir: Path) -> list[tuple[Path, Path]]:
     if not img_dir or not lbl_dir:
         return []
         
-    print(f"Using images from: {img_dir.relative_to(SCRIPT_DIR.parent.parent.parent.parent.parent.parent) if img_dir.is_relative_to(SCRIPT_DIR.parent.parent.parent.parent.parent.parent) else img_dir}")
-    print(f"Using labels from: {lbl_dir.relative_to(SCRIPT_DIR.parent.parent.parent.parent.parent.parent) if lbl_dir.is_relative_to(SCRIPT_DIR.parent.parent.parent.parent.parent.parent) else lbl_dir}")
+    #print(f"Using images from: {img_dir.relative_to(SCRIPT_DIR.parent.parent.parent.parent.parent.parent) if img_dir.is_relative_to(SCRIPT_DIR.parent.parent.parent.parent.parent.parent) else img_dir}")
+    #print(f"Using labels from: {lbl_dir.relative_to(SCRIPT_DIR.parent.parent.parent.parent.parent.parent) if lbl_dir.is_relative_to(SCRIPT_DIR.parent.parent.parent.parent.parent.parent) else lbl_dir}")
+    print(f"Using images from: {safe_relative(img_dir, SCRIPT_DIR.parent.parent.parent.parent.parent.parent)}")
+    print(f"Using labels from: {safe_relative(lbl_dir, SCRIPT_DIR.parent.parent.parent.parent.parent.parent)}")
 
     for img_path in img_dir.iterdir():
         if img_path.suffix.lower() not in IMAGE_EXTENSIONS:
@@ -89,7 +99,7 @@ def create_directory_structure(processed_dir: Path):
         (processed_dir / split / "images").mkdir(parents=True, exist_ok=True)
         (processed_dir / split / "labels").mkdir(parents=True, exist_ok=True)
 
-def split_and_move_data(pairs: list[tuple[Path, Path]], processed_dir: Path, ratios: tuple):
+def split_and_move_data(pairs: List[Tuple[Path, Path]], processed_dir: Path, ratios: tuple):
     """Shuffle and split data into train/val/test sets."""
     random.shuffle(pairs)
     
