@@ -7,18 +7,23 @@
         "layout": {
                 "first": {
                         "first": "Plot!depth",
-                        "second": "Plot!attitude",
-                        "direction": "row",
+                        "second": {
+                                "first": "RawMessages!imu",
+                                "second": "RawMessages!imuSetpoint",
+                                "direction": "row",
+                                "splitPercentage": 50
+                        },
+                        "direction": "column",
                         "splitPercentage": 50
                 },
                 "second": {
-                        "first": "Plot!efforts",
-                        "second": "Tab!propulsion",
-                        "direction": "row",
+                        "first": "Publish!effort",
+                        "second": "RawMessages!forces",
+                        "direction": "column",
                         "splitPercentage": 50
                 },
-                "direction": "column",
-                "splitPercentage": 50
+                "direction": "row",
+                "splitPercentage": 60
         },
         "configById": {
                 "Plot!depth": {
@@ -36,134 +41,22 @@
                         ],
                         "showLegend": true
                 },
-                "Plot!attitude": {
-                        "title": "Attitude Control (Quaternion W)",
-                        "isSynced": true,
-                        "paths": [
-                                {
-                                        "value": "/controls/quaternion_setpoint.w",
-                                        "label": "Setpoint W"
-                                },
-                                {
-                                        "value": "/processed/imu.orientation.w",
-                                        "label": "Actual W"
-                                }
-                        ],
-                        "showLegend": true
+                "RawMessages!imu": {
+                        "topicPath": "/processed/imu",
+                        "diffEnabled": false
                 },
-                "Plot!efforts": {
-                        "title": "Control Efforts",
-                        "isSynced": true,
-                        "paths": [
-                                {
-                                        "value": "/controls/depth_effort.force.z",
-                                        "label": "Depth Force Z"
-                                },
-                                {
-                                        "value": "/controls/attitude_effort.torque.x",
-                                        "label": "Roll Torque"
-                                },
-                                {
-                                        "value": "/controls/attitude_effort.torque.y",
-                                        "label": "Pitch Torque"
-                                },
-                                {
-                                        "value": "/controls/attitude_effort.torque.z",
-                                        "label": "Yaw Torque"
-                                }
-                        ],
-                        "showLegend": true
+                "RawMessages!imuSetpoint": {
+                        "topicPath": "/controls/quaternion_setpoint",
+                        "diffEnabled": false
                 },
-                "Tab!propulsion": {
-                        "activeTabIdx": 0,
-                        "tabs": [
-                                {
-                                        "title": "Forces (N)",
-                                        "layout": "Plot!forces"
-                                },
-                                {
-                                        "title": "PWM (µs)",
-                                        "layout": "Plot!pwm"
-                                }
-                        ]
+                "Publish!effort": {
+                        "topicName": "/controls/effort",
+                        "datatype": "geometry_msgs/msg/Wrench",
+                        "advancedView": true
                 },
-                "Plot!forces": {
-                        "title": "Thruster Forces",
-                        "isSynced": true,
-                        "paths": [
-                                {
-                                        "value": "/propulsion/forces.thruster_1",
-                                        "label": "T1"
-                                },
-                                {
-                                        "value": "/propulsion/forces.thruster_2",
-                                        "label": "T2"
-                                },
-                                {
-                                        "value": "/propulsion/forces.thruster_3",
-                                        "label": "T3"
-                                },
-                                {
-                                        "value": "/propulsion/forces.thruster_4",
-                                        "label": "T4"
-                                },
-                                {
-                                        "value": "/propulsion/forces.thruster_5",
-                                        "label": "T5"
-                                },
-                                {
-                                        "value": "/propulsion/forces.thruster_6",
-                                        "label": "T6"
-                                },
-                                {
-                                        "value": "/propulsion/forces.thruster_7",
-                                        "label": "T7"
-                                },
-                                {
-                                        "value": "/propulsion/forces.thruster_8",
-                                        "label": "T8"
-                                }
-                        ],
-                        "showLegend": true
-                },
-                "Plot!pwm": {
-                        "title": "Thruster PWM",
-                        "isSynced": true,
-                        "paths": [
-                                {
-                                        "value": "/propulsion/microseconds.thruster_1",
-                                        "label": "T1"
-                                },
-                                {
-                                        "value": "/propulsion/microseconds.thruster_2",
-                                        "label": "T2"
-                                },
-                                {
-                                        "value": "/propulsion/microseconds.thruster_3",
-                                        "label": "T3"
-                                },
-                                {
-                                        "value": "/propulsion/microseconds.thruster_4",
-                                        "label": "T4"
-                                },
-                                {
-                                        "value": "/propulsion/microseconds.thruster_5",
-                                        "label": "T5"
-                                },
-                                {
-                                        "value": "/propulsion/microseconds.thruster_6",
-                                        "label": "T6"
-                                },
-                                {
-                                        "value": "/propulsion/microseconds.thruster_7",
-                                        "label": "T7"
-                                },
-                                {
-                                        "value": "/propulsion/microseconds.thruster_8",
-                                        "label": "T8"
-                                }
-                        ],
-                        "showLegend": true
+                "RawMessages!forces": {
+                        "topicPath": "/propulsion/forces",
+                        "diffEnabled": false
                 }
         }
 }

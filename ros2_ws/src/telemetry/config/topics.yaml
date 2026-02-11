@@ -76,3 +76,9 @@ transforms:
 services:
   toggle_front_collection: /image_collection/toggle_front_collection
   toggle_down_collection: /image_collection/toggle_down_collection
+  
+  # Drytest
+  drytest_re_arm: /dry_test_node/re_arm
+  drytest_test_thruster: /dry_test_node/test_thruster
+  drytest_optimized: /dry_test_node/optimized_dry_test
+  drytest_simultaneous: /dry_test_node/simultaneous_test

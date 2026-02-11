@@ -5,57 +5,22 @@
                 "speed": 1
         },
         "layout": {
-                "first": "3D!main",
-                "second": "Tab!images",
-                "direction": "column",
-                "splitPercentage": 60
+                "first": "Tab!images",
+                "second": {
+                        "first": {
+                                "first": "CallService!startCollection",
+                                "second": "CallService!stopCollection",
+                                "direction": "column",
+                                "splitPercentage": 50
+                        },
+                        "second": "RosOut!1",
+                        "direction": "column",
+                        "splitPercentage": 40
+                },
+                "direction": "row",
+                "splitPercentage": 70
         },
         "configById": {
-                "3D!main": {
-                        "cameraState": {
-                                "perspective": false,
-                                "distance": 12,
-                                "phi": 90,
-                                "theta": 0,
-                                "target": [
-                                        0,
-                                        0,
-                                        0
-                                ],
-                                "targetOffset": [
-                                        0,
-                                        0,
-                                        0
-                                ]
-                        },
-                        "followMode": "follow-pose",
-                        "followTf": "base_link",
-                        "scene": {},
-                        "transforms": {
-                                "showLabel": true,
-                                "axisScale": 0.3
-                        },
-                        "topics": {
-                                "/tf": {
-                                        "visible": true
-                                },
-                                "/vision/objects_3d": {
-                                        "visible": true,
-                                        "colorMode": "flat",
-                                        "color": "#00ff00"
-                                }
-                        },
-                        "layers": {
-                                "grid": {
-                                        "layerId": "foxglove.Grid",
-                                        "position": [
-                                                0,
-                                                0,
-                                                0
-                                        ]
-                                }
-                        }
-                },
                 "Tab!images": {
                         "activeTabIdx": 0,
                         "tabs": [
@@ -88,6 +53,20 @@
                 "Image!ref": {
                         "cameraTopic": "/zed/zed_node/rgb/color/rect/image/compressed",
                         "smooth": true
+                },
+                "CallService!startCollection": {
+                        "serviceName": "/image_collection/toggle_front_collection",
+                        "requestPayload": "{ \"data\": true }",
+                        "buttonText": "Start Collection"
+                },
+                "CallService!stopCollection": {
+                        "serviceName": "/image_collection/toggle_front_collection",
+                        "requestPayload": "{ \"data\": false }",
+                        "buttonText": "Stop Collection"
+                },
+                "RosOut!1": {
+                        "searchTerms": [],
+                        "minLogLevel": 1
                 }
         }
 }

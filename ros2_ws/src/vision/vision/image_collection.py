@@ -14,6 +14,20 @@ import subprocess
 from datetime import datetime
 import threading
 from pathlib import Path
+import yaml
+from ament_index_python.packages import get_package_share_directory
+
+
+def load_topics_config():
+    """Load centralized topic config from telemetry/config/topics.yaml."""
+    try:
+        config_path = os.path.join(
+            get_package_share_directory('telemetry'), 'config', 'topics.yaml'
+        )
+        with open(config_path, 'r') as f:
+            return yaml.safe_load(f)
+    except Exception:
+        return None
 
 
 class ImageCollectionNode(Node):
@@ -23,11 +37,16 @@ class ImageCollectionNode(Node):
         # Check if display is available
         self.display_available = self._check_display()
         
-        # Parameters
+        # Load centralized topic config
+        topics = load_topics_config()
+        default_front = topics['cameras']['front'] if topics else '/zed/zed_node/rgb/color/rect/image/compressed'
+        default_down = topics['cameras']['down'] if topics else '/down_cam/image_raw'
+
+        # Parameters (defaults from topics.yaml)
         self.declare_parameter('front_cam_data_dir', 'data_front_cam')
         self.declare_parameter('down_cam_data_dir', 'data_down_cam')
-        self.declare_parameter('front_cam_topic', '/zed/zed_node/rgb/color/rect/image/compressed')
-        self.declare_parameter('down_cam_topic', '/down_cam/image_raw')
+        self.declare_parameter('front_cam_topic', default_front)
+        self.declare_parameter('down_cam_topic', default_down)
         self.declare_parameter('collection_interval', 2.0)
         
         # Get parameters

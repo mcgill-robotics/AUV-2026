@@ -1,0 +1,134 @@
+{
+  "configById": {
+    "CallService!ReArm": {
+      "requestPayload": "{}",
+      "layout": "vertical",
+      "timeoutSeconds": 3,
+      "serviceName": "/dry_test_node/re_arm",
+      "buttonText": "Re-Arm"
+    },
+    "CallService!SimTest": {
+      "requestPayload": "{}",
+      "layout": "vertical",
+      "timeoutSeconds": 3,
+      "serviceName": "/dry_test_node/simultaneous_test",
+      "buttonText": "Test All Thrusters"
+    },
+    "CallService!Thruster1": {
+      "requestPayload": "{\n  \"data\": 1\n}",
+      "layout": "vertical",
+      "timeoutSeconds": 3,
+      "serviceName": "/dry_test_node/test_thruster",
+      "buttonText": "Test Thruster 1"
+    },
+    "CallService!Thruster2": {
+      "requestPayload": "{\n  \"data\": 2\n}",
+      "layout": "vertical",
+      "timeoutSeconds": 3,
+      "serviceName": "/dry_test_node/test_thruster",
+      "buttonText": "Test Thruster 2"
+    },
+    "CallService!Thruster3": {
+      "requestPayload": "{\n  \"data\": 3\n}",
+      "layout": "vertical",
+      "timeoutSeconds": 3,
+      "serviceName": "/dry_test_node/test_thruster",
+      "buttonText": "Test Thruster 3"
+    },
+    "CallService!Thruster4": {
+      "requestPayload": "{\n  \"data\": 4\n}",
+      "layout": "vertical",
+      "timeoutSeconds": 3,
+      "serviceName": "/dry_test_node/test_thruster",
+      "buttonText": "Test Thruster 4"
+    },
+    "CallService!Thruster5": {
+      "requestPayload": "{\n  \"data\": 5\n}",
+      "layout": "vertical",
+      "timeoutSeconds": 3,
+      "serviceName": "/dry_test_node/test_thruster",
+      "buttonText": "Test Thruster 5"
+    },
+    "CallService!Thruster6": {
+      "requestPayload": "{\n  \"data\": 6\n}",
+      "layout": "vertical",
+      "timeoutSeconds": 3,
+      "serviceName": "/dry_test_node/test_thruster",
+      "buttonText": "Test Thruster 6"
+    },
+    "CallService!Thruster7": {
+      "requestPayload": "{\n  \"data\": 7\n}",
+      "layout": "vertical",
+      "timeoutSeconds": 3,
+      "serviceName": "/dry_test_node/test_thruster",
+      "buttonText": "Test Thruster 7"
+    },
+    "CallService!Thruster8": {
+      "requestPayload": "{\n  \"data\": 8\n}",
+      "layout": "vertical",
+      "timeoutSeconds": 3,
+      "serviceName": "/dry_test_node/test_thruster",
+      "buttonText": "Test Thruster 8"
+    },
+    "RosOut!1": {
+      "searchTerms": [],
+      "minLogLevel": 1
+    }
+  },
+  "globalVariables": {},
+  "userNodes": {},
+  "playbackConfig": {
+    "speed": 1
+  },
+  "layout": {
+    "first": {
+      "first": "CallService!ReArm",
+      "second": "CallService!SimTest",
+      "direction": "row",
+      "splitPercentage": 50
+    },
+    "second": {
+      "first": {
+        "first": {
+          "first": "CallService!Thruster1",
+          "second": "CallService!Thruster2",
+          "direction": "row",
+          "splitPercentage": 50
+        },
+        "second": {
+          "first": "CallService!Thruster3",
+          "second": "CallService!Thruster4",
+          "direction": "row",
+          "splitPercentage": 50
+        },
+        "direction": "column",
+        "splitPercentage": 50
+      },
+      "second": {
+        "first": {
+          "first": {
+            "first": "CallService!Thruster5",
+            "second": "CallService!Thruster6",
+            "direction": "row",
+            "splitPercentage": 50
+          },
+          "second": {
+            "first": "CallService!Thruster7",
+            "second": "CallService!Thruster8",
+            "direction": "row",
+            "splitPercentage": 50
+          },
+          "direction": "column",
+          "splitPercentage": 50
+        },
+        "second": "RosOut!1",
+        "direction": "column",
+        "splitPercentage": 60
+      },
+      "direction": "column",
+      "splitPercentage": 40
+    },
+    "direction": "column",
+    "splitPercentage": 15
+  }
+}
