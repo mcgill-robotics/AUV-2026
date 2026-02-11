@@ -41,7 +41,7 @@ jobs:
       id: build
       uses: docker/build-push-action@v6
       with:
-        context: Docker/dev
+        context: .
         file: Docker/dev/Dockerfile
         platforms: linux/arm64
         push: false

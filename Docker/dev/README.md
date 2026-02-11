@@ -74,9 +74,30 @@ cd /root/AUV-2026
 source ros2_ws/install/setup.bash
 ```
 
-## 4. Connecting to Unity Simulation
+## 4. Connecting to Unity Simulation & Networking
+
+### Standardized ROS Domain
+We standardize **`ROS_DOMAIN_ID=0`** across all our Docker containers (Dev, Jetson, Simulation). This ensures seamless communication between:
+*   The Docker container and the Host machine.
+*   The Docker container and the Unity Simulation (which defaults to ID 0).
+*   Multiple robots/machines on the same network (e.g., Topside <-> AUV).
 
 This setup uses **Host Networking**, meaning the container shares `localhost` with your computer.
+
+### Windows Users (WSL 2)
+
+To ensure the container can communicate with the simulation running on Windows, you must update your networking settings.
+
+1.  **Enable Host Networking in Docker Desktop:**
+    
+    ![windows-docker-desktop-network-settings](https://github.com/user-attachments/assets/158a659b-9e18-4b9b-9e66-2231692e144a)
+
+2.  **Set Networking Mode to Mirrored & Enable Host Address Loopback:**
+    
+    ![windows-wsl-network-settings](https://github.com/user-attachments/assets/ca6500b4-c4c0-4e9c-a0c6-30b789014e84)
+
+### Instructions
+
 
 1.  **Start Unity** on your host machine.
 2.  **Inside Docker**, launch the TCP Endpoint:
