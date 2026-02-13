@@ -15,13 +15,15 @@ export CMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH:-}"
 export PKG_CONFIG_PATH="${PKG_CONFIG_PATH:-}"
 export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"
 export MAKEFLAGS="-j $(nproc)"
-export ROS_PACKAGE_PATH="${AMENT_PREFIX_PATH:-}"
 export PYTHONNOUSERSITE=1
 
 # Source ROS environment, suppress colcon trace to avoid flooding CI logs
 # (colcon checks `[ -n "$COLCON_TRACE" ]` — empty string passes the check
 #  without triggering set -u like unset would)
 [ -f /ros_environment.sh ] && { COLCON_TRACE=""; source /ros_environment.sh; } || true
+
+# Set after sourcing so AMENT_PREFIX_PATH is populated
+export ROS_PACKAGE_PATH="${AMENT_PREFIX_PATH:-}"
 
 # ---- Workspace & flags --------------------------------------------------------
 ROS_WORKSPACE="${ROS_WORKSPACE:=${ROS_ROOT:-/opt/ros/unknown}}"
