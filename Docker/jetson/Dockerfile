@@ -204,8 +204,9 @@ RUN /ros2_install.sh https://github.com/pal-robotics/backward_ros.git
 # This clones the wrapper into src/ and builds it against the deps we just installed.
 # We'll rebuild the wrapper from our git submodule in ros2_ws/ during development,
 # but baking it here means all its compiled dependencies are pre-built in the image.
-RUN ROS_BRANCH=v5.2.0 /ros2_install.sh \
-    https://github.com/stereolabs/zed-ros2-wrapper.git
+# COMMENTED IT OUT BECAUSE THE CICD CANNOT BUILD IT SINCE IT DOESN'T HAVE THE STUBS / GPU TO BUILD IT
+# RUN ROS_BRANCH=v5.2.0 /ros2_install.sh \
+#     https://github.com/stereolabs/zed-ros2-wrapper.git
 
 # ===== CUDA Sparse Libraries (for torch/torchvision) =====
 WORKDIR /root
