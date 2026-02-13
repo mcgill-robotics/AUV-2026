@@ -1,154 +1,81 @@
-# Define the L4T_VERSION argument
-ARG L4T_VERSION=l4t-r36.4.0
-ARG IMAGE_NAME=dustynv/ros:humble-desktop-l4t-r36.4.0
+# ==============================================================================
+# Jetson Dockerfile for AUV-2026
+# Base: dustynv ROS 2 Humble (source-built, not apt) on L4T r36.4.0 / JetPack 6
+#
+# Since dustynv builds ROS from source, we CANNOT install ROS packages via apt.
+# All ROS dependencies must be built from source using /ros2_install.sh
+# (see: https://github.com/dusty-nv/jetson-containers/tree/master/packages/robots/ros)
+# ==============================================================================
 
+ARG IMAGE_NAME=dustynv/ros:humble-desktop-l4t-r36.4.0
 FROM ${IMAGE_NAME}
 
-ARG ZED_SDK_MAJOR=5
-ARG ZED_SDK_MINOR=1
-ARG ZED_SDK_PATCH=0
-ARG L4T_MAJOR=36
-ARG L4T_MINOR=4
-# Optional: Override ZED SDK URL
-ARG CUSTOM_ZED_SDK_URL=""
+SHELL ["/bin/bash", "-lc"]
 
-# ZED SDK link
-ENV ZED_SDK_URL=${CUSTOM_ZED_SDK_URL:-"https://download.stereolabs.com/zedsdk/${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}.${ZED_SDK_PATCH}/l4t${L4T_MAJOR}.${L4T_MINOR}/jetsons"}
-ARG ZED_SDK_RUN="ZED_SDK_installer.run"
-
-# ROS2 distribution
+# ===== Core Environment =====
 ARG ROS2_DIST=humble
+ENV ROS_DISTRO=${ROS2_DIST}
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Europe/Paris
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+# anything building this container targets jetson, whether CI or physical hardware
+ENV IS_JETSON=true
 
-# UBUNTU Versions
+# NVIDIA's jetson pip server doesn't have protobuf, so we need the standard one as a fallback
+ENV PYPI_URL=https://pypi.jetson-ai-lab.io/jp6/cu126
+ENV PIP_INDEX_URL=https://pypi.jetson-ai-lab.io/jp6/cu126
+ENV PIP_TRUSTED_HOST=pypi.jetson-ai-lab.io
+ENV PIP_INDEX_FOR_NON_NVIDIA=https://pypi.python.org/simple
+
+# Ubuntu version (used for CUDA library naming)
 ARG UBUNTU_RELEASE=22
 ARG UBUNTU_MINOR_RELEASE=04
 
-# ZED ROS2 Wrapper dependencies version
-ARG XACRO_VERSION=2.0.8
-ARG DIAGNOSTICS_VERSION=4.0.0
-ARG AMENT_LINT_VERSION=0.12.11
-ARG ROBOT_LOCALIZATION_VERSION=3.5.3
-ARG ZED_MSGS_VERSION=5.0.0
-ARG NMEA_MSGS_VERSION=2.0.0
-ARG ANGLES_VERSION=1.15.0
-ARG GEOGRAPHIC_INFO_VERSION=1.0.6
-ARG POINTCLOUD_TRANSPORT_VERSION=1.0.18
-ARG POINTCLOUD_TRANSPORT_PLUGINS_VERSION=1.0.11
-ARG RMW_CYCLONEDDS_VERSION=1.3.4
-ARG BACKWARD_ROS_VERSION=1.0.7
-ARG RQT_GUI_VERSION=1.1.7
-ARG ROBOT_STATE_PUBLISHER_VERSION=3.5.2
-ARG USB_CAM_VERSION=0.8.1
-ARG IMAGE_COMMON_VERSION=3.1.12
-ARG MAVROS_VERSION=2.10.1
-# CI has a different runner than the jetson (notably git permissions are different and there is no GPU)
-# Unlike the nvidia dev container, we cannot just install stubs to satisfy the linker, so we just forego installing the zed sdk in CI for the jetson, which is fine since we should test it locally anyways
-ARG CI
-RUN if [ "$CI" = "true" ]; then \
-        echo "Building container for CI"; \
-    else \
-        echo "Building container locally"; \
-    fi
-# set it as env var so build scripts can see it
-ENV CI=${CI}
+# ===== ZED SDK Configuration =====
+ARG ZED_SDK_MAJOR=5
+ARG ZED_SDK_MINOR=2
+ARG ZED_SDK_PATCH=0
+ARG L4T_MAJOR=36
+ARG L4T_MINOR=4
+ARG CUSTOM_ZED_SDK_URL=""
+ENV ZED_SDK_URL=${CUSTOM_ZED_SDK_URL:-"https://download.stereolabs.com/zedsdk/${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}.${ZED_SDK_PATCH}/l4t${L4T_MAJOR}.${L4T_MINOR}/jetsons"}
+ARG ZED_SDK_RUN="ZED_SDK_installer.run"
 
-# Make pip work
-ENV PYPI_URL=https://pypi.jetson-ai-lab.io/jp6/cu126
-ENV PIP_INDEX_URL=https://pypi.jetson-ai-lab.io/jp6/cu126 
-ENV PIP_TRUSTED_HOST=pypi.jetson-ai-lab.io
-
-# protobuf is a pip package needed by zed sdk, for some reason nvidias pip server killed protobuf in its available packages so you need 
-# the default non nvidia pip index just to download protobuf
-ENV PIP_INDEX_FOR_NON_NVIDIA=https://pypi.python.org/simple
-
-# Set up environment (we in paris because official docs are in paris)
-ENV LANG=C.UTF-8
-ENV LC_ALL=C.UTF-8
-ENV DEBIAN_FRONTEND=noninteractive
-ENV TZ=Europe/Paris 
-ENV ROS_DISTRO=${ROS2_DIST}
-# assume anything trying to build this container is for jetson, whether CI or physical jetson hardware
-ENV IS_JETSON=true
-
-# Check that this SDK URL exists
+# Fail fast: check the SDK URL is valid before doing anything expensive
 RUN if [ "$(curl -L -I "${ZED_SDK_URL}" -o /dev/null -s -w '%{http_code}\n' | head -n 1)" = "200" ]; then \
-    echo "The URL points to something."; \
+    echo "ZED SDK URL is valid."; \
     else \
-    echo "The URL does not point to a .run file or the file does not exist."; \
+    echo "ERROR: ZED SDK URL does not point to a valid file: ${ZED_SDK_URL}"; \
     exit 1; \
     fi
 
-# Disable apt-get warnings
-RUN curl -fsSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg && \
-    apt-get update || true && apt-get install -y --no-install-recommends apt-utils dialog && \
-    rm -rf /var/lib/apt/lists/* && \
-    apt-get clean
+# ===== System Dependencies =====
+# These are non-ROS apt packages: build tools, libraries, and utilities.
+# ROS packages are installed from source further down via /ros2_install.sh.
 
-# Install SSH server and set up SSH access
-# Hardcoding a password is not secure but eh
-RUN apt-get update && apt-get install -y \
-    openssh-server \
-    xauth \
-    && mkdir /var/run/sshd \
-    && mkdir /root/.ssh \
-    && chmod 700 /root/.ssh \
-    && echo "Port 222" >> /etc/ssh/sshd_config \
-    && echo "PermitRootLogin yes" >> /etc/ssh/sshd_config \
-    && echo 'root:jetson' | chpasswd \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+# The base image has the ROS apt repo configured but its GPG key can expire.
+# Refresh it before any apt-get update or the build will fail with EXPKEYSIG.
+RUN curl -fsSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
+    -o /usr/share/keyrings/ros-archive-keyring.gpg
 
-
-RUN echo "# R${L4T_MAJOR} (release), REVISION: ${L4T_MINOR}" > /etc/nv_tegra_release && \
-    apt-get update -y || true && apt-get install -y --no-install-recommends \
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone && \
+    apt-get update && apt-get install -y --no-install-recommends \
+    # Build tools
     build-essential \
     cmake \
+    ninja-build \
+    # Networking and general utilities
     curl \
-    gnupg2 \
-    less \
-    libdraco-dev \
-    libgeographic-dev \
-    libusb-1.0-0-dev \
-    python3 \
-    python3-dev \
-    python3-pip \
-    python3-setuptools \
-    wget \
-    zlib1g-dev \
-    zstd && \
-    export PIP_INDEX_URL="${PIP_INDEX_FOR_NON_NVIDIA}" && \
-    pip install  --no-cache-dir protobuf && \
-    rm -rf /var/lib/apt/lists/* && \
-    apt-get clean
-
-RUN cd /tmp && \
-    wget -q --no-check-certificate -O ${ZED_SDK_RUN} \
-    ${ZED_SDK_URL} && \
-    chmod +x ${ZED_SDK_RUN} && \
-    ./${ZED_SDK_RUN} silent skip_python skip_cuda && \
-    # since the installer installs to /usr/local/zed we need to set permissions for lib access
-    # a for all user r for read and X for conditional execute (only allow executing if it is an actual executable)
-    chmod -R a+rX /usr/local/zed && \
-    # Update library cache
-    ldconfig && \
-    rm -rf ${ZED_SDK_RUN} && \
-    ldconfig
-# Install other common development tools
-# Keep these in alphabetical
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone && \ 
-    apt-get update && apt-get install -y --no-install-recommends \
     git \
     git-lfs \
+    gnupg2 \
     iproute2 \
     iputils-ping \
     jq \
-    libpq-dev \
+    less \
     lsb-release \
     nano \
-    python3-colcon-common-extensions \
-    python3-rosdep \
-    python3-vcstools \
-    python3-wheel \
     sudo \
     tar \
     tmux \
@@ -156,11 +83,24 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone &
     usbutils \
     v4l-utils \
     vim \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
-
-#Install graphics, video, c++ dev libraries
-RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget \
+    # Python
+    python3 \
+    python3-dev \
+    python3-pip \
+    python3-setuptools \
+    python3-colcon-common-extensions \
+    python3-rosdep \
+    python3-vcstools \
+    python3-wheel \
+    # Libraries for ZED SDK and ROS package compilation
+    libusb-1.0-0-dev \
+    libgeographic-dev \
+    libdraco-dev \
+    libpq-dev \
+    zlib1g-dev \
+    zstd \
+    # Graphics, video encoding, and C++ development
     g++ \
     libc++-dev \
     libavcodec-dev \
@@ -176,143 +116,165 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libswscale-dev \
     libwayland-dev \
     libxkbcommon-dev \
-    ninja-build \
-    v4l-utils \
-    && add-apt-repository ppa:deadsnakes/ppa -y \
+    # SSH (we SSH into the jetson container for development)
+    openssh-server \
+    xauth \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# copy our configs for zed2i
+# ===== SSH Server Setup =====
+# We use port 222 so it doesn't conflict with the host's SSH
+# Password is hardcoded — not secure, but fine for our LAN-only dev setup
+RUN mkdir -p /var/run/sshd /root/.ssh && \
+    chmod 700 /root/.ssh && \
+    echo "Port 222" >> /etc/ssh/sshd_config && \
+    echo "PermitRootLogin yes" >> /etc/ssh/sshd_config && \
+    echo 'root:jetson' | chpasswd
+
+# ===== ZED SDK Installation =====
+# The ZED installer checks /etc/nv_tegra_release to detect L4T version
+RUN echo "# R${L4T_MAJOR} (release), REVISION: ${L4T_MINOR}" > /etc/nv_tegra_release
+
+# protobuf is needed by ZED SDK but NVIDIA's pip index dropped it, so use the standard index
+RUN PIP_INDEX_URL="${PIP_INDEX_FOR_NON_NVIDIA}" pip install --no-cache-dir protobuf
+
+# Download and install the ZED SDK
+# skip_python: we manage our own Python environment
+# skip_cuda: CUDA is already in the base image
+# chmod a+rX: let non-root users read ZED libs (r) and execute actual binaries only (X)
+RUN cd /tmp && \
+    wget -q --no-check-certificate -O ${ZED_SDK_RUN} "${ZED_SDK_URL}" && \
+    chmod +x ${ZED_SDK_RUN} && \
+    ./${ZED_SDK_RUN} silent skip_python skip_cuda && \
+    chmod -R a+rX /usr/local/zed && \
+    ldconfig && \
+    rm -f ${ZED_SDK_RUN}
+
+# Copy our ZED2i camera calibration config
 COPY Docker/jetson/SN33688213.conf /usr/local/zed/settings/
 
-# Install missing dependencies and wanted packages from source
-WORKDIR /opt/dependencies_ws/src
-RUN wget https://github.com/ros/xacro/archive/refs/tags/${XACRO_VERSION}.tar.gz -O - | tar -xvz && mv xacro-${XACRO_VERSION} xacro && \
-    wget https://github.com/ros/diagnostics/archive/refs/tags/${DIAGNOSTICS_VERSION}.tar.gz -O - | tar -xvz && mv diagnostics-${DIAGNOSTICS_VERSION} diagnostics && \
-    wget https://github.com/ament/ament_lint/archive/refs/tags/${AMENT_LINT_VERSION}.tar.gz -O - | tar -xvz && mv ament_lint-${AMENT_LINT_VERSION} ament-lint && \
-    wget https://github.com/cra-ros-pkg/robot_localization/archive/refs/tags/${ROBOT_LOCALIZATION_VERSION}.tar.gz -O - | tar -xvz && mv robot_localization-${ROBOT_LOCALIZATION_VERSION} robot-localization && \
-    wget https://github.com/stereolabs/zed-ros2-interfaces/archive/refs/tags/${ZED_MSGS_VERSION}.tar.gz -O - | tar -xvz && mv zed-ros2-interfaces-${ZED_MSGS_VERSION} zed-ros2-interfaces && \
-    wget https://github.com/ros-drivers/nmea_msgs/archive/refs/tags/${NMEA_MSGS_VERSION}.tar.gz -O - | tar -xvz && mv nmea_msgs-${NMEA_MSGS_VERSION} nmea_msgs && \
-    wget https://github.com/ros/angles/archive/refs/tags/${ANGLES_VERSION}.tar.gz -O - | tar -xvz && mv angles-${ANGLES_VERSION} angles && \
-    wget https://github.com/ros-perception/point_cloud_transport/archive/refs/tags/${POINTCLOUD_TRANSPORT_VERSION}.tar.gz -O - | tar -xvz && mv point_cloud_transport-${POINTCLOUD_TRANSPORT_VERSION} point_cloud_transport && \
-    wget https://github.com/ros-perception/point_cloud_transport_plugins/archive/refs/tags/${POINTCLOUD_TRANSPORT_PLUGINS_VERSION}.tar.gz -O - | tar -xvz && mv point_cloud_transport_plugins-${POINTCLOUD_TRANSPORT_PLUGINS_VERSION} point_cloud_transport_plugins && \
-    wget https://github.com/ros2/rmw_cyclonedds/archive/refs/tags/${RMW_CYCLONEDDS_VERSION}.tar.gz -O - | tar -xvz && mv rmw_cyclonedds-${RMW_CYCLONEDDS_VERSION} rmw_cyclonedds && \
-    wget https://github.com/ros-geographic-info/geographic_info/archive/refs/tags/${GEOGRAPHIC_INFO_VERSION}.tar.gz -O - | tar -xvz && mv geographic_info-${GEOGRAPHIC_INFO_VERSION} geographic-info && \
-    wget https://github.com/pal-robotics/backward_ros/archive/refs/tags/${BACKWARD_ROS_VERSION}.tar.gz -O - | tar -xvz && mv backward_ros-${BACKWARD_ROS_VERSION} backward_ros && \
-    wget https://github.com/ros-drivers/usb_cam/archive/refs/tags/${USB_CAM_VERSION}.tar.gz -O - | tar -xvz && mv usb_cam-${USB_CAM_VERSION} usb_cam && \
-    wget https://github.com/mavlink/mavros/archive/refs/tags/${MAVROS_VERSION}.tar.gz -O - | tar -xvz && mv mavros-${MAVROS_VERSION} mavros && \
-    wget https://github.com/ros-perception/image_common/archive/refs/tags/${IMAGE_COMMON_VERSION}.tar.gz -O - | tar -xvz && mv image_common-${IMAGE_COMMON_VERSION} image_common && \
-    # copy needed packages to src
-    cp -r geographic-info/geographic_msgs/ . && \
-    cp -r mavros/mavros_msgs/ . && \
-    # clean up unneeded source folders
-    rm -rf geographic-info && \
-    rm -rf mavros && \
-    rm -rf /opt/dependencies_ws/src/.cache
+# ===== ROS 2 Dependencies (built from source) =====
+# The base image includes /ros2_install.sh which:
+#   1. Uses rosinstall_generator to resolve all transitive dependencies
+#   2. Runs rosdep to install system libs via apt
+#   3. Builds everything from source with colcon into $ROS_WORKSPACE
+#
+# We use a separate workspace (/opt/dependencies_ws) so that these "infrastructure"
+# packages don't clutter our development workspace in ros2_ws/.
+#
+# IMPORTANT: the script has two modes that CANNOT be mixed in one call:
+#   - Git URL mode: first arg starts with http, clones that repo
+#   - Named package mode: all args are ROS package names
+# So we need separate RUN commands for each mode.
 
-# ROS packages that do not depend on OpenCV/that ZED wrapper doesn't depend on can be installed here
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ros-$ROS_DISTRO-foxglove-bridge \
-    ros-$ROS_DISTRO-joy \
-    ros-$ROS_DISTRO-joy-teleop \
-    ros-$ROS_DISTRO-rosidl-default-generators \
-    ros-$ROS_DISTRO-vision-msgs \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+ENV ROS_WORKSPACE=/opt/dependencies_ws
 
-# Build the dependencies from source against NVIDIA OpenCV
-# There are 2 workspaces so that all the dependencies installed source
-# do not clutter our ros2_ws
-WORKDIR /opt/dependencies_ws
+# Install the ZED ROS 2 wrapper and ALL of its dependencies from source.
+# This pulls in zed-ros2-interfaces (messages), xacro, diagnostics, image_transport,
+# point_cloud_transport, and everything else the wrapper needs — automatically.
+# We bake it here so dependencies are pre-built, but we'll rebuild the wrapper itself
+# from our git submodule in ros2_ws/src/zed-ros2-wrapper during development.
+# ROS_BRANCH pins the version (git --branch works for both branches and tags).
+RUN ROS_BRANCH=v5.2.0 /ros2_install.sh https://github.com/stereolabs/zed-ros2-wrapper.git
 
-RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
-    colcon build --parallel-workers $(nproc) \
-    --event-handlers console_direct+ --base-paths src \
-    --cmake-args ' -DCMAKE_BUILD_TYPE=Release' \
-    ' -DCMAKE_LIBRARY_PATH=/usr/local/cuda/lib64/stubs' \
-    ' -DCMAKE_CXX_FLAGS=\"-Wl,--allow-shlib-undefined\"' \
-    ' --no-warn-unused-cli' " && \
-    rm -rf build log
+# Install other ROS packages we need that aren't ZED wrapper dependencies.
+# ros2_install.sh resolves their full dependency trees automatically,
+# so we only list top-level packages — no need to manually track transitive deps.
+RUN /ros2_install.sh \
+    mavros \
+    usb_cam \
+    rmw_cyclonedds_cpp \
+    foxglove_bridge \
+    joy \
+    joy_teleop \
+    rosidl_default_generators \
+    vision_msgs
 
-
-# Get CUDA dependencies to install torch and torchvision
+# ===== CUDA Sparse Libraries (for torch/torchvision) =====
 WORKDIR /root
+
+# Install cuSPARSELt (sparse matrix operations on tensor cores)
 RUN CUSPARSE_LIBRARY_NAME="cusparselt-local-tegra-repo-ubuntu${UBUNTU_RELEASE}${UBUNTU_MINOR_RELEASE}-0.8.1_0.8.1-1_arm64.deb" && \
     wget https://developer.download.nvidia.com/compute/cusparselt/0.8.1/local_installers/${CUSPARSE_LIBRARY_NAME} && \
     dpkg -i ${CUSPARSE_LIBRARY_NAME} && \
     cp /var/cusparselt-local-tegra-repo-ubuntu${UBUNTU_RELEASE}${UBUNTU_MINOR_RELEASE}-0.8.1/cusparselt-*-keyring.gpg /usr/share/keyrings/ && \
-    apt-get update && \
-    apt-get -y install cusparselt-cuda-12 && \
-    rm -rf ${CUSPARSE_LIBRARY_NAME} && \
-    rm -rf /var/lib/apt/lists/* && \
+    apt-get update && apt-get -y install cusparselt-cuda-12 && \
+    rm -rf ${CUSPARSE_LIBRARY_NAME} /var/lib/apt/lists/* && \
     apt-get clean
 
+# Install cuDSS (CUDA direct sparse solver)
 ARG CUSPARSE_SOLVER_NAME="libcudss-linux-sbsa-0.6.0.5_cuda12-archive"
-RUN mkdir -p tmp_cudss && cd tmp_cudss && \
+RUN mkdir -p /tmp/cudss && cd /tmp/cudss && \
     curl -L -O https://developer.download.nvidia.com/compute/cudss/redist/libcudss/linux-sbsa/${CUSPARSE_SOLVER_NAME}.tar.xz && \
     tar xf ${CUSPARSE_SOLVER_NAME}.tar.xz && \
     cp -a ${CUSPARSE_SOLVER_NAME}/include/* /usr/local/cuda/include/ && \
     cp -a ${CUSPARSE_SOLVER_NAME}/lib/* /usr/local/cuda/lib64/ && \
-    rm -rf ${CUSPARSE_SOLVER_NAME} ${CUSPARSE_SOLVER_NAME}.tar.xz
+    rm -rf /tmp/cudss
 
-# Install ultralytics, avoid reinstalling numpy and opencv (torch, tensorflow and torchvision installed in the .toml file, cuda supported cause pip index is Jetpack6 one)
-RUN pip install --no-cache-dir --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} --ignore-install sympy \ 
+# ===== Python ML/Vision Stack =====
+# torch, tensorflow, and torchvision are installed via the .toml file
+# pip index points to the Jetpack6 CUDA-aware server so we get GPU-enabled wheels
+RUN pip install --no-cache-dir --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} \
+    --ignore-installed sympy \
     cython --upgrade
 
-RUN git clone https://github.com/ultralytics/ultralytics.git && \
+# Ultralytics YOLO — pinned to a tag so builds are reproducible (git --branch works for tags too)
+# We strip numpy/opencv constraints because the base image ships Jetson-optimized versions
+ARG ULTRALYTICS_REF=v8.2.0
+RUN git clone --depth 1 --branch ${ULTRALYTICS_REF} https://github.com/ultralytics/ultralytics.git && \
     cd ultralytics && \
     sed -i '/"numpy>=1.23.0"/d; /"opencv-python>=4.6.0"/d; /"numpy<2.0.0"/d' pyproject.toml && \
     pip install --no-cache-dir --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} -e . && \
-    cd .. && \
-    rm -rf ultralytics
+    cd /root && rm -rf ultralytics
 
-# Install dependencies for vision
-RUN pip install --no-cache-dir --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} notebook \
-    roboflow albumentations pandas && \
-    pip install --no-cache-dir --ignore-install --upgrade typing_extensions
+# Computer vision tooling (Jupyter for remote notebooks, roboflow for dataset management)
+RUN pip install --no-cache-dir --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} \
+    notebook roboflow albumentations pandas && \
+    pip install --no-cache-dir --ignore-installed --upgrade typing_extensions
 
-
-# Environment Setup
+# ===== User Setup =====
 ARG USERNAME=douglas
 ARG USER_UID=1000
 ARG USER_GID=$USER_UID
 
-# 1. Create or rename the group
+# Create or rename the group/user. dialout group is needed for IMU serial access.
 RUN if getent group $USER_GID; then \
     groupmod -n $USERNAME $(getent group $USER_GID | cut -d: -f1); \
     else \
     groupadd --gid $USER_GID $USERNAME; \
-    fi \
-    # 2. Create the user, dialout is IMU driver permissions
-    && useradd --uid $USER_UID --gid $USER_GID -m -s /bin/bash $USERNAME \
-    && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
-    && chmod 0440 /etc/sudoers.d/$USERNAME \
-    && usermod -aG video,render,dialout -s /bin/bash $USERNAME 
+    fi && \
+    useradd --uid $USER_UID --gid $USER_GID -m -s /bin/bash $USERNAME && \
+    echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME && \
+    chmod 0440 /etc/sudoers.d/$USERNAME && \
+    usermod -aG video,render,dialout -s /bin/bash $USERNAME
 
-# Install fixuid for dynamic UID/GID remapping at runtime
+# fixuid remaps UID/GID at runtime when using docker run --user
+# This keeps file permissions sane between host and container
 ARG FIXUID_VERSION=0.6.0
 RUN ARCH="$(dpkg --print-architecture)" && \
-    curl -fsSL "https://github.com/boxboat/fixuid/releases/download/v${FIXUID_VERSION}/fixuid-${FIXUID_VERSION}-linux-${ARCH}.tar.gz" | tar -C /usr/local/bin -xzf - && \
+    curl -fsSL "https://github.com/boxboat/fixuid/releases/download/v${FIXUID_VERSION}/fixuid-${FIXUID_VERSION}-linux-${ARCH}.tar.gz" \
+    | tar -C /usr/local/bin -xzf - && \
     chown root:root /usr/local/bin/fixuid && \
     chmod 4755 /usr/local/bin/fixuid && \
     mkdir -p /etc/fixuid && \
     printf "user: $USERNAME\ngroup: $USERNAME\n" > /etc/fixuid/config.yml
 
+# ===== User Environment =====
 USER $USERNAME
 
-# set colcon home after adding user
+# colcon defaults (e.g. parallel workers, build type) — copied from repo root
 ENV COLCON_HOME=/home/$USERNAME/.colcon
-# move repo defaults.yaml to container, CI is run from Docker/jetson so need to go up 2 levels
 COPY .colcon ${COLCON_HOME}/
 
 WORKDIR /home/$USERNAME/AUV-2026
 
-# Source env variables
-# We use /opt/dependencies_ws which is readable by all
-RUN echo "source /opt/ros/humble/setup.bash && source /opt/dependencies_ws/install/setup.bash && source /home/$USERNAME/AUV-2026/ros2_ws/install/setup.bash" >> ~/.bashrc 
-RUN echo 'AMENT_PREFIX_PATH=$(echo $AMENT_PREFIX_PATH | sed "s|\(.*:\)\([^:]*\):\([^:]*\)$|\1\3:\2|")' >> ~/.bashrc
+# Source ROS environments using Dusty's canonical env script.
+# /ros_environment.sh handles the correct install/ path for source-built ROS,
+# activates the Python venv, and already includes /opt/dependencies_ws/install/setup.bash
+# (ros2_install.sh automatically registers workspaces into it).
+# We only need to add our own project workspace on top.
+RUN echo "source /ros_environment.sh && \
+    source /home/$USERNAME/AUV-2026/ros2_ws/install/setup.bash" >> ~/.bashrc
 
-# Entrypoint uses fixuid to remap UID/GID if running with --user
 ENTRYPOINT ["fixuid", "-q"]
-
 CMD ["bash"]
