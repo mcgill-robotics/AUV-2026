@@ -187,7 +187,16 @@ RUN /ros2_install.sh \
     joy \
     joy_teleop \
     rosidl_default_generators \
-    vision_msgs
+    vision_msgs \
+    robot_localization \
+    backward_ros \
+    xacro \
+    diagnostics \
+    angles \
+    point_cloud_transport \
+    point_cloud_transport_plugins \
+    geographic_msgs \
+    image_common
 
 # Now install the ZED wrapper itself via URL mode, pinned to v5.2.0.
 # This clones the wrapper into src/ and builds it against the deps we just installed.
