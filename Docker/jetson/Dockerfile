@@ -50,6 +50,13 @@ RUN if [ "$(curl -L -I "${ZED_SDK_URL}" -o /dev/null -s -w '%{http_code}\n' | he
     exit 1; \
     fi
 
+# ===== Replace outdated base image scripts =====
+# The base image ships year-old versions of these scripts that lack ROS_BRANCH support
+# and don't clone with --recursive. We overwrite them with current versions.
+COPY Docker/jetson/ros2_install.sh /ros2_install.sh
+COPY Docker/jetson/ros_environment.sh /ros_environment.sh
+RUN chmod +x /ros2_install.sh /ros_environment.sh
+
 # ===== System Dependencies =====
 # These are non-ROS apt packages: build tools, libraries, and utilities.
 # ROS packages are installed from source further down via /ros2_install.sh.
@@ -161,26 +168,15 @@ COPY Docker/jetson/SN33688213.conf /usr/local/zed/settings/
 #
 # We use a separate workspace (/opt/dependencies_ws) so that these "infrastructure"
 # packages don't clutter our development workspace in ros2_ws/.
-#
-# IMPORTANT: the script has two modes that CANNOT be mixed in one call:
-#   - Git URL mode: first arg starts with http, clones that repo
-#   - Named package mode: all args are ROS package names
-# So we need separate RUN commands for each mode.
 
 ENV ROS_WORKSPACE=/opt/dependencies_ws
 
-# Install the ZED ROS 2 wrapper and ALL of its dependencies from source.
-# This pulls in zed-ros2-interfaces (messages), xacro, diagnostics, image_transport,
-# point_cloud_transport, and everything else the wrapper needs — automatically.
-# We bake it here so dependencies are pre-built, but we'll rebuild the wrapper itself
-# from our git submodule in ros2_ws/src/zed-ros2-wrapper during development.
-# ROS_BRANCH pins the version (git --branch works for both branches and tags).
-RUN ROS_BRANCH=v5.2.0 /ros2_install.sh https://github.com/stereolabs/zed-ros2-wrapper.git
-
-# Install other ROS packages we need that aren't ZED wrapper dependencies.
-# ros2_install.sh resolves their full dependency trees automatically,
-# so we only list top-level packages — no need to manually track transitive deps.
+# First install the ZED wrapper's message dependencies and all other ROS packages.
+# zed_msgs (from zed-ros2-interfaces) and nmea_msgs are in the ROS Humble index,
+# so ros2_install.sh can fetch and build them by name.
 RUN /ros2_install.sh \
+    zed_msgs \
+    nmea_msgs \
     mavros \
     usb_cam \
     rmw_cyclonedds_cpp \
@@ -189,6 +185,13 @@ RUN /ros2_install.sh \
     joy_teleop \
     rosidl_default_generators \
     vision_msgs
+
+# Now install the ZED wrapper itself via URL mode, pinned to v5.2.0.
+# This clones the wrapper into src/ and builds it against the deps we just installed.
+# We'll rebuild the wrapper from our git submodule in ros2_ws/ during development,
+# but baking it here means all its compiled dependencies are pre-built in the image.
+RUN ROS_BRANCH=v5.2.0 /ros2_install.sh \
+    https://github.com/stereolabs/zed-ros2-wrapper.git
 
 # ===== CUDA Sparse Libraries (for torch/torchvision) =====
 WORKDIR /root
