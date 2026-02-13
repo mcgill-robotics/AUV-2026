@@ -1,4 +1,12 @@
 #!/bin/bash
+# Original script from dusty-nv/jetson-containers
+# https://github.com/dusty-nv/jetson-containers/blob/master/packages/ros/ros_environment.sh
+# Author: Dustin Franklin (dusty-nv) — NVIDIA
+#
+# We keep a local copy rather than fetching from upstream at build time for:
+#   - Reproducibility: pinned to a known-good version, no surprise breakages
+#   - Reliability: no dependency on GitHub availability during CI builds
+#   - Patchability: modifications can be applied cleanly in-place
 
 export CUDA_HOME="/usr/local/cuda"
 export NVCC_PATH="$CUDA_HOME/bin/nvcc"

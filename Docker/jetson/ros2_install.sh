@@ -1,4 +1,14 @@
 #!/usr/bin/env bash
+# Original script from dusty-nv/jetson-containers
+# https://github.com/dusty-nv/jetson-containers/blob/master/packages/ros/ros2_install.sh
+# Author: Dustin Franklin (dusty-nv) — NVIDIA
+# Modified for AUV-2026: COLCON_TRACE suppression, ROS_PACKAGE_PATH ordering fix
+#
+# We keep a local copy rather than fetching from upstream at build time for:
+#   - Reproducibility: pinned to a known-good version, no surprise breakages
+#   - Reliability: no dependency on GitHub availability during CI builds
+#   - Patchability: our fixes are applied cleanly in-place, not via fragile sed hacks
+#
 # downloads, builds, and installs ROS 2 packages from source in $ROS_WORKSPACE
 # usage examples:
 #   ros2_install.sh xacro teleop_twist_joy
