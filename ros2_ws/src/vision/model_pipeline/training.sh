@@ -5,4 +5,4 @@ if [ -z "$1" ]; then
 fi
 python3 fix_labels.py
 python3 organize_dataset.py
-python3 training_real.py --custom-model "$1" --learning-rate 0.0003
+python3 training.py --custom-model "$1" --learning-rate 0.0003
