@@ -189,7 +189,6 @@ RUN /ros2_install.sh \
     rosidl_default_generators \
     vision_msgs \
     robot_localization \
-    backward_ros \
     xacro \
     diagnostics \
     angles \
@@ -197,6 +196,9 @@ RUN /ros2_install.sh \
     point_cloud_transport_plugins \
     geographic_msgs \
     image_common
+
+# backward_ros isn't in the Humble rosdistro, so install it from GitHub directly.
+RUN /ros2_install.sh https://github.com/pal-robotics/backward_ros.git
 
 # Now install the ZED wrapper itself via URL mode, pinned to v5.2.0.
 # This clones the wrapper into src/ and builds it against the deps we just installed.
