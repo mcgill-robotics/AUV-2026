@@ -63,13 +63,20 @@ else
     echo "Running in CI, skipping git submodule update (already handled by checkout action)."
 fi
 
-if [ -f "$ROS_INSTALL" ]; then
+if [ -f /ros_environment.sh ]; then
+  # Dusty-nv / Jetson containers: ROS is source-built, use the canonical script
+  echo -e "\n=== Sourcing ROS 2 base via /ros_environment.sh ==="
+  set +u
+  COLCON_TRACE="" source /ros_environment.sh
+  set -u
+elif [ -f "$ROS_INSTALL" ]; then
+  # Standard deb-installed ROS (dev container)
   echo -e "\n=== Sourcing ROS 2 base ($ROS_DISTRO) ==="
   set +u
   source "$ROS_INSTALL"
   set -u
 else
-  echo "ERROR: cannot find ROS install at $ROS_INSTALL" >&2
+  echo "ERROR: cannot find ROS install at $ROS_INSTALL or /ros_environment.sh" >&2
   exit 1
 fi
 
