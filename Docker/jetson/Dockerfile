@@ -53,6 +53,10 @@ RUN if [ "$(curl -L -I "${ZED_SDK_URL}" -o /dev/null -s -w '%{http_code}\n' | he
 # ===== System Dependencies =====
 # Non-ROS apt packages: build tools, libraries, and utilities.
 
+# The base image ships with a Yarn apt repo whose GPG key is expired.
+# We don't need Yarn, so remove it to prevent apt-get update from failing.
+RUN rm -f /etc/apt/sources.list.d/yarn.list
+
 # Refresh the ROS apt GPG key in case it has expired
 RUN curl -fsSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
     -o /usr/share/keyrings/ros-archive-keyring.gpg
