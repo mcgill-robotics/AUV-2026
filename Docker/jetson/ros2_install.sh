@@ -18,7 +18,8 @@ export MAKEFLAGS="-j $(nproc)"
 export ROS_PACKAGE_PATH="${AMENT_PREFIX_PATH:-}"
 export PYTHONNOUSERSITE=1
 
-[ -f /ros_environment.sh ] && source /ros_environment.sh || true
+# Source ROS environment, suppress colcon trace to avoid flooding CI logs
+[ -f /ros_environment.sh ] && COLCON_TRACE=0 source /ros_environment.sh 2>/dev/null || true
 
 # ---- Workspace & flags --------------------------------------------------------
 ROS_WORKSPACE="${ROS_WORKSPACE:=${ROS_ROOT:-/opt/ros/unknown}}"
