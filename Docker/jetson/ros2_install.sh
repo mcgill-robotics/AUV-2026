@@ -1,18 +1,38 @@
 #!/usr/bin/env bash
 # Original script from dusty-nv/jetson-containers
-# https://github.com/dusty-nv/jetson-containers/blob/master/packages/ros/ros2_install.sh
+# https://github.com/dusty-nv/jetson-containers/blob/master/packages/robots/ros/ros2_install.sh
 # Author: Dustin Franklin (dusty-nv) — NVIDIA
-# Modified for AUV-2026: COLCON_TRACE suppression, ROS_PACKAGE_PATH ordering fix
+# License: 
 #
-# We keep a local copy rather than fetching from upstream at build time for:
-#   - Reproducibility: pinned to a known-good version, no surprise breakages
-#   - Reliability: no dependency on GitHub availability during CI builds
-#   - Patchability: our fixes are applied cleanly in-place, not via fragile sed hacks
+# Copyright (c) 2026, NVIDIA CORPORATION. All rights reserved.
+
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+#
+
 #
 # downloads, builds, and installs ROS 2 packages from source in $ROS_WORKSPACE
 # usage examples:
 #   ros2_install.sh xacro teleop_twist_joy
 #   ros2_install.sh https://github.com/ros-perception/image_pipeline.git
+
+# Modified for AUV-2026: COLCON_TRACE suppression, ROS_PACKAGE_PATH ordering fix
+
 set -euo pipefail
 
 # ---- Base env (if present) ----------------------------------------------------
