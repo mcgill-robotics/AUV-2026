@@ -14,7 +14,7 @@ For training on synthetic data generated from Unity, follow this pipeline to ens
    ```
 4. **Train Model**: Run the training script on the processed dataset.
    ```bash
-   python3 training-unity.py --model v11 --size s --data data/processed_aug/data.yaml
+   python3 training.py --model v11 --size s --data data/processed_aug/data.yaml --unity
    ```
 
 ## Fine-tuning Pipeline (Local)
