@@ -102,6 +102,7 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone &
     python3-wheel \
     python3-rospkg \
     python3-rosdistro \
+    python3-catkin-pkg \
     # Libraries for ZED SDK and ROS package compilation
     libusb-1.0-0-dev \
     libgeographic-dev \
