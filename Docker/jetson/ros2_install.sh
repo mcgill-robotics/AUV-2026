@@ -19,8 +19,9 @@ export ROS_PACKAGE_PATH="${AMENT_PREFIX_PATH:-}"
 export PYTHONNOUSERSITE=1
 
 # Source ROS environment, suppress colcon trace to avoid flooding CI logs
-# (colcon checks `[ -n "$COLCON_TRACE" ]` so "0" still triggers — must unset)
-[ -f /ros_environment.sh ] && { unset COLCON_TRACE; source /ros_environment.sh; } || true
+# (colcon checks `[ -n "$COLCON_TRACE" ]` — empty string passes the check
+#  without triggering set -u like unset would)
+[ -f /ros_environment.sh ] && { COLCON_TRACE=""; source /ros_environment.sh; } || true
 
 # ---- Workspace & flags --------------------------------------------------------
 ROS_WORKSPACE="${ROS_WORKSPACE:=${ROS_ROOT:-/opt/ros/unknown}}"
