@@ -9,7 +9,7 @@ cameras:
   front: /zed/zed_node/rgb/color/rect/image/compressed
   front_raw: /zed/zed_node/rgb/color/rect/image
   down: /down_cam/image_raw
-  depth_map: /zed/depth/depth_registered
+  depth_map: /zed/zed_node/depth/depth_registered
 
 # =============================================================================
 # SENSORS (from dev/controls branch)
@@ -76,6 +76,7 @@ transforms:
 services:
   toggle_front_collection: /image_collection/toggle_front_collection
   toggle_down_collection: /image_collection/toggle_down_collection
+  toggle_depth_collection: /image_collection/toggle_depth_collection
   
   # Drytest
   drytest_re_arm: /dry_test_node/re_arm
