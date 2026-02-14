@@ -1,0 +1,28 @@
+# these values are set as defaults for the ROS nodes, but some may be overriden by the launch file, those that will not be overriden by the launch file will be marked with #!
+
+front_image_enhancement:
+  input_topic: /zed/zed_node/rgb/color/rect/image
+  output_topic: /vision/front_cam/image_enhanced
+  sim: false
+
+down_image_enhancement:
+  input_topic: /down_cam/image_raw
+  output_topic: /vision/down_cam/image_enhanced
+  sim: false
+
+front_object_detection:
+  input_topic: /vision/front_cam/image_enhanced
+  output_topic: /vision/front_cam/object_detections
+  model_path: /models/frontcam.pt
+  class_names: ['gate', 'lane_marker', 'red_pipe', 'white_pipe', 'octagon', 'table', 'bin', 'board', 'shark', 'sawfish'] #!
+  queue_size: 10 #!
+
+down_object_detection:
+  input_topic: /vision/down_cam/image_enhanced
+  output_topic: /vision/down_cam/object_detections
+  model_path: /models/downcam.pt
+  class_names: ['gate', 'octagon_table', 'octagon_top', 'path_marker', 'sawfish', 'shark'] #!
+  queue_size: 10 #!
+
+object_map:
+  
