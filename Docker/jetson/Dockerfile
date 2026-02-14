@@ -159,26 +159,26 @@ COPY Docker/jetson/SN33688213.conf /usr/local/zed/settings/
 # Since Isaac ROS uses standard apt-based ROS 2, we install packages as binaries.
 # This guarantees ABI compatibility — no more rosidl symbol mismatches.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ros-humble-foxglove-bridge \
-    ros-humble-mavros \
-    ros-humble-mavros-msgs \
-    ros-humble-usb-cam \
-    ros-humble-vision-msgs \
-    ros-humble-robot-localization \
-    ros-humble-nmea-msgs \
-    ros-humble-backward-ros \
-    ros-humble-geographic-msgs \
-    ros-humble-xacro \
-    ros-humble-diagnostics \
-    ros-humble-rmw-cyclonedds-cpp \
-    ros-humble-joy \
-    ros-humble-joy-teleop \
-    ros-humble-point-cloud-transport \
-    ros-humble-point-cloud-transport-plugins \
-    ros-humble-zed-msgs \
-    ros-humble-image-common \
-    ros-humble-angles \
-    ros-humble-rosidl-default-generators \
+    ros-$ROS_DISTRO-foxglove-bridge \
+    ros-$ROS_DISTRO-mavros \
+    ros-$ROS_DISTRO-mavros-msgs \
+    ros-$ROS_DISTRO-usb-cam \
+    ros-$ROS_DISTRO-vision-msgs \
+    ros-$ROS_DISTRO-robot-localization \
+    ros-$ROS_DISTRO-nmea-msgs \
+    ros-$ROS_DISTRO-backward-ros \
+    ros-$ROS_DISTRO-geographic-msgs \
+    ros-$ROS_DISTRO-xacro \
+    ros-$ROS_DISTRO-diagnostics \
+    ros-$ROS_DISTRO-rmw-cyclonedds-cpp \
+    ros-$ROS_DISTRO-joy \
+    ros-$ROS_DISTRO-joy-teleop \
+    ros-$ROS_DISTRO-point-cloud-transport \
+    ros-$ROS_DISTRO-point-cloud-transport-plugins \
+    ros-$ROS_DISTRO-zed-msgs \
+    ros-$ROS_DISTRO-image-common \
+    ros-$ROS_DISTRO-angles \
+    ros-$ROS_DISTRO-rosidl-default-generators \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
