@@ -1,0 +1,72 @@
+{
+        "globalVariables": {},
+        "userNodes": {},
+        "playbackConfig": {
+                "speed": 1
+        },
+        "layout": {
+                "first": "Tab!images",
+                "second": {
+                        "first": {
+                                "first": "CallService!startCollection",
+                                "second": "CallService!stopCollection",
+                                "direction": "column",
+                                "splitPercentage": 50
+                        },
+                        "second": "RosOut!1",
+                        "direction": "column",
+                        "splitPercentage": 40
+                },
+                "direction": "row",
+                "splitPercentage": 70
+        },
+        "configById": {
+                "Tab!images": {
+                        "activeTabIdx": 0,
+                        "tabs": [
+                                {
+                                        "title": "YOLO Debug",
+                                        "layout": "Image!yolo"
+                                },
+                                {
+                                        "title": "Depth Map",
+                                        "layout": "Image!depth"
+                                },
+                                {
+                                        "title": "Reference Cam",
+                                        "layout": "Image!ref"
+                                }
+                        ]
+                },
+                "Image!yolo": {
+                        "cameraTopic": "/vision/debug_image",
+                        "smooth": true
+                },
+                "Image!depth": {
+                        "cameraTopic": "/zed/depth/depth_registered",
+                        "smooth": true,
+                        "colorMode": "colormap",
+                        "colorMap": "turbo",
+                        "minValue": 0,
+                        "maxValue": 10
+                },
+                "Image!ref": {
+                        "cameraTopic": "/zed/zed_node/rgb/color/rect/image/compressed",
+                        "smooth": true
+                },
+                "CallService!startCollection": {
+                        "serviceName": "/image_collection/toggle_front_collection",
+                        "requestPayload": "{ \"data\": true }",
+                        "buttonText": "Start Collection"
+                },
+                "CallService!stopCollection": {
+                        "serviceName": "/image_collection/toggle_front_collection",
+                        "requestPayload": "{ \"data\": false }",
+                        "buttonText": "Stop Collection"
+                },
+                "RosOut!1": {
+                        "searchTerms": [],
+                        "minLogLevel": 1
+                }
+        }
+}

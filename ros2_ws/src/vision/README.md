@@ -55,7 +55,7 @@ Images are saved with timestamps:
 |-----------|---------|-------------|
 | `front_cam_data_dir` | `data_front_cam` | Directory for front camera images |
 | `down_cam_data_dir` | `data_down_cam` | Directory for down camera images |
-| `front_cam_topic` | `/zed/zed_node/stereo/image_rect_color` | Front camera topic |
+| `front_cam_topic` | `/zed/zed_node/rgb/color/rect/image/compressed` | Front camera topic |
 | `down_cam_topic` | `/down_cam/image_raw` | Down camera topic |
 
 #### Custom Configuration Example
@@ -92,7 +92,7 @@ Algorithms can be set in the node scripts (`front_image_enhancement.py` and `dow
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `front_cam_topic` | `/zed/zed_node/stereo/image_rect_color` | Input front camera topic |
+| `front_cam_topic` | `/zed/zed_node/rgb/color/rect/image/compressed` | Input front camera topic |
 | `down_cam_topic` | `/sensors/down_cam/image_raw` | Input down camera topic |
 | `front_cam_enhanced_topic` | `/vision/front_cam/image_enhanced` | Output enhanced front camera topic |
 | `down_cam_enhanced_topic` | `/vision/down_cam/image_enhanced` | Output enhanced down camera topic |

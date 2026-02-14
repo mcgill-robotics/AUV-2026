@@ -1,0 +1,214 @@
+{
+        "globalVariables": {},
+        "userNodes": {},
+        "playbackConfig": {
+                "speed": 1
+        },
+        "layout": {
+                "first": {
+                        "first": "Publish!depth_sp",
+                        "second": {
+                                "first": "Publish!attitude_sp",
+                                "second": {
+                                        "first": "Publish!xy_sp",
+                                        "second": "RawMessages!battery",
+                                        "direction": "column",
+                                        "splitPercentage": 50
+                                },
+                                "direction": "column",
+                                "splitPercentage": 33
+                        },
+                        "direction": "column",
+                        "splitPercentage": 25
+                },
+                "second": {
+                        "first": {
+                                "first": "Tab!imu",
+                                "second": "Tab!depth",
+                                "direction": "row",
+                                "splitPercentage": 50
+                        },
+                        "second": {
+                                "first": "Tab!dvl",
+                                "second": "Tab!pose",
+                                "direction": "row",
+                                "splitPercentage": 50
+                        },
+                        "direction": "column",
+                        "splitPercentage": 50
+                },
+                "direction": "row",
+                "splitPercentage": 25
+        },
+        "configById": {
+                "Tab!setpoints": {
+                        "activeTabIdx": 0,
+                        "tabs": [
+                                {
+                                        "title": "Depth",
+                                        "layout": "Publish!depth_sp"
+                                },
+                                {
+                                        "title": "Attitude",
+                                        "layout": "Publish!attitude_sp"
+                                },
+                                {
+                                        "title": "XY",
+                                        "layout": "Publish!xy_sp"
+                                }
+                        ]
+                },
+                "Publish!depth_sp": {
+                        "topicName": "/controls/depth_setpoint"
+                },
+                "Publish!attitude_sp": {
+                        "topicName": "/controls/quaternion_setpoint"
+                },
+                "Publish!xy_sp": {
+                        "topicName": "/controls/xy_setpoint"
+                },
+                "RawMessages!battery": {
+                        "topicPath": "/batteries/voltage"
+                },
+                "RawMessages!imu_raw": {
+                        "topicPath": "/imu/data"
+                },
+                "RawMessages!imu_proc": {
+                        "topicPath": "/auv_frame/imu"
+                },
+                "RawMessages!depth_raw": {
+                        "topicPath": "/sensors/depth/z"
+                },
+                "RawMessages!depth_proc": {
+                        "topicPath": "/auv_frame/depth"
+                },
+                "Plot!1fswa2v": {
+                        "paths": [
+                                {
+                                        "timestampMethod": "receiveTime",
+                                        "value": "/auv_frame/depth",
+                                        "enabled": true,
+                                        "color": "#4e98e2",
+                                        "id": "ab18cea3-3bfb-4d79-9b8f-98cba964588c"
+                                },
+                                {
+                                        "timestampMethod": "receiveTime",
+                                        "value": "/controls/depth_setpoint",
+                                        "enabled": true,
+                                        "color": "#f5774d",
+                                        "id": "c3430864-cb33-46a7-a840-82456650ddc9"
+                                }
+                        ]
+                },
+                "RawMessages!dvl_vel": {
+                        "topicPath": "/dvl/velocity"
+                },
+                "RawMessages!dvl_dr": {
+                        "topicPath": "/dvl/dead_reckoning"
+                },
+                "RawMessages!dvl_odom": {
+                        "topicPath": "/dvl/odometry"
+                },
+                "3D!pose_viz": {
+                        "cameraState": {
+                                "perspective": true,
+                                "distance": 8,
+                                "phi": 60,
+                                "theta": 45,
+                                "target": [
+                                        0,
+                                        0,
+                                        0
+                                ],
+                                "targetOffset": [
+                                        0,
+                                        0,
+                                        0
+                                ]
+                        },
+                        "followMode": "follow-pose",
+                        "followTf": "base_link",
+                        "topics": {
+                                "/tf": {
+                                        "visible": true
+                                },
+                                "/state/pose": {
+                                        "visible": true
+                                }
+                        },
+                        "layers": {
+                                "grid": {
+                                        "layerId": "foxglove.Grid",
+                                        "position": [
+                                                0,
+                                                0,
+                                                0
+                                        ]
+                                }
+                        }
+                },
+                "RawMessages!pose_raw": {
+                        "topicPath": "/state/pose"
+                },
+                "Tab!imu": {
+                        "activeTabIdx": 1,
+                        "tabs": [
+                                {
+                                        "title": "IMU (Raw)",
+                                        "layout": "RawMessages!imu_raw"
+                                },
+                                {
+                                        "title": "IMU (Processed)",
+                                        "layout": "RawMessages!imu_proc"
+                                }
+                        ]
+                },
+                "Tab!depth": {
+                        "activeTabIdx": 2,
+                        "tabs": [
+                                {
+                                        "title": "Depth (Raw)",
+                                        "layout": "RawMessages!depth_raw"
+                                },
+                                {
+                                        "title": "Depth (Processed)",
+                                        "layout": "RawMessages!depth_proc"
+                                },
+                                {
+                                        "title": "Depth vs DSetpoint",
+                                        "layout": "Plot!1fswa2v"
+                                }
+                        ]
+                },
+                "Tab!dvl": {
+                        "activeTabIdx": 0,
+                        "tabs": [
+                                {
+                                        "title": "Velocity",
+                                        "layout": "RawMessages!dvl_vel"
+                                },
+                                {
+                                        "title": "Dead Reckoning",
+                                        "layout": "RawMessages!dvl_dr"
+                                },
+                                {
+                                        "title": "Odometry",
+                                        "layout": "RawMessages!dvl_odom"
+                                }
+                        ]
+                },
+                "Tab!pose": {
+                        "activeTabIdx": 1,
+                        "tabs": [
+                                {
+                                        "title": "3D Path",
+                                        "layout": "3D!pose_viz"
+                                },
+                                {
+                                        "title": "Raw Data",
+                                        "layout": "RawMessages!pose_raw"
+                                }
+                        ]
+                }
+        }
+}

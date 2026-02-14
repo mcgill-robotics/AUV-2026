@@ -1,58 +1,167 @@
-# Use the official ROS 2 Humble image as the base image
+# ---------------------------------------------------------
+# Base Image: ROS 2 Humble Dev (Ubuntu 22.04)
+# CPU-only development environment without NVIDIA/ZED support
+# ---------------------------------------------------------
 FROM althack/ros2:humble-dev
 
-# Set up environment
-ENV LANG=C.UTF-8
-ENV LC_ALL=C.UTF-8
-ENV DEBIAN_FRONTEND=noninteractive
-ENV ROS_DISTRO=humble
+# CI has a different runner than the jetson (notably git permissions are different and there is no GPU)
+ARG CI
+RUN if [ "$CI" = "true" ]; then \
+        echo "Building container for CI"; \
+    else \
+        echo "Building container locally"; \
+    fi
+# set it as env var so build scripts can see it
+ENV CI=${CI}
+# Set environment variables
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    DEBIAN_FRONTEND=noninteractive \
+    ROS_DISTRO=humble \
+    IS_JETSON=false
 
+# ---------------------------------------------------------
+# 1. Install System Dependencies & Tools
+# ---------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Build Tools
     apt-utils \
     build-essential \
     cmake \
-    curl \
+    # Version Control
     git \
     git-lfs \
+    # Networking & Utils
+    curl \
+    wget \
     gnupg2 \
-    less \
     lsb-release \
-    mesa-utils \
+    sudo \
+    iputils-ping \
+    net-tools \
+    # Editors & Terminal
+    nano \
+    vim \
+    less \
+    tmux \
+    # Python
     python3 \
     python3-dev \
-    python3-opencv \
     python3-pip \
     python3-setuptools \
     python3-wheel \
+    python3-opencv \
+    # ROS Build Tools
     python3-colcon-common-extensions \
     python3-rosdep \
     python3-vcstools \
-    sudo \
+    # Hardware & Devices
     tar \
-    tmux \
-    v4l-utils usbutils \ 
-    vim \
-    wget \
-    x11-apps \
+    v4l-utils \
+    usbutils \
+    libusb-1.0-0-dev \
     libboost-all-dev \
+    # GUI Support (RQT/Rviz)
+    mesa-utils \
+    x11-apps \
+    libgl1-mesa-glx \
+    libgl1-mesa-dri \
+    libeigen3-dev \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# ROS packages 
+# ---------------------------------------------------------
+# 2. Install ROS 2 Packages
+# ---------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
-   ros-$ROS_DISTRO-joy \
-   ros-$ROS_DISTRO-joy-teleop \
-   ros-$ROS_DISTRO-foxglove-bridge \
-   ros-$ROS_DISTRO-mavros \
-   ros-$ROS_DISTRO-rviz2 \
-   ros-$ROS_DISTRO-nmea-msgs \
-   ros-$ROS_DISTRO-mavros-msgs \
-   && rm -rf /var/lib/apt/lists/* \
-   && apt-get clean
+    # Bridge & Teleop
+    ros-${ROS_DISTRO}-joy \
+    ros-${ROS_DISTRO}-joy-teleop \
+    ros-${ROS_DISTRO}-foxglove-bridge \
+    # Navigation & Localization
+    ros-${ROS_DISTRO}-mavros \
+    ros-${ROS_DISTRO}-mavros-msgs \
+    ros-${ROS_DISTRO}-robot-localization \
+    ros-${ROS_DISTRO}-nmea-msgs \
+    ros-${ROS_DISTRO}-marine-sensor-msgs \
+    ros-${ROS_DISTRO}-marine-acoustic-msgs \
+    ros-${ROS_DISTRO}-vision-msgs \
+    # Image & Transport
+    ros-${ROS_DISTRO}-image-transport \
+    ros-${ROS_DISTRO}-image-transport-plugins \
+    ros-${ROS_DISTRO}-compressed-image-transport \
+    # Visualization Tools
+    ros-${ROS_DISTRO}-rviz2 \
+    ros-${ROS_DISTRO}-rqt-gui \
+    ros-${ROS_DISTRO}-rqt-image-view \
+    # Robot Description & Drivers
+    ros-${ROS_DISTRO}-xacro \
+    ros-${ROS_DISTRO}-robot-state-publisher \
+    ros-${ROS_DISTRO}-diagnostic-updater \
+    ros-${ROS_DISTRO}-usb-cam \
+    ros-${ROS_DISTRO}-zed-msgs \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
-# Create workspace
-WORKDIR /root/AUV-2026
+# ---------------------------------------------------------
+# 3. Install Python ML & Vision Dependencies (CPU)
+# ---------------------------------------------------------
+COPY Docker/dev/requirements.txt Docker/dev/constraints.txt /tmp/
 
-RUN echo "source /opt/ros/$ROS_DISTRO/setup.bash" >> /root/.bashrc && \
-    echo "if [ -f /root/AUV-2026/ros2_ws/install/setup.bash ]; then source /root/AUV-2026/ros2_ws/install/setup.bash; fi" >> /root/.bashrc
+RUN pip3 install --no-cache-dir -c /tmp/constraints.txt torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+RUN pip3 install --no-cache-dir -c /tmp/constraints.txt "opencv-python==4.10.0.84"
+
+# Install other requirements (Pip will skip torch since it's already done)
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip3 install --ignore-installed -c /tmp/constraints.txt -r /tmp/requirements.txt
+
+# DOWNGRADE Setuptools for ROS 2
+# Restores compatibility with 'colcon build'
+RUN pip3 install --no-cache-dir --force-reinstall "setuptools==65.5.1"
+
+# ---------------------------------------------------------
+# 4. Environment Setup
+# ---------------------------------------------------------
+# The base image already has a 'ros' user with sudo. 
+ARG USERNAME=douglas
+ARG USER_UID=1000
+ARG USER_GID=$USER_UID
+
+# Rename the default 'ros' user to our desired username/uid
+# We keep UID 1000 to match host permissions
+RUN groupmod --gid $USER_GID --new-name $USERNAME ros \
+    && usermod --uid $USER_UID --gid $USER_GID --login $USERNAME --move-home --home /home/$USERNAME ros \
+    && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
+    && chmod 0440 /etc/sudoers.d/$USERNAME \
+    && groupadd -f -r render \
+    && usermod -aG video,render -s /bin/bash $USERNAME
+
+# Install fixuid for dynamic UID/GID remapping at runtime
+# This allows the container to match the host user's UID when running with --user
+ARG FIXUID_VERSION=0.6.0
+RUN ARCH="$(dpkg --print-architecture)" && \
+    curl -fsSL "https://github.com/boxboat/fixuid/releases/download/v${FIXUID_VERSION}/fixuid-${FIXUID_VERSION}-linux-${ARCH}.tar.gz" | tar -C /usr/local/bin -xzf - && \
+    chown root:root /usr/local/bin/fixuid && \
+    chmod 4755 /usr/local/bin/fixuid && \
+    mkdir -p /etc/fixuid && \
+    printf "user: $USERNAME\ngroup: $USERNAME\n" > /etc/fixuid/config.yml
+
+USER $USERNAME
+
+# set colcon home after adding user
+ENV COLCON_HOME=/home/$USERNAME/.colcon
+# move repo defaults.yaml to container
+COPY .colcon ${COLCON_HOME}/
+
+WORKDIR /home/$USERNAME/AUV-2026
+
+# Add source commands to bashrc
+RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc && \
+    echo "if [ -f ~/AUV-2026/ros2_ws/install/setup.bash ]; then source ~/AUV-2026/ros2_ws/install/setup.bash; fi" >> ~/.bashrc
+
+# Entrypoint uses fixuid to remap UID/GID if running with --user
+ENTRYPOINT ["fixuid", "-q"]
+
+# Keep container alive
 CMD ["bash"]
