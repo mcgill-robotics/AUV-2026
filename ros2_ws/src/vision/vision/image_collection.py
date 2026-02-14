@@ -124,7 +124,6 @@ class ImageCollectionNode(Node):
     
     def front_callback(self, msg):
         """Callback for front camera images"""
-        print("Front camera image received")
         try:
             if isinstance(msg, CompressedImage):
                 # Manual decoding to avoid cv_bridge issues with numpy 2.x
