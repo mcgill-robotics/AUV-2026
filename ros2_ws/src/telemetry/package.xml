@@ -7,12 +7,17 @@
   <maintainer email="kaidalisohaib@gmail.com">Sohaib Kaidal</maintainer>
   <license>GPL-3.0-or-later</license>
 
-  <buildtool_depend>ament_cmake</buildtool_depend>
-  
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
+  <exec_depend>auv_msgs</exec_depend>
   <exec_depend>foxglove_bridge</exec_depend>
   <exec_depend>ros2launch</exec_depend>
 
   <export>
-    <build_type>ament_cmake</build_type>
+    <build_type>ament_python</build_type>
   </export>
 </package>

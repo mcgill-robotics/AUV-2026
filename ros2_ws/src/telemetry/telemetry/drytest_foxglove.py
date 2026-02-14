@@ -5,7 +5,8 @@ from std_msgs.msg import Int16MultiArray
 from geometry_msgs.msg import Wrench
 from propulsion.thrust_mapper_utils import force_to_pwm_thruster
 from time import sleep
-from std_srvs.srv import Trigger, SetInt32
+from std_srvs.srv import Trigger
+from auv_msgs.srv import SetInt32
 from ament_index_python.packages import get_package_share_directory
 import yaml
 import os
