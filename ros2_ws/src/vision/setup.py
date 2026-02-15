@@ -16,6 +16,7 @@ setup(
         ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.*')),
         (os.path.join('share', package_name, 'models'), glob('model_pipeline/models/*.pt')),
+        (os.path.join('share', package_name, 'config'), glob('config/*.yaml'))
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -35,6 +36,7 @@ setup(
             'down_cam_object_detection = vision.down_cam_object_detection:main',
             'down_image_enhancement = vision.down_image_enhancement:main',
             'front_image_enhancement = vision.front_image_enhancement:main',
+            'depth_fusion = vision.depth_fusion_node:main',
         ],
     },
 )

@@ -11,6 +11,9 @@
   <license>GPL-3.0-or-later</license>
 
   <depend>rclpy</depend>
+  <depend>auv_msgs</depend>
+  <depend>message_filters</depend>
+  <depend>python3-yaml</depend>
   <depend>sensor_msgs</depend>
   <depend>vision_msgs</depend>
   <depend>cv_bridge</depend>
