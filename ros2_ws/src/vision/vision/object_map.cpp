@@ -75,7 +75,9 @@ public:
 
 		// ZED Parameters
 		this->declare_parameter<int>("frame_rate");
-		this->declare_parameter<string>("confidence_threshold");
+		// confidence threshold for YOLO detections
+		this->declare_parameter<float>("confidence_threshold");
+		// maximum distance to consider a detection for object mapping
 		this->declare_parameter<float>("max_range");
 		// use UDP stream for input frames
 		this->declare_parameter<bool>("use_stream");
