@@ -1,7 +1,7 @@
 # Vision Package
 
 ## Launch File Usage
-
+In most cases, the [vision pipeline](#vision-pipeline) launch file will be the main entry point for running vision nodes. All other launch files are intended for testing and development of individual nodes, and are run as intermediate steps in the vision pipeline. It expects models to already be trained (see [Steps to train a model](./model_pipeline/README.md)) and placed in the `ros2_ws/vision/model_pipeline/models` directory.
 ### VIsion Pipeline
 Launches the entire vision pipeline, image enhancement -> object detection -> object mapping.
 
@@ -13,18 +13,18 @@ Configurations for the launch file are pulled from [config/vision_pipeline.yaml]
 
 | Category | Parameter | Default | Description |
 |----------|-----------|---------|-------------|
-| camera | `front_cam_topic` | `/zed/zed_node/stereo/image_rect_color` | Input topic for front camera images |
-| camera | `down_cam_topic` | `/sensors/down_cam/image_raw` | Input topic for down camera images |
-| image_enhancement | `front_enhanced_topic` | `/vision/front_cam/image_enhanced` | Output topic for enhanced front camera images |
-| image_enhancement | `down_enhanced_topic` | `/vision/down_cam/image_enhanced` | Output topic for enhanced down camera images |
-| object_detection | `front_detections_topic` | `/vision/front_cam/detections` | Output topic for front camera object detections |
-| object_detection | `down_detections_topic` | `/vision/down_cam/detections` | Output topic for down camera object detections |
-| object_detection | `front_model_relative_path` | `models/front_cam_model.pt` | Path to front camera object detection model file, relative to the `src` directory of the vision package |
-| object_detection | `down_model_relative_path` | `models/down_cam_model.pt` | Path to down camera object detection model file, relative to the `src` directory of the vision package |
-| object_map | `object_map_topic` | `/vision/object_map` | Output topic for object map |
-| object_map | `vio_pose_topic` | `/vision/vio_pose` | Output topic for VIO pose computed by ZED SDK|
-| general | `sim` | `false` | Set to true to enable simulation mode (for Unity sim) |
-| general | `debug` | `false` | Set to true to enable debug logging in all nodes (there should only be debug logging in object map) |
+| `camera` | `front_cam_topic` | `/zed/zed_node/stereo/image_rect_color` | Input topic for front camera images |
+| `camera` | `down_cam_topic` | `/sensors/down_cam/image_raw` | Input topic for down camera images |
+| `image_enhancement` | `front_enhanced_topic` | `/vision/front_cam/image_enhanced` | Output topic for enhanced front camera images |
+| `image_enhancement` | `down_enhanced_topic` | `/vision/down_cam/image_enhanced` | Output topic for enhanced down camera images |
+| `object_detection` | `front_detections_topic` | `/vision/front_cam/detections` | Output topic for front camera object detections |
+| `object_detection` | `down_detections_topic` | `/vision/down_cam/detections` | Output topic for down camera object detections |
+| `object_detection` | `front_model_relative_path` | `front_cam_model.pt` | Path to front camera object detection model file, relative to the `src` directory of the vision package |
+| `object_detection` | `down_model_relative_path` | `down_cam_model.pt` | Path to down camera object detection model file, relative to the `ros2_ws/vision/model_pipeline/models` directory |
+| `object_map` | `object_map_topic` | `/vision/object_map` | Output topic for object map |
+| `object_map` | `vio_pose_topic` | `/vision/vio_pose` | Output topic for VIO pose computed by ZED SDK|
+| `general` | `sim` | `false` | Set to true to enable simulation mode (for Unity sim) |
+| `general` | `debug` | `false` | Set to true to enable debug logging in all nodes (there should only be debug logging in object map) |
 
 Parameters can be overriden via command line:
 

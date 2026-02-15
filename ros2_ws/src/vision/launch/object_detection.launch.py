@@ -10,13 +10,10 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     vision_dir = get_package_share_directory("vision")
-    config_arg = DeclareLaunchArgument(
-        "config_file",
-        default_value=os.path.join(vision_dir, "config", "object_detection.yaml"),
-        description="Path to the object detection config file."
-    )
+    print(f"Vision package share directory: {vision_dir}")
     
-    config_path = str(LaunchConfiguration("config_file"))
+    config_path = os.path.join(vision_dir, "config", "object_detection.yaml")
+    print(f"Object detection config file path: {config_path}")
     with open(config_path, 'r') as f:
         default_config:dict = yaml.safe_load(f)
     
