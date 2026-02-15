@@ -1,5 +1,0 @@
-train: /home/arthur/AUV-2026/ros2_ws/src/vision/model_pipeline/data/augmented/train/images
-test: /home/arthur/AUV-2026/ros2_ws/src/vision/model_pipeline/data/augmented/test/images
-val: /home/arthur/AUV-2026/ros2_ws/src/vision/model_pipeline/data/augmented/val/images
-nc: 6
-names: ['gate', 'octagon_table', 'octagon_top', 'path_marker', 'sawfish', 'shark']

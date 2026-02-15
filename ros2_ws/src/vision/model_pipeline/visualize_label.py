@@ -1,62 +1,96 @@
-import os
+#!/usr/bin/env python3
+"""
+Random Image Inference Viewer
+
+Load random images from a folder, run YOLO inference, and display results.
+
+Usage:
+    python3 random_inference.py --folder data/processed/test/images
+    python3 random_inference.py --folder /path/to/images --model best_yolov11s_model.pt
+
+Controls:
+    - Press any key to load the next random image
+    - Press 'q' to quit
+"""
+
+import argparse
 import random
+from pathlib import Path
+
 import cv2
+from ultralytics import YOLO
 
-# Root paths
-#img_dir = "data/augmented/val/images"
-#label_dir = "data/augmented/val/labels"
-img_dir = "data/augmented/train/images"
-label_dir = "data/augmented/train/labels"
-#img_dir = "data/split_raw/left/val/images"
-#label_dir = "data/split_raw/left/val/labels"
+# BASE DIR for paths
+SCRIPT_DIR = Path(__file__).parent.resolve()
+BASE_DIR = SCRIPT_DIR.parent
 
-# Pick a random image file
-img_file = random.choice(os.listdir(img_dir))
-img_path = os.path.join(img_dir, img_file)
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp"}
 
-# Matching YOLO label file (same base name, .txt extension)
-label_file = os.path.splitext(img_file)[0] + ".txt"
-label_path = os.path.join(label_dir, label_file)
 
-print(f"Selected image: {img_file}")
-print(f"Label file: {label_file}")
+def get_image_files(folder: Path) -> list[Path]:
+    """Get all image files from a folder."""
+    images = [f for f in folder.iterdir() if f.suffix.lower() in IMAGE_EXTENSIONS]
+    if not images:
+        print(f"No images found in {folder}")
+        exit(1)
+    return images
 
-# Load image
-img = cv2.imread(img_path)
-img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-h, w, _ = img.shape
 
-# Read YOLO labels if file exists
-if os.path.exists(label_path):
-    with open(label_path, "r") as f:
-        labels = f.readlines()
-else:
-    labels = []
-    print("⚠️ No label file found for this image!")
+def main():
+    parser = argparse.ArgumentParser(description="View YOLO predictions on random images")
+    parser.add_argument(
+        "--folder", "-f",
+        type=str,
+        required=True,
+        help="Path to folder containing images"
+    )
+    parser.add_argument(
+        "--model", "-m",
+        type=str,
+        default=str(BASE_DIR / "best_yolov11s_model.pt"),
+        help="Path to YOLO model weights"
+    )
+    parser.add_argument(
+        "--conf", "-c",
+        type=float,
+        default=0.5,
+        help="Confidence threshold (default: 0.5)"
+    )
+    args = parser.parse_args()
 
-# Draw bounding boxes
-for label in labels:
-    cls, x_center, y_center, bw, bh = map(float, label.split())
-    
-    # Convert YOLO normalized coords → pixel coords
-    x_center *= w
-    y_center *= h
-    bw *= w
-    bh *= h
-    
-    x1 = int(x_center - bw / 2)
-    y1 = int(y_center - bh / 2)
-    x2 = int(x_center + bw / 2)
-    y2 = int(y_center + bh / 2)
-    
-    # Draw rectangle and class id
-    cv2.rectangle(img, (x1, y1), (x2, y2), (255, 0, 0), 2)
-    cv2.putText(img, str(int(cls)), (x1, y1 - 5),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
+    # Load model
+    model = YOLO(args.model)
+    print(f"Loaded model: {args.model}")
 
-# === Save result to /dev/shm/ ===
-output_path = "/dev/shm/image_labeled.jpg"
-cv2.imwrite(output_path, cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
+    # Get images
+    folder = Path(args.folder)
+    images = get_image_files(folder)
+    print(f"Found {len(images)} images in {folder}")
+    print("Press any key for next image, 'q' to quit.\n")
 
-print(f"✅ Saved labeled image to: {output_path}")
+    while True:
+        # Pick random image
+        img_path = random.choice(images)
+        print(f"Image: {img_path.name}")
 
+        # Load and run inference
+        img = cv2.imread(str(img_path))
+        results = model.predict(img, verbose=False, conf=args.conf)
+
+        # Draw results
+        annotated = results[0].plot()
+
+        # Show
+        cv2.imshow("YOLO Inference - Random Image", annotated)
+
+        # Wait for keypress
+        key = cv2.waitKey(0) & 0xFF
+        if key == ord('q'):
+            break
+
+    cv2.destroyAllWindows()
+    print("Done.")
+
+
+if __name__ == "__main__":
+    main()
