@@ -1,42 +1,54 @@
+import yaml
+import os
+
+from ament_index_python import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
-from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
-    vision_pkg_share = FindPackageShare('vision')
+    vision_dir = get_package_share_directory("vision")
+    config_arg = DeclareLaunchArgument(
+        "config_file",
+        default_value=os.path.join(vision_dir, "config", "object_detection.yaml"),
+        description="Path to the object detection config file."
+    )
     
-    front_model_arg = DeclareLaunchArgument(
-        "front_model",
-        default_value=PathJoinSubstitution([vision_pkg_share, 'models', 'frontcam.pt']),
-        description="Path to the front camera object detection model file."
-    )
-    down_model_arg = DeclareLaunchArgument(
-        "down_model",
-        default_value=PathJoinSubstitution([vision_pkg_share, 'models', 'downcam.pt']),
-        description="Path to the down camera object detection model file."
-    )
+    config_path = str(LaunchConfiguration("config_file"))
+    with open(config_path, 'r') as f:
+        default_config:dict = yaml.safe_load(f)
+    
     front_erhanced_topic_arg = DeclareLaunchArgument(
         "front_enhanced_topic",
-        default_value='/vision/front_cam/image_enhanced',
+        default_value=default_config["front_cam"]["enhanced_topic"],
         description="Front enhanced image topic name."
     )
     down_enhanced_topic_arg = DeclareLaunchArgument(
         "down_enhanced_topic",
-        default_value='/vision/down_cam/image_enhanced',
+        default_value=default_config["down_cam"]["enhanced_topic"],
         description="Down enhanced image topic name."
     )
     front_detections_topic_arg = DeclareLaunchArgument(
         "front_detections_topic",
-        default_value='/vision/front_cam/detections',
+        default_value=default_config["front_cam"]["detection_topic"],
         description="Front camera detections topic name."
     )
     down_detections_topic_arg = DeclareLaunchArgument(
         "down_detections_topic",
-        default_value='/vision/down_cam/detections',
+        default_value=default_config["down_cam"]["detection_topic"],
         description="Down camera detections topic name."
+    )   
+    front_model_arg = DeclareLaunchArgument(
+        "front_model",
+        default_value=os.path.join(vision_dir, default_config["front_cam"]["model_relative_path"]),
+        description="Path to the front camera object detection model file."
+    )
+    down_model_arg = DeclareLaunchArgument(
+        "down_model",
+        default_value=os.path.join(vision_dir, default_config["down_cam"]["model_relative_path"]),
+        description="Path to the down camera object detection model file."
     )
     
     front_detection_node = Node(
@@ -44,11 +56,11 @@ def generate_launch_description():
         executable='front_cam_object_detection.py',
         name='front_cam_object_detection',
         parameters=[
-            {'class_names': ['gate', 'lane_marker', 'red_pipe', 'white_pipe', 'octagon', 'table', 'bin', 'board', 'shark', 'sawfish']},
+            {'class_names': default_config["front_cam"]["class_names"]},
             {'model_path': LaunchConfiguration('front_model')},
             {'input_topic': LaunchConfiguration('front_enhanced_topic')},
             {'output_topic': LaunchConfiguration('front_detections_topic')},
-            {'queue_size': 10},
+            {'queue_size': default_config["front_cam"]["queue_size"]},
         ]
     )
     down_detection_node = Node(
@@ -56,11 +68,11 @@ def generate_launch_description():
         executable='down_cam_object_detection.py',
         name='down_cam_object_detection',
         parameters=[
-            {'class_names': ['gate', 'octagon_table', 'octagon_top', 'path_marker', 'sawfish', 'shark']},
+            {'class_names': default_config["down_cam"]["class_names"]},
             {'model_path': LaunchConfiguration('down_model')},
             {'input_topic': LaunchConfiguration('down_enhanced_topic')},
             {'output_topic': LaunchConfiguration('down_detections_topic')},
-            {'queue_size': 10},
+            {'queue_size': default_config["down_cam"]["queue_size"]},
         ]
     )
     launch_description = LaunchDescription()
