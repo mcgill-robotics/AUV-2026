@@ -11,8 +11,8 @@ object_detection:
   front_detections_topic: /vision/front_cam/detections
   down_detections_topic: /vision/down_cam/detections
 # relative to src directory
-  front_model_relative_path: models/front_cam_model.pt
-  down_model_relative_path: models/down_cam_model.pt
+  front_model_relative_path: models/frontcam.pt
+  down_model_relative_path: models/downcam.pt
 
 object_map:
   map_topic: /vision/object_map

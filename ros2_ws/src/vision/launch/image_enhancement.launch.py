@@ -4,16 +4,14 @@ import os
 from ament_index_python import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration,PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration,PythonExpression
 from launch_ros.actions import Node
 
 
 def generate_launch_description():
     vision_dir = get_package_share_directory("vision")
-    print(f"Vision package share directory: {vision_dir}")
     
     config_path = os.path.join(vision_dir, "config", "image_enhancement.yaml")
-    print(f"Image enhancement config file path: {config_path}")
     with open(config_path, 'r') as f:
         default_config:dict = yaml.safe_load(f)
         
@@ -42,11 +40,19 @@ def generate_launch_description():
         default_value=str(default_config["general"]["sim"]),
         description='Whether running in simulation mode'
     )
-    front_cam_topic = str(LaunchConfiguration('front_cam_topic'))
-    down_cam_topic = str(LaunchConfiguration('down_cam_topic'))
-    if LaunchConfiguration('sim') == 'true':
-        front_cam_topic += "/compressed"
-        down_cam_topic += "/compressed"
+    
+    front_cam_topic = PythonExpression([
+        "'",
+        LaunchConfiguration('front_cam_topic'),
+        "'",
+        " + '/compressed' if ",LaunchConfiguration('sim'), " else ''"
+    ])
+    down_cam_topic = PythonExpression([
+        "'",
+        LaunchConfiguration('down_cam_topic'),
+        "'",
+        " + '/compressed' if ",LaunchConfiguration('sim'), " else ''",
+    ])
 
     front_cam_enhancement_node = Node(
         package='vision',

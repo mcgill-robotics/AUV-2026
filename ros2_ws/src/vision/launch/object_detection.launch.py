@@ -10,14 +10,12 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     vision_dir = get_package_share_directory("vision")
-    print(f"Vision package share directory: {vision_dir}")
     
     config_path = os.path.join(vision_dir, "config", "object_detection.yaml")
-    print(f"Object detection config file path: {config_path}")
     with open(config_path, 'r') as f:
         default_config:dict = yaml.safe_load(f)
     
-    front_erhanced_topic_arg = DeclareLaunchArgument(
+    front_enhanced_topic_arg = DeclareLaunchArgument(
         "front_enhanced_topic",
         default_value=default_config["front_cam"]["enhanced_topic"],
         description="Front enhanced image topic name."
@@ -75,7 +73,7 @@ def generate_launch_description():
     launch_description = LaunchDescription()
     launch_description.add_action(front_model_arg)
     launch_description.add_action(down_model_arg)
-    launch_description.add_action(front_erhanced_topic_arg)
+    launch_description.add_action(front_enhanced_topic_arg)
     launch_description.add_action(down_enhanced_topic_arg)
     launch_description.add_action(front_detections_topic_arg)
     launch_description.add_action(down_detections_topic_arg)

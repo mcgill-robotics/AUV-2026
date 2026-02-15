@@ -3,7 +3,7 @@ front_cam:
   enhanced_topic: /vision/front_cam/image_enhanced
   detection_topic: /vision/front_cam/detections
 # relative to src directory
-  model_relative_path: models/front_cam_model.pt
+  model_relative_path: models/frontcam.pt
   class_names:
     - "gate"
     - "lane_marker"
@@ -22,7 +22,7 @@ down_cam:
   enhanced_topic: /vision/down_cam/image_enhanced
   detection_topic: /vision/down_cam/detections
 # relative to src directory
-  model_relative_path: models/down_cam_model.pt
+  model_relative_path: models/downcam.pt
   class_names:
     - "gate"
     - "octagon_table"
