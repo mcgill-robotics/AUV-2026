@@ -43,11 +43,19 @@ public:
 #endif
 	// final decision on using ZED SDK
 	zed_sdk &= sdk_available;
-    
-    // Subscriber for front cam detections (YOLO from Python node)
-    this->declare_parameter<string>("front_cam_detection_topic", "/vision/front_cam/detections");
-    string front_cam_detection_topic;
-    this->get_parameter("front_cam_detection_topic", front_cam_detection_topic);
+
+	// Subscriber for front cam detections (YOLO from Python node)
+	this->declare_parameter<string>("front_cam_detection_topic");
+	this->declare_parameter<string>("object_map_topic");
+	this->declare_parameter<string>("vio_pose_topic");
+
+	string front_cam_detection_topic;
+	string object_map_topic;
+	string vio_pose_topic;
+
+	this->get_parameter("front_cam_detection_topic", front_cam_detection_topic);
+	this->get_parameter("object_map_topic", object_map_topic);
+	this->get_parameter("vio_pose_topic", vio_pose_topic);
 
 	if (!zed_sdk)
 	{	
@@ -66,18 +74,19 @@ public:
 		);
 
 		// ZED Parameters
-		this->declare_parameter("frame_rate", 30);
-		this->declare_parameter("confidence_threshold", 0.5);
-		this->declare_parameter("max_range", 10.0);
+		this->declare_parameter<int>("frame_rate");
+		this->declare_parameter<string>("confidence_threshold");
+		this->declare_parameter<float>("max_range");
 		// use UDP stream for input frames
-		this->declare_parameter("use_stream", true);
+		this->declare_parameter<bool>("use_stream");
 		// UDP stream IP and port
-		this->declare_parameter("stream_ip", "127.0.0.1");
-		this->declare_parameter("stream_port", 30000);
+		this->declare_parameter<string>("stream_ip", "127.0.0.1");
+		this->declare_parameter<int>("stream_port");
 		// show YOLO bounding boxes on output frames
-		this->declare_parameter("show_detections", true);
+		this->declare_parameter<bool>("show_detections");
 		// enable heavy debug table logs
-		this->declare_parameter("debug_logs", false);
+		this->declare_parameter<bool>("debug_logs");
+
 	
 		// get parameters
 		int frame_rate;
@@ -119,8 +128,8 @@ public:
 	// Object Tracker
 	object_tracker = ObjectTracker(new_object_distance_threshold);
 	// Publishers
-	object_map_publisher = this->create_publisher<auv_msgs::msg::VisionObjectArray>("/vision/object_map", 10);
-	pose_publisher = this->create_publisher<geometry_msgs::msg::PoseStamped>("/vision/vio_pose", 10);
+	object_map_publisher = this->create_publisher<auv_msgs::msg::VisionObjectArray>(object_map_topic, 10);
+	pose_publisher = this->create_publisher<geometry_msgs::msg::PoseStamped>(vio_pose_topic, 10);
 	// Subscriber for depth
 	depth_subscriber = this->create_subscription<std_msgs::msg::Float64 >(
 		"/sensors/depth", 10, std::bind(&ObjectMapNode::depth_callback, this, std::placeholders::_1)
