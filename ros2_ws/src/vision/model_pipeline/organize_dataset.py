@@ -178,7 +178,7 @@ def main():
     
     print("\n" + "=" * 50)
     print("Done!")
-    print(f"Training command: python3 training-unity.py --data {output_dir}/data.yaml")
+    print(f"Training command: python3 training.py --data {output_dir}/data.yaml")
     print("=" * 50)
 
 if __name__ == "__main__":
