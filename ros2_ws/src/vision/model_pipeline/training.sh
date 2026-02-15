@@ -32,4 +32,4 @@ fi
 
 python3 fix_labels.py
 python3 organize_dataset.py $ORGANIZE_ARGS
-python3 training.py --custom-model "$1" --learning-rate 0.0003 $TRAINING_ARGS
+python3 training.py --custom-model "$1" $TRAINING_ARGS

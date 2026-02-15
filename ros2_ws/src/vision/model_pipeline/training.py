@@ -207,7 +207,7 @@ Examples:
     parser.add_argument(
         "--learning-rate", "-lr0",
         type=float,
-        default=0.01,
+        default=0.0003,
         help="Initial learning rate"
     )
     parser.add_argument(
