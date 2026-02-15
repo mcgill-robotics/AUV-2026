@@ -1,3 +1,4 @@
+# not the standard ROS node config parameters, these are topics passed to the object detection launch file
 front_cam:
   enhanced_topic: /vision/front_cam/image_enhanced
   detection_topic: /vision/front_cam/detections

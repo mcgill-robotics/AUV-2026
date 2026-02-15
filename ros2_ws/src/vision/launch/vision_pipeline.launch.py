@@ -1,4 +1,5 @@
 import os
+import yaml
 
 from ament_index_python.packages import get_package_share_directory
 
@@ -6,14 +7,23 @@ from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument
 from launch_ros.actions import SetParameter,Node
 from launch_xml.launch_description_sources import XMLLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 
 def generate_launch_description():
     vision_dir = get_package_share_directory("vision")
+    config_arg = DeclareLaunchArgument(
+        "config_file",
+        default_value=os.path.join(vision_dir, "config", "vision_pipeline.yaml"),
+        description="Path to the vision pipeline config file."
+    )
+    
+    config_path = str(LaunchConfiguration("config_file"))
+    with open(config_path, 'r') as f:
+        default_config:dict = yaml.safe_load(f)
     
     sim_arg = DeclareLaunchArgument(
         "sim",
-        default_value="false",
+        default_value=default_config["general"]["sim"],
         description=(
             "Whether to run in simulation mode. In simulation mode, input topics "
             "are assumed to be in compressed image format and use_sim_time is enabled."
@@ -21,28 +31,29 @@ def generate_launch_description():
     )
     debug_arg = DeclareLaunchArgument(
         "debug_logs",
-        default_value="false",
+        default_value=default_config["general"]["debug"],
         description="Whether to enable debug logs for vision nodes."
     )
     
     front_model_arg = DeclareLaunchArgument(
-        "front_model_path",
-        default_value=os.path.join(vision_dir, "models", "frontcam.pt"),
+        "front_model_relative_path",
+        default_value=default_config["object_detection"]["front_model_relative_path"],
         description="Path to the front camera object detection model file."
     )
     down_model_arg = DeclareLaunchArgument(
-        "down_model_path",
-        default_value=os.path.join(vision_dir, "models", "downcam.pt"),
+        "down_model_relative_path",
+        default_value=default_config["object_detection"]["down_model_relative_path"],
         description="Path to the down camera object detection model file."
     )
     
-    # Topic name will be set as constant here for now
-    front_cam_topic = "/zed/zed_node/rgb/color/rect/image"
-    down_cam_topic = "/down_cam/image_raw"
-    front_enhanced_topic = "/vision/front_cam/image_enhanced"
-    down_enhanced_topic = "/vision/down_cam/image_enhanced"
-    front_detections_topic = "/vision/front_cam/detections"
-    down_detections_topic = "/vision/down_cam/detections"
+    # topic names pulled from config directly
+    front_cam_topic = default_config["camera"]["front_cam_topic"]
+    down_cam_topic = default_config["camera"]["down_cam_topic"]
+    front_enhanced_topic = default_config["image_enhancement"]["front_enhanced_topic"]
+    down_enhanced_topic = default_config["image_enhancement"]["down_enhanced_topic"]
+    front_detections_topic = default_config["object_detection"]["front_detections_topic"]
+    down_detections_topic = default_config["object_detection"]["down_detections_topic"]
+    
     
     enhancement_launch = IncludeLaunchDescription(
         XMLLaunchDescriptionSource(os.path.join(vision_dir, "launch", "image_enhancement.launch.xml")),
@@ -92,13 +103,15 @@ def generate_launch_description():
             {"use_sim_time": LaunchConfiguration("sim")}
         ]
     )
-    return LaunchDescription([
-        sim_arg,
-        debug_arg,
-        front_model_arg,
-        down_model_arg,
-        SetParameter(name="use_sim_time", value=LaunchConfiguration("sim")),
-        enhancement_launch,
-        object_detection_launch,
-        object_map_node
-    ])
+    
+    launch_description = LaunchDescription()
+    launch_description.add_action(config_arg)
+    launch_description.add_action(sim_arg)
+    launch_description.add_action(debug_arg)
+    launch_description.add_action(front_model_arg)
+    launch_description.add_action(down_model_arg)
+    launch_description.add_action(enhancement_launch)
+    launch_description.add_action(object_detection_launch)
+    launch_description.add_action(object_map_node)
+    
+    return launch_description

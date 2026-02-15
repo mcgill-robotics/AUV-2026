@@ -1,0 +1,19 @@
+# not the standard ROS node config parameters, these are topics passed to the vision pipeline launch file
+camera:
+  front_cam_topic: /zed/zed_node/rgb/color/rect/image
+  down_cam_topic: /vision/down_cam/image_raw
+
+image_enhancement:
+  front_enhanced_topic: /vision/front_cam/image_enhanced
+  down_enhanced_topic: /vision/down_cam/image_enhanced
+
+object_detection:
+  front_detections_topic: /vision/front_cam/detections
+  down_detections_topic: /vision/down_cam/detections
+# relative to src directory
+  front_model_relative_path: models/front_cam_model.pt
+  down_model_relative_path: models/down_cam_model.pt
+
+general:
+  sim: false
+  debug: false
