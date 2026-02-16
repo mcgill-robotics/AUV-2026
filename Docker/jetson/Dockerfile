@@ -191,31 +191,28 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # do not clutter our ros2_ws
 WORKDIR /root/dependencies_ws
 
-RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
+RUN . /opt/ros/$ROS_DISTRO/install/setup.bash && \
   colcon build --parallel-workers $(nproc) --symlink-install \
   --event-handlers console_direct+ --base-paths src \
   --cmake-args ' -DCMAKE_BUILD_TYPE=Release' \
   ' -DCMAKE_LIBRARY_PATH=/usr/local/cuda/lib64/stubs' \
   ' -DCMAKE_CXX_FLAGS="-Wl,--allow-shlib-undefined"' \
-  ' --no-warn-unused-cli' "
+  ' --no-warn-unused-cli' 
 
 # install micro-ROS
 WORKDIR /root/micro_ros_ws
-# add repository and build micro-ROS package
-RUN git clone -b $ROS_DISTRO https://github.com/micro-ROS/micro_ros_setup.git src/micro_ros_setup && \
-    source /opt/ros/$ROS_DISTRO/install/setup.bash && \
-    source /root/dependencies_ws/install/setup.bash && \
+# add repository and 
+RUN git clone -b $ROS_DISTRO https://github.com/micro-ROS/micro_ros_setup.git src/micro_ros_setup
+# build micro-ROS package and agent
+RUN . /opt/ros/$ROS_DISTRO/install/setup.bash && \
+    . /root/dependencies_ws/install/setup.bash && \
     colcon build --parallel-workers $(nproc) --symlink-install \
     --event-handlers console_direct+ --base-paths src \
     --cmake-args ' -DCMAKE_BUILD_TYPE=Release' && \
-    source install/setup.bash
-# build agent
-RUN source /opt/ros/$ROS_DISTRO/install/setup.bash && \
-    source /root/dependencies_ws/install/setup.bash && \
+    . /root/micro_ros_ws/install/setup.bash && \
     MICROROS_PREFIX=$(ros2 pkg prefix micro_ros_setup) && \
     ros2 run micro_ros_setup create_ws.sh src $MICROROS_PREFIX/config/agent_ros2_packages.txt $MICROROS_PREFIX/config/agent_uros_packages.repos && \
     ros2 run micro_ros_setup build_agent.sh && \
-    source install/setup.bash && \
     # cleanup
     rm -rf build log
 
