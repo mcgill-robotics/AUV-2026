@@ -199,6 +199,24 @@ RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
   ' -DCMAKE_CXX_FLAGS="-Wl,--allow-shlib-undefined"' \
   ' --no-warn-unused-cli' "
 
+# install micro-ROS
+WORKDIR /root/micro_ros_ws
+# add repository
+RUN git clone -b $ROS_DISTRO https://github.com/micro-ROS/micro_ros_setup.git src/micro_ros_setup && \
+    source /opt/ros/$ROS_DISTRO/install/setup.bash && \
+    source /root/dependencies_ws/install/setup.bash && \
+    colcon build --parallel-workers $(nproc) --symlink-install \
+    --event-handlers console_direct+ --base-paths src \
+    --cmake-args ' -DCMAKE_BUILD_TYPE=Release' && \
+    source install/setup.bash
+
+RUN MICROROS_PREFIX=$(ros2 pkg prefix micro_ros_setup) && \
+    ros2 run micro_ros_setup create_ws.sh src $MICROROS_PREFIX/config/agent_ros2_packages.txt $MICROROS_PREFIX/config/agent_uros_packages.repos && \
+    ros2 run micro_ros_setup build_agent.sh && \
+    source install/setup.bash && \
+    # cleanup
+    rm -rf build log
+
 # Get CUDA dependencies to install torch and torchvision
 WORKDIR /root
 RUN wget https://developer.download.nvidia.com/compute/cusparselt/0.8.1/local_installers/cusparselt-local-tegra-repo-ubuntu2204-0.8.1_0.8.1-1_arm64.deb && \
@@ -215,6 +233,7 @@ RUN mkdir -p tmp_cudss && cd tmp_cudss && \
     cp -a ${CUSPARSE_SOLVER_NAME}/include/* /usr/local/cuda/include/ && \
     cp -a ${CUSPARSE_SOLVER_NAME}/lib/* /usr/local/cuda/lib64/ && \
 	rm -rf ${CUSPARSE_SOLVER_NAME} ${CUSPARSE_SOLVER_NAME}.tar.xz
+    
 
 # Install ultralytics, avoid reinstalling numpy and opencv (torch, tensorflow and torchvision installed in the .toml file, cuda supported cause pip index is Jetpack6 one)
 RUN pip install --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} --ignore-install sympy \ 
