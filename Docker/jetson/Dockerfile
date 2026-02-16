@@ -206,15 +206,25 @@ RUN git clone -b $ROS_DISTRO https://github.com/micro-ROS/micro_ros_setup.git sr
 # build micro-ROS package and agent
 RUN . /opt/ros/$ROS_DISTRO/install/setup.bash && \
     . /root/dependencies_ws/install/setup.bash && \
-    colcon build --parallel-workers $(nproc) --symlink-install \
-    --event-handlers console_direct+ --base-paths src \
-    --cmake-args ' -DCMAKE_BUILD_TYPE=Release' && \
-    . /root/micro_ros_ws/install/setup.bash && \
+    colcon build \
+        --parallel-workers $(nproc) \
+        --merge-install \
+        --event-handlers console_direct+ \
+        --base-paths src \
+        --cmake-args -DCMAKE_BUILD_TYPE=Release && \
+    . /root/micro_ros_ws/install/setup.sh && \
     MICROROS_PREFIX=$(ros2 pkg prefix micro_ros_setup) && \
-    ros2 run micro_ros_setup create_ws.sh src $MICROROS_PREFIX/config/agent_ros2_packages.txt $MICROROS_PREFIX/config/agent_uros_packages.repos && \
-    ros2 run micro_ros_setup build_agent.sh && \
-    # cleanup
-    rm -rf build log
+    ros2 run micro_ros_setup create_ws.sh src "$MICROROS_PREFIX/config/agent_ros2_packages.txt" "$MICROROS_PREFIX/config/agent_uros_packages.repos" && \
+    colcon build \
+        --packages-up-to micro_ros_agent $@ \
+        --parallel-workers $(nproc) \
+        --merge-install \
+        --event-handlers console_direct+ \
+        --cmake-args \
+            "-DUAGENT_BUILD_EXECUTABLE=OFF" \
+            "-DUAGENT_P2P_PROFILE=OFF" \
+            "--no-warn-unused-cli" && \
+    rm -rf build src log
 
 # Get CUDA dependencies to install torch and torchvision
 WORKDIR /root
