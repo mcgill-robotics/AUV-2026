@@ -21,6 +21,7 @@ ZEDDetection::ZEDDetection(
 		bool show_detections,
 		bool debug_logs,
 		function<void(const string&)> log_error,
+		function<void(const string&)> log_fatal,
 		function<void(const string&)> log_info,
         function<void(const string&)> log_warn,
 		function<void(const string&, int)> log_warn_throttle
@@ -34,12 +35,14 @@ ZEDDetection::ZEDDetection(
 		show_detections(show_detections),
 		debug_logs(debug_logs),
 		log_error(log_error),
+		log_fatal(log_fatal),
 		log_info(log_info),
 		log_warn(log_warn),
 		log_warn_throttle(log_warn_throttle)
 {
 	if (!init_zed()) {
 		log_error("Failed to initialize ZED camera");
+		log_fatal("Exiting due to ZED initialization failure");
 		throw runtime_error("ZED initialization failed");
 	}
 }

@@ -43,6 +43,7 @@ public:
         bool show_detections,
         bool debug_logs,
         function<void(const string&)> log_error,
+        function<void(const string&)> log_fatal,
         function<void(const string&)> log_info,
         function<void(const string&)> log_warn,
         function<void(const string&, int)> log_warn_throttle
@@ -92,6 +93,7 @@ private:
     double sensor_depth;
     
     function<void(const string&)> log_error;
+    function<void(const string&)> log_fatal;
     function<void(const string&)> log_info;
     function<void(const string&)> log_warn;
     function<void(const string&, int)> log_warn_throttle;    

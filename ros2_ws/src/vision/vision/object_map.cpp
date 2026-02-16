@@ -121,6 +121,7 @@ public:
 			debug_logs,
 			// add callbacks to use rclcpp logging
 			[this](const string& msg) { RCLCPP_ERROR(this->get_logger(), "%s", msg.c_str()); },
+			[this](const string& msg) { RCLCPP_FATAL(this->get_logger(), "%s", msg.c_str()); },
 			[this](const string& msg) { RCLCPP_INFO(this->get_logger(), "%s", msg.c_str()); },
 			[this](const string& msg) { RCLCPP_WARN(this->get_logger(), "%s", msg.c_str()); },
 			[this](const string& msg, int throttle_duration_ms) { RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), throttle_duration_ms, "%s", msg.c_str()); }
