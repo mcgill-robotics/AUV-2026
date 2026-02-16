@@ -201,7 +201,7 @@ RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
 
 # install micro-ROS
 WORKDIR /root/micro_ros_ws
-# add repository
+# add repository and build micro-ROS package
 RUN git clone -b $ROS_DISTRO https://github.com/micro-ROS/micro_ros_setup.git src/micro_ros_setup && \
     source /opt/ros/$ROS_DISTRO/install/setup.bash && \
     source /root/dependencies_ws/install/setup.bash && \
@@ -209,8 +209,10 @@ RUN git clone -b $ROS_DISTRO https://github.com/micro-ROS/micro_ros_setup.git sr
     --event-handlers console_direct+ --base-paths src \
     --cmake-args ' -DCMAKE_BUILD_TYPE=Release' && \
     source install/setup.bash
-
-RUN MICROROS_PREFIX=$(ros2 pkg prefix micro_ros_setup) && \
+# build agent
+RUN source /opt/ros/$ROS_DISTRO/install/setup.bash && \
+    source /root/dependencies_ws/install/setup.bash && \
+    MICROROS_PREFIX=$(ros2 pkg prefix micro_ros_setup) && \
     ros2 run micro_ros_setup create_ws.sh src $MICROROS_PREFIX/config/agent_ros2_packages.txt $MICROROS_PREFIX/config/agent_uros_packages.repos && \
     ros2 run micro_ros_setup build_agent.sh && \
     source install/setup.bash && \
@@ -252,5 +254,5 @@ RUN pip install --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} notebook \
 	pip install --ignore-install --upgrade typing_extensions
 
 # Source env variables
-RUN echo "source /opt/ros/humble/install/setup.bash && source /root/dependencies_ws/install/setup.bash && source /root/AUV-2026/ros2_ws/install/setup.bash" >> ~/.bashrc
+RUN echo "source /opt/ros/humble/install/setup.bash && source /root/dependencies_ws/install/local_setup.bash && source /root/micro_ros_ws/install/local_setup.bash && source /root/AUV-2026/ros2_ws/install/setup.bash" >> ~/.bashrc
 CMD ["bash"]
