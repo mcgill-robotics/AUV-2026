@@ -118,7 +118,7 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone &
     nano \
     python3-colcon-common-extensions \
     python3-rosdep \
-    python3-vcstools \
+    python3-vcstool \
     python3-wheel \
     sudo \
     tar \
