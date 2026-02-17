@@ -13,6 +13,7 @@ namespace controls
         this->declare_parameter<double>("buoyancy", 278.0); // Newtons
         this->declare_parameter<std::vector<double>>("r_bv_v", {0.0, 0.0, 0.023}); // [m] From CAD Model
         this->declare_parameter<double>("control_loop_hz", 10.0); // Control loop frequency
+        this->declare_parameter<bool>("enabled", false);
 
         this->get_parameter("P_ex", P_ex_);
         this->get_parameter("P_ey", P_ey_);
@@ -23,6 +24,7 @@ namespace controls
         this->get_parameter("buoyancy", buoyancy_);
         this->get_parameter("r_bv_v", r_bv_v_);
         this->get_parameter("control_loop_hz", control_loop_hz_);
+        this->get_parameter("enabled", enabled_);
 
         q_iv_ = quatd::Identity(); // Initial orientation: identity quaternion
         w_iv_ = Vec3::Zero(); // Initial angular velocity: zero vector
@@ -47,6 +49,9 @@ namespace controls
             "/controls/quaternion_setpoint",
             1,
             std::bind(&AttitudeController::target_orientation_callback, this, std::placeholders::_1)
+        );
+        parameter_callback_handle_ = this->add_on_set_parameters_callback(
+            std::bind(&AttitudeController::parameters_callback, this, std::placeholders::_1)
         );
 
         control_timer_ = this->create_wall_timer(
@@ -123,8 +128,52 @@ namespace controls
 
     void AttitudeController::control_loop_callback()
     {
-        wrench_msg effort = compute_control_effort();
+        wrench_msg effort;
+        if (enabled_)
+        {
+            effort = compute_control_effort();
+        }
+        else
+        {
+            effort.force.x = 0.0;
+            effort.force.y = 0.0;
+            effort.force.z = 0.0;
+            effort.torque.x = 0.0;
+            effort.torque.y = 0.0;
+            effort.torque.z = 0.0;
+        }
+
         pub_effort_->publish(effort);
+    }
+
+    rcl_interfaces::msg::SetParametersResult AttitudeController::parameters_callback(
+        const std::vector<rclcpp::Parameter> &parameters
+    )
+    {
+        rcl_interfaces::msg::SetParametersResult result;
+        result.successful = true;
+
+        for (const auto &parameter : parameters)
+        {
+            if (parameter.get_name() == "enabled")
+            {
+                if (parameter.get_type() != rclcpp::ParameterType::PARAMETER_BOOL)
+                {
+                    result.successful = false;
+                    result.reason = "'enabled' must be a bool";
+                    return result;
+                }
+
+                enabled_ = parameter.as_bool();
+                RCLCPP_INFO(
+                    this->get_logger(),
+                    "Attitude controller enabled: %s",
+                    enabled_ ? "true" : "false"
+                );
+            }
+        }
+
+        return result;
     }
 
 }

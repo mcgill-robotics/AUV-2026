@@ -6,6 +6,7 @@ import numpy as np
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
+from rcl_interfaces.msg import SetParametersResult
 from controls.pid import PID
 
 from geometry_msgs.msg import Wrench
@@ -34,6 +35,7 @@ class DepthController(Node):
         self.declare_parameter("KI", 0.0)
         self.declare_parameter("I_MAX", 0.0)
         self.declare_parameter("net_buoyancy", 0.0)
+        self.declare_parameter("enabled", False)
 
         # PID controller parameters
         self.control_loop_hz = float(self.get_parameter('control_loop_hz').value)
@@ -42,6 +44,9 @@ class DepthController(Node):
         self.KI = float(self.get_parameter("KI").value)
         self.I_MAX = float(self.get_parameter("I_MAX").value)
         self.net_buoyancy = float(self.get_parameter("net_buoyancy").value)
+        self.enabled = bool(self.get_parameter("enabled").value)
+
+        self.parameter_callback_handle = self.add_on_set_parameters_callback(self.parameters_callback)
 
         self.pid = PID(self.KP, self.KD, self.KI, self.I_MAX)
 
@@ -63,14 +68,32 @@ class DepthController(Node):
     def setpoint_callback(self, msg):
         self.setpoint_depth = msg.data
 
-    def control_loop_callback(self):
-        # Compute PID errors
-        self.pid.compute_errors(-self.setpoint_depth, -self.current_depth, -self.previous_depth, self.time_step) # +Z is up, so invert depth values for PID calculations
-        effort_output = self.pid.compute_output()
+    def parameters_callback(self, parameters):
+        result = SetParametersResult()
+        result.successful = True
 
+        for parameter in parameters:
+            if parameter.name == "enabled":
+                if parameter.type_ != parameter.Type.BOOL:
+                    result.successful = False
+                    result.reason = "'enabled' must be a bool"
+                    return result
+                self.enabled = bool(parameter.value)
+                self.get_logger().info(f"Depth controller enabled: {self.enabled}")
+
+        return result
+
+    def control_loop_callback(self):
         # Publish effort command
         effort_msg = Wrench()
-        effort_msg.force.z = effort_output + self.feed_forward 
+        if self.enabled:
+            # +Z is up, so invert depth values for PID calculations
+            self.pid.compute_errors(-self.setpoint_depth, -self.current_depth, -self.previous_depth, self.time_step)
+            effort_output = self.pid.compute_output()
+            effort_msg.force.z = effort_output + self.feed_forward
+        else:
+            effort_msg.force.z = 0.0
+
         self.pub_effort.publish(effort_msg)  # Published effort is in pool frame
 
 

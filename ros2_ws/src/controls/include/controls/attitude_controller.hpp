@@ -1,5 +1,7 @@
 #pragma once
 
+#include <rclcpp/rclcpp.hpp>
+#include <rcl_interfaces/msg/set_parameters_result.hpp>
 #include <std_msgs/msg/float64.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <geometry_msgs/msg/vector3_stamped.hpp>
@@ -64,12 +66,17 @@ namespace controls
 
 
                 rclcpp::TimerBase::SharedPtr control_timer_;
+                rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr parameter_callback_handle_;
+                bool enabled_;
 
                 void imu_callback(const imu_msg::SharedPtr msg);
                 void target_orientation_callback(const geometry_msgs::msg::Quaternion::SharedPtr msg);
                 Vec3 feedback_effort(const quatd& q_iv2);
                 Vec3 feedforward_effort();
                 void control_loop_callback();
+                rcl_interfaces::msg::SetParametersResult parameters_callback(
+                    const std::vector<rclcpp::Parameter> &parameters
+                );
                 
     };
 
