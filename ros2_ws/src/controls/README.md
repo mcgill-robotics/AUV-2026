@@ -29,7 +29,18 @@ The controls package implements separate depth and attitude controllers. The dep
 
 
 ## Usage
-The controls package is not for direct use, it is used through publishing setpoints.
+The controls package is not for direct use, it is used through publishing setpoints. By default, the controllers are disabled at startup. 
+
+To activate the attitude controller:
+
+        ros2 param set attitude_controller enabled true
+
+
+To activate the depth controller:
+
+        ros2 param set depth_controller enabled true
+
+
 
 Publishing a depth setpoint onto `/controls/depth_setpoint`:
 
@@ -45,11 +56,11 @@ Publishing an attitude setpoint onto `/controls/quaternion_setpoint`:
 ## Nodes
 The package provides three ROS nodes: `depth_controller`, `attitude_controller`, and `superimposer`.
 
-- `depth_controller` input: `/processed/depth`, `/controls/depth_setpoint`
+- `depth_controller` input: `/auv_frame/depth`, `/controls/depth_setpoint`
 
 - `depth_controller` output: `/controls/depth_effort`
 
-- `attitude_controller` input: `processed/imu`, `quaternion_setpoint`
+- `attitude_controller` input: `/auv_frame/imu`, `quaternion_setpoint`
 
 - `attitude_controller` output: `/controls/attitude_effort`
 
@@ -64,15 +75,15 @@ The package provides three ROS nodes: `depth_controller`, `attitude_controller`,
 | ------ | ------- | ---------- |
 | `/controls/depth_effort` | `geometry_msgs/Wrench` | Depth controller effort (force.z) in the pool frame |
 | `/controls/attitude_effort` | `geometry_msgs/Wrench` | Attitude controller effort (torques) |
-| `/controls/combined_effort` | `geometry_msgs/Wrench` | Sum of depth and attitude efforts with optional biases |
+| `/controls/total_effort` | `geometry_msgs/Wrench` | Sum of depth and attitude efforts with optional biases |
 
 
 ### Subscribed Topics
 
 | Topic | Message | Description |
 | ------ | ------- | ---------- |
-| `/processed/depth` | `std_msgs/Float64` | Current depth estimate |
-| `processed/imu` | `sensor_msgs/Imu` | Orientation and angular velocity for attitude control |
+| `/auv_frame/depth` | `std_msgs/Float64` | Current depth estimate |
+| `/auv_frame/imu` | `sensor_msgs/Imu` | Orientation and angular velocity for attitude control |
 | `/controls/depth_setpoint` | `std_msgs/Float64` | Desired depth setpoint |
 | `/controls/quaternion_setpoint` | `geometry_msgs/Quaternion` | Desired vehicle orientation |
 | `/controls/depth_effort` | `geometry_msgs/Wrench` | Depth effort input to superimposer |
