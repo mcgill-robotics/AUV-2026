@@ -17,6 +17,9 @@ object_detection:
 object_map:
   map_topic: /vision/object_map
   pose_topic: /vision/vio_pose
+  stream_ip: "127.0.0.1"
+  stream_port: 30000
+  frame_rate: 30
 
 general:
   sim: false

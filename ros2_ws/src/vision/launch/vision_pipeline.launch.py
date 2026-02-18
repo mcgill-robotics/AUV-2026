@@ -83,7 +83,7 @@ def generate_launch_description():
         name="object_map_node",
         parameters=[
             {
-                "frame_rate": 30,
+                "frame_rate": default_config["object_map"]["frame_rate"],
                 "zed_sdk": True,
                 "new_object_min_distance_threshold": 0.5,
                 "front_cam_detection_topic": front_detections_topic,
@@ -91,9 +91,9 @@ def generate_launch_description():
                 "vio_pose_topic": auv_pose_topic,
                 "confidence_threshold": 0.5,
                 "max_range": 10.0,
-                "use_stream": LaunchConfiguration("sim"),
-                "stream_ip": "127.0.0.1",
-                "stream_port": 30000,
+                "use_stream": True,
+                "stream_ip": default_config["object_map"]["stream_ip"],
+                "stream_port": default_config["object_map"]["stream_port"],
                 "show_detections": True,
                 "debug_logs": LaunchConfiguration("debug_logs"),
                 "use_sim_time": LaunchConfiguration("sim")
@@ -106,8 +106,8 @@ def generate_launch_description():
     launch_description.add_action(debug_arg)
     launch_description.add_action(front_model_arg)
     launch_description.add_action(down_model_arg)
-    # launch_description.add_action(enhancement_launch)
-    # launch_description.add_action(object_detection_launch)
+    launch_description.add_action(enhancement_launch)
+    launch_description.add_action(object_detection_launch)
     launch_description.add_action(object_map_node)
     
     return launch_description
