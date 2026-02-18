@@ -18,6 +18,7 @@ ZEDDetection::ZEDDetection(
 		bool use_stream,
 		const string & stream_ip,
 		int stream_port,
+		ZEDCameraModel camera_model,
 		bool show_detections,
 		bool debug_logs,
 		function<void(const string&)> log_error,
@@ -32,6 +33,7 @@ ZEDDetection::ZEDDetection(
 		use_stream(use_stream),
 		stream_ip(stream_ip),
 		stream_port(stream_port),
+		camera_model(camera_model),
 		show_detections(show_detections),
 		debug_logs(debug_logs),
 		log_error(log_error),
@@ -50,7 +52,7 @@ ZEDDetection::ZEDDetection(
 bool ZEDDetection::init_zed()
 {
 	sl::InitParameters init_params;
-	init_params.camera_resolution = sl::RESOLUTION::VGA;
+	init_params.camera_resolution = (camera_model == ZEDCameraModel::ZEDX) ? sl::RESOLUTION::VGA : sl::RESOLUTION::HD1080;
 	init_params.camera_fps = frame_rate;
 	init_params.coordinate_units = sl::UNIT::METER;
 	init_params.coordinate_system = sl::COORDINATE_SYSTEM::RIGHT_HANDED_Z_UP_X_FWD;
@@ -99,8 +101,6 @@ void ZEDDetection::process_detections(const std::vector<sl::CustomBoxObjectData>
 	if (!ZEDDetection::check_zed_status()) {
 	    return; // Skip processing if ZED health not OK
 	}
-
-
 	
 	// Ingest custom boxes
 	zed.ingestCustomBoxObjects(detections);
@@ -227,8 +227,6 @@ void ZEDDetection::determine_world_position_zed_2D_boxes(const sl::Objects& zed_
 void ZEDDetection::LogDebugTable(const vector<sl::CustomBoxObjectData>& YOLO_detections, const sl::Objects& zed_detections)
 {
     // Implementation of the debug table logging
-    (void)YOLO_detections;
-    (void)zed_detections;
 }
 
 void ZEDDetection::UpdateSensorDepth(double new_depth)

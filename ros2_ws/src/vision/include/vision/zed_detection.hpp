@@ -29,6 +29,13 @@ using namespace std;
 //     string error_details = "";
 // };
 
+enum class ZEDCameraModel
+{
+    ZEDX,
+    ZED2i,
+
+};
+
 class ZEDDetection
 {
 public:
@@ -40,6 +47,7 @@ public:
         bool use_stream,
         const string & stream_ip,
         int stream_port,
+        ZEDCameraModel camera_model,
         bool show_detections,
         bool debug_logs,
         function<void(const string&)> log_error,
@@ -100,6 +108,7 @@ private:
     
     
     sl::Camera zed;
+    ZEDCameraModel camera_model;
     sl::RuntimeParameters runtime_params;
     sl::ObjectDetectionRuntimeParameters obj_runtime_param;
     

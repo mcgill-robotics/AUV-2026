@@ -84,6 +84,8 @@ public:
 		// UDP stream IP and port
 		this->declare_parameter<string>("stream_ip", "127.0.0.1");
 		this->declare_parameter<int>("stream_port");
+		// whether run in simulation or real-world (affects ZED SDK settings)
+		this->declare_parameter<bool>("sim");
 		// show YOLO bounding boxes on output frames
 		this->declare_parameter<bool>("show_detections");
 		// enable heavy debug table logs
@@ -97,6 +99,7 @@ public:
 		bool use_stream;
 		string stream_ip;
 		int stream_port;
+		bool sim;
 		bool show_detections;
 		bool debug_logs;
 
@@ -106,10 +109,12 @@ public:
 		this->get_parameter("use_stream", use_stream);
 		this->get_parameter("stream_ip", stream_ip);
 		this->get_parameter("stream_port", stream_port);
+		this->get_parameter("sim", sim);
 		this->get_parameter("show_detections", show_detections);
 		this->get_parameter("debug_logs", debug_logs);
 		
 #ifdef HAS_ZED_SDK
+		ZEDCameraModel camera_model = sim ? ZEDCameraModel::ZEDX : ZEDCameraModel::ZED2i;
 		zed_detector = std::make_unique<ZEDDetection>(
 			frame_rate,
 			confidence_threshold,
@@ -117,6 +122,7 @@ public:
 			use_stream,
 			stream_ip,
 			stream_port,
+			camera_model,
 			show_detections,
 			debug_logs,
 			// add callbacks to use rclcpp logging
@@ -192,7 +198,6 @@ private:
 
 	void publish_object_map(const std::vector<Track>& tracks)
 	{
-		// TODO: implement publishing logic, use object_map_publisher
 		auv_msgs::msg::VisionObjectArray object_map_msg;
 		// for each track, publish as VisionObject
 		for (const auto& track : tracks)

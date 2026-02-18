@@ -96,6 +96,7 @@ def generate_launch_description():
                 "stream_port": default_config["object_map"]["stream_port"],
                 "show_detections": True,
                 "debug_logs": LaunchConfiguration("debug_logs"),
+                "sim": LaunchConfiguration("sim"),
                 "use_sim_time": LaunchConfiguration("sim")
             }
         ]
