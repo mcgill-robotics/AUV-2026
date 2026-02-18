@@ -50,7 +50,7 @@ ZEDDetection::ZEDDetection(
 bool ZEDDetection::init_zed()
 {
 	sl::InitParameters init_params;
-	init_params.camera_resolution = sl::RESOLUTION::SVGA;
+	init_params.camera_resolution = sl::RESOLUTION::VGA;
 	init_params.camera_fps = frame_rate;
 	init_params.coordinate_units = sl::UNIT::METER;
 	init_params.coordinate_system = sl::COORDINATE_SYSTEM::RIGHT_HANDED_Z_UP_X_FWD;

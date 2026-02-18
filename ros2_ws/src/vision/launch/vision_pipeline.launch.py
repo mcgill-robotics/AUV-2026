@@ -91,7 +91,7 @@ def generate_launch_description():
                 "vio_pose_topic": auv_pose_topic,
                 "confidence_threshold": 0.5,
                 "max_range": 10.0,
-                "use_stream": True,
+                "use_stream": LaunchConfiguration("sim"),
                 "stream_ip": "127.0.0.1",
                 "stream_port": 30000,
                 "show_detections": True,
