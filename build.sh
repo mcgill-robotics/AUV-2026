@@ -5,6 +5,7 @@ set -euo pipefail
 # Do we want to remove install/build/log directories before building?
 CLEAN_BUILD=false
 DEBUG_BUILD=false
+OFFLINE_BUILD=false
 PACKAGE_TO_BUILD=""
 
 while getopts ":cdp:" flag; do
@@ -16,6 +17,10 @@ while getopts ":cdp:" flag; do
         d)
             echo "Flag -d was set. Debug build enabled."
             DEBUG_BUILD=true
+            ;;
+        o)
+            echo "Flag -o was set. Building in offline mode."
+            OFFLINE_BUILD=true
             ;;
         p)
             echo "Flag -p was set. Building up to package: ${OPTARG}"
@@ -187,6 +192,12 @@ if [ "$CLEAN_BUILD" = true ]; then
     done
 fi
 
+OFFLINE_CMAKE_ARGS=""
+if [ "$OFFLINE_BUILD" = true ]; then
+    echo "    -> Building in offline mode. CMake will not attempt to fetch any content from any remote."
+    OFFLINE_CMAKE_ARGS="-DFETCHCONTENT_FULLY_DISCONNECTED=ON -DFETCHCONTENT_UPDATES_DISCONNECTED=ON"
+fi
+
 if [ "$DEBUG_BUILD" = true ]; then
     echo "    -> Performing Debug Build of packages: ${PKGS[*]}"
     # Output to console, interleaving build output for better visibility
@@ -198,6 +209,7 @@ if [ "$DEBUG_BUILD" = true ]; then
             -DCMAKE_BUILD_TYPE=RelWithDebInfo  \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
             -DIS_JETSON_CI=$IS_JETSON_CI \
+            $OFFLINE_CMAKE_ARGS \
         --executor sequential \
         $([ -n "$PACKAGE_TO_BUILD" ] && echo "--packages-up-to $PACKAGE_TO_BUILD")
 else
@@ -208,6 +220,7 @@ else
         --cmake-args \
             -DCMAKE_BUILD_TYPE=Release \
             -DIS_JETSON_CI=$IS_JETSON_CI \
+            $OFFLINE_CMAKE_ARGS \
         --event-handlers console_cohesion+ \
         --parallel-workers $(nproc) \
         $([ -n "$PACKAGE_TO_BUILD" ] && echo "--packages-up-to $PACKAGE_TO_BUILD")
