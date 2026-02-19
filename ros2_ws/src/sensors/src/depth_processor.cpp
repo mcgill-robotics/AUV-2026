@@ -1,5 +1,5 @@
 #include "sensors/depth_processor.hpp"
-#include "depth_calibration.hpp"
+#include "sensors/depth_calibration.hpp"
 
 // See ../README.md for explanation of what is being done by DepthProcessor
 // and variable naming conventions. 

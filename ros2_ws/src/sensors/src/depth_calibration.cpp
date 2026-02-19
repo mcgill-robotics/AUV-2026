@@ -1,7 +1,9 @@
-#include "depth_calibration.hpp"
+#include "sensors/depth_calibration.hpp"
 #include <yaml-cpp/yaml.h>
 #include <ament_index_cpp/get_package_share_directory.hpp>
 
+namespace sensors
+{
 const static std::string share_path = ament_index_cpp::get_package_share_directory("sensors");
 const static std::string yaml_path = share_path + "/config/depth_configuration.yaml";
 
@@ -27,4 +29,5 @@ void load_depth_configuration() {
     depth_slope = diff_expected / diff_sensor;
 
     depth_offset = depth_min_actual - depth_min_sensor;
+}
 }
