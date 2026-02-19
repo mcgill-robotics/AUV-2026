@@ -45,13 +45,13 @@ def generate_launch_description():
         "'",
         LaunchConfiguration('front_cam_topic'),
         "'",
-        " + '/compressed' if ",LaunchConfiguration('sim'), " else ''"
+        " + ('/compressed' if ",LaunchConfiguration('sim'), " else '')"
     ])
     down_cam_topic = PythonExpression([
         "'",
         LaunchConfiguration('down_cam_topic'),
         "'",
-        " + '/compressed' if ",LaunchConfiguration('sim'), " else ''",
+        " + ('/compressed' if ",LaunchConfiguration('sim'), " else '')",
     ])
 
     front_cam_enhancement_node = Node(

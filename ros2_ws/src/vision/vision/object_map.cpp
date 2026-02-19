@@ -26,6 +26,7 @@ class ObjectMapNode : public rclcpp::Node
 public:
     ObjectMapNode() : Node("object_map_node")
     {
+	RCLCPP_INFO(this->get_logger(), "[INIT] ObjectMapNode constructor started");
 	// adding "this" boilerplate for methods called from rclcpp Node base class
 	// ZED SDK usage
 	this->declare_parameter<bool>("zed_sdk", true);
@@ -36,6 +37,7 @@ public:
 	float new_object_distance_threshold;
 	this->get_parameter("new_object_min_distance_threshold", new_object_distance_threshold);
 	this->get_parameter("zed_sdk", zed_sdk);
+	RCLCPP_INFO(this->get_logger(), "[INIT] zed_sdk param: %s", zed_sdk ? "true" : "false");
 	bool sdk_available = false;
 // compile time check for ZED SDK see CMakeLists.txt
 #ifdef HAS_ZED_SDK
@@ -112,26 +114,36 @@ public:
 		this->get_parameter("sim", sim);
 		this->get_parameter("show_detections", show_detections);
 		this->get_parameter("debug_logs", debug_logs);
+
+		RCLCPP_INFO(this->get_logger(), "[INIT] ZED params: sim=%s, use_stream=%s, stream=%s:%d, frame_rate=%d",
+			sim ? "true" : "false", use_stream ? "true" : "false", stream_ip.c_str(), stream_port, frame_rate);
 		
 #ifdef HAS_ZED_SDK
 		ZEDCameraModel camera_model = sim ? ZEDCameraModel::ZEDX : ZEDCameraModel::ZED2i;
-		zed_detector = std::make_unique<ZEDDetection>(
-			frame_rate,
-			confidence_threshold,
-			max_range_distance_threshold,
-			use_stream,
-			stream_ip,
-			stream_port,
-			camera_model,
-			show_detections,
-			debug_logs,
-			// add callbacks to use rclcpp logging
-			[this](const string& msg) { RCLCPP_ERROR(this->get_logger(), "%s", msg.c_str()); },
-			[this](const string& msg) { RCLCPP_FATAL(this->get_logger(), "%s", msg.c_str()); },
-			[this](const string& msg) { RCLCPP_INFO(this->get_logger(), "%s", msg.c_str()); },
-			[this](const string& msg) { RCLCPP_WARN(this->get_logger(), "%s", msg.c_str()); },
-			[this](const string& msg, int throttle_duration_ms) { RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), throttle_duration_ms, "%s", msg.c_str()); }
-		);
+		RCLCPP_INFO(this->get_logger(), "[INIT] Creating ZEDDetection with camera model: %s", sim ? "ZEDX" : "ZED2i");
+		try {
+			zed_detector = std::make_unique<ZEDDetection>(
+				frame_rate,
+				confidence_threshold,
+				max_range_distance_threshold,
+				use_stream,
+				stream_ip,
+				stream_port,
+				camera_model,
+				show_detections,
+				debug_logs,
+				// add callbacks to use rclcpp logging
+				[this](const string& msg) { RCLCPP_ERROR(this->get_logger(), "%s", msg.c_str()); },
+				[this](const string& msg) { RCLCPP_FATAL(this->get_logger(), "%s", msg.c_str()); },
+				[this](const string& msg) { RCLCPP_INFO(this->get_logger(), "%s", msg.c_str()); },
+				[this](const string& msg) { RCLCPP_WARN(this->get_logger(), "%s", msg.c_str()); },
+				[this](const string& msg, int throttle_duration_ms) { RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), throttle_duration_ms, "%s", msg.c_str()); }
+			);
+			RCLCPP_INFO(this->get_logger(), "[INIT] ZEDDetection created successfully");
+		} catch (const std::exception& e) {
+			RCLCPP_FATAL(this->get_logger(), "[INIT] ZEDDetection creation failed: %s", e.what());
+			throw;
+		}
 #endif
 }
 	// Object Tracker
@@ -157,15 +169,23 @@ private:
 	void detection_callback(const vision_msgs::msg::Detection2DArray::SharedPtr msg)
 	{
 #ifdef HAS_ZED_SDK
-		if(!zed_detector) return;
+		RCLCPP_DEBUG(this->get_logger(), "[CB] detection_callback triggered with %zu detections", msg->detections.size());
+		if(!zed_detector) {
+			RCLCPP_WARN(this->get_logger(), "[CB] zed_detector is null, skipping");
+			return;
+		}
+		RCLCPP_DEBUG(this->get_logger(), "[CB] Extracting ZED detections...");
 		std::vector<sl::CustomBoxObjectData> zed_detections = extract_ZED_detections(msg);
+		RCLCPP_DEBUG(this->get_logger(), "[CB] Processing %zu ZED detections...", zed_detections.size());
 		// Convert ROS message to ZED SDK CustomBoxObjectData
 		zed_detector->process_detections(zed_detections);
+		RCLCPP_DEBUG(this->get_logger(), "[CB] Getting detections...");
 		const auto [measurements,covariances,classes,orientations,confidences] = zed_detector->GetDetections();
 		
 		// The classes returned by `GetDetections` are strings derived from int label inside `ZEDDetection`.
 		// So passing the correct int label is crucial.
 		
+		RCLCPP_DEBUG(this->get_logger(), "[CB] Updating object tracker with %zu measurements...", measurements.size());
 		std::vector<Track> confirmed_tracks = object_tracker.update(
 			measurements, 
 			covariances, 
@@ -173,14 +193,17 @@ private:
 			orientations, 
 			confidences
 		);
+		RCLCPP_DEBUG(this->get_logger(), "[CB] Publishing pose and object map...");
 		publish_pose(zed_detector->GetCameraPose());
 		publish_object_map(confirmed_tracks);
+		RCLCPP_DEBUG(this->get_logger(), "[CB] detection_callback complete");
 #endif
 	}
 
 	void depth_callback(const std_msgs::msg::Float64::SharedPtr msg)
 	{
 #ifdef HAS_ZED_SDK
+		RCLCPP_DEBUG(this->get_logger(), "[CB] depth_callback triggered: %f", msg->data);
 		if(zed_detector)
 		{
 			zed_detector->UpdateSensorDepth(msg->data);

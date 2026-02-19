@@ -51,6 +51,7 @@ ZEDDetection::ZEDDetection(
 
 bool ZEDDetection::init_zed()
 {
+	log_info("[INIT] init_zed() started");
 	sl::InitParameters init_params;
 	init_params.camera_resolution = (camera_model == ZEDCameraModel::ZEDX) ? sl::RESOLUTION::VGA : sl::RESOLUTION::HD1080;
 	init_params.camera_fps = frame_rate;
@@ -61,27 +62,33 @@ bool ZEDDetection::init_zed()
 	init_params.enable_image_validity_check = true;
 
 	if (use_stream) {
-	    log_info("Connecting to stream: " + stream_ip + ":" + to_string(stream_port));
+	    log_info("[INIT] Connecting to stream: " + stream_ip + ":" + to_string(stream_port));
 	    init_params.input.setFromStream(stream_ip.c_str(), stream_port);
 	}
 
+	log_info("[INIT] Calling zed.open()...");
 	sl::ERROR_CODE err = zed.open(init_params);
 	if (err != sl::ERROR_CODE::SUCCESS) {
 		log_error("Failed to open ZED: " + string(sl::toString(err).c_str()));
 		return false;
 	}
+	log_info("[INIT] zed.open() succeeded");
 
 	// Enable positional tracking for VIO
+	log_info("[INIT] Enabling positional tracking...");
 	sl::PositionalTrackingParameters pos_param;
-	pos_param.enable_imu_fusion = true;
+	pos_param.enable_imu_fusion = !use_stream; // Disable IMU fusion for stream input (no IMU data available)
 	pos_param.set_floor_as_origin = false;
+	log_info("[INIT] IMU fusion: " + string(pos_param.enable_imu_fusion ? "enabled" : "disabled (stream mode)"));
 	err = zed.enablePositionalTracking(pos_param);
 	if (err != sl::ERROR_CODE::SUCCESS) {
 		log_error("Failed to enable positional tracking: " + string(sl::toString(err).c_str()));
 		return false;
 	}
+	log_info("[INIT] Positional tracking enabled");
 
 	// Enable object detection (custom box mode - no ZED tracking)
+	log_info("[INIT] Enabling object detection...");
 	sl::ObjectDetectionParameters obj_param;
 	obj_param.detection_model = sl::OBJECT_DETECTION_MODEL::CUSTOM_BOX_OBJECTS;
 	obj_param.enable_tracking = false;
@@ -91,6 +98,7 @@ bool ZEDDetection::init_zed()
 		log_error("Failed to enable object detection: " + string(sl::toString(err).c_str()));
 		return false;
 	}
+	log_info("[INIT] Object detection enabled - init_zed() complete");
 	return true;
 }
 
@@ -98,27 +106,35 @@ bool ZEDDetection::init_zed()
 
 void ZEDDetection::process_detections(const std::vector<sl::CustomBoxObjectData>& detections)
 {
+	log_info("[CB] process_detections called with " + to_string(detections.size()) + " detections");
 	if (!ZEDDetection::check_zed_status()) {
+	    log_info("[CB] check_zed_status returned false, skipping");
 	    return; // Skip processing if ZED health not OK
 	}
+	log_info("[CB] check_zed_status OK, ingesting custom boxes...");
 	
 	// Ingest custom boxes
 	zed.ingestCustomBoxObjects(detections);
+	log_info("[CB] Ingested, retrieving objects...");
 
 	sl::Objects objects;
 	zed.retrieveObjects(objects, obj_runtime_param);
+	log_info("[CB] Retrieved " + to_string(objects.object_list.size()) + " objects");
 	if (debug_logs) {
 	    LogDebugTable(detections, objects);
 	}
 	// Get VIO pose
+	log_info("[CB] Getting VIO pose...");
 	sl::Pose cam_pose;
 	sl::POSITIONAL_TRACKING_STATE tracking_state = zed.getPosition(cam_pose, sl::REFERENCE_FRAME::WORLD);
 	// Check tracking state and warn every second
 	if (tracking_state != sl::POSITIONAL_TRACKING_STATE::OK) {
-	    log_warn_throttle("Error in VIO tracking", 1000);
+	    log_warn_throttle("VIO tracking not OK - " + string(sl::toString(tracking_state).c_str()), 1000);
 	    return;
 	}
+	log_info("[CB] VIO OK, determining world positions...");
 	determine_world_position_zed_2D_boxes(objects, cam_pose);
+	log_info("[CB] process_detections complete");
 }
 
 std::tuple<vector<Eigen::Vector3d>, vector<Eigen::Matrix3d>, vector<string>, 
@@ -144,6 +160,7 @@ ZEDDetection::~ZEDDetection()
 bool ZEDDetection::check_zed_status()
 {
     // Grab frame
+	log_info("[CB] check_zed_status: calling zed.grab()...");
 	sl::ERROR_CODE grab_status = zed.grab(runtime_params);
 	if (grab_status == sl::ERROR_CODE::CORRUPTED_FRAME) {
 	    log_warn("Corrupted frame detected - skipping");
@@ -152,9 +169,10 @@ bool ZEDDetection::check_zed_status()
 
 	// only log failure to grab every second
 	if (grab_status != sl::ERROR_CODE::SUCCESS) {
-	    log_warn_throttle("Failed to grab frame", 1000);
+	    log_warn_throttle("Failed to grab frame: " + string(sl::toString(grab_status).c_str()), 1000);
 	    return false;
 	}
+	log_info("[CB] check_zed_status: grab OK, checking health...");
 
 	sl::HealthStatus health = zed.getHealthStatus();
 	// Check frame health, only log every 5 seconds
@@ -167,6 +185,7 @@ bool ZEDDetection::check_zed_status()
 	    log_warn_throttle("Low light conditions", 5000);
 	    return false;
 	}
+	log_info("[CB] check_zed_status: all checks passed");
 	
 	return true;
 }
