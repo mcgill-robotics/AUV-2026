@@ -1,0 +1,7 @@
+config:
+  depth_min:
+    actual: 0.0
+    sensor: 0.0
+  depth_max:
+    actual: 1.0
+    sensor: 1.0

@@ -68,6 +68,10 @@ install(DIRECTORY
         include/
         DESTINATION include/${PROJECT_NAME})
 
+install(DIRECTORY 
+        config/
+        DESTINATION config/${PROJECT_NAME})
+
 ament_export_include_directories(include)
 
 ament_package()

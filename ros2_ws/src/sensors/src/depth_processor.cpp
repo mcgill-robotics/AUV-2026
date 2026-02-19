@@ -1,4 +1,5 @@
 #include "sensors/depth_processor.hpp"
+#include "depth_calibration.hpp"
 
 // See ../README.md for explanation of what is being done by DepthProcessor
 // and variable naming conventions. 
@@ -28,6 +29,8 @@ DepthProcessor::DepthProcessor()
     
     q_iv_ = quatd::Identity();
 
+    //initialize depth calibration
+    load_depth_configuration();
 };
 
 void DepthProcessor::imu_callback(const sensor_msgs::msg::Imu::SharedPtr imu_in)
@@ -36,15 +39,13 @@ void DepthProcessor::imu_callback(const sensor_msgs::msg::Imu::SharedPtr imu_in)
     q_iv_ = q_iv;
 };
 
-
-
-
 void DepthProcessor::depth_callback(const std_msgs::msg::Float64::SharedPtr depth_in) const
 {
     const Vec3 r_vs_i = q_iv_ * r_vs_v_;
     const double r_vi_i_z = -depth_in->data + r_vs_i(2); // Add z-component of r_vs_i to depth measurement
-    float64_msg depth_out ;
-    depth_out.data = -r_vi_i_z;
+    float64_msg depth_out;
+
+    depth_out.data = get_calibrated_depth(-r_vi_i_z);
 
     depth_pub_->publish(depth_out);
 }; 
