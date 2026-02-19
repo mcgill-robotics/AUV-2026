@@ -57,8 +57,11 @@ if [ -z "${CI:-}" ]; then
     git config --global --add safe.directory $(pwd)/ros2_ws/src/Xsens_MTi_Driver || $SUDO git config --system --add safe.directory $(pwd)/ros2_ws/src/Xsens_MTi_Driver
     git config --global --add safe.directory $(pwd)/ros2_ws/src/ros-tcp-endpoint || $SUDO git config --system --add safe.directory $(pwd)/ros2_ws/src/ros-tcp-endpoint
     git config --global --add safe.directory $(pwd)/ros2_ws/src/zed-ros2-wrapper || $SUDO git config --system --add safe.directory $(pwd)/ros2_ws/src/zed-ros2-wrapper
-
-    # git submodule update --init --recursive --rebase
+    # do not exit on error
+    set +e
+    git submodule update --init --recursive
+    SUBMODULE_ERROR_CODE=$?
+    set -e
 else
     echo "Running in CI, skipping git submodule update (already handled by checkout action)."
 fi
@@ -216,6 +219,11 @@ fi
 # ---------------------------------------------------------
 if [ "$CAN_BUILD_ZED" = false ] && [ -f "$ZED_DIR/AMENT_IGNORE" ]; then
     rm "$ZED_DIR/AMENT_IGNORE"
+fi
+
+if [ SUBMODULE_ERROR_CODE -ne 0 ]; then
+    echo -e "\n⚠️  Warning: git submodule update failed with code $SUBMODULE_ERROR_CODE. Submodules may not be properly initialized."
+    echo "Please run 'git submodule update --init --recursive' manually to ensure all submodules are correctly set up."
 fi
 
 echo -e "\n✅ Build Complete. Don't forget to source:"
