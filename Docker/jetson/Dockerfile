@@ -200,7 +200,7 @@ RUN . /opt/ros/$ROS_DISTRO/install/setup.bash && \
   ' --no-warn-unused-cli' 
 
 # install micro-ROS
-WORKDIR /root/micro_ros_ws
+WORKDIR /opt/ros/micro_ros_ws
 # add repository and 
 RUN git clone -b $ROS_DISTRO https://github.com/micro-ROS/micro_ros_setup.git src/micro_ros_setup
 # build micro-ROS package and agent
@@ -212,7 +212,7 @@ RUN . /opt/ros/$ROS_DISTRO/install/setup.bash && \
         --event-handlers console_direct+ \
         --base-paths src \
         --cmake-args -DCMAKE_BUILD_TYPE=Release && \
-    . /root/micro_ros_ws/install/setup.sh && \
+    . /opt/ros/micro_ros_ws/install/setup.sh && \
     MICROROS_PREFIX=$(ros2 pkg prefix micro_ros_setup) && \
     ros2 run micro_ros_setup create_ws.sh src "$MICROROS_PREFIX/config/agent_ros2_packages.txt" "$MICROROS_PREFIX/config/agent_uros_packages.repos" && \
     colcon build \
@@ -261,5 +261,5 @@ RUN pip install --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} notebook \
 	pip install --ignore-install --upgrade typing_extensions
 
 # Source env variables
-RUN echo "source /opt/ros/humble/install/setup.bash && source /root/dependencies_ws/install/local_setup.bash && source /root/micro_ros_ws/install/local_setup.bash && source /root/AUV-2026/ros2_ws/install/setup.bash" >> ~/.bashrc
+RUN echo "source /opt/ros/humble/install/setup.bash && source /root/dependencies_ws/install/local_setup.bash && source /opt/ros/micro_ros_ws/install/local_setup.bash && source /root/AUV-2026/ros2_ws/install/setup.bash" >> ~/.bashrc
 CMD ["bash"]
