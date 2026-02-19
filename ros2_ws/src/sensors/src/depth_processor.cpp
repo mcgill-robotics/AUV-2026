@@ -14,7 +14,8 @@ DepthProcessor::DepthProcessor()
     this->get_parameter("r_vs_v", r_vs_v_vec);
     r_vs_v_ = Vec3(r_vs_v_vec[0], r_vs_v_vec[1], r_vs_v_vec[2]);
 
-    depth_pub_ = this->create_publisher<float64_msg>("auv_frame/depth", 10);
+    depth_processed_pub_ = this->create_publisher<float64_msg>("auv_frame/depth", 10);
+    depth_calibrated_pub_ = this->create_publisher<float64_msg>("auv_frame/depth-calibrated", 10);
     depth_sub_ = this->create_subscription<float64_msg>(
             "/sensors/depth/z",
             10,
@@ -43,11 +44,14 @@ void DepthProcessor::depth_callback(const std_msgs::msg::Float64::SharedPtr dept
 {
     const Vec3 r_vs_i = q_iv_ * r_vs_v_;
     const double r_vi_i_z = -depth_in->data + r_vs_i(2); // Add z-component of r_vs_i to depth measurement
-    float64_msg depth_out;
 
-    depth_out.data = get_calibrated_depth(-r_vi_i_z);
+    float64_msg depth_processed_out;
+    depth_processed_out.data = -r_vi_i_z;
+    depth_processed_pub_->publish(depth_processed_out);
 
-    depth_pub_->publish(depth_out);
+    float64_msg depth_calibrated_out;
+    depth_calibrated_out.data = get_calibrated_depth(depth_processed_out.data);
+    depth_calibrated_pub_->publish(depth_calibrated_out);
 }; 
 
 }
