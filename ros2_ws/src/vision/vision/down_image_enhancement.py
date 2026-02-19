@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import rclpy
 
 from vision.image_enhancement  import image_enhancement_utils
@@ -7,8 +8,7 @@ def main(args=None):
     rclpy.init(args=args)
 
     enhancer = enhance.ImageEnhancer(
-        enhance.DCPEnhancement(),
-        enhance.CLAHEEnhancement()
+        enhance.Identity()
     )
     enhance_node = image_enhancement_utils.EnhanceNode(
         node_name="down_image_enhancement",

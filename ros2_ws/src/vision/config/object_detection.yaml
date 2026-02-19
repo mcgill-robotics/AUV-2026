@@ -1,0 +1,35 @@
+# not the standard ROS node config parameters, these are topics passed to the object detection launch file
+front_cam:
+  enhanced_topic: /vision/front_cam/image_enhanced
+  detection_topic: /vision/front_cam/detections
+# relative to src directory
+  model_relative_path: models/frontcam.pt
+  class_names:
+    - "gate"
+    - "lane_marker"
+    - "red_pipe"
+    - "white_pipe"
+    - "octagon"
+    - "table"
+    - "bin"
+    - "board"
+    - "shark"
+    - "sawfish"
+# QOL queue size, how many messages to buffer if the node can't process them fast enough
+  queue_size: 10
+
+down_cam:
+  enhanced_topic: /vision/down_cam/image_enhanced
+  detection_topic: /vision/down_cam/detections
+# relative to src directory
+  model_relative_path: models/downcam.pt
+  class_names:
+    - "gate"
+    - "octagon_table"
+    - "octagon_top"
+    - "path_marker"
+    - "sawfish"
+    - "shark"
+# QOL queue size, how many messages to buffer if the node can't process them fast enough
+  queue_size: 10
+  
