@@ -96,7 +96,7 @@ std::vector<Track> ObjectTracker::update(
 
     // 6. Create new tracks
     create_new_tracks(unmatched_dets, measurements, classes, orientations, confidences);
-
+    
     return tracks;
 }  
 
@@ -176,6 +176,13 @@ std::vector<std::pair<size_t, size_t>> ObjectTracker::match_tracks(
     std::vector<size_t>& unmatched_tracks,
     std::vector<size_t>& unmatched_detections
 ) {
+    if (cost_matrix.empty()) {
+        // All detections are unmatched
+        // unmatched_tracks is already full of indices (but size 0)
+        // unmatched_detections is already full of indices
+        return {};
+    }
+
     HungarianAlgorithm solver;
 	
 	// FIX: Clear matches from previous frame!
@@ -203,12 +210,38 @@ std::vector<std::pair<size_t, size_t>> ObjectTracker::match_tracks(
         if (det_idx != -1 && cost_matrix[track_idx][det_idx] <= gating_threshold) {
             // Valid match, at this point det_idx must be positive i.e. valid size_t
             matches.push_back(std::make_pair(track_idx, det_idx));
+        } else {
+             // Debug print for rejected match?
+             // std::cerr << "[TRACKER] Rejected match: track " << track_idx << " det " << det_idx << " cost " << cost_matrix[track_idx][det_idx] << std::endl;
+        }
+    }
 
-            // TODO: Refactor unmatching function to client-side to prevent
-            // monolithic function
-            // Remove from unmatched lists
-            unmatched_tracks.erase(std::remove(unmatched_tracks.begin(), unmatched_tracks.end(), track_idx), unmatched_tracks.end());
-            unmatched_detections.erase(std::remove(unmatched_detections.begin(), unmatched_detections.end(), det_idx), unmatched_detections.end());
+    // Identify unmatched tracks and detections
+    // Efficiently remove matched indices
+    std::set<size_t> matched_track_indices;
+    std::set<size_t> matched_det_indices;
+    for(const auto& match : matches) {
+        matched_track_indices.insert(match.first);
+        matched_det_indices.insert(match.second);
+    }
+
+    // Filter unmatched_tracks
+    auto track_it = unmatched_tracks.begin();
+    while(track_it != unmatched_tracks.end()) {
+        if(matched_track_indices.count(*track_it)) {
+            track_it = unmatched_tracks.erase(track_it);
+        } else {
+            ++track_it;
+        }
+    }
+
+    // Filter unmatched_detections
+    auto det_it = unmatched_detections.begin();
+    while(det_it != unmatched_detections.end()) {
+        if(matched_det_indices.count(*det_it)) {
+            det_it = unmatched_detections.erase(det_it);
+        } else {
+            ++det_it;
         }
     }
 
@@ -225,6 +258,13 @@ void ObjectTracker::update_matched_tracks(
     for (const auto& match : matches) {
         int track_idx = match.first;
         int meas_idx = match.second;
+        
+        if (track_idx < 0 || track_idx >= (int)tracks.size()) {
+            continue;
+        }
+        if (meas_idx < 0 || meas_idx >= (int)measurements.size()) {
+             continue;
+        }
 
         Track& track = this->tracks[track_idx];
         

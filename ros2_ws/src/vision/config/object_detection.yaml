@@ -17,6 +17,7 @@ front_cam:
     - "sawfish"
 # QOL queue size, how many messages to buffer if the node can't process them fast enough
   queue_size: 10
+  publish_annotated_image: true
 
 down_cam:
   enhanced_topic: /vision/down_cam/image_enhanced
@@ -32,4 +33,5 @@ down_cam:
     - "shark"
 # QOL queue size, how many messages to buffer if the node can't process them fast enough
   queue_size: 10
+  publish_annotated_image: true
   

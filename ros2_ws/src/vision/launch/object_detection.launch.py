@@ -56,6 +56,7 @@ def generate_launch_description():
             {'input_topic': LaunchConfiguration('front_enhanced_topic')},
             {'output_topic': LaunchConfiguration('front_detections_topic')},
             {'queue_size': default_config["front_cam"]["queue_size"]},
+            {'publish_annotated_image': default_config["front_cam"].get("publish_annotated_image", False)},
         ]
     )
     down_detection_node = Node(
@@ -68,6 +69,7 @@ def generate_launch_description():
             {'input_topic': LaunchConfiguration('down_enhanced_topic')},
             {'output_topic': LaunchConfiguration('down_detections_topic')},
             {'queue_size': default_config["down_cam"]["queue_size"]},
+            {'publish_annotated_image': default_config["down_cam"].get("publish_annotated_image", False)},
         ]
     )
     launch_description = LaunchDescription()

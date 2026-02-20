@@ -9,6 +9,7 @@ import os
 import torch
 from cv_bridge import CvBridge
 from ultralytics import YOLO
+import cv2
 
 from sensor_msgs.msg import Image
 from vision_msgs.msg import Detection2DArray, Detection2D, ObjectHypothesisWithPose
@@ -23,6 +24,7 @@ class ObjectDetectorNode():
         self.node.declare_parameter('input_topic', Parameter.Type.STRING)
         self.node.declare_parameter('output_topic', Parameter.Type.STRING)
         self.node.declare_parameter('queue_size', Parameter.Type.INTEGER)
+        self.node.declare_parameter('publish_annotated_image', False)
  
 
         self.class_names = list(self.node.get_parameter('class_names').get_parameter_value().string_array_value)
@@ -31,6 +33,7 @@ class ObjectDetectorNode():
         input_topic = self.node.get_parameter('input_topic').get_parameter_value().string_value
         output_topic = self.node.get_parameter('output_topic').get_parameter_value().string_value
         queue_size = self.node.get_parameter('queue_size').get_parameter_value().integer_value
+        self.publish_annotated_image = self.node.get_parameter('publish_annotated_image').get_parameter_value().bool_value
 
         # Load YOLO
         self.bridge = CvBridge()
@@ -67,6 +70,16 @@ class ObjectDetectorNode():
         )
 
         self.node.get_logger().info(f"Publishing to output topic: {output_topic}")
+
+        # Publisher for annotated debug image
+        if self.publish_annotated_image:
+            self.pub_annotated_image = self.node.create_publisher(
+                Image,
+                output_topic + "/debug_image",
+                queue_size
+            )
+            self.node.get_logger().info(f"Publishing annotated debug image to: {output_topic}/debug_image")
+        
         self.node.get_logger().info(f"{self.node.get_name()} initialized.")
 
     def image_callback(self, msg: Image):
@@ -115,6 +128,22 @@ class ObjectDetectorNode():
                 detection.bbox.size_x = float(w)
                 detection.bbox.size_y = float(h)
                 
+                # Draw bounding box on the image for debugging
+                if self.publish_annotated_image:
+                    # Convert center x,y and width,height back to top-left and bottom-right corners
+                    # Ensure they are integers for cv2
+                    x1 = int(cx - w / 2)
+                    y1 = int(cy - h / 2)
+                    x2 = int(cx + w / 2)
+                    y2 = int(cy + h / 2)
+                    
+                    # Draw rectangle
+                    cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                    
+                    # Draw label and confidence
+                    label_text = f"{label} {conf:.2f}"
+                    cv2.putText(img, label_text, (x1, max(y1 - 10, 0)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                
                 # Hypothesis
                 hypothesis = ObjectHypothesisWithPose()
                 hypothesis.hypothesis.class_id = label
@@ -125,9 +154,19 @@ class ObjectDetectorNode():
 
         det_msg.detections = det_objects
         self.pub_detections.publish(det_msg)
+        
+        # Publish the annotated image
+        if self.publish_annotated_image:
+            try:
+                annotated_img_msg = self.bridge.cv2_to_imgmsg(img, encoding="bgr8")
+                annotated_img_msg.header = msg.header
+                self.pub_annotated_image.publish(annotated_img_msg)
+            except Exception as e:
+                self.node.get_logger().error(f"Failed to publish annotated image: {e}")
 
-        self.node.get_logger().debug(f"Published {len(det_objects)} detections")
-        stamp_time = Time.from_msg(msg.header.stamp)
-        current_time = self.node.get_clock().now()
-        time_diff = (current_time - stamp_time).nanoseconds / 1e9
-        self.node.get_logger().debug(f"Detection latency: {time_diff:.9f} seconds")
+        if len(det_objects) > 0:
+            self.node.get_logger().info(f"Published {len(det_objects)} detections")
+            stamp_time = Time.from_msg(msg.header.stamp)
+            current_time = self.node.get_clock().now()
+            time_diff = (current_time - stamp_time).nanoseconds / 1e9
+            self.node.get_logger().info(f"Detection latency: {time_diff:.9f} seconds")

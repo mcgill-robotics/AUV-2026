@@ -77,9 +77,8 @@ bool ZEDDetection::init_zed()
 	// Enable positional tracking for VIO
 	log_info("[INIT] Enabling positional tracking...");
 	sl::PositionalTrackingParameters pos_param;
-	pos_param.enable_imu_fusion = !use_stream; // Disable IMU fusion for stream input (no IMU data available)
+	pos_param.enable_imu_fusion = true;
 	pos_param.set_floor_as_origin = false;
-	log_info("[INIT] IMU fusion: " + string(pos_param.enable_imu_fusion ? "enabled" : "disabled (stream mode)"));
 	err = zed.enablePositionalTracking(pos_param);
 	if (err != sl::ERROR_CODE::SUCCESS) {
 		log_error("Failed to enable positional tracking: " + string(sl::toString(err).c_str()));
@@ -98,6 +97,10 @@ bool ZEDDetection::init_zed()
 		log_error("Failed to enable object detection: " + string(sl::toString(err).c_str()));
 		return false;
 	}
+
+    runtime_params.measure3D_reference_frame = sl::REFERENCE_FRAME::CAMERA;
+    obj_runtime_param.detection_confidence_threshold = 10;
+
 	log_info("[INIT] Object detection enabled - init_zed() complete");
 	return true;
 }
@@ -130,7 +133,7 @@ void ZEDDetection::process_detections(const std::vector<sl::CustomBoxObjectData>
 	// Check tracking state and warn every second
 	if (tracking_state != sl::POSITIONAL_TRACKING_STATE::OK) {
 	    log_warn_throttle("VIO tracking not OK - " + string(sl::toString(tracking_state).c_str()), 1000);
-	    return;
+	    // return;
 	}
 	log_info("[CB] VIO OK, determining world positions...");
 	determine_world_position_zed_2D_boxes(objects, cam_pose);
@@ -222,6 +225,10 @@ void ZEDDetection::determine_world_position_zed_2D_boxes(const sl::Objects& zed_
 
 		// Transform to world frame
 		Eigen::Vector3d world_pos = transform_to_world(pos, rotation, pose_translation);
+
+		// DEBUG PRINT: Compare local vs world
+		log_info("[CB] Detection (" + label_str + ") RAW local: {" + 
+			to_string(pos.x) + ", " + to_string(pos.y) + ", " + to_string(pos.z) + "}");
 
 		// Get covariance in world frame
 		Eigen::Matrix3d cov_world = get_world_covariance(obj.position_covariance, rotation);

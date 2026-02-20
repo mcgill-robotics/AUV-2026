@@ -153,7 +153,7 @@ public:
 	pose_publisher = this->create_publisher<geometry_msgs::msg::PoseStamped>(vio_pose_topic, 10);
 	// Subscriber for depth
 	depth_subscriber = this->create_subscription<std_msgs::msg::Float64 >(
-		"/sensors/depth", 10, std::bind(&ObjectMapNode::depth_callback, this, std::placeholders::_1)
+		"/sensors/depth/z", 10, std::bind(&ObjectMapNode::depth_callback, this, std::placeholders::_1)
 	);
 	RCLCPP_INFO(this->get_logger(), "Object Map Node has been initialized");
 	if (zed_sdk)
@@ -182,6 +182,11 @@ private:
 		RCLCPP_DEBUG(this->get_logger(), "[CB] Getting detections...");
 		const auto [measurements,covariances,classes,orientations,confidences] = zed_detector->GetDetections();
 		
+		for (size_t i = 0; i < measurements.size(); ++i) {
+			RCLCPP_INFO(this->get_logger(), "[CB] Detection %zu (%s): {X: %.2f, Y: %.2f, Z: %.2f}",
+				i, classes[i].c_str(), measurements[i].x(), measurements[i].y(), measurements[i].z());
+		}
+
 		// The classes returned by `GetDetections` are strings derived from int label inside `ZEDDetection`.
 		// So passing the correct int label is crucial.
 		
@@ -310,7 +315,7 @@ private:
 			}
 			
             if (box.label != -1) {
-			    box.is_grounded = false;
+			    box.is_static = true;
 			    zed_detections.push_back(box);
             }
 		}
