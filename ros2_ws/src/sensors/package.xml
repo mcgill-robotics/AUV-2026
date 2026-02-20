@@ -18,6 +18,8 @@
   <depend>sensor_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>message_filters</depend>
+  <depend>ament_index_cpp</depend>
+  <depend>yaml-cpp</depend>
   <build_depend>eigen3_cmake_module</build_depend>
   <depend>eigen</depend>
 
