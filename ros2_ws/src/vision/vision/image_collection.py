@@ -5,7 +5,8 @@
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image, CompressedImage
-from std_srvs.srv import SetBool
+from auv_msgs.srv import AutomaticCapture
+from std_srvs.srv import SetBool, Trigger 
 from cv_bridge import CvBridge, CvBridgeError
 import cv2
 import numpy as np
@@ -13,6 +14,7 @@ import os
 import subprocess
 from datetime import datetime
 import threading
+from functools import partial
 from pathlib import Path
 import yaml
 from ament_index_python.packages import get_package_share_directory
@@ -102,13 +104,15 @@ class ImageCollectionNode(Node):
         self.auto_timer = None
 
         # Service controlled capture state
-        self.service_capture_timer = None
+        self.service_capture_timer_front = None
         self.service_capture_timer_down = None
         self.service_capture_timer_depth = None
-        self.create_service(SetBool, '~/toggle_front_collection', self.toggle_front_collection_callback)
-        self.create_service(SetBool, '~/toggle_down_collection', self.toggle_down_collection_callback)
-        self.create_service(SetBool, '~/toggle_depth_collection', self.toggle_depth_collection_callback)
-        
+        self.create_service(AutomaticCapture, '~/toggle_front_collection', self.toggle_front_collection_service_callback)
+        self.create_service(AutomaticCapture, '~/toggle_down_collection', self.toggle_down_collection_service_callback)
+        self.create_service(AutomaticCapture, '~/toggle_depth_collection', self.toggle_depth_collection_service_callback)
+        self.create_service(Trigger, '~/toggle_manual_front_collection', partial(self.manual_save_image_service_callback, "front"))
+        self.create_service(Trigger, '~/toggle_manual_down_collection', partial(self.manual_save_image_service_callback, "down"))
+
         self.get_logger().info('Image Collection Node initialized')
         self.get_logger().info(f'Front cam dir: {self.front_cam_dir}')
         self.get_logger().info(f'Down cam dir: {self.down_cam_dir}')
@@ -239,27 +243,53 @@ class ImageCollectionNode(Node):
         
         return True
 
-    def toggle_front_collection_callback(self, request, response):
+    def manual_save_image_service_callback(self, camera_type, request, response): # Important note for function signature of service callbacks, add your args before request, reponse
+        """Save an image manually from specified camera"""
+        if (camera_type == "front" and self.service_capture_timer_front is not None) or \
+           (camera_type == "down" and self.service_capture_timer_down is not None):
+            response.message = 'Front collection already running'
+        else:
+            capture_success = self.save_image(camera_type)
+            response.message = "Collected image!" if capture_success else "Failed to collect image."
+            response.success = False if capture_success == False else True
+        
+        self.get_logger().info(response.message)
+        return response
+
+
+    def toggle_front_collection_service_callback(self, request, response):
         """Service callback to toggle front camera collection"""
         if request.data:
+            # Verify desired interval is valid
+            try:
+                interval_between_captures = float(request.time_interval)
+                if interval_between_captures <= 0.1:
+                    response.success = False
+                    response.message = "The input interval time is invalid! Make sure it is a float above 0.1"
+                    return response
+            except:
+                response.success = False
+                response.message = "The input interval time is invalid! Make sure it is a float above 0.1"
+                return response
+            
             # Start collection
-            if self.service_capture_timer is not None:
+            if self.service_capture_timer_front is not None:
                 response.success = True
                 response.message = 'Front collection already running'
             else:
-                self.service_capture_timer = self.create_timer(
-                    self.collection_interval, 
+                self.service_capture_timer_front = self.create_timer(
+                    interval_between_captures, 
                     lambda: self.save_image('front')
                 )
                 response.success = True
-                response.message = f'Started front collection (every {self.collection_interval}s)'
+                response.message = f'Started front collection (every {interval_between_captures}s)'
                 self.get_logger().info(response.message)
         else:
             # Stop collection
-            if self.service_capture_timer is not None:
-                self.service_capture_timer.cancel()
-                self.service_capture_timer.destroy()
-                self.service_capture_timer = None
+            if self.service_capture_timer_front is not None:
+                self.service_capture_timer_front.cancel()
+                self.service_capture_timer_front.destroy()
+                self.service_capture_timer_front = None
                 response.success = True
                 response.message = 'Stopped front collection'
                 self.get_logger().info(response.message)
@@ -269,20 +299,32 @@ class ImageCollectionNode(Node):
         
         return response
     
-    def toggle_down_collection_callback(self, request, response):
+    def toggle_down_collection_service_callback(self, request, response):
         """Service callback to toggle down camera collection"""
         if request.data:
+            # Verify desired interval is valid
+            try:
+                interval_between_captures = float(request.time_interval)
+                if interval_between_captures <= 0.1:
+                    response.success = False
+                    response.message = "The input interval time is invalid! Make sure it is a float above 0.1"
+                    return response
+            except:
+                response.success = False
+                response.message = "The input interval time is invalid! Make sure it is a float above 0.1"
+                return response
+            
             # Start collection
             if self.service_capture_timer_down is not None:
                 response.success = True
                 response.message = 'Down collection already running'
             else:
                 self.service_capture_timer_down = self.create_timer(
-                    self.collection_interval, 
+                    interval_between_captures, 
                     lambda: self.save_image('down')
                 )
                 response.success = True
-                response.message = f'Started down collection (every {self.collection_interval}s)'
+                response.message = f'Started down collection (every {interval_between_captures}s)'
                 self.get_logger().info(response.message)
         else:
             # Stop collection
@@ -299,21 +341,35 @@ class ImageCollectionNode(Node):
         
         return response
     
-    def toggle_depth_collection_callback(self, request, response):
+    def toggle_depth_collection_service_callback(self, request, response):
         """Service callback to toggle depth-only collection"""
+        # Verify desired interval is valid
+        try:
+            interval_between_captures = float(request.time_interval)
+            if interval_between_captures <= 0.1:
+                response.success = False
+                response.message = "The input interval time is invalid! Make sure it is a float above 0.1"
+                return response
+        except:
+            response.success = False
+            response.message = "The input interval time is invalid! Make sure it is a float above 0.1"
+            return response
+        
+        # Start collection
         if request.data:
             if self.service_capture_timer_depth is not None:
                 response.success = True
                 response.message = 'Depth collection already running'
             else:
                 self.service_capture_timer_depth = self.create_timer(
-                    self.collection_interval,
+                    interval_between_captures,
                     lambda: self.save_depth()
                 )
                 response.success = True
-                response.message = f'Started depth collection (every {self.collection_interval}s)'
+                response.message = f'Started depth collection (every {interval_between_captures}s)'
                 self.get_logger().info(response.message)
         else:
+            # Stop collection
             if self.service_capture_timer_depth is not None:
                 self.service_capture_timer_depth.cancel()
                 self.service_capture_timer_depth.destroy()

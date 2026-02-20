@@ -25,6 +25,7 @@ set(msg_files
 
 set(srv_files
 	"srv/SetInt32.srv"
+	"srv/AutomaticCapture.srv"
 )
 
 set(action_files

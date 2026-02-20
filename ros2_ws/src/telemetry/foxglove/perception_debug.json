@@ -1,72 +1,133 @@
 {
-        "globalVariables": {},
-        "userNodes": {},
-        "playbackConfig": {
-                "speed": 1
+  "globalVariables": {},
+  "userNodes": {},
+  "playbackConfig": {
+    "speed": 1
+  },
+  "layout": {
+    "first": "Tab!images",
+    "second": {
+      "first": {
+        "first": "CallService!startCollection",
+        "second": "CallService!stopCollection",
+        "direction": "column",
+        "splitPercentage": 53.09381237524949
+      },
+      "second": {
+        "first": "CallService!2eqhzsa",
+        "second": "RosOut!1",
+        "direction": "column",
+        "splitPercentage": 38.77463947435788
+      },
+      "direction": "column",
+      "splitPercentage": 43.29786717193801
+    },
+    "direction": "row",
+    "splitPercentage": 67.27714222199423
+  },
+  "configById": {
+    "Image!yolo": {
+      "cameraTopic": "/vision/debug_image",
+      "smooth": true,
+      "cameraState": {
+        "distance": 20,
+        "perspective": true,
+        "phi": 60,
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOffset": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "thetaOffset": 45,
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "scene": {},
+      "transforms": {},
+      "topics": {},
+      "layers": {},
+      "publish": {
+        "type": "point",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "imageMode": {
+        "imageTopic": "/down_cam/image_raw"
+      }
+    },
+    "Image!depth": {
+      "cameraTopic": "/zed/depth/depth_registered",
+      "smooth": true,
+      "colorMode": "colormap",
+      "colorMap": "turbo",
+      "minValue": 0,
+      "maxValue": 10
+    },
+    "Image!ref": {
+      "cameraTopic": "/zed/zed_node/rgb/color/rect/image/compressed",
+      "smooth": true
+    },
+    "Tab!images": {
+      "activeTabIdx": 0,
+      "tabs": [
+        {
+          "title": "YOLO Debug",
+          "layout": "Image!yolo"
         },
-        "layout": {
-                "first": "Tab!images",
-                "second": {
-                        "first": {
-                                "first": "CallService!startCollection",
-                                "second": "CallService!stopCollection",
-                                "direction": "column",
-                                "splitPercentage": 50
-                        },
-                        "second": "RosOut!1",
-                        "direction": "column",
-                        "splitPercentage": 40
-                },
-                "direction": "row",
-                "splitPercentage": 70
+        {
+          "title": "Depth Map",
+          "layout": "Image!depth"
         },
-        "configById": {
-                "Tab!images": {
-                        "activeTabIdx": 0,
-                        "tabs": [
-                                {
-                                        "title": "YOLO Debug",
-                                        "layout": "Image!yolo"
-                                },
-                                {
-                                        "title": "Depth Map",
-                                        "layout": "Image!depth"
-                                },
-                                {
-                                        "title": "Reference Cam",
-                                        "layout": "Image!ref"
-                                }
-                        ]
-                },
-                "Image!yolo": {
-                        "cameraTopic": "/vision/debug_image",
-                        "smooth": true
-                },
-                "Image!depth": {
-                        "cameraTopic": "/zed/depth/depth_registered",
-                        "smooth": true,
-                        "colorMode": "colormap",
-                        "colorMap": "turbo",
-                        "minValue": 0,
-                        "maxValue": 10
-                },
-                "Image!ref": {
-                        "cameraTopic": "/zed/zed_node/rgb/color/rect/image/compressed",
-                        "smooth": true
-                },
-                "CallService!startCollection": {
-                        "serviceName": "/image_collection/toggle_front_collection",
-                        "requestPayload": "{ \"data\": true }",
-                        "buttonText": "Start Collection"
-                },
-                "CallService!stopCollection": {
-                        "serviceName": "/image_collection/toggle_front_collection",
-                        "requestPayload": "{ \"data\": false }",
-                        "buttonText": "Stop Collection"
-                },
-                "RosOut!1": {
-                        "searchTerms": [],
-                        "minLogLevel": 1
-                }
+        {
+          "title": "Reference Cam",
+          "layout": "Image!ref"
         }
+      ]
+    },
+    "CallService!startCollection": {
+      "serviceName": "/image_collection/toggle_front_collection",
+      "requestPayload": "{ \"data\": true , \"time_interval\": 1}",
+      "buttonText": "Start Collection",
+      "layout": "vertical",
+      "timeoutSeconds": 10
+    },
+    "CallService!stopCollection": {
+      "serviceName": "/image_collection/toggle_front_collection",
+      "requestPayload": "{ \"data\": false , \"time_interval\": 0}",
+      "buttonText": "Stop Collection",
+      "layout": "vertical",
+      "timeoutSeconds": 10
+    },
+    "CallService!2eqhzsa": {
+      "requestPayload": "{}",
+      "layout": "vertical",
+      "timeoutSeconds": 10,
+      "buttonText": "Manual Image Capture",
+      "serviceName": "/image_collection/toggle_manual_front_collection"
+    },
+    "RosOut!1": {
+      "searchTerms": [],
+      "minLogLevel": 1,
+      "preload": true,
+      "nameFilter": {},
+      "fontSize": 12
+    }
+  }
 }

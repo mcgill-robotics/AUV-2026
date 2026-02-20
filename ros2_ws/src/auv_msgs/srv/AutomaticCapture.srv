@@ -1,0 +1,5 @@
+bool data
+float64 time_interval
+---
+bool success
+string message
