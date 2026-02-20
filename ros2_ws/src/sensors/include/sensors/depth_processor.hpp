@@ -34,11 +34,11 @@ class DepthProcessor: public rclcpp::Node
 		Vec3 r_vs_v_; // Vector from sensor frame to vehicle frame, expressed in vehicle frame	
 
 		// depth calibration parameters
+		bool calibrate_depth_;
 		double depth_slope_;
 		double depth_offset_;
 
                 rclcpp::Publisher<float64_msg>::SharedPtr depth_processed_pub_;
-                rclcpp::Publisher<float64_msg>::SharedPtr depth_calibrated_pub_;
                 rclcpp::Subscription<float64_msg>::SharedPtr depth_sub_;
 		rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
 		quatd q_iv_; // Current vehicle orientation 
