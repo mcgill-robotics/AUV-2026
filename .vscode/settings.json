@@ -32,7 +32,6 @@
         "**/log": true
     },
     "cSpell.words": [
-        "RTPS",
         "athackst",
         "autopep",
         "cmake",
@@ -54,7 +53,8 @@
         "uncrustify",
         "Wextra",
         "Wpedantic",
-        "xmllint"
+        "xmllint",
+        "Xsens"
     ],
     "cSpell.allowCompoundWords": true,
     "cSpell.ignorePaths": [
@@ -68,5 +68,6 @@
     ],
     "ros.distro": "humble",
     "python-envs.defaultEnvManager": "ms-python.python:system",
-    "python-envs.pythonProjects": []
+    "python-envs.pythonProjects": [],
+    "cmake.sourceDirectory": "/Users/stuartklenner/Downloads/McGill Robotics/AUV-2026/ros2_ws/build/micro_ros_agent/agent/src/xrceagent/test/case/packaging"
 }
