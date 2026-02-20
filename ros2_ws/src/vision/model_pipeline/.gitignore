@@ -1,0 +1,12 @@
+# Datasets - too large for git
+data/
+
+# Training runs and model weights: actually don't
+runs/
+*.pt
+# TensorRT engine files
+*.engine
+
+# Temp files
+__pycache__/
+*.pyc
