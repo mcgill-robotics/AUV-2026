@@ -81,7 +81,7 @@ install(DIRECTORY
 
 install(DIRECTORY 
         config/
-        DESTINATION config/${PROJECT_NAME})
+        DESTINATION share/${PROJECT_NAME}/config)
 
 ament_export_include_directories(include)
 

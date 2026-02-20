@@ -15,7 +15,7 @@ DepthProcessor::DepthProcessor()
     r_vs_v_ = Vec3(r_vs_v_vec[0], r_vs_v_vec[1], r_vs_v_vec[2]);
 
     depth_processed_pub_ = this->create_publisher<float64_msg>("auv_frame/depth", 10);
-    depth_calibrated_pub_ = this->create_publisher<float64_msg>("auv_frame/depth-calibrated", 10);
+    depth_calibrated_pub_ = this->create_publisher<float64_msg>("auv_frame/depth_calibrated", 10);
     depth_sub_ = this->create_subscription<float64_msg>(
             "/sensors/depth/z",
             10,
