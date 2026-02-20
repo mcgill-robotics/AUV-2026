@@ -1,5 +1,4 @@
 #include "sensors/depth_processor.hpp"
-#include "sensors/depth_calibration.hpp"
 
 // See ../README.md for explanation of what is being done by DepthProcessor
 // and variable naming conventions. 
@@ -30,8 +29,12 @@ DepthProcessor::DepthProcessor()
     
     q_iv_ = quatd::Identity();
 
-    //initialize depth calibration
-    load_depth_configuration();
+    double depth_min_actual = this->declare_parameter<double>("depth_min_actual");
+    double depth_min_sensor = this->declare_parameter<double>("depth_min_sensor");
+    double depth_max_actual = this->declare_parameter<double>("depth_max_actual");
+    double depth_max_sensor = this->declare_parameter<double>("depth_max_sensor");
+
+    set_depth_calibration(depth_min_actual, depth_min_sensor, depth_max_actual, depth_max_sensor);
 };
 
 void DepthProcessor::imu_callback(const sensor_msgs::msg::Imu::SharedPtr imu_in)
@@ -54,8 +57,20 @@ void DepthProcessor::depth_callback(const std_msgs::msg::Float64::SharedPtr dept
     depth_calibrated_pub_->publish(depth_calibrated_out);
 }; 
 
+void DepthProcessor::set_depth_calibration(double depth_min_actual, double depth_min_sensor, double depth_max_actual, double depth_max_sensor) {
+    double diff_expected = depth_max_actual - depth_min_actual;
+    double diff_sensor   = depth_max_sensor - depth_min_sensor;
+
+    depth_slope_  = diff_expected / diff_sensor;
+
+    depth_offset_ = depth_min_actual - depth_min_sensor;
 }
 
+double DepthProcessor::get_calibrated_depth(double base_depth) const {
+    return base_depth * depth_slope_ + depth_offset_;
+}
+
+}
 int main(int argc, char *argv[])
 {
 	rclcpp::init(argc, argv);

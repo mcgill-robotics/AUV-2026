@@ -17,8 +17,6 @@ find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(message_filters REQUIRED)
-find_package(yaml-cpp REQUIRED)
-find_package(ament_index_cpp REQUIRED)
 
 find_package(eigen3_cmake_module REQUIRED)
 find_package(Eigen3 REQUIRED)
@@ -41,18 +39,10 @@ target_include_directories(imu_processor PUBLIC
   $<INSTALL_INTERFACE:include>
 )
 
-add_library(depth_calibration src/depth_calibration.cpp)
-ament_target_dependencies(depth_calibration ament_index_cpp)
-target_link_libraries(depth_calibration yaml-cpp)
-target_include_directories(depth_calibration PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-
-)
 
 add_executable(depth_processor src/depth_processor.cpp)
 ament_target_dependencies(depth_processor rclcpp std_msgs geometry_msgs sensor_msgs sensor_msgs message_filters)
-target_link_libraries(depth_processor Eigen3::Eigen depth_calibration)
+target_link_libraries(depth_processor Eigen3::Eigen)
 target_include_directories(depth_processor PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
