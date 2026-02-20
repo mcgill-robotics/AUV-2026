@@ -1,6 +1,0 @@
-depth_min:
-  actual: 0.0
-  sensor: -0.04
-depth_max:
-  actual: 1.5
-  sensor: 1.1

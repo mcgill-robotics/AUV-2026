@@ -69,10 +69,6 @@ install(DIRECTORY
         include/
         DESTINATION include/${PROJECT_NAME})
 
-install(DIRECTORY 
-        config/
-        DESTINATION share/${PROJECT_NAME}/config)
-
 ament_export_include_directories(include)
 
 ament_package()
