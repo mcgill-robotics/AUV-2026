@@ -54,8 +54,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # ROS Build Tools
     python3-colcon-common-extensions \
     python3-rosdep \
-    python3-vcstools \
-    # Hardware & Devices
+    python3-vcstool \
+    sudo \
     tar \
     v4l-utils \
     usbutils \
