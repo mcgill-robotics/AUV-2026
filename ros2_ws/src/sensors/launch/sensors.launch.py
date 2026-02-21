@@ -16,7 +16,7 @@ def generate_launch_description():
 
     # Set Sim condition
     sim_condition = DeclareLaunchArgument(
-        "sim", default_value="false", description="no launch if in sim"
+        "sim", default_value="false", description="Launch sensors in simulation mode"
     )
 
     # Find other launch files to launch
