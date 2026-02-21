@@ -26,7 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-wheel \
     python3-colcon-common-extensions \
     python3-rosdep \
-    python3-vcstools \
+    python3-vcstool \
     sudo \
     tar \
     tmux \
