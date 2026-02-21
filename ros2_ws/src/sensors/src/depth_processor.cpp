@@ -13,7 +13,7 @@ DepthProcessor::DepthProcessor()
     this->get_parameter("r_vs_v", r_vs_v_vec);
     r_vs_v_ = Vec3(r_vs_v_vec[0], r_vs_v_vec[1], r_vs_v_vec[2]);
 
-    depth_pub_ = this->create_publisher<float64_msg>("auv_frame/depth", 10);
+    depth_processed_pub_ = this->create_publisher<float64_msg>("auv_frame/depth", 10);
     depth_sub_ = this->create_subscription<float64_msg>(
             "/sensors/depth/z",
             10,
@@ -28,6 +28,13 @@ DepthProcessor::DepthProcessor()
     
     q_iv_ = quatd::Identity();
 
+    calibrate_depth_ = this->declare_parameter<bool>("calibrate_depth");
+    double depth_min_actual = this->declare_parameter<double>("depth_min_actual");
+    double depth_min_sensor = this->declare_parameter<double>("depth_min_sensor");
+    double depth_max_actual = this->declare_parameter<double>("depth_max_actual");
+    double depth_max_sensor = this->declare_parameter<double>("depth_max_sensor");
+
+    set_depth_calibration(depth_min_actual, depth_min_sensor, depth_max_actual, depth_max_sensor);
 };
 
 void DepthProcessor::imu_callback(const sensor_msgs::msg::Imu::SharedPtr imu_in)
@@ -36,21 +43,34 @@ void DepthProcessor::imu_callback(const sensor_msgs::msg::Imu::SharedPtr imu_in)
     q_iv_ = q_iv;
 };
 
-
-
-
 void DepthProcessor::depth_callback(const std_msgs::msg::Float64::SharedPtr depth_in) const
 {
     const Vec3 r_vs_i = q_iv_ * r_vs_v_;
     const double r_vi_i_z = -depth_in->data + r_vs_i(2); // Add z-component of r_vs_i to depth measurement
-    float64_msg depth_out ;
-    depth_out.data = -r_vi_i_z;
 
-    depth_pub_->publish(depth_out);
+    float64_msg depth_processed_out;
+    double published_depth = -r_vi_i_z;
+    if (calibrate_depth_) {
+        published_depth = get_calibrated_depth(published_depth);
+    }
+    depth_processed_out.data = published_depth;
+    depth_processed_pub_->publish(depth_processed_out);
 }; 
 
+void DepthProcessor::set_depth_calibration(double depth_min_actual, double depth_min_sensor, double depth_max_actual, double depth_max_sensor) {
+    double diff_expected = depth_max_actual - depth_min_actual;
+    double diff_sensor   = depth_max_sensor - depth_min_sensor;
+
+    depth_slope_  = diff_expected / diff_sensor;
+
+    depth_offset_ = depth_min_actual - depth_min_sensor;
 }
 
+double DepthProcessor::get_calibrated_depth(double base_depth) const {
+    return base_depth * depth_slope_ + depth_offset_;
+}
+
+}
 int main(int argc, char *argv[])
 {
 	rclcpp::init(argc, argv);

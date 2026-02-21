@@ -1,0 +1,7 @@
+depth_processor:
+  ros__parameters:
+    calibrate_depth: false
+    depth_min_actual: 0.0 # Minimum expected depth (meters)
+    depth_min_sensor: -0.04 # Minimum sensor reading corresponding to depth_min_actual (meters)
+    depth_max_actual: 1.5 # Maximum expected depth (meters)
+    depth_max_sensor: 1.1 # Maximum sensor reading corresponding to depth_max_actual (meters)
