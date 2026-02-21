@@ -12,8 +12,6 @@
   <url type="repository">https://github.com/mcgill-robotics/AUV-2026</url>
   <author email="nadim.asmar@mail.mcgill.ca">Nadim Asmar</author>
 
-<buildtool_depend>ament_python</buildtool_depend>
-
 
         <exec_depend>rclpy</exec_depend>             
         <exec_depend>geometry_msgs</exec_depend>     

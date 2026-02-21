@@ -1,0 +1,34 @@
+# Global/common frames
+/**:
+  ros__parameters:
+    frame_id_auv: "auv_link"
+    frame_id_global: "pool_link" # Inertial frame, located at AUV's deployment point. 
+    # Orientation is that of auv_link at deployment time. 
+
+# IMU node parameters
+imu_processor:
+  ros__parameters:
+    frame_id: "imu_link"
+    # Position offset from sensor to AUV frame (meters)
+    offset_xyz: [0.0, 0.0, 0.0] # IMU is mounted at origin of AUV frame
+    # Orientation offset as quaternion from sensor to AUV frame. (w,x,y,z)
+    q_vs: [1.0, 0.0, 0.0, 0.0]
+
+# Depth node parameters
+depth_processor:
+  ros__parameters:
+    frame_id: "depth_link"
+    # Position offset from sensor to AUV frame (meters), expressed in AUV frame.
+    r_vs_v: [0.0624, 0.0585, 0.0962] # [m] Forward, Left, Up. 
+
+
+# DVL node parameters 
+dvl_processor:
+  ros__parameters:
+    frame_id: "dvl_link"
+    offset_xyz: [0.0, 0.0, 0.0] # TBD based on actual mounting
+    # Orientation offset as quaternion from sensor to AUV frame. (w,x,y,z)
+    q_vs: [1.0, 0.0, 0.0, 0.0]
+
+
+
