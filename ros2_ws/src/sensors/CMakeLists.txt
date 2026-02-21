@@ -25,7 +25,7 @@ find_package(Eigen3 REQUIRED)
 
 # --- Executables ---
 add_executable(state_aggregator src/State_aggregator.cpp)
-ament_target_dependencies(state_aggregator rclcpp std_msgs geometry_msgs sensor_msgs message_filters)
+ament_target_dependencies(state_aggregator rclcpp std_msgs std_srvs geometry_msgs sensor_msgs message_filters)
 target_link_libraries(state_aggregator Eigen3::Eigen)
 target_include_directories(state_aggregator PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
