@@ -31,19 +31,25 @@ jobs:
         include:
           - name: x86
             runner: ubuntu-22.04
-            context: Docker/dev
+            context: .
             file: Docker/dev/Dockerfile
             platform: linux/amd64
             suffix: amd64
+          - name: nvidia
+            runner: ubuntu-22.04
+            context: .
+            file: Docker/dev/Dockerfile.nvidia
+            platform: linux/amd64
+            suffix: nvidia-amd64
           - name: arm
             runner: ubuntu-22.04-arm
-            context: Docker/dev
+            context: .
             file: Docker/dev/Dockerfile
             platform: linux/arm64
             suffix: arm64
           - name: jetson
             runner: ubuntu-22.04-arm
-            context: Docker/jetson
+            context: .
             file: Docker/jetson/Dockerfile
             platform: linux/arm64
             suffix: jetson
@@ -60,8 +66,35 @@ jobs:
           submodules: recursive
           lfs: true
 
+      - uses: ./.github/actions/cleanup_disk
+
+      - name: Set Docker Tags
+        id: docker_tags
+        run: |
+          # 1. Determine the base tag (manual input or default 'dev')
+          BASE_TAG="${{ github.event.inputs.tag_name }}"
+          TAG_NAME="${BASE_TAG:-dev}"
+          
+          # 2. Define the image name
+          IMAGE="mcgillrobotics/auv_2026"
+          
+          # 3. Create the primary tag string (used for verification)
+          PRIMARY_TAG="$IMAGE:$TAG_NAME-${{ matrix.suffix }}"
+          
+          # 4. Create the list of tags to push
+          # Start with the primary tag
+          TAGS="$PRIMARY_TAG"
+          
+          # If this is a push to main, append the 'latest' tag
+          if [[ "${{ github.ref }}" == "refs/heads/main" && "${{ github.event_name }}" == "push" ]]; then
+            TAGS="$TAGS,$IMAGE:latest-${{ matrix.suffix }}"
+          fi
+          
+          echo "PRIMARY_TAG=$PRIMARY_TAG" >> $GITHUB_ENV
+          echo "DOCKER_TAGS=$TAGS" >> $GITHUB_ENV
+
       - name: Login to DockerHub
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           username: ${{ vars.DOCKERHUB_USERNAME }}
@@ -71,10 +104,12 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         shell: bash
         run: |
-          FULL_TAG="mcgillrobotics/auv_2026:${{ inputs.tag_name }}-${{ matrix.suffix }}"
-          ALLOW_OVERWRITE="${{ inputs.allow_overwrite }}"
+          FULL_TAG="${{ env.PRIMARY_TAG }}"
+          ALLOW_OVERWRITE="${{ github.event.inputs.allow_overwrite }}"
           
           # Check if tag exists on Docker Hub
+          # Note: This check only validates the PRIMARY tag to avoid accidental overwrite of explicit version.
+          # We generally don't check 'latest' here as it is intended to move.
           if docker manifest inspect "$FULL_TAG" > /dev/null 2>&1; then
             if [ "$ALLOW_OVERWRITE" = "true" ]; then
               echo "::warning::Tag '$FULL_TAG' already exists. Overwrite is ENABLED. Proceeding with building."
@@ -86,14 +121,31 @@ jobs:
             echo "Tag '$FULL_TAG' does not exist. Proceeding with building."
           fi
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      # - name: Set up Docker Buildx
+      #   uses: docker/setup-buildx-action@v3
 
-      - name: Build and optionally push image
+      - name: Build and Load image
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}
           platforms: ${{ matrix.platform }}
-          push: ${{ github.event_name == 'workflow_dispatch' }}
-          tags: mcgillrobotics/auv_2026:${{ inputs.tag_name || 'dev' }}-${{ matrix.suffix }}
+          load: true
+          push: false
+          tags: ${{ env.PRIMARY_TAG }}
+          build-args: |
+            CI=true
+
+      - name: Verify Build
+        run: |
+          docker run --rm --user $(id -u):$(id -g) -v ${{ github.workspace }}:/home/douglas/AUV-2026 ${{ env.PRIMARY_TAG }} /bin/bash -c "./build.sh -d"
+
+      - name: Push image
+        if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          platforms: ${{ matrix.platform }}
+          push: true
+          tags: ${{ env.DOCKER_TAGS }}
