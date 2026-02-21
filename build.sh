@@ -8,7 +8,7 @@ DEBUG_BUILD=false
 OFFLINE_BUILD=false
 PACKAGE_TO_BUILD=""
 
-while getopts ":cdp:" flag; do
+while getopts ":cdop:" flag; do
     case "${flag}" in
         c) 
             echo "Flag -c was set. ros2_ws packages will be built from scratch"
@@ -27,7 +27,7 @@ while getopts ":cdp:" flag; do
             PACKAGE_TO_BUILD="${OPTARG}"
             ;;
         *)
-            echo "Usage: $0 [-c] [-d] [-p <package_name>]"
+            echo "Usage: $0 [-c] [-d] [-o] [-p <package_name>]"
             exit 1
             ;;
     esac
@@ -55,6 +55,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROS_DISTRO=humble
 ROS_INSTALL=/opt/ros/$ROS_DISTRO/setup.bash
 
+SUBMODULE_ERROR_CODE=0
 # Initialize all git submodules
 # Skip in CI since GitHub Actions checkout already fetches submodules (avoids permission issues)
 if [ -z "${CI:-}" ]; then
@@ -234,7 +235,7 @@ if [ "$CAN_BUILD_ZED" = false ] && [ -f "$ZED_DIR/AMENT_IGNORE" ]; then
     rm "$ZED_DIR/AMENT_IGNORE"
 fi
 
-if [ SUBMODULE_ERROR_CODE -ne 0 ]; then
+if [ $SUBMODULE_ERROR_CODE -ne 0 ]; then
     echo -e "\n⚠️  Warning: git submodule update failed with code $SUBMODULE_ERROR_CODE. Submodules may not be properly initialized."
     echo "Please run 'git submodule update --init --recursive' manually to ensure all submodules are correctly set up."
 fi
