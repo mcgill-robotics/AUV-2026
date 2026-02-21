@@ -240,7 +240,7 @@ WORKDIR /opt/ros/micro_ros_ws
 RUN git clone -b $ROS_DISTRO https://github.com/micro-ROS/micro_ros_setup.git src/micro_ros_setup
 # build micro-ROS package and agent
 RUN . /opt/ros/$ROS_DISTRO/install/setup.bash && \
-    . /root/dependencies_ws/install/setup.bash && \
+    . /opt/dependencies_ws/install/setup.bash && \
     colcon build \
         --parallel-workers $(nproc) \
         --merge-install \
