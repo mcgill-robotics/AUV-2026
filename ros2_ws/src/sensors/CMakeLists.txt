@@ -14,6 +14,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(message_filters REQUIRED)
@@ -24,7 +25,7 @@ find_package(Eigen3 REQUIRED)
 
 # --- Executables ---
 add_executable(state_aggregator src/State_aggregator.cpp)
-ament_target_dependencies(state_aggregator rclcpp std_msgs geometry_msgs sensor_msgs message_filters)
+ament_target_dependencies(state_aggregator rclcpp std_msgs std_srvs geometry_msgs sensor_msgs message_filters)
 target_link_libraries(state_aggregator Eigen3::Eigen)
 target_include_directories(state_aggregator PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -40,7 +41,7 @@ target_include_directories(imu_processor PUBLIC
 )
 
 add_executable(depth_processor src/depth_processor.cpp)
-ament_target_dependencies(depth_processor rclcpp std_msgs geometry_msgs sensor_msgs sensor_msgs message_filters)
+ament_target_dependencies(depth_processor rclcpp std_msgs std_srvs geometry_msgs sensor_msgs sensor_msgs message_filters)
 target_link_libraries(depth_processor Eigen3::Eigen)
 target_include_directories(depth_processor PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
