@@ -238,9 +238,6 @@ RUN if getent group $USER_GID; then \
         && chmod 0440 /etc/sudoers.d/$USERNAME \
         && usermod -aG video,render -s /bin/bash $USERNAME
 
-# add micros ros workspace to new user's home so that they can source it
-RUN mv /root/micro_ros_ws /home/$USERNAME/micro_ros_ws && \
-    chown -R $USERNAME:$USERNAME /home/$USERNAME/micro_ros_ws
 
 # Install fixuid for dynamic UID/GID remapping at runtime
 ARG FIXUID_VERSION=0.6.0
