@@ -1,43 +1,73 @@
 cmake_minimum_required(VERSION 3.5)
 project(sensors)
 
-# Default to C++14
+# Default to C++17
 if(NOT CMAKE_CXX_STANDARD)
-	set(CMAKE_CXX_STANDARD 17)
+        set(CMAKE_CXX_STANDARD 17)
 endif()
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-	add_compile_options(-Wall -Wextra -Wpedantic)
+        add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
+# --- Dependencies ---
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(message_filters REQUIRED)
 
-add_executable(imu src/movella_republish.cpp)
-ament_target_dependencies(imu 
-	rclcpp 
-	std_msgs 
-	geometry_msgs 
-	sensor_msgs  
-	message_filters)
+find_package(eigen3_cmake_module REQUIRED)
+find_package(Eigen3 REQUIRED)
 
-target_include_directories(imu PUBLIC include/)
 
+# --- Executables ---
+add_executable(state_aggregator src/State_aggregator.cpp)
+ament_target_dependencies(state_aggregator rclcpp std_msgs std_srvs geometry_msgs sensor_msgs message_filters)
+target_link_libraries(state_aggregator Eigen3::Eigen)
+target_include_directories(state_aggregator PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+
+add_executable(imu_processor src/Imu_processor.cpp)
+ament_target_dependencies(imu_processor rclcpp std_msgs geometry_msgs sensor_msgs message_filters)
+target_link_libraries(imu_processor Eigen3::Eigen)
+target_include_directories(imu_processor PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+
+add_executable(depth_processor src/depth_processor.cpp)
+ament_target_dependencies(depth_processor rclcpp std_msgs std_srvs geometry_msgs sensor_msgs sensor_msgs message_filters)
+target_link_libraries(depth_processor Eigen3::Eigen)
+target_include_directories(depth_processor PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+
+# --- Install ---
 install(TARGETS
-	imu
-	DESTINATION lib/${PROJECT_NAME})
+  state_aggregator
+  imu_processor
+  depth_processor
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 install(DIRECTORY
-	launch/
-	DESTINATION share/${PROJECT_NAME})
+        launch/
+        DESTINATION share/${PROJECT_NAME})
+
+install(DIRECTORY 
+        params/
+        DESTINATION share/${PROJECT_NAME}/params
+)
 
 install(DIRECTORY
-	include/
-	DESTINATION include/${PROJECT_NAME})
+        include/
+        DESTINATION include/${PROJECT_NAME})
 
 ament_export_include_directories(include)
 

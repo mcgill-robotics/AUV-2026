@@ -3,7 +3,7 @@
 <package format="3">
   <name>sensors</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>ROS 2 sensor processing nodes and launch files.</description>
   <maintainer email="root@todo.todo">root</maintainer>
   <license>TODO: License declaration</license>
 
@@ -15,9 +15,12 @@
 
   <depend>rclcpp</depend>
   <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
   <depend>sensor_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>message_filters</depend>
+  <build_depend>eigen3_cmake_module</build_depend>
+  <depend>eigen</depend>
 
   <!-- runtime deps for down-facing USB camera -->
   <exec_depend>usb_cam</exec_depend>
