@@ -14,7 +14,7 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
+        (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.*')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -29,8 +29,9 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'image_collection = vision.image_collection:main',
-            'fake_camera_node = vision.fake_camera_node:main',
+                'image_collection = vision.image_collection:main',
+                'down_image_enhancement = vision.down_image_enhancement:main',
+                'front_image_enhancement = vision.front_image_enhancement:main',
         ],
     },
 )
