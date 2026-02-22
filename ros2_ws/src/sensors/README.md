@@ -19,7 +19,10 @@ These processed sensor streams are used downstream by the **EKF**, **controller*
     - [**2. Gyroscope angular rates**](#2-gyroscope-angular-rates)
     - [**3. Orientation**](#3-orientation)
   - [Depth Sensor Processing](#depth-sensor-processing)
+    - [Depth Calibration](#depth-calibration)
   - [DVL Processing](#dvl-processing)
+    - [**1. Homogeneous Transformation Logic**](#1-homogeneous-transformation-logic)
+    - [**2. Mathematical Transformation Equation**](#2-mathematical-transformation-equation)
   - [Usage](#usage)
   - [Nodes](#nodes)
     - [Published Topics](#published-topics)
@@ -178,6 +181,28 @@ $r_v^{vs}$: the vector from the sensor to the vehicle frame, expressed in the ve
 
 ---
 
+### Depth Calibration
+
+The depth sensors is calibrated by a simple linear rescaling of the raw pressure readings. The calibration parameters are determined by taking measurements of the depth sensor at both max depth and at the surface, and then solving for the linear rescaling parameters. Given the following:
+- $d_{\min}^{m}$: the processed depth sensor reading at the surface, found as $[r_i^{vi}]_z$ above when the AUV foam top is aligned to the surface of the pool
+- $d_{\max}^{m}$: the processed depth sensor reading at max depth found as $[r_i^{vi}]_z$ above when the AUV is at the bottom of the pool
+- $d_{\min}^{\ast}$: the true depth at the surface (measured by hand)
+- $d_{\max}^{\ast}$: the true depth at the bottom of the pool (measured by hand)
+
+Then, from the processed depth sensor reading, $d^{unc}$, we can calculate the calibrated depth, $d^{cal}$, as follows:
+$$
+d^{cal} = d_{\min}^{\ast} + \frac{d_{\max}^{\ast} - d_{\min}^{\ast}}{d_{\max}^{m} - d_{\min}^{m}} (d^{unc} - d_{\min}^{m})
+$$
+
+Some notes on implementation:
+- If the sensor readings are perfect, then $d_{\min}^{m} = d_{\min}^{\ast}$ and $d_{\max}^{m} = d_{\max}^{\ast}$, which implies $d^{cal} = d^{unc}$, as expected.
+- If $d_{\min}^{m} = d_{\min}^{\ast}$ and $d_{\max}^{m} = d_{\max}^{\ast}$, then the calibration will be assumed to be purely an offset based on the surface readings:
+$$
+d^{cal} = d^{unc} + (d_{\min}^{\ast} - d_{\min}^{m})
+$$
+- $d_{\min}^{m}$ and $d_{\max}^{m}$ are computed as the vehicle frame's depth (i.e. center of mass), which, means some minor vertical offsets will need to be applied to:
+   + $d_{\min}^{\ast}$: take the distance from the top of the AUV to the center of mass and add it to the true depth at the surface of the pool
+   + $d_{\max}^{\ast}$: take the distance from the bottom of the AUV to the center of mass and subtract it from the true depth at the bottom of the pool
 
 ## DVL Processing
 
