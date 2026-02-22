@@ -4,7 +4,7 @@ from rclpy.node import Node
 from std_msgs.msg import Int16MultiArray
 from geometry_msgs.msg import Wrench
 from propulsion.thrust_mapper_utils import force_to_pwm_thruster
-from time import sleep
+import rclpy.duration
 from std_srvs.srv import Trigger
 from auv_msgs.srv import SetInt32
 from ament_index_python.packages import get_package_share_directory
@@ -65,7 +65,7 @@ class DryTestNode(Node):
     def simultaneous_forwards_test(self, request, response):
         forward_test_msg = [force_to_pwm_thruster(i + 1, force_amt * MAX_FWD_FORCE) for i in range(8)]
         self.publish_thruster(forward_test_msg)
-        sleep(1)
+        self.get_clock().sleep_for(rclpy.duration.Duration(seconds=1.0))
         self.publish_thruster(reset_msg)
 
         response.success = True
@@ -83,7 +83,7 @@ class DryTestNode(Node):
         optimized_dry_test_msg = reset_msg.copy()
         optimized_dry_test_msg[thruster - 1] = force_to_pwm_thruster(thruster, force_amt * MAX_FWD_FORCE)
         self.publish_thruster(optimized_dry_test_msg)
-        sleep(1)
+        self.get_clock().sleep_for(rclpy.duration.Duration(seconds=1.0))
         self.publish_thruster(reset_msg)
 
         response.success = True
@@ -105,16 +105,16 @@ class DryTestNode(Node):
         test_msg = reset_msg.copy()
         test_msg[thruster - 1] = force_to_pwm_thruster(thruster, force_amt * MAX_FWD_FORCE)
         self.publish_thruster(test_msg)
-        sleep(1)
+        self.get_clock().sleep_for(rclpy.duration.Duration(seconds=1.0))
         
         # Stop
         self.publish_thruster(reset_msg)
         
-        sleep(0.5)
+        self.get_clock().sleep_for(rclpy.duration.Duration(seconds=0.5))
         # Backward
         test_msg[thruster - 1] = force_to_pwm_thruster(thruster, force_amt * MAX_BWD_FORCE)
         self.publish_thruster(test_msg)
-        sleep(1)
+        self.get_clock().sleep_for(rclpy.duration.Duration(seconds=1.0))
         
         # Stop
         self.publish_thruster(reset_msg)
@@ -131,9 +131,9 @@ class DryTestNode(Node):
         arming_msg = ([1540] * 8)
 
         self.publish_thruster(reset_msg)
-        sleep(1)
+        self.get_clock().sleep_for(rclpy.duration.Duration(seconds=1.0))
         self.publish_thruster(arming_msg)
-        sleep(1)
+        self.get_clock().sleep_for(rclpy.duration.Duration(seconds=1.0))
         self.publish_thruster(reset_msg)
 
         return response

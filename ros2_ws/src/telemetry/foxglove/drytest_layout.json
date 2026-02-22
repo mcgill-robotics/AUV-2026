@@ -70,9 +70,34 @@
       "serviceName": "/drytest_foxglove/test_thruster",
       "buttonText": "Test Thruster 8"
     },
+    "Plot!3q5gwrq": {
+      "paths": [
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/power/batteries/voltage.data[0]",
+          "enabled": true,
+          "color": "#4e98e2",
+          "id": "3f6a313c-9b26-4abd-bd66-acf342c20c55",
+          "label": "Battery 0"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/power/batteries/voltage.data[1]",
+          "enabled": true,
+          "color": "#f5774d",
+          "id": "fb09632d-d658-4654-830f-4051c03364a3",
+          "label": "Battery 1"
+        }
+      ],
+      "minYValue": 15,
+      "showPlotValuesInLegend": true
+    },
     "RosOut!1": {
       "searchTerms": [],
-      "minLogLevel": 1
+      "minLogLevel": 1,
+      "preload": true,
+      "nameFilter": {},
+      "fontSize": 12
     }
   },
   "globalVariables": {},
@@ -102,7 +127,7 @@
           "splitPercentage": 50
         },
         "direction": "column",
-        "splitPercentage": 50
+        "splitPercentage": 51.57821099257993
       },
       "second": {
         "first": {
@@ -119,16 +144,21 @@
             "splitPercentage": 50
           },
           "direction": "column",
-          "splitPercentage": 50
+          "splitPercentage": 50.286672185551254
         },
-        "second": "RosOut!1",
+        "second": {
+          "first": "Plot!3q5gwrq",
+          "second": "RosOut!1",
+          "direction": "row",
+          "splitPercentage": 26.22868605817452
+        },
         "direction": "column",
-        "splitPercentage": 60
+        "splitPercentage": 52.4223609211758
       },
       "direction": "column",
-      "splitPercentage": 40
+      "splitPercentage": 36.28535455685403
     },
     "direction": "column",
-    "splitPercentage": 15
+    "splitPercentage": 17.75708194582311
   }
 }
