@@ -11,8 +11,8 @@ from ament_index_python.packages import get_package_share_directory
 import yaml
 import os
 
-MAX_FWD_FORCE = 4 * 9.81 # Numbers from drytest in AUV-2025
-MAX_BWD_FORCE = -2 * 9.81 # Numbers from drytest in AUV-2025
+MAX_FWD_FORCE =  1 * 9.81 # Numbers from drytest in AUV-2025
+MAX_BWD_FORCE = -1 * 9.81 # Numbers from drytest in AUV-2025
 
 
 force_amt = 0.1
@@ -107,6 +107,10 @@ class DryTestNode(Node):
         self.publish_thruster(test_msg)
         sleep(1)
         
+        # Stop
+        self.publish_thruster(reset_msg)
+        
+        sleep(0.5)
         # Backward
         test_msg[thruster - 1] = force_to_pwm_thruster(thruster, force_amt * MAX_BWD_FORCE)
         self.publish_thruster(test_msg)
