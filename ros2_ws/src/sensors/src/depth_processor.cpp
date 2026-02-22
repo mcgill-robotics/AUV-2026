@@ -29,12 +29,14 @@ DepthProcessor::DepthProcessor()
     q_iv_ = quatd::Identity();
 
     calibrate_depth_ = this->declare_parameter<bool>("calibrate_depth");
-    double depth_min_actual = this->declare_parameter<double>("depth_min_actual");
-    double depth_min_sensor = this->declare_parameter<double>("depth_min_sensor");
-    double depth_max_actual = this->declare_parameter<double>("depth_max_actual");
-    double depth_max_sensor = this->declare_parameter<double>("depth_max_sensor");
-
-    set_depth_calibration(depth_min_actual, depth_min_sensor, depth_max_actual, depth_max_sensor);
+    
+    if (calibrate_depth_) {
+        double depth_min_actual = this->declare_parameter<double>("depth_min_actual");
+        double depth_min_sensor = this->declare_parameter<double>("depth_min_sensor");
+        double depth_max_actual = this->declare_parameter<double>("depth_max_actual");
+        double depth_max_sensor = this->declare_parameter<double>("depth_max_sensor");
+        set_depth_calibration(depth_min_actual, depth_min_sensor, depth_max_actual, depth_max_sensor);
+    }
 };
 
 void DepthProcessor::imu_callback(const sensor_msgs::msg::Imu::SharedPtr imu_in)
@@ -60,10 +62,22 @@ void DepthProcessor::depth_callback(const std_msgs::msg::Float64::SharedPtr dept
 void DepthProcessor::set_depth_calibration(double depth_min_actual, double depth_min_sensor, double depth_max_actual, double depth_max_sensor) {
     double diff_expected = depth_max_actual - depth_min_actual;
     double diff_sensor   = depth_max_sensor - depth_min_sensor;
-
+    
+    if (diff_sensor == 0 && diff_expected == 0) {
+        RCLCPP_INFO(this->get_logger(), "No range provided for both expected and sensor values. Assuming offset calibration only.");
+        depth_slope_ = 1.0;
+        depth_offset_ = depth_min_actual - depth_min_sensor;
+        return;
+    }
+    if (diff_sensor == 0 && diff_expected > 0) {
+        RCLCPP_WARN(this->get_logger(), "Unable to set depth calibration: sensor min and max are the same. Please ensure to include at least two different measurements.");
+        calibrate_depth_ = false;
+        return;
+    } 
+    
     depth_slope_  = diff_expected / diff_sensor;
-
     depth_offset_ = depth_min_actual - depth_min_sensor;
+
 }
 
 double DepthProcessor::get_calibrated_depth(double base_depth) const {
