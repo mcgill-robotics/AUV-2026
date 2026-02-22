@@ -62,11 +62,12 @@ void DepthProcessor::depth_callback(const std_msgs::msg::Float64::SharedPtr dept
 void DepthProcessor::set_depth_calibration(double depth_min_actual, double depth_min_sensor, double depth_max_actual, double depth_max_sensor) {
     double diff_expected = depth_max_actual - depth_min_actual;
     double diff_sensor   = depth_max_sensor - depth_min_sensor;
+    actual_offset_ = depth_min_actual;
+    sensor_offset_ = depth_min_sensor;
     
     if (diff_sensor == 0 && diff_expected == 0) {
         RCLCPP_INFO(this->get_logger(), "No range provided for both expected and sensor values. Assuming offset calibration only.");
         depth_slope_ = 1.0;
-        depth_offset_ = depth_min_actual - depth_min_sensor;
         return;
     }
     if (diff_sensor == 0 && diff_expected > 0) {
@@ -74,14 +75,11 @@ void DepthProcessor::set_depth_calibration(double depth_min_actual, double depth
         calibrate_depth_ = false;
         return;
     } 
-    
     depth_slope_  = diff_expected / diff_sensor;
-    depth_offset_ = depth_min_actual - depth_min_sensor;
-
 }
 
-double DepthProcessor::get_calibrated_depth(double base_depth) const {
-    return base_depth * depth_slope_ + depth_offset_;
+double DepthProcessor::get_calibrated_depth(double uncalibrated_depth) const {
+    return (uncalibrated_depth + sensor_offset_) * depth_slope_ + actual_offset_;
 }
 
 }

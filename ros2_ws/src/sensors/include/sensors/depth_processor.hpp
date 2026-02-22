@@ -36,7 +36,8 @@ class DepthProcessor: public rclcpp::Node
 		// depth calibration parameters
 		bool calibrate_depth_;
 		double depth_slope_;
-		double depth_offset_;
+		double actual_offset_;
+		double sensor_offset_;
 
                 rclcpp::Publisher<float64_msg>::SharedPtr depth_processed_pub_;
                 rclcpp::Subscription<float64_msg>::SharedPtr depth_sub_;
