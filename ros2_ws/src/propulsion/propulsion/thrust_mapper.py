@@ -93,7 +93,7 @@ class ThrusterMapper(Node):
         # --- Subscriber
         self.sub_cmd = self.create_subscription(
             Wrench,
-            'controls/total_effort',
+            'controls/effort',
             self.wrench_to_thrust,
             qos
         )

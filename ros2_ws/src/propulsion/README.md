@@ -20,6 +20,7 @@ This process occurs in two stages:
   - [Running](#running)
 - [License](#license)
 
+
 ## Overview
 The [wrench](https://docs.ros.org/en/noetic/api/geometry_msgs/html/msg/Wrench.html) consists of forces AND torques on the X,Y,Z axes. These are distributed to the thrusters using the following allocation matrix:
 
@@ -108,11 +109,8 @@ After build is complete, make the packages visible to ROS
 
 Launch all package nodes
 
-	ros2 launch propulsion propulsion.launch.py
+	ros2 launch propulsion thrust_mapper.launch.py
 
-| Argument | Default | Description |
-| :--- | :--- | :--- | 
-| `sim` | `false` | Run in simulation mode
 
 ### License
 
