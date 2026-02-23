@@ -2,49 +2,52 @@
 
 namespace sensors {
 
+
+
 DvlProcessor::DvlProcessor(const Vec3& r_dv_v) 
     : r_dv_v_(r_dv_v) {}
 
-Vec3 DvlProcessor::process(const Vec3& r_di_i, const Quatd& q_vi) const {
-    return r_di_i - (q_vi * r_dv_v_);
+Vec3 DvlProcessor::process(const Vec3& r_di_i, const Quatd& q_iv) const {
+    return r_di_i - (q_iv * r_dv_v_);
 }
+
+
 
 DvlNode::DvlNode() : Node("dvl_processor") {
-    q_vi_.setIdentity();
+    q_iv_.setIdentity();
+// gets parameters from yaml file using ros2 node function declare_parameter, if yaml file is empty then it sets r_dv_v to 0,0,0
+    this->declare_parameter<std::vector<double>>("r_dv_v", {0.0, 0.0, 0.0});
 
-    this->declare_parameter("r_dv_v.x", 0.0);
-    this->declare_parameter("r_dv_v.y", 0.0);
-    this->declare_parameter("r_dv_v.z", 0.0);
+// creates a vector r_dv_v_vec and then sets it equal to r_dv_v
+    std::vector<double> r_dv_v_vec;
+    this->get_parameter("r_dv_v", r_dv_v_vec);
 
-    double x = this->get_parameter("r_dv_v.x").as_double();
-    double y = this->get_parameter("r_dv_v.y").as_double();
-    double z = this->get_parameter("r_dv_v.z").as_double();
-
-    processor_ = std::make_unique<DvlProcessor>(Vec3(x, y, z));
+    processor_ = std::make_unique<DvlProcessor>(Vec3(r_dv_v_vec[0], r_dv_v_vec[1], r_dv_v_vec[2]));
 
     imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
-        "imu/data", 10, std::bind(&DvlNode::imu_callback, this, std::placeholders::_1));
+        "auv_frame/imu", 10, std::bind(&DvlNode::imu_callback, this, std::placeholders::_1));
 
-    dvl_sub_ = this->create_subscription<geometry_msgs::msg::PointStamped>(
-        "dvl/position", 10, std::bind(&DvlNode::dvl_callback, this, std::placeholders::_1));
-
-    state_pub_ = this->create_publisher<geometry_msgs::msg::PointStamped>("state_estimation", 10);
-
-    RCLCPP_INFO(this->get_logger(), "DvlProcessor started with Offset: [%.3f, %.3f, %.3f]", x, y, z);
+    dvl_sub_ = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
+            "dvl/dead_reckoning", 10, std::bind(&DvlNode::dvl_callback, this, std::placeholders::_1));
+    
+    state_pub_ = this->create_publisher<geometry_msgs::msg::PointStamped>("auv_frame/position", 10); 
 }
+
+
 
 void DvlNode::imu_callback(const sensor_msgs::msg::Imu::SharedPtr msg) {
-    q_vi_.w() = msg->orientation.w;
-    q_vi_.x() = msg->orientation.x;
-    q_vi_.y() = msg->orientation.y;
-    q_vi_.z() = msg->orientation.z;
-    q_vi_.normalize();
+    q_iv_.w() = msg->orientation.w;
+    q_iv_.x() = msg->orientation.x;
+    q_iv_.y() = msg->orientation.y;
+    q_iv_.z() = msg->orientation.z;
 }
 
-void DvlNode::dvl_callback(const geometry_msgs::msg::PointStamped::SharedPtr msg) {
-    Vec3 r_di_i(msg->point.x, msg->point.y, msg->point.z);
 
-    Vec3 r_vi_i = processor_->process(r_di_i, q_vi_);
+void DvlNode::dvl_callback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg) {
+
+    Vec3 r_di_i(msg->pose.pose.position.x, msg->pose.pose.position.y, msg->pose.pose.position.z);
+
+    Vec3 r_vi_i = processor_->process(r_di_i, q_iv_);
 
     geometry_msgs::msg::PointStamped output;
     output.header = msg->header;
@@ -54,8 +57,9 @@ void DvlNode::dvl_callback(const geometry_msgs::msg::PointStamped::SharedPtr msg
 
     state_pub_->publish(output);
 }
-
 } // namespace sensors
+
+
 
 int main(int argc, char * argv[]) {
     rclcpp::init(argc, argv);
