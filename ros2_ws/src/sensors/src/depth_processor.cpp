@@ -37,6 +37,7 @@ DepthProcessor::DepthProcessor()
     
     if (calibrate_depth_) {
         // only time we allow defaults since this is an internal parameter
+        allow_calibration_ = this->declare_parameter<bool>("allow_calibration",true);
         depth_offset_ = this->declare_parameter<double>("depth_offset");
         calibration_window_size_ = this->declare_parameter<int>("calibration_window_size");
     }
@@ -74,7 +75,14 @@ void DepthProcessor::calibrate_callback(
         return;
     }
 
+    if (!allow_calibration_) {
+        response->success = false;
+        response->message = "Calibration is not allowed as it has likely been called previously in this run. Set allow_calibration parameter to true to enable: ros2 param set /depth_processor allow_calibration true.";
+        return;
+    }
+
     calibration_active_ = true;
+    allow_calibration_ = false; // only allow calibration to be started once per run to prevent accidental resets of calibration
 
     response->success = true;
     response->message = "Calibration started. Averaging next " + std::to_string(calibration_window_size_) + " depth samples.";

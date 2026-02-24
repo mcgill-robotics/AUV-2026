@@ -38,6 +38,7 @@ class DepthProcessor: public rclcpp::Node
 
 		// depth calibration parameters
 		bool calibrate_depth_;
+		bool allow_calibration_;
 		bool calibration_active_;
 		double depth_offset_; // Depth offset to be added to depth measurement (meters)
 		int calibration_window_size_; 
