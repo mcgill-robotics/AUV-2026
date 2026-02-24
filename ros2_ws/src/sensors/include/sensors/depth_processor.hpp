@@ -26,18 +26,13 @@ class DepthProcessor: public rclcpp::Node
 		void depth_callback(const std_msgs::msg::Float64::SharedPtr depth_in) const;
 		void imu_callback(const sensor_msgs::msg::Imu::SharedPtr imu_in);
 
-		// depth calibration
-		void set_depth_calibration(double depth_min_actual, double depth_min_sensor, double depth_max_actual, double depth_max_sensor);
-
 		double get_calibrated_depth(double base_depth) const;
 
 		Vec3 r_vs_v_; // Vector from sensor frame to vehicle frame, expressed in vehicle frame	
 
 		// depth calibration parameters
 		bool calibrate_depth_;
-		double depth_slope_;
-		double actual_offset_;
-		double sensor_offset_;
+		double depth_offset_; // Depth offset to be added to depth measurement (meters)
 
                 rclcpp::Publisher<float64_msg>::SharedPtr depth_processed_pub_;
                 rclcpp::Subscription<float64_msg>::SharedPtr depth_sub_;
