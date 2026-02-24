@@ -4,6 +4,7 @@
 #include <std_msgs/msg/float64.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <geometry_msgs/msg/vector3_stamped.hpp>
+#include <std_srvs/srv/trigger.hpp>
 #include <message_filters/subscriber.h>
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
@@ -25,6 +26,9 @@ class DepthProcessor: public rclcpp::Node
 
 		void depth_callback(const std_msgs::msg::Float64::SharedPtr depth_in) const;
 		void imu_callback(const sensor_msgs::msg::Imu::SharedPtr imu_in);
+		void calibrate_callback(
+			const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+			std::shared_ptr<std_srvs::srv::Trigger::Response> response);
 
 		double get_calibrated_depth(double base_depth) const;
 
@@ -37,7 +41,15 @@ class DepthProcessor: public rclcpp::Node
                 rclcpp::Publisher<float64_msg>::SharedPtr depth_processed_pub_;
                 rclcpp::Subscription<float64_msg>::SharedPtr depth_sub_;
 		rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
+		rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr calibrate_srv_;
 		quatd q_iv_; // Current vehicle orientation 
+
+		// Calibration variables
+		double zero_offset_;
+		bool calibration_active_;
+		int calibration_sample_count_;
+		double calibration_sample_sum_;
+		static constexpr int calibration_window_size_ = 5; 
 
 };
 } // namespace sensors

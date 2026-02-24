@@ -25,6 +25,11 @@ DepthProcessor::DepthProcessor()
         10,
         std::bind(&DepthProcessor::imu_callback, this, std::placeholders::_1)
     );
+
+    calibrate_srv_ = this->create_service<std_srvs::srv::Trigger>(
+        "/depth_processor/calibrate",
+        std::bind(&DepthProcessor::calibrate_callback, this, std::placeholders::_1, std::placeholders::_2)
+    );
     
     q_iv_ = quatd::Identity();
 
@@ -55,10 +60,28 @@ void DepthProcessor::depth_callback(const std_msgs::msg::Float64::SharedPtr dept
     depth_processed_pub_->publish(depth_processed_out);
 }; 
 
+void DepthProcessor::calibrate_callback(
+    const std::shared_ptr<std_srvs::srv::Trigger::Request> /*request*/,
+    std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+{
+    if (calibration_active_) {
+        response->success = false;
+        response->message = "Calibration already in progress.";
+        return;
+    }
+
+    calibration_active_ = true;
+    calibration_sample_count_ = 0;
+    calibration_sample_sum_ = 0.0;
+
+    response->success = true;
+    response->message = "Calibration started. Averaging next " + std::to_string(calibration_window_size_) + " depth samples.";
+    RCLCPP_INFO(this->get_logger(), "Depth calibration started.");
+}
+
 double DepthProcessor::get_calibrated_depth(double uncalibrated_depth) const {
     return uncalibrated_depth + depth_offset_;
 }
-
 }
 int main(int argc, char *argv[])
 {
