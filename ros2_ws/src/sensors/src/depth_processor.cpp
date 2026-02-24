@@ -25,8 +25,17 @@ DepthProcessor::DepthProcessor()
         10,
         std::bind(&DepthProcessor::imu_callback, this, std::placeholders::_1)
     );
+
+    calibrate_srv_ = this->create_service<std_srvs::srv::Trigger>(
+        "/depth_processor/calibrate",
+        std::bind(&DepthProcessor::calibrate_callback, this, std::placeholders::_1, std::placeholders::_2)
+    );
     
     q_iv_ = quatd::Identity();
+    zero_offset_ = 0.0;
+    calibration_active_ = false;
+    calibration_sample_count_ = 0;
+    calibration_sample_sum_ = 0.0;
 
 };
 
@@ -39,15 +48,47 @@ void DepthProcessor::imu_callback(const sensor_msgs::msg::Imu::SharedPtr imu_in)
 
 
 
-void DepthProcessor::depth_callback(const std_msgs::msg::Float64::SharedPtr depth_in) const
+void DepthProcessor::depth_callback(const std_msgs::msg::Float64::SharedPtr depth_in)
 {
     const Vec3 r_vs_i = q_iv_ * r_vs_v_;
     const double r_vi_i_z = -depth_in->data + r_vs_i(2); // Add z-component of r_vs_i to depth measurement
+    const double uncalibrated_depth = -r_vi_i_z;
+
+    if (calibration_active_) {
+        calibration_sample_sum_ += uncalibrated_depth;
+        calibration_sample_count_ += 1;
+
+        if (calibration_sample_count_ >= calibration_window_size_) {
+            zero_offset_ = calibration_sample_sum_ / static_cast<double>(calibration_window_size_);
+            calibration_active_ = false;
+            RCLCPP_INFO(this->get_logger(), "Depth calibration complete. zero_offset=%.6f", zero_offset_);
+        }
+    }
+
     float64_msg depth_out ;
-    depth_out.data = -r_vi_i_z;
+    depth_out.data = uncalibrated_depth - zero_offset_;
 
     depth_pub_->publish(depth_out);
 }; 
+
+void DepthProcessor::calibrate_callback(
+    const std::shared_ptr<std_srvs::srv::Trigger::Request> /*request*/,
+    std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+{
+    if (calibration_active_) {
+        response->success = false;
+        response->message = "Calibration already in progress.";
+        return;
+    }
+
+    calibration_active_ = true;
+    calibration_sample_count_ = 0;
+    calibration_sample_sum_ = 0.0;
+
+    response->success = true;
+    response->message = "Calibration started. Averaging next " + std::to_string(calibration_window_size_) + " depth samples.";
+    RCLCPP_INFO(this->get_logger(), "Depth calibration started.");
+}
 
 }
 

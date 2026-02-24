@@ -11,8 +11,9 @@ namespace controls
         this->declare_parameter<double>("P_wy", 1.0);
         this->declare_parameter<double>("P_wz", 1.0);
         this->declare_parameter<double>("buoyancy", 278.0); // Newtons
-        this->declare_parameter<std::vector<double>>("r_bv", {0.0, 0.0, 0.023}); // [m] From CAD Model
+        this->declare_parameter<std::vector<double>>("r_bv_v", {0.0, 0.0, 0.023}); // [m] From CAD Model
         this->declare_parameter<double>("control_loop_hz", 10.0); // Control loop frequency
+        this->declare_parameter<bool>("enabled", false);
 
         this->get_parameter("P_ex", P_ex_);
         this->get_parameter("P_ey", P_ey_);
@@ -21,8 +22,9 @@ namespace controls
         this->get_parameter("P_wy", P_wy_);
         this->get_parameter("P_wz", P_wz_);
         this->get_parameter("buoyancy", buoyancy_);
-        this->get_parameter("r_bv", r_bv_);
+        this->get_parameter("r_bv_v", r_bv_v_);
         this->get_parameter("control_loop_hz", control_loop_hz_);
+        this->get_parameter("enabled", enabled_);
 
         q_iv_ = quatd::Identity(); // Initial orientation: identity quaternion
         w_iv_ = Vec3::Zero(); // Initial angular velocity: zero vector
@@ -47,6 +49,9 @@ namespace controls
             "/controls/quaternion_setpoint",
             1,
             std::bind(&AttitudeController::target_orientation_callback, this, std::placeholders::_1)
+        );
+        parameter_callback_handle_ = this->add_on_set_parameters_callback(
+            std::bind(&AttitudeController::parameters_callback, this, std::placeholders::_1)
         );
 
         control_timer_ = this->create_wall_timer(
@@ -89,16 +94,18 @@ namespace controls
         quatd q_error = q_iv_.conjugate() * q_iv2;
         Vec3 error_vector = Vec3(q_error.x(), q_error.y(), q_error.z());
         Vec3 feedback = P_e_ * error_vector - P_w_ * w_iv_; //TODO: Verify sign conventions
+        RCLCPP_INFO(this->get_logger(), "Feedback effort: [%f, %f, %f]", feedback.x(), feedback.y(), feedback.z());
         return feedback;
     }
 
     Vec3 AttitudeController::feedforward_effort()
     {
         // Compute the torque due to buoyancy offset
-        Vec3 r_bv_vec(r_bv_[0], r_bv_[1], r_bv_[2]);
+        Vec3 r_bv_vec(r_bv_v_[0], r_bv_v_[1], r_bv_v_[2]);
         Vec3 f_buoyancy = q_iv_.conjugate() * Vec3(0, 0, buoyancy_);
         Vec3 torque_buoyancy = r_bv_vec.cross(f_buoyancy);
         Vec3 feedforward = -1 * torque_buoyancy; // Negate to counteract
+        RCLCPP_INFO(this->get_logger(), "Feedforward effort: [%f, %f, %f]", feedforward.x(), feedforward.y(), feedforward.z());
         return feedforward;
     }
 
@@ -121,8 +128,52 @@ namespace controls
 
     void AttitudeController::control_loop_callback()
     {
-        wrench_msg effort = compute_control_effort();
+        wrench_msg effort;
+        if (enabled_)
+        {
+            effort = compute_control_effort();
+        }
+        else
+        {
+            effort.force.x = 0.0;
+            effort.force.y = 0.0;
+            effort.force.z = 0.0;
+            effort.torque.x = 0.0;
+            effort.torque.y = 0.0;
+            effort.torque.z = 0.0;
+        }
+
         pub_effort_->publish(effort);
+    }
+
+    rcl_interfaces::msg::SetParametersResult AttitudeController::parameters_callback(
+        const std::vector<rclcpp::Parameter> &parameters
+    )
+    {
+        rcl_interfaces::msg::SetParametersResult result;
+        result.successful = true;
+
+        for (const auto &parameter : parameters)
+        {
+            if (parameter.get_name() == "enabled")
+            {
+                if (parameter.get_type() != rclcpp::ParameterType::PARAMETER_BOOL)
+                {
+                    result.successful = false;
+                    result.reason = "'enabled' must be a bool";
+                    return result;
+                }
+
+                enabled_ = parameter.as_bool();
+                RCLCPP_INFO(
+                    this->get_logger(),
+                    "Attitude controller enabled: %s",
+                    enabled_ ? "true" : "false"
+                );
+            }
+        }
+
+        return result;
     }
 
 }

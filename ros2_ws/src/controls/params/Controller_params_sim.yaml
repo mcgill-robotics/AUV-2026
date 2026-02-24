@@ -1,0 +1,22 @@
+attitude_controller:
+  ros__parameters:
+    control_loop_rate: 10.0
+    P_ex: 6.0
+    P_ey: 6.0
+    P_ez: 6.0
+    P_wx: 1.0
+    P_wy: 1.0
+    P_wz: 1.0
+    buoyancy: 264.0 # [N]
+    r_bv_v: [0.0, 0.0, 0.023] # [m] From CAD Model    
+    enabled: false
+
+depth_controller:
+  ros__parameters:
+    control_loop_hz: 10.0
+    KP: 10.0
+    KD: 50.0
+    KI: 0.0
+    I_MAX: 10.0
+    net_buoyancy: 8.94 # Newtons
+    enabled: false

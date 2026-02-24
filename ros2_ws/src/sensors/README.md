@@ -248,8 +248,8 @@ The package provides a single ROS node: `sensor_node`.
 
 | Topic | Message | Description |
 |-------|---------|-------------|
-| `processed/imu` | Imu | Processed imu data in `auv` frame. Free acceleration |
-| `processed/depth` | Float64 | AUV's depth in `pool` frame |
+| `auv_frame/imu` | Imu | Processed imu data in `auv` frame. Free acceleration |
+| `auv_frame/depth` | Float64 | AUV's depth in `pool` frame |
 | `/sensors/dvl` | TBD | TBD |
 | `state/pose` | PoseStamped | Aggregated pose of the AUV in `pool` frame | 
 

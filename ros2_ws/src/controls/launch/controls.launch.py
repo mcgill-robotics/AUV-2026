@@ -6,54 +6,62 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
-    # Default paths inside the installed package share directory
+
+    declare_sim = DeclareLaunchArgument(
+        "sim",
+        default_value="false",
+        description="true for simulation params, false for real-world params",
+    )
+    sim = LaunchConfiguration("sim")
+
     default_attitude = PathJoinSubstitution([
-        FindPackageShare('controls'), 'launch', 'attitude_controller.launch.py'
+        FindPackageShare("controls"), "launch", "attitude_controller.launch.py"
     ])
     default_depth = PathJoinSubstitution([
-        FindPackageShare('controls'), 'launch', 'depth_controller.launch.py'
+        FindPackageShare("controls"), "launch", "depth_controller.launch.py"
     ])
     default_superimposer = PathJoinSubstitution([
-        FindPackageShare('controls'), 'launch', 'superimposer.launch.py'
+        FindPackageShare("controls"), "launch", "superimposer.launch.py"
     ])
 
-    # Declare launch arguments (optional overrides)
     declare_attitude = DeclareLaunchArgument(
-        'attitude_controller_launch_file',
+        "attitude_controller_launch_file",
         default_value=default_attitude,
-        description='Path to the attitude controller launch file'
+        description="Path to the attitude controller launch file",
     )
     declare_depth = DeclareLaunchArgument(
-        'depth_controller_launch_file',
+        "depth_controller_launch_file",
         default_value=default_depth,
-        description='Path to the depth controller launch file'
+        description="Path to the depth controller launch file",
     )
     declare_superimposer = DeclareLaunchArgument(
-        'superimposer_launch_file',
+        "superimposer_launch_file",
         default_value=default_superimposer,
-        description='Path to the superimposer launch file'
+        description="Path to the superimposer launch file",
     )
 
-    # Include sub-launch files
     attitude_controller_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            LaunchConfiguration('attitude_controller_launch_file')
-        )
+            LaunchConfiguration("attitude_controller_launch_file")
+        ),
+        launch_arguments={"sim": sim}.items(),
     )
 
     depth_controller_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            LaunchConfiguration('depth_controller_launch_file')
-        )
+            LaunchConfiguration("depth_controller_launch_file")
+        ),
+        launch_arguments={"sim": sim}.items(),
     )
 
     superimposer_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            LaunchConfiguration('superimposer_launch_file')
+            LaunchConfiguration("superimposer_launch_file")
         )
     )
 
     return LaunchDescription([
+        declare_sim,
         declare_attitude,
         declare_depth,
         declare_superimposer,

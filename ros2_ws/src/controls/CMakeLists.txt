@@ -68,8 +68,11 @@ install(TARGETS
 install(DIRECTORY include/
   DESTINATION include)
 
-install(DIRECTORY launch
+install(DIRECTORY launch/
   DESTINATION share/${PROJECT_NAME}/launch)
+
+install(DIRECTORY params/
+  DESTINATION share/${PROJECT_NAME}/params)
 
 install(PROGRAMS
   scripts/depth_controller.py
