@@ -41,20 +41,20 @@ class ZEDDetection
 public:
     ZEDDetection();
     ZEDDetection(
-        int frame_rate,
-        float confidence_threshold,
-        float max_range,
-        bool use_stream,
-        const string & stream_ip,
-        int stream_port,
-        ZEDCameraModel camera_model,
-        bool show_detections,
-        bool debug_logs,
-        function<void(const string&)> log_error,
-        function<void(const string&)> log_fatal,
-        function<void(const string&)> log_info,
+		int frame_rate,
+		float confidence_threshold,
+		float max_range,
+		bool use_stream,
+		const string & stream_ip,
+		int stream_port,
+		ZEDCameraModel camera_model,
+		bool show_detections,
+		function<void(const string&)> log_debug,
+		function<void(const string&)> log_info,
         function<void(const string&)> log_warn,
-        function<void(const string&, int)> log_warn_throttle
+		function<void(const string&, long)> log_warn_throttle,
+		function<void(const string&)> log_error,
+		function<void(const string&)> log_fatal
     );
     /// @brief Process external 2D detections, using ZED for depth fusion and world positioning.
     /// @param detections Vector of 2D detections to ingest into ZED SDK.
@@ -100,11 +100,12 @@ private:
     
     double sensor_depth;
     
+    function<void(const string&)> log_debug;
     function<void(const string&)> log_error;
     function<void(const string&)> log_fatal;
     function<void(const string&)> log_info;
     function<void(const string&)> log_warn;
-    function<void(const string&, int)> log_warn_throttle;    
+    function<void(const string&, long)> log_warn_throttle;    
     
     
     sl::Camera zed;

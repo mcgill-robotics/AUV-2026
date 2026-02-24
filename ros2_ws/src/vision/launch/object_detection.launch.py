@@ -14,6 +14,12 @@ def generate_launch_description():
     config_path = os.path.join(vision_dir, "config", "object_detection.yaml")
     with open(config_path, 'r') as f:
         default_config:dict = yaml.safe_load(f)
+        
+    log_level_arg = DeclareLaunchArgument(
+        "log_level",
+        default_value=str(default_config["general"]["log_level"]),
+        description="Log Level for all vision nodes: [debug, info, warning, error, fatal]"
+    )
     
     front_enhanced_topic_arg = DeclareLaunchArgument(
         "front_enhanced_topic",
@@ -57,7 +63,8 @@ def generate_launch_description():
             {'output_topic': LaunchConfiguration('front_detections_topic')},
             {'queue_size': default_config["front_cam"]["queue_size"]},
             {'publish_annotated_image': default_config["front_cam"].get("publish_annotated_image", False)},
-        ]
+        ],
+        arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')]
     )
     down_detection_node = Node(
         package='vision',
@@ -70,9 +77,11 @@ def generate_launch_description():
             {'output_topic': LaunchConfiguration('down_detections_topic')},
             {'queue_size': default_config["down_cam"]["queue_size"]},
             {'publish_annotated_image': default_config["down_cam"].get("publish_annotated_image", False)},
-        ]
+        ],
+        arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')]
     )
     launch_description = LaunchDescription()
+    launch_description.add_action(log_level_arg)
     launch_description.add_action(front_model_arg)
     launch_description.add_action(down_model_arg)
     launch_description.add_action(front_enhanced_topic_arg)

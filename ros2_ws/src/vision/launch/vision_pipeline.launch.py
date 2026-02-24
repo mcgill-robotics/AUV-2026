@@ -24,12 +24,6 @@ def generate_launch_description():
             "are assumed to be in compressed image format and use_sim_time is enabled."
         )
     )
-
-    debug_arg = DeclareLaunchArgument(
-        "debug_logs",
-        default_value=str(default_config["general"]["debug"]),
-        description="Whether to enable debug logs for vision nodes."
-    )
     
     front_model_arg = DeclareLaunchArgument(
         "front_model_relative_path",
@@ -49,7 +43,10 @@ def generate_launch_description():
     front_detections_topic = default_config["object_detection"]["front_detections_topic"]
     down_detections_topic = default_config["object_detection"]["down_detections_topic"]
     object_map_topic = default_config["object_map"]["map_topic"]
-    auv_pose_topic = default_config["object_map"]["pose_topic"]   
+    auv_pose_topic = default_config["object_map"]["pose_topic"]
+    ie_log_level = default_config["image_enhancement"]["log_level"]
+    od_log_level = default_config["object_detection"]["log_level"]
+    om_log_level = default_config["object_map"]["log_level"]
     
     enhancement_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(vision_dir, "launch", "image_enhancement.launch.py")),
@@ -61,6 +58,7 @@ def generate_launch_description():
             "down_enhanced_topic": down_enhanced_topic,
             "sim": LaunchConfiguration("sim"),
             "use_sim_time": LaunchConfiguration("sim"),
+            "log_level": ie_log_level
         }.items()
     )
     
@@ -74,6 +72,7 @@ def generate_launch_description():
             "front_model": LaunchConfiguration("front_model_relative_path"),
             "down_model": LaunchConfiguration("down_model_relative_path"),
             "use_sim_time": LaunchConfiguration("sim"),
+            "log_level": od_log_level
         }.items()
     )
     
@@ -95,16 +94,15 @@ def generate_launch_description():
                 "stream_ip": default_config["object_map"]["stream_ip"],
                 "stream_port": default_config["object_map"]["stream_port"],
                 "show_detections": True,
-                "debug_logs": LaunchConfiguration("debug_logs"),
                 "sim": LaunchConfiguration("sim"),
                 "use_sim_time": LaunchConfiguration("sim")
             }
-        ]
+        ],
+        arguments=['--ros-args', '--log-level', om_log_level]
     )
     
     launch_description = LaunchDescription()
     launch_description.add_action(sim_arg)
-    launch_description.add_action(debug_arg)
     launch_description.add_action(front_model_arg)
     launch_description.add_action(down_model_arg)
     launch_description.add_action(enhancement_launch)

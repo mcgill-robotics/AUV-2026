@@ -90,9 +90,6 @@ public:
 		this->declare_parameter<bool>("sim");
 		// show YOLO bounding boxes on output frames
 		this->declare_parameter<bool>("show_detections");
-		// enable heavy debug table logs
-		this->declare_parameter<bool>("debug_logs");
-
 	
 		// get parameters
 		int frame_rate;
@@ -103,7 +100,6 @@ public:
 		int stream_port;
 		bool sim;
 		bool show_detections;
-		bool debug_logs;
 
 		this->get_parameter("frame_rate", frame_rate);
 		this->get_parameter("confidence_threshold", confidence_threshold);
@@ -113,7 +109,6 @@ public:
 		this->get_parameter("stream_port", stream_port);
 		this->get_parameter("sim", sim);
 		this->get_parameter("show_detections", show_detections);
-		this->get_parameter("debug_logs", debug_logs);
 
 		RCLCPP_INFO(this->get_logger(), "[INIT] ZED params: sim=%s, use_stream=%s, stream=%s:%d, frame_rate=%d",
 			sim ? "true" : "false", use_stream ? "true" : "false", stream_ip.c_str(), stream_port, frame_rate);
@@ -131,13 +126,13 @@ public:
 				stream_port,
 				camera_model,
 				show_detections,
-				debug_logs,
 				// add callbacks to use rclcpp logging
-				[this](const string& msg) { RCLCPP_ERROR(this->get_logger(), "%s", msg.c_str()); },
-				[this](const string& msg) { RCLCPP_FATAL(this->get_logger(), "%s", msg.c_str()); },
+				[this] (const string& msg) { RCLCPP_DEBUG(this->get_logger(), "%s", msg.c_str()); },
 				[this](const string& msg) { RCLCPP_INFO(this->get_logger(), "%s", msg.c_str()); },
 				[this](const string& msg) { RCLCPP_WARN(this->get_logger(), "%s", msg.c_str()); },
-				[this](const string& msg, int throttle_duration_ms) { RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), throttle_duration_ms, "%s", msg.c_str()); }
+				[this](const string& msg, int throttle_duration_ms) { RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), throttle_duration_ms, "%s", msg.c_str()); },
+				[this](const string& msg) { RCLCPP_ERROR(this->get_logger(), "%s", msg.c_str()); },
+				[this](const string& msg) { RCLCPP_FATAL(this->get_logger(), "%s", msg.c_str()); }
 			);
 			RCLCPP_INFO(this->get_logger(), "[INIT] ZEDDetection created successfully");
 		} catch (const std::exception& e) {
@@ -242,7 +237,6 @@ private:
 			object_map_msg.array.push_back(object_msg);
 		}
 		object_map_publisher->publish(object_map_msg);
-		// RCLCPP_DEBUG(this->get_logger(), "Published object map with %zu objects", tracks.size());
 		RCLCPP_DEBUG(this->get_logger(), "Published object map with %zu objects", tracks.size());
 		rclcpp::Time pipeline_end_time = this->now();
 		rclcpp::Duration time_diff = pipeline_end_time - frame_collection_time;

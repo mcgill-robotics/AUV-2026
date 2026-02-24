@@ -9,3 +9,4 @@ down_cam:
 
 general:
   sim: false
+  log_level: info

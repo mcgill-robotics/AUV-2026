@@ -15,6 +15,12 @@ def generate_launch_description():
     with open(config_path, 'r') as f:
         default_config:dict = yaml.safe_load(f)
         
+    log_level_arg = DeclareLaunchArgument(
+        "log_level",
+        default_value=str(default_config["general"]["log_level"]),
+        description="Log Level for all vision nodes: [debug, info, warning, error, fatal]"
+    )
+        
     front_cam_topic_arg = DeclareLaunchArgument(
         'front_cam_topic',
         default_value=default_config["front_cam"]["cam_topic"],
@@ -63,7 +69,8 @@ def generate_launch_description():
             {'input_topic': front_cam_topic},
             {'output_topic': LaunchConfiguration('front_enhanced_topic')},
             {'sim': LaunchConfiguration('sim')},
-        ]
+        ],
+        arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')]
     )
     down_cam_enhancement_node = Node(
         package='vision',
@@ -74,10 +81,12 @@ def generate_launch_description():
             {'input_topic': down_cam_topic},
             {'output_topic': LaunchConfiguration('down_enhanced_topic')},
             {'sim': LaunchConfiguration('sim')},
-        ]
+        ],
+        arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')]
     )
     
     launch_description = LaunchDescription()
+    launch_description.add_action(log_level_arg)
     launch_description.add_action(front_cam_topic_arg)
     launch_description.add_action(down_cam_topic_arg)
     launch_description.add_action(front_enhanced_topic_arg)

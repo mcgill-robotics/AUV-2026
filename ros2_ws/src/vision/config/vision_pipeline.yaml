@@ -6,6 +6,7 @@ camera:
 image_enhancement:
   front_enhanced_topic: /vision/front_cam/image_enhanced
   down_enhanced_topic: /vision/down_cam/image_enhanced
+  log_level: info
 
 object_detection:
   front_detections_topic: /vision/front_cam/detections
@@ -13,6 +14,7 @@ object_detection:
 # relative to src directory
   front_model_relative_path: models/frontcam.pt
   down_model_relative_path: models/downcam.pt
+  log_level: info
 
 object_map:
   map_topic: /vision/object_map
@@ -20,7 +22,7 @@ object_map:
   stream_ip: "127.0.0.1"
   stream_port: 30000
   frame_rate: 30
+  log_level: info
 
 general:
   sim: false
-  debug: false

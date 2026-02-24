@@ -20,12 +20,12 @@ ZEDDetection::ZEDDetection(
 		int stream_port,
 		ZEDCameraModel camera_model,
 		bool show_detections,
-		bool debug_logs,
-		function<void(const string&)> log_error,
-		function<void(const string&)> log_fatal,
+		function<void(const string&)> log_debug,
 		function<void(const string&)> log_info,
         function<void(const string&)> log_warn,
-		function<void(const string&, int)> log_warn_throttle
+		function<void(const string&, long)> log_warn_throttle,
+		function<void(const string&)> log_error,
+		function<void(const string&)> log_fatal
 	): 
 		frame_rate(frame_rate),
 		confidence_threshold(confidence_threshold),
@@ -35,7 +35,7 @@ ZEDDetection::ZEDDetection(
 		stream_port(stream_port),
 		camera_model(camera_model),
 		show_detections(show_detections),
-		debug_logs(debug_logs),
+		log_debug(log_debug),
 		log_error(log_error),
 		log_fatal(log_fatal),
 		log_info(log_info),
@@ -123,9 +123,9 @@ void ZEDDetection::process_detections(const std::vector<sl::CustomBoxObjectData>
 	sl::Objects objects;
 	zed.retrieveObjects(objects, obj_runtime_param);
 	log_info("[CB] Retrieved " + to_string(objects.object_list.size()) + " objects");
-	if (debug_logs) {
-	    LogDebugTable(detections, objects);
-	}
+	// if (debug_logs) {
+	//     LogDebugTable(detections, objects);
+	// }
 	// Get VIO pose
 	log_info("[CB] Getting VIO pose...");
 	sl::Pose cam_pose;
@@ -135,7 +135,8 @@ void ZEDDetection::process_detections(const std::vector<sl::CustomBoxObjectData>
 	    log_warn_throttle("VIO tracking not OK - " + string(sl::toString(tracking_state).c_str()), 1000);
 	    // return;
 	}
-	log_info("[CB] VIO OK, determining world positions...");
+	log_debug("[CB] VIO pose retrieved, camera pose: [" + to_string(cam_pose.getTranslation().x) + ", " + to_string(cam_pose.getTranslation().y) + ", " + to_string(cam_pose.getTranslation().z)+ "]");
+	log_debug("[CB] VIO OK, determining world positions...");
 	determine_world_position_zed_2D_boxes(objects, cam_pose);
 	log_info("[CB] process_detections complete");
 }
@@ -163,7 +164,7 @@ ZEDDetection::~ZEDDetection()
 bool ZEDDetection::check_zed_status()
 {
     // Grab frame
-	log_info("[CB] check_zed_status: calling zed.grab()...");
+	log_debug("[CB] check_zed_status: calling zed.grab()...");
 	sl::ERROR_CODE grab_status = zed.grab(runtime_params);
 	if (grab_status == sl::ERROR_CODE::CORRUPTED_FRAME) {
 	    log_warn("Corrupted frame detected - skipping");
@@ -175,7 +176,7 @@ bool ZEDDetection::check_zed_status()
 	    log_warn_throttle("Failed to grab frame: " + string(sl::toString(grab_status).c_str()), 1000);
 	    return false;
 	}
-	log_info("[CB] check_zed_status: grab OK, checking health...");
+	log_debug("[CB] check_zed_status: grab OK, checking health...");
 
 	sl::HealthStatus health = zed.getHealthStatus();
 	// Check frame health, only log every 5 seconds
@@ -188,7 +189,7 @@ bool ZEDDetection::check_zed_status()
 	    log_warn_throttle("Low light conditions", 5000);
 	    return false;
 	}
-	log_info("[CB] check_zed_status: all checks passed");
+	log_debug("[CB] check_zed_status: all checks passed");
 	
 	return true;
 }

@@ -35,3 +35,5 @@ down_cam:
   queue_size: 10
   publish_annotated_image: true
   
+general:
+  log_level: info
