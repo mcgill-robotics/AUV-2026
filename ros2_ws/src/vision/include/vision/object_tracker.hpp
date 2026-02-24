@@ -27,8 +27,8 @@ struct Track {
 
     int hits = 0;               // total number of matched measurements
     int consecutive_hits = 0;   // CONSECUTIVE matched frames (resets on miss)
-    int age = 0;                // total frames since creation
-    int time_since_updates = 0; // if this is > max_age, delete the track
+    int age = 0;                // frames since last hit (lost frames)
+    int total_updates = 0;      // total frames since creation
     
     KalmanFilter kf;
 
@@ -114,9 +114,9 @@ private:
     int min_hits = 20;              // CONSECUTIVE frames to confirm
     int max_age = 8;                // Frames to keep lost track
     float max_position_jump = 2.0;  // Max jump (meters) - higher to handle VIO rotation errors
-    
+
     // Track State Transition Parameters
-    int conf_to_tent_threshold = 10; // Misses before downgrading CONFIRMED -> TENTATIVE
+    int conf_to_tent_threshold = 5; // Misses before downgrading CONFIRMED -> TENTATIVE
     int tent_init_buffer = 5;       // Extra frames allowed for initialization before zombie cull
 
     std::vector<std::pair<size_t,size_t>> matches;

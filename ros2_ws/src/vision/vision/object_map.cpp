@@ -164,46 +164,59 @@ private:
 	void detection_callback(const vision_msgs::msg::Detection2DArray::SharedPtr msg)
 	{
 #ifdef HAS_ZED_SDK
-		RCLCPP_DEBUG(this->get_logger(), "[CB] detection_callback triggered with %zu detections", msg->detections.size());
 		if(!zed_detector) {
 			RCLCPP_WARN(this->get_logger(), "[CB] zed_detector is null, skipping");
 			return;
 		}
-		RCLCPP_DEBUG(this->get_logger(), "[CB] Extracting ZED detections...");
 		std::vector<sl::CustomBoxObjectData> zed_detections = extract_ZED_detections(msg);
-		RCLCPP_DEBUG(this->get_logger(), "[CB] Processing %zu ZED detections...", zed_detections.size());
 		// Convert ROS message to ZED SDK CustomBoxObjectData
 		zed_detector->process_detections(zed_detections);
-		RCLCPP_DEBUG(this->get_logger(), "[CB] Getting detections...");
 		const auto [measurements,covariances,classes,orientations,confidences] = zed_detector->GetDetections();
 		
+		std::vector<Eigen::Vector3d> filtered_measurements;
+		std::vector<Eigen::Matrix3d> filtered_covariances;
+		std::vector<std::string> filtered_classes;
+		std::vector<double> filtered_orientations;
+		std::vector<double> filtered_confidences;
+
 		for (size_t i = 0; i < measurements.size(); ++i) {
-			RCLCPP_INFO(this->get_logger(), "[CB] Detection %zu (%s): {X: %.2f, Y: %.2f, Z: %.2f}",
-				i, classes[i].c_str(), measurements[i].x(), measurements[i].y(), measurements[i].z());
+			// Filter: Skip pipes detected more than 7m away (unreliable at distance)
+			if (classes[i] == "red_pipe" || classes[i] == "white_pipe") {
+				// We don't have the raw camera-frame position here easily, but the world 
+				// position's distance from the camera pose is roughly the same.
+				// For exact equivalence with Python, we can just check the norm from the camera.
+				auto cam_pose = zed_detector->GetCameraPose();
+				Eigen::Vector3d cam_trans = std::get<0>(cam_pose);
+				double dist_from_robot = (measurements[i] - cam_trans).norm();
+				if (dist_from_robot > 7.0) {
+					continue;
+				}
+			}
+			filtered_measurements.push_back(measurements[i]);
+			filtered_covariances.push_back(covariances[i]);
+			filtered_classes.push_back(classes[i]);
+			filtered_orientations.push_back(orientations[i]);
+			filtered_confidences.push_back(confidences[i]);
 		}
 
 		// The classes returned by `GetDetections` are strings derived from int label inside `ZEDDetection`.
 		// So passing the correct int label is crucial.
 		
-		RCLCPP_DEBUG(this->get_logger(), "[CB] Updating object tracker with %zu measurements...", measurements.size());
-		std::vector<Track> confirmed_tracks = object_tracker.update(
-			measurements, 
-			covariances, 
-			classes, 
-			orientations, 
-			confidences
+		std::vector<Track> all_tracks = object_tracker.update(
+			filtered_measurements, 
+			filtered_covariances, 
+			filtered_classes, 
+			filtered_orientations, 
+			filtered_confidences
 		);
-		RCLCPP_DEBUG(this->get_logger(), "[CB] Publishing pose and object map...");
 		publish_pose(zed_detector->GetCameraPose());
-		publish_object_map(confirmed_tracks);
-		RCLCPP_DEBUG(this->get_logger(), "[CB] detection_callback complete");
+		publish_object_map(all_tracks);
 #endif
 	}
 
 	void depth_callback(const std_msgs::msg::Float64::SharedPtr msg)
 	{
 #ifdef HAS_ZED_SDK
-		RCLCPP_DEBUG(this->get_logger(), "[CB] depth_callback triggered: %f", msg->data);
 		if(zed_detector)
 		{
 			zed_detector->UpdateSensorDepth(msg->data);
@@ -225,6 +238,9 @@ private:
 		// for each track, publish as VisionObject
 		for (const auto& track : tracks)
 		{
+			if (track.state != TrackState::CONFIRMED) {
+			    continue;
+			}
 			auv_msgs::msg::VisionObject object_msg;
 			object_msg.label = track.label;
 			object_msg.id = track.id;
@@ -237,7 +253,6 @@ private:
 			object_map_msg.array.push_back(object_msg);
 		}
 		object_map_publisher->publish(object_map_msg);
-		RCLCPP_DEBUG(this->get_logger(), "Published object map with %zu objects", tracks.size());
 		rclcpp::Time pipeline_end_time = this->now();
 		rclcpp::Duration time_diff = pipeline_end_time - frame_collection_time;
 		RCLCPP_DEBUG(this->get_logger(), "Object map pipeline latency: %.9f seconds", time_diff.seconds());

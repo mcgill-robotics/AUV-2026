@@ -35,9 +35,9 @@ KalmanFilter ObjectTracker::create_kf(const Eigen::Vector3d& initial_pos) {
 
     // Reasonable covariance matrices
     // Q (Process Noise): Small for static objects
-    Q << 0.05, 0, 0, 
-         0, 0.05, 0, 
-         0, 0, 0.05;
+    Q << 0.01, 0, 0, 
+         0, 0.01, 0, 
+         0, 0, 0.01;
          
     // R (Measurement Noise): Initial placeholder, will be overwritten by ZED cov
     R << 0.1, 0, 0, 
@@ -149,7 +149,8 @@ std::vector<std::vector<double>> ObjectTracker::compute_cost_matrix(
                 
                 Eigen::Matrix3d inv_S = S.inverse();
                 
-                double dist = diff.transpose() * inv_S * diff;
+                double dist_sq = diff.transpose() * inv_S * diff;
+                double dist = std::sqrt(dist_sq);
 
                 // 4. Gating and Assignment
                 if (dist > this->gating_threshold) {
@@ -279,12 +280,10 @@ void ObjectTracker::update_matched_tracks(
         // ref: track metadata in .hpp file
         track.hits++;
         track.consecutive_hits++;
-
-        // TODO: Refactor age increasing of tracks into the main loop
-        track.age++;
+        track.total_updates++;
 
         // TODO: Update to the time data type instead of using ints
-        track.time_since_updates = 0;
+        track.age = 0;
         track.confidence = confidences[meas_idx];
         track.theta_z = orientations[meas_idx]; 
 
@@ -299,13 +298,13 @@ void ObjectTracker::handle_unmatched_tracks(const std::vector<size_t>& unmatched
     for (size_t track_idx : unmatched_tracks) {
         Track& track = this->tracks[track_idx];
 
+        track.total_updates++;
         track.age++;
-        track.time_since_updates++;
         // STRICT MODE: Reset consecutive hits if track is missed
         track.consecutive_hits = 0; 
         
         // Downgrade confirmed tracks that lost detection
-        if (track.state == TrackState::CONFIRMED && track.time_since_updates > conf_to_tent_threshold) {
+        if (track.state == TrackState::CONFIRMED && track.age > conf_to_tent_threshold) {
              track.state = TrackState::TENTATIVE;
         }
     }
@@ -317,12 +316,12 @@ void ObjectTracker::delete_dead_tracks() {
         bool delete_track = false;
 
         // time exceeded
-        if (it->time_since_updates > max_age) {
+        if (it->age > max_age) {
             delete_track = true;
         }
         
         // tentative for too long 
-        if (it->state == TrackState::TENTATIVE && it->age > min_hits + tent_init_buffer) {
+        if (it->state == TrackState::TENTATIVE && it->total_updates > min_hits + tent_init_buffer) {
             delete_track = true;
         }
 
@@ -356,14 +355,31 @@ void ObjectTracker::create_new_tracks(
             }
         }
 
+        // Check 2: Too close to ANY existing track? (Prevent duplicate objects of different classes)
+        bool too_close = false;
+        Eigen::Vector3d new_pos = measurements[det_idx];
+        for (const auto& existing_track : tracks) {
+            Eigen::Vector3d existing_pos = existing_track.kf.state();
+            double dist = (new_pos - existing_pos).norm();
+            if (dist < min_new_track_distance) {
+                too_close = true;
+                break;
+            }
+        }
+        
+        // Skip this detection, its space is already occupied
+        if (too_close) {
+            continue;
+        }
+
         Track new_track;
         new_track.id = track_id_counter++;
         new_track.label = label;
         new_track.state = TrackState::TENTATIVE;
         new_track.hits = 1;
         new_track.consecutive_hits = 1;
-        new_track.age = 1;
-        new_track.time_since_updates = 0;
+        new_track.total_updates = 1;
+        new_track.age = 0;
         new_track.theta_z = orientations[det_idx];
         new_track.confidence = confidences[det_idx];
 

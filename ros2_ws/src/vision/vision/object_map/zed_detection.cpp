@@ -313,6 +313,9 @@ Eigen::Matrix3d get_world_covariance(const float position_covariance[6], const s
 	Eigen::Matrix3d R = Zed_Rotation_to_Eigen(rotation_matrix);
 
 	Eigen::Matrix3d cov_world = R * cov_cam * R.transpose();
+    
+    cov_world += Eigen::Matrix3d::Identity() * 0.1;
+
 	return cov_world;
 }
 
