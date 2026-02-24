@@ -84,6 +84,7 @@ class ObjectDetectorNode():
 
     def image_callback(self, msg: Image):
         try:
+            self.node.get_logger().info(f"Received image {msg.height} {msg.width}")
             img = self.bridge.imgmsg_to_cv2(msg, "bgr8") 
         except Exception as e:
             self.node.get_logger().error(f"cv_bridge failed: {e}")
