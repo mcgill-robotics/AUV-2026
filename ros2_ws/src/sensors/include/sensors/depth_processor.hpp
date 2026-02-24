@@ -32,24 +32,23 @@ class DepthProcessor: public rclcpp::Node
 
 		double get_calibrated_depth(double base_depth) const;
 
+		void add_depth_calibration_measurement(double depth_measurement);
+
 		Vec3 r_vs_v_; // Vector from sensor frame to vehicle frame, expressed in vehicle frame	
 
 		// depth calibration parameters
 		bool calibrate_depth_;
+		bool calibration_active_;
 		double depth_offset_; // Depth offset to be added to depth measurement (meters)
+		int calibration_window_size_; 
+		int calibration_sample_count_;
+		double calibration_sample_sum_;
 
                 rclcpp::Publisher<float64_msg>::SharedPtr depth_processed_pub_;
                 rclcpp::Subscription<float64_msg>::SharedPtr depth_sub_;
 		rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
 		rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr calibrate_srv_;
 		quatd q_iv_; // Current vehicle orientation 
-
-		// Calibration variables
-		double zero_offset_;
-		bool calibration_active_;
-		int calibration_sample_count_;
-		double calibration_sample_sum_;
-		static constexpr int calibration_window_size_ = 5; 
 
 };
 } // namespace sensors

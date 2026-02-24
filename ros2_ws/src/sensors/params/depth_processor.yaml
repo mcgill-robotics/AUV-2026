@@ -2,3 +2,4 @@ depth_processor:
   ros__parameters:
     calibrate_depth: false
     depth_offset: 0.0
+    calibration_window_size: 10

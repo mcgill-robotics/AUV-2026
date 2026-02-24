@@ -36,7 +36,9 @@ DepthProcessor::DepthProcessor()
     calibrate_depth_ = this->declare_parameter<bool>("calibrate_depth");
     
     if (calibrate_depth_) {
+        // only time we allow defaults since this is an internal parameter
         depth_offset_ = this->declare_parameter<double>("depth_offset");
+        calibration_window_size_ = this->declare_parameter<int>("calibration_window_size");
     }
 };
 
@@ -54,6 +56,8 @@ void DepthProcessor::depth_callback(const std_msgs::msg::Float64::SharedPtr dept
     float64_msg depth_processed_out;
     double published_depth = -r_vi_i_z;
     if (calibrate_depth_) {
+        if (calibration_active_) {
+        }
         published_depth = get_calibrated_depth(published_depth);
     }
     depth_processed_out.data = published_depth;
@@ -71,15 +75,27 @@ void DepthProcessor::calibrate_callback(
     }
 
     calibration_active_ = true;
-    calibration_sample_count_ = 0;
-    calibration_sample_sum_ = 0.0;
 
     response->success = true;
     response->message = "Calibration started. Averaging next " + std::to_string(calibration_window_size_) + " depth samples.";
     RCLCPP_INFO(this->get_logger(), "Depth calibration started.");
 }
 
-double DepthProcessor::get_calibrated_depth(double uncalibrated_depth) const {
+void DepthProcessor::add_depth_calibration_measurement(double depth_measurement) 
+{
+    calibration_sample_sum_ += depth_measurement;
+    calibration_sample_count_++;
+    if (calibration_sample_count_ < calibration_window_size_) {
+        RCLCPP_INFO(this->get_logger(), "Adding depth measurement %.3f to calibration (sample %d of %d)", depth_measurement, calibration_sample_count_ + 1, calibration_window_size_);
+    } else {
+        RCLCPP_INFO(this->get_logger(), "Depth calibration complete. Depth offset set to %.3f based on average of %d samples.", depth_offset_, calibration_sample_count_);
+        depth_offset_ = calibration_sample_sum_ / calibration_sample_count_;
+        calibration_active_ = false;
+    }
+}
+
+double DepthProcessor::get_calibrated_depth(double uncalibrated_depth) const 
+{
     return uncalibrated_depth + depth_offset_;
 }
 }
