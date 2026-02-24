@@ -100,7 +100,7 @@ To ensure the container can communicate with the simulation running on Windows, 
     ```
 3.  **(NVIDIA Only)** To use ZED Simulation mode:
     ```bash
-    ros2 launch zed_wrapper zed_camera.launch.py camera_model:=zedx stream_address:=127.0.0.1 sim_mode:=true stream_port:=30000 ros_params_override_path:=Docker/dev/unity_sim_zed_config.yaml
+    ros2 launch zed_wrapper zed_camera.launch.py camera_model:=zedx stream_address:=127.0.0.1 sim_mode:=True stream_port:=30000 ros_params_override_path:=Docker/dev/unity_sim_zed_config.yaml
     ```
 
 ## 5. Troubleshooting
