@@ -9,6 +9,7 @@ ENV LC_ALL=C.UTF-8
 # Install additional tools and dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
+    libboost-all-dev \
     git \
     python3-colcon-common-extensions \
     python3-pip \
@@ -18,6 +19,8 @@ RUN apt-get update && apt-get install -y \
 # Install ROS 2 packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-humble-usb-cam \  
+    ros-humble-nmea-msgs \
+    ros-humble-mavros-msgs \
     && rm -rf /var/lib/apt/lists/*
 
 #TODO: add sbg driver (compile from source)
