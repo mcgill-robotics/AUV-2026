@@ -41,6 +41,7 @@ class DepthProcessor: public rclcpp::Node
 		bool allow_calibration_;
 		bool calibration_active_;
 		double depth_offset_; // Depth offset to be added to depth measurement (meters)
+		double calibrated_surface_to_CoM_; // Distance from the surface to the vehicle's center of mass (meters)
 		int calibration_window_size_; 
 		int calibration_sample_count_;
 		double calibration_sample_sum_;

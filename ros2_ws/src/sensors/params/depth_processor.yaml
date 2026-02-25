@@ -4,3 +4,4 @@ depth_processor:
     calibration_service_name: "/depth_processor/calibrate" # Name of the service to trigger depth calibration
     depth_offset: 0.0 # Initial depth offset (in meters)
     calibration_window_size: 10 # Number of depth measurements to average for calibration when triggered as a service
+    calibrated_surface_to_CoM: 0.0 # Distance from the surface to the vehicle's center of mass (in meters)

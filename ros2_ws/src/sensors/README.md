@@ -183,28 +183,30 @@ $r_v^{vs}$: the vector from the sensor to the vehicle frame, expressed in the ve
 
 ### Depth Calibration
 
-The depth sensors is calibrated by a simple offset correction. We take a processed measurement of the depth sensor's reading when the AUV is at the surface (0 depth) and use that as an offset to correct all future readings:
+The depth sensor is calibrated by a simple offset correction. We take a processed measurement of the depth sensor's reading when the AUV is at the surface (0.0 depth) and use that as an offset to correct all future readings:
 
 $$
-\text{calibrated depth} = \text{uncalibrated depth} + \text{offset}
+\text{calibrated depth} = \text{uncalibrated depth} + \text{offset} + \text{calibrated surface to CoM}
 $$
 
 where uncalibrated depth is the $[r_i^{vi}]_z$ calculated from the equation above.
 
-This computation is either preset in the [config](params/depth_processor.yaml), or can be computed at runtime by calling a service:
+The offset term is either preset in the [config](params/depth_processor.yaml) as `depth_offset`, or can be computed at runtime by calling a service:
 ```bash
 ros2 service call /depth_processor/calibrate std_srvs/srv/Trigger "{}"
 ```
 
-This will trigger the depth processor to take the next $N$ depth measurements, average them, and set that as the new offset. The depth processor will then add this offset to all future depth measurements to give us a calibrated depth reading. $N$ is set by the `calibration_window_size` parameter in the [config](params/depth_processor.yaml) file.
+This will trigger the depth processor to take the next $N$ depth measurements, average them, and set that as the new offset. $N$ is set by the `calibration_window_size` parameter in the [config](params/depth_processor.yaml) file.
 
-This service must only be called when the AUV is at the surface to get an accurate calibration. To prevent accidental recalibrations at incorrect times, the service can only be called once in the entire run, and a guard parameteris used to prevent multiple calls. This parameter can be reset by restarting the node or by setting the parameter:
+This service must only be called when the AUV is at the surface to get an accurate calibration. To prevent accidental recalibrations at incorrect times, the service can only be called once in the entire run, and a guard parameter is used to prevent multiple calls. This parameter can be reset by restarting the node or by setting the parameter:
 
 ```bash
 ros2 param set /depth_processor allow_calibration true
 ```
 
-Note the implication of triggering this service when the AUV floats at 0 0 depth. $[r_i^{vi}]_z$ is computed as the depth of the AUV frame, i.e. the depth value of the center of mass, which is always below the surface. Thus any setpoint sent to the controller will have the semantic meaning where 0.0m is the vehicle frame point when the AUV is floating at the surface.
+(this is made purposefully difficult to prevent accidental resets)
+
+Note the implication of triggering this service when the AUV floats at 0.0 depth. $[r_i^{vi}]_z$ is computed as the depth of the AUV frame, i.e. the depth value of the center of mass, which is below the foam top and thus below the surface when the AUV float. Thus we need to correct for this distance from the (now calibrated) surface to the center of mass. This is the "calibrated surface to CoM" term in the equation above. It is obtained as a constant from our CAD model and set in the [config](params/depth_processor.yaml) file as `calibrated_surface_to_CoM`. 
 
 ## DVL Processing
 

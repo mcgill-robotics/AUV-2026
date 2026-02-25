@@ -41,6 +41,7 @@ DepthProcessor::DepthProcessor()
         calibration_service_name_ = this->declare_parameter<std::string>("calibration_service_name");
         depth_offset_ = this->declare_parameter<double>("depth_offset");
         calibration_window_size_ = this->declare_parameter<int>("calibration_window_size");
+        calibrated_surface_to_CoM_ = this->declare_parameter<double>("calibrated_surface_to_CoM");
     }
 };
 
@@ -105,7 +106,7 @@ void DepthProcessor::add_depth_calibration_measurement(double depth_measurement)
 
 double DepthProcessor::get_calibrated_depth(double uncalibrated_depth) const 
 {
-    return uncalibrated_depth + depth_offset_;
+    return uncalibrated_depth + depth_offset_ + calibrated_surface_to_CoM_;
 }
 }
 int main(int argc, char *argv[])
