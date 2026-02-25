@@ -26,10 +26,6 @@ DepthProcessor::DepthProcessor()
         std::bind(&DepthProcessor::imu_callback, this, std::placeholders::_1)
     );
 
-    calibrate_srv_ = this->create_service<std_srvs::srv::Trigger>(
-        calibration_service_name_,
-        std::bind(&DepthProcessor::calibrate_callback, this, std::placeholders::_1, std::placeholders::_2)
-    );
     
     q_iv_ = quatd::Identity();
 
@@ -38,11 +34,17 @@ DepthProcessor::DepthProcessor()
     if (calibrate_depth_) {
         // only time we allow defaults since this is an internal parameter
         allow_calibration_ = this->declare_parameter<bool>("allow_calibration",true);
-        calibration_service_name_ = this->declare_parameter<std::string>("calibration_service_name");
         depth_offset_ = this->declare_parameter<double>("depth_offset");
         calibration_window_size_ = this->declare_parameter<int>("calibration_window_size");
         calibrated_surface_to_CoM_ = this->declare_parameter<double>("calibrated_surface_to_CoM");
+        
+        calibration_service_name_ = this->declare_parameter<std::string>("calibration_service_name");
+        calibrate_srv_ = this->create_service<std_srvs::srv::Trigger>(
+            calibration_service_name_,
+            std::bind(&DepthProcessor::calibrate_callback, this, std::placeholders::_1, std::placeholders::_2)
+        );
     }
+
 };
 
 void DepthProcessor::imu_callback(const sensor_msgs::msg::Imu::SharedPtr imu_in)
