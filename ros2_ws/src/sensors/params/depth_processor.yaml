@@ -1,5 +1,6 @@
 depth_processor:
   ros__parameters:
-    calibrate_depth: false
-    depth_offset: 0.0
-    calibration_window_size: 10
+    calibrate_depth: false # Set to true to enable depth calibration
+    calibration_service_name: "/depth_processor/calibrate" # Name of the service to trigger depth calibration
+    depth_offset: 0.0 # Initial depth offset (in meters)
+    calibration_window_size: 10 # Number of depth measurements to average for calibration when triggered as a service

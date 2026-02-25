@@ -183,26 +183,28 @@ $r_v^{vs}$: the vector from the sensor to the vehicle frame, expressed in the ve
 
 ### Depth Calibration
 
-The depth sensors is calibrated by a simple linear rescaling of the raw pressure readings. The calibration parameters are determined by taking measurements of the depth sensor at both max depth and at the surface, and then solving for the linear rescaling parameters. Given the following:
-- $d_{\min}^{m}$: the processed depth sensor reading at the surface, found as $[r_i^{vi}]_z$ above when the AUV foam top is aligned to the surface of the pool
-- $d_{\max}^{m}$: the processed depth sensor reading at max depth found as $[r_i^{vi}]_z$ above when the AUV is at the bottom of the pool
-- $d_{\min}^{\ast}$: the true depth at the surface (measured by hand)
-- $d_{\max}^{\ast}$: the true depth at the bottom of the pool (measured by hand)
+The depth sensors is calibrated by a simple offset correction. We take a processed measurement of the depth sensor's reading when the AUV is at the surface (0 depth) and use that as an offset to correct all future readings:
 
-Then, from the processed depth sensor reading, $d^{unc}$, we can calculate the calibrated depth, $d^{cal}$, as follows:
 $$
-d^{cal} = d_{\min}^{\ast} + \frac{d_{\max}^{\ast} - d_{\min}^{\ast}}{d_{\max}^{m} - d_{\min}^{m}} (d^{unc} - d_{\min}^{m})
+\text{calibrated depth} = \text{uncalibrated depth} + \text{offset}
 $$
 
-Some notes on implementation:
-- If the sensor readings are perfect, then $d_{\min}^{m} = d_{\min}^{\ast}$ and $d_{\max}^{m} = d_{\max}^{\ast}$, which implies $d^{cal} = d^{unc}$, as expected.
-- If $d_{\min}^{m} = d_{\min}^{\ast}$ and $d_{\max}^{m} = d_{\max}^{\ast}$, then the calibration will be assumed to be purely an offset based on the surface readings:
-$$
-d^{cal} = d^{unc} + (d_{\min}^{\ast} - d_{\min}^{m})
-$$
-- $d_{\min}^{m}$ and $d_{\max}^{m}$ are computed as the vehicle frame's depth (i.e. center of mass), which, means some minor vertical offsets will need to be applied to:
-   + $d_{\min}^{\ast}$: take the distance from the top of the AUV to the center of mass and add it to the true depth at the surface of the pool
-   + $d_{\max}^{\ast}$: take the distance from the bottom of the AUV to the center of mass and subtract it from the true depth at the bottom of the pool
+where uncalibrated depth is the $[r_i^{vi}]_z$ calculated from the equation above.
+
+This computation is either preset in the [config](params/depth_processor.yaml), or can be computed at runtime by calling a service:
+```bash
+ros2 service call /depth_processor/calibrate std_srvs/srv/Trigger "{}"
+```
+
+This will trigger the depth processor to take the next $N$ depth measurements, average them, and set that as the new offset. The depth processor will then add this offset to all future depth measurements to give us a calibrated depth reading. $N$ is set by the `calibration_window_size` parameter in the [config](params/depth_processor.yaml) file.
+
+This service must only be called when the AUV is at the surface to get an accurate calibration. To prevent accidental recalibrations at incorrect times, the service can only be called once in the entire run, and a guard parameteris used to prevent multiple calls. This parameter can be reset by restarting the node or by setting the parameter:
+
+```bash
+ros2 param set /depth_processor allow_calibration true
+```
+
+Note the implication of triggering this service when the AUV floats at 0 0 depth. $[r_i^{vi}]_z$ is computed as the depth of the AUV frame, i.e. the depth value of the center of mass, which is always below the surface. Thus any setpoint sent to the controller will have the semantic meaning where 0.0m is the vehicle frame point when the AUV is floating at the surface.
 
 ## DVL Processing
 

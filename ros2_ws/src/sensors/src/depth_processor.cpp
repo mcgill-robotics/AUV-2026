@@ -27,7 +27,7 @@ DepthProcessor::DepthProcessor()
     );
 
     calibrate_srv_ = this->create_service<std_srvs::srv::Trigger>(
-        "/depth_processor/calibrate",
+        calibration_service_name_,
         std::bind(&DepthProcessor::calibrate_callback, this, std::placeholders::_1, std::placeholders::_2)
     );
     
@@ -38,6 +38,7 @@ DepthProcessor::DepthProcessor()
     if (calibrate_depth_) {
         // only time we allow defaults since this is an internal parameter
         allow_calibration_ = this->declare_parameter<bool>("allow_calibration",true);
+        calibration_service_name_ = this->declare_parameter<std::string>("calibration_service_name");
         depth_offset_ = this->declare_parameter<double>("depth_offset");
         calibration_window_size_ = this->declare_parameter<int>("calibration_window_size");
     }
@@ -77,7 +78,7 @@ void DepthProcessor::calibrate_callback(
 
     if (!allow_calibration_) {
         response->success = false;
-        response->message = "Calibration is not allowed as it has likely been called previously in this run. Set allow_calibration parameter to true to enable: ros2 param set /depth_processor allow_calibration true.";
+        response->message = "Calibration is not allowed as it has likely been called previously in this run. Set allow_calibration parameter to true to enable:\nros2 param set /depth_processor allow_calibration true.";
         return;
     }
 

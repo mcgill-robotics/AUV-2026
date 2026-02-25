@@ -45,6 +45,8 @@ class DepthProcessor: public rclcpp::Node
 		int calibration_sample_count_;
 		double calibration_sample_sum_;
 
+		// ROS interfaces
+		std::string calibration_service_name_;
                 rclcpp::Publisher<float64_msg>::SharedPtr depth_processed_pub_;
                 rclcpp::Subscription<float64_msg>::SharedPtr depth_sub_;
 		rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
