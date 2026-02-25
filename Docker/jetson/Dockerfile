@@ -331,6 +331,9 @@ ENV COLCON_HOME=/home/$USERNAME/.colcon
 # move repo defaults.yaml to container, CI is run from Docker/jetson so need to go up 2 levels
 COPY .colcon ${COLCON_HOME}/
 
+# add ultralytics config dir to avoid storing settings in temp
+RUN mkdir -p /home/$USERNAME/.config/Ultralytics
+
 WORKDIR /home/$USERNAME/AUV-2026
 
 # Source env variables
