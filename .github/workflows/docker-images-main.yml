@@ -140,6 +140,26 @@ jobs:
         run: |
           docker run --rm --user $(id -u):$(id -g) -v ${{ github.workspace }}:/home/douglas/AUV-2026 ${{ env.PRIMARY_TAG }} /bin/bash -c "./build.sh -d"
 
+      - name: Verify Python Libraries Permissions
+        run: |
+          docker run --rm --user $(id -u):$(id -g) ${{ env.PRIMARY_TAG }} python3 -c "
+          import cv2, torch, torchvision, ultralytics, pandas, scipy, albumentations, sys, re
+          print('All key Python libraries imported successfully as non-root user.')
+          
+          matrix_suffix = '${{ matrix.suffix }}'
+          if matrix_suffix in ['nvidia-amd64', 'jetson']:
+              build_info = cv2.getBuildInformation()
+              print('--- OpenCV Build Information ---')
+              print(build_info)
+              print('--------------------------------')
+              if not re.search(r'NVIDIA CUDA:\s+YES', build_info):
+                  sys.exit('ERROR: OpenCV is NOT CUDA enabled.')
+              else:
+                  print('SUCCESS: OpenCV is CUDA enabled.')
+          else:
+              print('CPU container, skipping CUDA check.')
+          "
+
       - name: Push image
         if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         uses: docker/build-push-action@v6
