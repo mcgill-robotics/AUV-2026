@@ -37,7 +37,7 @@ DepthProcessor::DepthProcessor()
         depth_offset_ = this->declare_parameter<double>("depth_offset");
         calibration_window_size_ = this->declare_parameter<int>("calibration_window_size");
         calibrated_surface_to_CoM_ = this->declare_parameter<double>("calibrated_surface_to_CoM");
-        
+
         calibration_service_name_ = this->declare_parameter<std::string>("calibration_service_name");
         calibrate_srv_ = this->create_service<std_srvs::srv::Trigger>(
             calibration_service_name_,
@@ -53,7 +53,7 @@ void DepthProcessor::imu_callback(const sensor_msgs::msg::Imu::SharedPtr imu_in)
     q_iv_ = q_iv;
 };
 
-void DepthProcessor::depth_callback(const std_msgs::msg::Float64::SharedPtr depth_in) const
+void DepthProcessor::depth_callback(const std_msgs::msg::Float64::SharedPtr depth_in)
 {
     const Vec3 r_vs_i = q_iv_ * r_vs_v_;
     const double r_vi_i_z = -depth_in->data + r_vs_i(2); // Add z-component of r_vs_i to depth measurement
@@ -62,6 +62,7 @@ void DepthProcessor::depth_callback(const std_msgs::msg::Float64::SharedPtr dept
     double published_depth = -r_vi_i_z;
     if (calibrate_depth_) {
         if (calibration_active_) {
+            add_depth_calibration_measurement(published_depth);
         }
         published_depth = get_calibrated_depth(published_depth);
     }
@@ -98,7 +99,7 @@ void DepthProcessor::add_depth_calibration_measurement(double depth_measurement)
     calibration_sample_sum_ += depth_measurement;
     calibration_sample_count_++;
     if (calibration_sample_count_ < calibration_window_size_) {
-        RCLCPP_INFO(this->get_logger(), "Adding depth measurement %.3f to calibration (sample %d of %d)", depth_measurement, calibration_sample_count_ + 1, calibration_window_size_);
+        RCLCPP_INFO(this->get_logger(), "Adding depth measurement %.3f to calibration sum %.3f (sample %d of %d)", depth_measurement, calibration_sample_sum_, calibration_sample_count_ + 1, calibration_window_size_);
     } else {
         RCLCPP_INFO(this->get_logger(), "Depth calibration complete. Depth offset set to %.3f based on average of %d samples.", depth_offset_, calibration_sample_count_);
         depth_offset_ = calibration_sample_sum_ / calibration_sample_count_;

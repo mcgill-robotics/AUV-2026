@@ -24,7 +24,7 @@ class DepthProcessor: public rclcpp::Node
 		~DepthProcessor() = default;
 	private:
 
-		void depth_callback(const std_msgs::msg::Float64::SharedPtr depth_in) const;
+		void depth_callback(const std_msgs::msg::Float64::SharedPtr depth_in);
 		void imu_callback(const sensor_msgs::msg::Imu::SharedPtr imu_in);
 		void calibrate_callback(
 			const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
