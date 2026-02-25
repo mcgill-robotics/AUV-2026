@@ -290,8 +290,7 @@ RUN git clone https://github.com/ultralytics/ultralytics.git && \
     sed -i '/"numpy>=1.23.0"/d; /"opencv-python>=4.6.0"/d; /"numpy<2.0.0"/d' pyproject.toml && \
     pip install --no-cache-dir --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} . && \
     cd .. && \
-    rm -rf ultralytics && \
-    chmod -R a+rX /usr/local/lib/python* /usr/lib/python* || true
+    rm -rf ultralytics
 
 # Install dependencies for vision
 RUN pip install --no-cache-dir --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} notebook \
