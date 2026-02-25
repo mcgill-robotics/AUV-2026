@@ -96,8 +96,8 @@ class ImageCollectionNode(Node):
         self.down_sub = self.create_subscription(
             Image, down_topic, self.down_callback, 10)
         
-        self.depth_sub = self.create_subscription(
-            Image, depth_topic, self.depth_callback, 10)
+        # self.depth_sub = self.create_subscription(
+        #     Image, depth_topic, self.depth_callback, 10)
         
         # Automatic capture state
         self.auto_capture_active = False
