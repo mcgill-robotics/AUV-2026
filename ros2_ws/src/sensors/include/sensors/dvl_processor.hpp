@@ -14,13 +14,13 @@ namespace sensors
     using Vec3  = Eigen::Vector3d;
     using Quatd = Eigen::Quaterniond;
 
-    // Struct to hold the raw data straight from the DVL sensor
+    // Struct to hold the raw data from the DVL sensor
     struct DvlData_DvlFrame {
-        Vec3 r_di_i; 
-        Vec3 v_di_d; 
+        Vec3 r_di_i2; 
+        Vec3 v_di_d;  
     };
 
-    // Struct to hold the transformed dvl data in the inertial frame
+    // Struct to hold the transformed dvl data in the pool inertial frame
     struct DvlData_InertialFrame {
         Vec3 r_vi_i; 
         Vec3 v_vi_i; 
@@ -62,6 +62,8 @@ namespace sensors
         Vec3 r_dv_v_; 
         std::string frame_id_global_;
         Quatd q_iv_; 
+        Quatd q_ii2_;
+        Quatd q_vd_;
     };
 
 } 

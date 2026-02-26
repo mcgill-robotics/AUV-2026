@@ -33,3 +33,11 @@ dvl_processor:
     # Orientation offset as quaternion from sensor to AUV frame. (w,x,y,z)
     # No offset as DVL is mounted with same orientation as AUV frame.
     q_vs: [1.0, 0.0, 0.0, 0.0]
+
+    #Orientation offset as quaternion from non inertial dvl frame to AUV frame (fixed offset value). (w,x,y,z) 
+    q_vd: [0.7071, 0.7071, 0.0, 0.0]
+    
+    # Orientation offset as quaternion from DVL inertial frame to pool inertial frame. (w,x,y,z)
+    q_ii2: [0.7071, 0.7071, 0.0, 0.0]
+
+    

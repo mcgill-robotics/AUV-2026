@@ -10,8 +10,23 @@ DvlProcessor::DvlProcessor() : Node("dvl_processor") {
     this->get_parameter("r_dv_v", r_dv_v_vec);
     r_dv_v_ = Vec3(r_dv_v_vec[0], r_dv_v_vec[1], r_dv_v_vec[2]);
 
+    //quarternion rotation from dvl inertial frame to pool inertial frame
+    //DVL posts data with +X forward, +Y right, and +Z downward. 
+    //Pool inertial uses +X forward, +Y left, and +Z up.
+    this->declare_parameter<std::vector<double>>("q_ii2", {1.0, 0.0, 0.0, 0.0});
+    std::vector<double> q_ii2_vec;
+    this->get_parameter("q_ii2", q_ii2_vec);
+    q_ii2_ = Quatd(q_ii2_vec[0], q_ii2_vec[1], q_ii2_vec[2], q_ii2_vec[3]);
+
+    this->declare_parameter<std::vector<double>>("q_vd", {1.0, 0.0, 0.0, 0.0});
+    std::vector<double> q_vd_vec;
+    this->get_parameter("q_vd", q_vd_vec);
+    q_vd_ = Quatd(q_vd_vec[0], q_vd_vec[1], q_vd_vec[2], q_vd_vec[3]);
+
+
     this->declare_parameter<std::string>("frame_id_global", "pool_link");
     this->get_parameter("frame_id_global", frame_id_global_);
+
 
     imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
         "auv_frame/imu", 10, std::bind(&DvlProcessor::imu_callback, this, std::placeholders::_1));
@@ -20,7 +35,7 @@ DvlProcessor::DvlProcessor() : Node("dvl_processor") {
         "dvl/odometry", 10, std::bind(&DvlProcessor::dvl_callback, this, std::placeholders::_1));
     
 
-        position_pub_ = this->create_publisher<geometry_msgs::msg::PointStamped>("auv_frame/dvl/position", 10); 
+    position_pub_ = this->create_publisher<geometry_msgs::msg::PointStamped>("auv_frame/dvl/position", 10); 
     velocity_pub_ = this->create_publisher<geometry_msgs::msg::TwistStamped>("auv_frame/dvl/velocity", 10); 
 }
 
@@ -50,8 +65,7 @@ void DvlProcessor::dvl_callback(const nav_msgs::msg::Odometry::SharedPtr msg) {
 DvlData_DvlFrame DvlProcessor::parse_dvl(const nav_msgs::msg::Odometry& msg) const {
     DvlData_DvlFrame dvl_raw;
 
-    dvl_raw.r_di_i = Vec3(msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z);
-    //Check what frame velocity data is in and update line below accordingly if necessary
+    dvl_raw.r_di_i2 = Vec3(msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z);
     dvl_raw.v_di_d = Vec3(msg.twist.twist.linear.x, msg.twist.twist.linear.y, msg.twist.twist.linear.z);
     
     return dvl_raw; 
@@ -60,10 +74,11 @@ DvlData_DvlFrame DvlProcessor::parse_dvl(const nav_msgs::msg::Odometry& msg) con
 DvlData_InertialFrame DvlProcessor::process_dvl(const DvlData_DvlFrame& dvl_raw) const {
     DvlData_InertialFrame dvl_inertial;
     
-    dvl_inertial.r_vi_i = dvl_raw.r_di_i - (q_iv_ * r_dv_v_);
+    //Transforms position vector from dvl inertial frame to pool inertial frame
+    //Rotates vector from vehicle to dvl to pool inertial frame
+    dvl_inertial.r_vi_i = (q_ii2_ * dvl_raw.r_di_i2) - (q_iv_ * r_dv_v_);
     
-    // Check what frame velocity data is in and update line below accordingly if necessary
-    dvl_inertial.v_vi_i = q_iv_ * dvl_raw.v_di_d;
+    dvl_inertial.v_vi_i = q_iv_ * q_vd_ * dvl_raw.v_di_d;
     
     return dvl_inertial;
 }
