@@ -20,6 +20,12 @@ depth_processor:
     frame_id: "depth_link"
     # Position offset from sensor to AUV frame (meters), expressed in AUV frame.
     r_vs_v: [0.0624, 0.0585, 0.0962] # [m] Forward, Left, Up. 
+    # calibration parameters
+    calibrate_depth: false # Set to true to enable depth calibration
+    calibration_service_name: "/depth_processor/calibrate" # Name of the service to trigger depth calibration
+    depth_offset: 0.0 # Initial depth offset (in meters)
+    calibration_window_size: 10 # Number of depth measurements to average for calibration when triggered as a service
+    calibrated_surface_to_CoM: 0.0 # Distance from the surface to the vehicle's center of mass (in meters)
 
 
 # DVL node parameters 

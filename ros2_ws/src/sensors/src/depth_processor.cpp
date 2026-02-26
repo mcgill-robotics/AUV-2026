@@ -13,7 +13,7 @@ DepthProcessor::DepthProcessor()
     this->get_parameter("r_vs_v", r_vs_v_vec);
     r_vs_v_ = Vec3(r_vs_v_vec[0], r_vs_v_vec[1], r_vs_v_vec[2]);
 
-    depth_pub_ = this->create_publisher<float64_msg>("auv_frame/depth", 10);
+    depth_processed_pub_ = this->create_publisher<float64_msg>("auv_frame/depth", 10);
     depth_sub_ = this->create_subscription<float64_msg>(
             "/sensors/depth/z",
             10,
@@ -26,16 +26,22 @@ DepthProcessor::DepthProcessor()
         std::bind(&DepthProcessor::imu_callback, this, std::placeholders::_1)
     );
 
-    calibrate_srv_ = this->create_service<std_srvs::srv::Trigger>(
-        "/depth_processor/calibrate",
-        std::bind(&DepthProcessor::calibrate_callback, this, std::placeholders::_1, std::placeholders::_2)
-    );
     
     q_iv_ = quatd::Identity();
-    zero_offset_ = 0.0;
-    calibration_active_ = false;
-    calibration_sample_count_ = 0;
-    calibration_sample_sum_ = 0.0;
+
+    calibrate_depth_ = this->declare_parameter<bool>("calibrate_depth");
+    
+    if (calibrate_depth_) {
+        depth_offset_ = this->declare_parameter<double>("depth_offset");
+        calibration_window_size_ = this->declare_parameter<int>("calibration_window_size");
+        calibrated_surface_to_CoM_ = this->declare_parameter<double>("calibrated_surface_to_CoM");
+
+        calibration_service_name_ = this->declare_parameter<std::string>("calibration_service_name");
+        calibrate_srv_ = this->create_service<std_srvs::srv::Trigger>(
+            calibration_service_name_,
+            std::bind(&DepthProcessor::calibrate_callback, this, std::placeholders::_1, std::placeholders::_2)
+        );
+    }
 
 };
 
@@ -45,30 +51,21 @@ void DepthProcessor::imu_callback(const sensor_msgs::msg::Imu::SharedPtr imu_in)
     q_iv_ = q_iv;
 };
 
-
-
-
 void DepthProcessor::depth_callback(const std_msgs::msg::Float64::SharedPtr depth_in)
 {
     const Vec3 r_vs_i = q_iv_ * r_vs_v_;
     const double r_vi_i_z = -depth_in->data + r_vs_i(2); // Add z-component of r_vs_i to depth measurement
-    const double uncalibrated_depth = -r_vi_i_z;
 
-    if (calibration_active_) {
-        calibration_sample_sum_ += uncalibrated_depth;
-        calibration_sample_count_ += 1;
-
-        if (calibration_sample_count_ >= calibration_window_size_) {
-            zero_offset_ = calibration_sample_sum_ / static_cast<double>(calibration_window_size_);
-            calibration_active_ = false;
-            RCLCPP_INFO(this->get_logger(), "Depth calibration complete. zero_offset=%.6f", zero_offset_);
+    float64_msg depth_processed_out;
+    double published_depth = -r_vi_i_z;
+    if (calibrate_depth_) {
+        if (calibration_active_) {
+            add_depth_calibration_measurement(published_depth);
         }
+        published_depth = get_calibrated_depth(published_depth);
     }
-
-    float64_msg depth_out ;
-    depth_out.data = uncalibrated_depth - zero_offset_;
-
-    depth_pub_->publish(depth_out);
+    depth_processed_out.data = published_depth;
+    depth_processed_pub_->publish(depth_processed_out);
 }; 
 
 void DepthProcessor::calibrate_callback(
@@ -82,16 +79,31 @@ void DepthProcessor::calibrate_callback(
     }
 
     calibration_active_ = true;
-    calibration_sample_count_ = 0;
-    calibration_sample_sum_ = 0.0;
 
     response->success = true;
     response->message = "Calibration started. Averaging next " + std::to_string(calibration_window_size_) + " depth samples.";
     RCLCPP_INFO(this->get_logger(), "Depth calibration started.");
 }
 
+void DepthProcessor::add_depth_calibration_measurement(double depth_measurement) 
+{
+    calibration_sample_sum_ += depth_measurement;
+    calibration_sample_count_++;
+    if (calibration_sample_count_ < calibration_window_size_) {
+        RCLCPP_INFO(this->get_logger(), "Adding depth measurement %.3f to calibration sum %.3f (sample %d of %d)", depth_measurement, calibration_sample_sum_, calibration_sample_count_ + 1, calibration_window_size_);
+    } else {
+        depth_offset_ = calibration_sample_sum_ / calibration_sample_count_;
+        RCLCPP_INFO(this->get_logger(), "Depth calibration complete. Depth offset set to %.3f based on average of %d samples.", depth_offset_, calibration_sample_count_);
+        calibration_active_ = false;
+        calibrate_srv_.reset(); // destroy service to prevent further calls
+    }
 }
 
+double DepthProcessor::get_calibrated_depth(double uncalibrated_depth) const 
+{
+    return uncalibrated_depth - depth_offset_ + calibrated_surface_to_CoM_;
+}
+}
 int main(int argc, char *argv[])
 {
 	rclcpp::init(argc, argv);
