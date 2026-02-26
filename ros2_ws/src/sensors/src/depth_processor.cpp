@@ -82,7 +82,7 @@ void DepthProcessor::calibrate_callback(
 
     if (!allow_calibration_) {
         response->success = false;
-        response->message = "Calibration is not allowed as it has likely been called previously in this run. Set allow_calibration parameter to true to enable:\nros2 param set /depth_processor allow_calibration true.";
+        response->message = "Calibration is not allowed as it has likely been called previously in this run. Set allow_calibration parameter to true to enable: ros2 param set /depth_processor allow_calibration true.";
         return;
     }
 
@@ -101,15 +101,15 @@ void DepthProcessor::add_depth_calibration_measurement(double depth_measurement)
     if (calibration_sample_count_ < calibration_window_size_) {
         RCLCPP_INFO(this->get_logger(), "Adding depth measurement %.3f to calibration sum %.3f (sample %d of %d)", depth_measurement, calibration_sample_sum_, calibration_sample_count_ + 1, calibration_window_size_);
     } else {
-        RCLCPP_INFO(this->get_logger(), "Depth calibration complete. Depth offset set to %.3f based on average of %d samples.", depth_offset_, calibration_sample_count_);
         depth_offset_ = calibration_sample_sum_ / calibration_sample_count_;
+        RCLCPP_INFO(this->get_logger(), "Depth calibration complete. Depth offset set to %.3f based on average of %d samples.", depth_offset_, calibration_sample_count_);
         calibration_active_ = false;
     }
 }
 
 double DepthProcessor::get_calibrated_depth(double uncalibrated_depth) const 
 {
-    return uncalibrated_depth + depth_offset_ + calibrated_surface_to_CoM_;
+    return uncalibrated_depth - depth_offset_ + calibrated_surface_to_CoM_;
 }
 }
 int main(int argc, char *argv[])
