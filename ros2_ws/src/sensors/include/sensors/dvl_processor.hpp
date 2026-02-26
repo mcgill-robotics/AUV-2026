@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 #include <rclcpp/rclcpp.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <geometry_msgs/msg/point_stamped.hpp>
@@ -23,6 +24,7 @@ namespace sensors
     struct DvlData_InertialFrame {
         Vec3 r_vi_i; 
         Vec3 v_vi_i; 
+    };
 
     class DvlProcessor : public rclcpp::Node {
     public:
@@ -58,7 +60,7 @@ namespace sensors
         rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr velocity_pub_;
 
         Vec3 r_dv_v_; 
-        
+        std::string frame_id_global_;
         Quatd q_iv_; 
     };
 

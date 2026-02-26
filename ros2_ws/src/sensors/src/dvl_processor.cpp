@@ -10,6 +10,9 @@ DvlProcessor::DvlProcessor() : Node("dvl_processor") {
     this->get_parameter("r_dv_v", r_dv_v_vec);
     r_dv_v_ = Vec3(r_dv_v_vec[0], r_dv_v_vec[1], r_dv_v_vec[2]);
 
+    this->declare_parameter<std::string>("frame_id_global", "pool_link");
+    this->get_parameter("frame_id_global", frame_id_global_);
+
     imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
         "auv_frame/imu", 10, std::bind(&DvlProcessor::imu_callback, this, std::placeholders::_1));
 
@@ -67,7 +70,7 @@ DvlData_InertialFrame DvlProcessor::process_dvl(const DvlData_DvlFrame& dvl_raw)
 
 geometry_msgs::msg::PointStamped DvlProcessor::compose_position_msg(const DvlData_InertialFrame& dvl_inertial) const {
     geometry_msgs::msg::PointStamped msg_out;
-    msg_out.header.frame_id = "pool_link"; //REVIEW, not sure what the frame_id is   
+    msg_out.header.frame_id = frame_id_global_;
     msg_out.point.x = dvl_inertial.r_vi_i.x();
     msg_out.point.y = dvl_inertial.r_vi_i.y();
     msg_out.point.z = dvl_inertial.r_vi_i.z();
@@ -77,8 +80,7 @@ geometry_msgs::msg::PointStamped DvlProcessor::compose_position_msg(const DvlDat
 
 geometry_msgs::msg::TwistStamped DvlProcessor::compose_velocity_msg(const DvlData_InertialFrame& dvl_inertial) const {
     geometry_msgs::msg::TwistStamped msg_out;
-    msg_out.header.frame_id = "pool_link"; //REVIEW, not sure what the frame_id is 
-    
+    msg_out.header.frame_id = frame_id_global_;    
     msg_out.twist.linear.x = dvl_inertial.v_vi_i.x();
     msg_out.twist.linear.y = dvl_inertial.v_vi_i.y();
     msg_out.twist.linear.z = dvl_inertial.v_vi_i.z();
