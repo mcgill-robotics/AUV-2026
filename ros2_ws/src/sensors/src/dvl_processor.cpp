@@ -2,40 +2,28 @@
 
 namespace sensors {
 
-
-
-DvlProcessor::DvlProcessor(const Vec3& r_dv_v) 
-    : r_dv_v_(r_dv_v) {}
-
-Vec3 DvlProcessor::process(const Vec3& r_di_i, const Quatd& q_iv) const {
-    return r_di_i - (q_iv * r_dv_v_);
-}
-
-
-
-DvlNode::DvlNode() : Node("dvl_processor") {
+DvlProcessor::DvlProcessor() : Node("dvl_processor") {
     q_iv_.setIdentity();
-// gets parameters from yaml file using ros2 node function declare_parameter, if yaml file is empty then it sets r_dv_v to 0,0,0
-    this->declare_parameter<std::vector<double>>("r_dv_v", {0.0, 0.0, 0.0});
 
-// creates a vector r_dv_v_vec and then sets it equal to r_dv_v
+    this->declare_parameter<std::vector<double>>("r_dv_v", {0.0, 0.0, 0.0});
     std::vector<double> r_dv_v_vec;
     this->get_parameter("r_dv_v", r_dv_v_vec);
-
-    processor_ = std::make_unique<DvlProcessor>(Vec3(r_dv_v_vec[0], r_dv_v_vec[1], r_dv_v_vec[2]));
+    r_dv_v_ = Vec3(r_dv_v_vec[0], r_dv_v_vec[1], r_dv_v_vec[2]);
 
     imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
-        "auv_frame/imu", 10, std::bind(&DvlNode::imu_callback, this, std::placeholders::_1));
+        "auv_frame/imu", 10, std::bind(&DvlProcessor::imu_callback, this, std::placeholders::_1));
 
-    dvl_sub_ = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
-            "dvl/dead_reckoning", 10, std::bind(&DvlNode::dvl_callback, this, std::placeholders::_1));
+    dvl_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
+        "dvl/odometry", 10, std::bind(&DvlProcessor::dvl_callback, this, std::placeholders::_1));
     
-    state_pub_ = this->create_publisher<geometry_msgs::msg::PointStamped>("auv_frame/position", 10); 
+// REVIEW TOPIC NAMES 
+    position_pub_ = this->create_publisher<geometry_msgs::msg::PointStamped>("auv_pool_frame/position", 10); 
+    velocity_pub_ = this->create_publisher<geometry_msgs::msg::TwistStamped>("auv_pool_frame/velocity", 10); 
 }
 
 
-
-void DvlNode::imu_callback(const sensor_msgs::msg::Imu::SharedPtr msg) {
+//Function updates stored vehicle orientation whenever the IMU publishes new data.
+void DvlProcessor::imu_callback(const sensor_msgs::msg::Imu::SharedPtr msg) {
     q_iv_.w() = msg->orientation.w;
     q_iv_.x() = msg->orientation.x;
     q_iv_.y() = msg->orientation.y;
@@ -43,27 +31,66 @@ void DvlNode::imu_callback(const sensor_msgs::msg::Imu::SharedPtr msg) {
 }
 
 
-void DvlNode::dvl_callback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg) {
+//Function takes new odometry messages and pushes them through the data pipeline.
+void DvlProcessor::dvl_callback(const nav_msgs::msg::Odometry::SharedPtr msg) {
+    DvlData_DvlFrame dvl_raw = parse_dvl(*msg);
+    
+    DvlData_InertialFrame dvl_inertial = process_dvl(dvl_raw);
+    
+    geometry_msgs::msg::PointStamped pos_msg = compose_position_msg(dvl_inertial);
+    geometry_msgs::msg::TwistStamped vel_msg = compose_velocity_msg(dvl_inertial);
 
-    Vec3 r_di_i(msg->pose.pose.position.x, msg->pose.pose.position.y, msg->pose.pose.position.z);
-
-    Vec3 r_vi_i = processor_->process(r_di_i, q_iv_);
-
-    geometry_msgs::msg::PointStamped output;
-    output.header = msg->header;
-    output.point.x = r_vi_i.x();
-    output.point.y = r_vi_i.y();
-    output.point.z = r_vi_i.z();
-
-    state_pub_->publish(output);
+    position_pub_->publish(pos_msg);
+    velocity_pub_->publish(vel_msg);
 }
-} // namespace sensors
 
+DvlData_DvlFrame DvlProcessor::parse_dvl(const nav_msgs::msg::Odometry& msg) const {
+    DvlData_DvlFrame dvl_raw;
 
+    dvl_raw.r_di_i = Vec3(msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z);
+    //Check what frame velocity data is in and update line below accordingly if necessary
+    dvl_raw.v_di_d = Vec3(msg.twist.twist.linear.x, msg.twist.twist.linear.y, msg.twist.twist.linear.z);
+    
+    return dvl_raw; 
+}
+
+DvlData_InertialFrame DvlProcessor::process_dvl(const DvlData_DvlFrame& dvl_raw) const {
+    DvlData_InertialFrame dvl_inertial;
+    
+    dvl_inertial.r_vi_i = dvl_raw.r_di_i - (q_iv_ * r_dv_v_);
+    
+    // Check what frame velocity data is in and update line below accordingly if necessary
+    dvl_inertial.v_vi_i = q_iv_ * dvl_raw.v_di_d;
+    
+    return dvl_inertial;
+}
+
+geometry_msgs::msg::PointStamped DvlProcessor::compose_position_msg(const DvlData_InertialFrame& dvl_inertial) const {
+    geometry_msgs::msg::PointStamped msg_out;
+    msg_out.header.frame_id = "pool_link"; //REVIEW, not sure what the frame_id is   
+    msg_out.point.x = dvl_inertial.r_vi_i.x();
+    msg_out.point.y = dvl_inertial.r_vi_i.y();
+    msg_out.point.z = dvl_inertial.r_vi_i.z();
+    
+    return msg_out;
+}
+
+geometry_msgs::msg::TwistStamped DvlProcessor::compose_velocity_msg(const DvlData_InertialFrame& dvl_inertial) const {
+    geometry_msgs::msg::TwistStamped msg_out;
+    msg_out.header.frame_id = "pool_link"; //REVIEW, not sure what the frame_id is 
+    
+    msg_out.twist.linear.x = dvl_inertial.v_vi_i.x();
+    msg_out.twist.linear.y = dvl_inertial.v_vi_i.y();
+    msg_out.twist.linear.z = dvl_inertial.v_vi_i.z();
+    
+    return msg_out;
+}
+
+} 
 
 int main(int argc, char * argv[]) {
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<sensors::DvlNode>());
+    rclcpp::spin(std::make_shared<sensors::DvlProcessor>());
     rclcpp::shutdown();
     return 0;
 }
