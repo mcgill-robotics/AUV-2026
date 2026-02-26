@@ -8,7 +8,6 @@ import os
 def generate_launch_description():
         pkg_share = get_package_share_directory('sensors')
         frame_params = os.path.join(pkg_share, 'params', 'sensors_frames.yaml')
-        depth_calibration_params = os.path.join(pkg_share, 'params', 'depth_processor.yaml')
         
         depth_processor_node = GroupAction(
             actions=[
@@ -16,7 +15,7 @@ def generate_launch_description():
                     package='sensors',
                     executable='depth_processor',
                     name='depth_processor',
-                    parameters=[frame_params, depth_calibration_params],
+                    parameters=[frame_params],
                     )
                 ]
             )
