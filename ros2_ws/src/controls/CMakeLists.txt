@@ -76,6 +76,7 @@ install(DIRECTORY params/
 
 install(PROGRAMS
   scripts/depth_controller.py
+  scripts/planar_controller.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
