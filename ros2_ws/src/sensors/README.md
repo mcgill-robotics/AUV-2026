@@ -186,10 +186,14 @@ $r_v^{vs}$: the vector from the sensor to the vehicle frame, expressed in the ve
 The depth sensor is calibrated by a simple offset correction. We take a processed measurement of the depth sensor's reading when the AUV is at the surface (0.0 depth) and use that as an offset to correct all future readings:
 
 $$
-\text{calibrated depth} = \text{uncalibrated depth} + \text{offset} + \text{calibrated surface to CoM}
+\text{calibrated depth} = \text{uncalibrated depth} - \text{offset} + \text{calibrated surface to CoM}
 $$
 
-where uncalibrated depth is the $[r_i^{vi}]_z$ calculated from the equation above.
+where uncalibrated depth is the $[r_i^{vi}]_z$ calculated from the equation above. Also see figure below, where positive depth points downwards:
+
+<p align="center">
+<img width="500" height="250" alt="auv-1" src="https://github.com/user-attachments/assets/1065b296-c4ea-408e-ad24-067f45a904c7" />
+</p>
 
 The offset term is either preset in the [config](params/depth_processor.yaml) as `depth_offset`, or can be computed at runtime by calling a service:
 ```bash
