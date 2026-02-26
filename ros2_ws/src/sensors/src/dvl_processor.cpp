@@ -16,8 +16,8 @@ DvlProcessor::DvlProcessor() : Node("dvl_processor") {
     dvl_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
         "dvl/odometry", 10, std::bind(&DvlProcessor::dvl_callback, this, std::placeholders::_1));
     
-// REVIEW TOPIC NAMES 
-    position_pub_ = this->create_publisher<geometry_msgs::msg::PointStamped>("auv_frame/dvl/position", 10); 
+
+        position_pub_ = this->create_publisher<geometry_msgs::msg::PointStamped>("auv_frame/dvl/position", 10); 
     velocity_pub_ = this->create_publisher<geometry_msgs::msg::TwistStamped>("auv_frame/dvl/velocity", 10); 
 }
 
