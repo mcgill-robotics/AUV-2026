@@ -17,6 +17,18 @@ namespace controls
            std::bind(&superimposer::depth_effort_callback, this, std::placeholders::_1)
        );
 
+       sub_x_effort_ = this->create_subscription<wrench_msg>(
+           "/controls/x_effort",
+           1,
+           std::bind(&superimposer::x_effort_callback, this, std::placeholders::_1)
+       );
+
+        sub_y_effort_ = this->create_subscription<wrench_msg>(
+           "/controls/y_effort",
+           1,
+           std::bind(&superimposer::y_effort_callback, this, std::placeholders::_1)
+       );
+
        sub_attitude_effort_ = this->create_subscription<wrench_msg>(
            "/controls/attitude_effort",
            1,
@@ -85,6 +97,16 @@ namespace controls
        depth_effort_ = *msg; // This is in the pool frame
    }
 
+    void superimposer::x_effort_callback(const wrench_msg::SharedPtr msg)
+   {
+       x_effort_ = *msg; // This is in the pool frame
+   }
+
+    void superimposer::y_effort_callback(const wrench_msg::SharedPtr msg)
+   {
+       y_effort_ = *msg; // This is in the pool frame
+   }
+
    void superimposer::attitude_effort_callback(const wrench_msg::SharedPtr msg)
    {
        attitude_effort_ = *msg; // This already is in the AUV body frame
@@ -96,7 +118,9 @@ namespace controls
 
        // Transform depth effort from pool frame to body frame. 
          Vec3 depth_force_pool(depth_effort_.force.x, depth_effort_.force.y, depth_effort_.force.z);
-         Vec3 total_force_pool = depth_force_pool; // No torque from depth controller. TODO: Add planar forces 
+         Vec3 x_force_pool(x_effort_.force.x, x_effort_.force.y, x_effort_.force.z);
+         Vec3 y_force_pool(y_effort_.force.x, y_effort_.force.y, y_effort_.force.z);
+         Vec3 total_force_pool = depth_force_pool + x_force_pool + y_force_pool; // No torque from axial controller.
          Vec3 total_force_body = q_iv_.inverse() * total_force_pool; // Rotate to body frame
 
 
