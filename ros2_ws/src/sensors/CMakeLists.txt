@@ -17,11 +17,12 @@ find_package(sensor_msgs REQUIRED)
 find_package(message_filters REQUIRED)
 find_package(eigen3_cmake_module REQUIRED)
 find_package(Eigen3 REQUIRED)
+find_package(nav_msgs REQUIRED)
 
 # Executables
 
 add_executable(state_aggregator src/State_aggregator.cpp)
-ament_target_dependencies(state_aggregator rclcpp std_msgs geometry_msgs sensor_msgs message_filters)
+ament_target_dependencies(state_aggregator rclcpp std_msgs geometry_msgs sensor_msgs message_filters nav_msgs)
 target_link_libraries(state_aggregator Eigen3::Eigen)
 target_include_directories(state_aggregator PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -45,7 +46,7 @@ target_include_directories(depth_processor PUBLIC
 )
 
 add_executable(dvl_processor src/dvl_processor.cpp)
-ament_target_dependencies(dvl_processor rclcpp std_msgs geometry_msgs sensor_msgs message_filters)
+ament_target_dependencies(dvl_processor rclcpp std_msgs geometry_msgs sensor_msgs message_filters nav_msgs)
 target_link_libraries(dvl_processor Eigen3::Eigen)
 target_include_directories(dvl_processor PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
