@@ -35,8 +35,8 @@ namespace controls
                         // Subscribe to efforts from controllers
                         rclcpp::Subscription<geometry_msgs::msg::Wrench>::SharedPtr sub_depth_effort_;
                         rclcpp::Subscription<geometry_msgs::msg::Wrench>::SharedPtr sub_attitude_effort_;
-                        // TODO: Add linear (X,Y) controllers when available
-                        
+                        rclcpp::Subscription<geometry_msgs::msg::Wrench>::SharedPtr sub_x_effort_;
+                        rclcpp::Subscription<geometry_msgs::msg::Wrench>::SharedPtr sub_y_effort_;                                               
 
                         //Publish combined effort for propulsion package
                         rclcpp::Publisher<wrench_msg>::SharedPtr pub_effort_;
@@ -44,6 +44,8 @@ namespace controls
                         
                         void imu_callback(const imu_msg::SharedPtr msg);
                         void depth_effort_callback(const wrench_msg::SharedPtr msg);
+                        void x_effort_callback(const wrench_msg::SharedPtr msg);
+                        void y_effort_callback(const wrench_msg::SharedPtr msg);
                         void attitude_effort_callback(const wrench_msg::SharedPtr msg);
                         void publish_combined_effort();
                         
@@ -51,6 +53,8 @@ namespace controls
                         quatd q_iv_;
                         wrench_msg depth_effort_; // Last received depth effort
                         wrench_msg attitude_effort_; // Last received attitude effort
+                        wrench_msg x_effort_; // Last received x effort
+                        wrench_msg y_effort_; // Last received y effort
                         std::unique_ptr<double> effort_bias_force_x; // Bias effort to be added to the combined effort (optional)
                         std::unique_ptr<double> effort_bias_force_y; 
                         std::unique_ptr<double> effort_bias_force_z; 

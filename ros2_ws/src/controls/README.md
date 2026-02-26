@@ -42,10 +42,33 @@ To activate the depth controller:
 
 
 
+To activate the X-axis controller:
+
+        ros2 param set x_controller enabled true
+
+
+
+To activate the y-axis controller:
+
+        ros2 param set y_controller enabled true
+
+
 Publishing a depth setpoint onto `/controls/depth_setpoint`:
 
 
         ros2 topic pub /controls/depth_setpoint std_msgs/msg/Float64 "{data: 1.5}" 
+
+
+Publishing a depth setpoint onto `/controls/x_setpoint`:
+
+
+        ros2 topic pub /controls/x_setpoint std_msgs/msg/Float64 "{data: 2.0}" 
+
+
+Publishing a depth setpoint onto `/controls/y_setpoint`:
+
+
+        ros2 topic pub /controls/y_setpoint std_msgs/msg/Float64 "{data: 2.0}" 
 
 
 Publishing an attitude setpoint onto `/controls/quaternion_setpoint`:
@@ -54,11 +77,15 @@ Publishing an attitude setpoint onto `/controls/quaternion_setpoint`:
 
 
 ## Nodes
-The package provides three ROS nodes: `depth_controller`, `attitude_controller`, and `superimposer`.
+The package provides five ROS nodes: `depth_controller`, `attitude_controller`, `x_controller`, `y_controller` and `superimposer`.
 
 - `depth_controller` input: `/auv_frame/depth`, `/controls/depth_setpoint`
 
 - `depth_controller` output: `/controls/depth_effort`
+- `x_controller` input: `/auv_frame/x`, `/controls/x_setpoint`
+- `x_controller` output: `/controls/x_effort`
+- `y_controller` input: `/auv_frame/y`, `/controls/y_setpoint`
+- `y_controller` output: `/controls/y_effort`
 
 - `attitude_controller` input: `/auv_frame/imu`, `quaternion_setpoint`
 
@@ -74,6 +101,8 @@ The package provides three ROS nodes: `depth_controller`, `attitude_controller`,
  Topic | Message | Description |
 | ------ | ------- | ---------- |
 | `/controls/depth_effort` | `geometry_msgs/Wrench` | Depth controller effort (force.z) in the pool frame |
+| `/controls/x_effort` | `geometry_msgs/Wrench` | X-axis controller effort in the pool frame |
+| `/controls/y_effort` | `geometry_msgs/Wrench` | Y-axis controller effort in the pool frame |
 | `/controls/attitude_effort` | `geometry_msgs/Wrench` | Attitude controller effort (torques) |
 | `/controls/total_effort` | `geometry_msgs/Wrench` | Sum of depth and attitude efforts with optional biases |
 
@@ -84,11 +113,16 @@ The package provides three ROS nodes: `depth_controller`, `attitude_controller`,
 | ------ | ------- | ---------- |
 | `/auv_frame/depth` | `std_msgs/Float64` | Current depth estimate |
 | `/auv_frame/imu` | `sensor_msgs/Imu` | Orientation and angular velocity for attitude control |
+| `/auv_frame/x` | `std_msgs/Float64` | AUV's position along the X-axis in the pool frame | 
+| `/auv_frame/y` | `std_msgs/Float64` | AUV's position along the Y-axis in the pool frame | 
 | `/controls/depth_setpoint` | `std_msgs/Float64` | Desired depth setpoint |
 | `/controls/quaternion_setpoint` | `geometry_msgs/Quaternion` | Desired vehicle orientation |
+| `/controls/x_setpoint` | `std_msgs/Float64` | Desired vehicle position along the X-axis | 
+| `/controls/y_setpoint` | `std_msgs/Float64` | Desired vehicle position along the Y-axis | 
 | `/controls/depth_effort` | `geometry_msgs/Wrench` | Depth effort input to superimposer |
 | `/controls/attitude_effort` | `geometry_msgs/Wrench` | Attitude effort input to superimposer |
-
+| `/controls/x_effort` | `geometry_msgs/Wrench` | X-axis effort input to superimposer |
+| `/controls/y_effort` | `geometry_msgs/Wrench` | Y-axis effort input to superimposer |
 
 ## Installation
 
