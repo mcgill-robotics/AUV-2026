@@ -285,6 +285,9 @@ RUN mkdir -p tmp_cudss && cd tmp_cudss && \
 RUN pip install --no-cache-dir --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} --ignore-install sympy \ 
     cython --upgrade
 
+# Manually install pytorch because it's not present in the base image
+RUN pip install --no-cache-dir torch torchvision
+
 RUN git clone https://github.com/ultralytics/ultralytics.git && \
     cd ultralytics && \
     sed -i '/"numpy>=1.23.0"/d; /"opencv-python>=4.6.0"/d; /"numpy<2.0.0"/d' pyproject.toml && \
