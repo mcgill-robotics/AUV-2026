@@ -89,6 +89,7 @@ def generate_launch_description():
                 "object_map_topic": object_map_topic,
                 "vio_pose_topic": auv_pose_topic,
                 "confidence_threshold": default_config["object_map"]["confidence_threshold"],
+                "zed_depth_confidence_threshold": default_config["object_map"]["zed_depth_confidence_threshold"],
                 "max_range": default_config["object_map"]["max_range"],
                 "use_stream": default_config["object_map"]["use_stream"],
                 "stream_ip": default_config["object_map"]["stream_ip"],

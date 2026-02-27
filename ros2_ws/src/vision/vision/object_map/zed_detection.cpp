@@ -20,6 +20,7 @@ ZEDDetection::ZEDDetection(
 		int stream_port,
 		ZEDCameraModel camera_model,
 		bool show_detections,
+		int zed_depth_confidence_threshold,
 		function<void(const string&)> log_debug,
 		function<void(const string&)> log_info,
         function<void(const string&)> log_warn,
@@ -35,6 +36,7 @@ ZEDDetection::ZEDDetection(
 		stream_port(stream_port),
 		camera_model(camera_model),
 		show_detections(show_detections),
+		zed_depth_confidence_threshold(zed_depth_confidence_threshold),
 		log_debug(log_debug),
 		log_error(log_error),
 		log_fatal(log_fatal),
@@ -99,7 +101,7 @@ bool ZEDDetection::init_zed()
 	}
 
     runtime_params.measure3D_reference_frame = sl::REFERENCE_FRAME::CAMERA;
-    obj_runtime_param.detection_confidence_threshold = 10;
+    obj_runtime_param.detection_confidence_threshold = zed_depth_confidence_threshold;
 
 	log_info("[INIT] Object detection enabled - init_zed() complete");
 	return true;

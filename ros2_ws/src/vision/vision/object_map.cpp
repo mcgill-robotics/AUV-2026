@@ -109,6 +109,9 @@ public:
 		this->declare_parameter<double>("max_position_jump", 2.0);
 		this->declare_parameter<int>("conf_to_tent_threshold", 5);
 		this->declare_parameter<int>("tent_init_buffer", 5);
+
+		// zed sdk tuning parameters
+		this->declare_parameter<int>("zed_depth_confidence_threshold", 90);
 	
 		// get parameters
 		int frame_rate;
@@ -119,6 +122,7 @@ public:
 		int stream_port;
 		bool sim;
 		bool show_detections;
+		int zed_depth_confidence_threshold;
 
 		this->get_parameter("frame_rate", frame_rate);
 		this->get_parameter("confidence_threshold", confidence_threshold);
@@ -128,6 +132,7 @@ public:
 		this->get_parameter("stream_port", stream_port);
 		this->get_parameter("sim", sim);
 		this->get_parameter("show_detections", show_detections);
+		this->get_parameter("zed_depth_confidence_threshold", zed_depth_confidence_threshold);
 		this->get_parameter("pool_floor_z", pool_floor_z);
 		this->get_parameter("pool_surface_z", pool_surface_z);
 
@@ -154,6 +159,7 @@ public:
 				stream_port,
 				camera_model,
 				show_detections,
+				zed_depth_confidence_threshold,
 				// add callbacks to use rclcpp logging
 				[this] (const string& msg) { RCLCPP_DEBUG(this->get_logger(), "%s", msg.c_str()); },
 				[this](const string& msg) { RCLCPP_INFO(this->get_logger(), "%s", msg.c_str()); },

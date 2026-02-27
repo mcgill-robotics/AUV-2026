@@ -20,6 +20,7 @@ object_map:
   map_topic: /vision/object_map
   pose_topic: /vision/vio_pose
   confidence_threshold: 0.5
+  zed_depth_confidence_threshold: 90
   max_range: 10.0
   use_stream: true
   stream_ip: "127.0.0.1"
