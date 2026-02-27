@@ -1,5 +1,6 @@
 #include <chrono>
 #include <string>
+#include <map>
 #include <array>
 #include <memory>
 
@@ -59,6 +60,14 @@ public:
 	this->get_parameter("object_map_topic", object_map_topic);
 	this->get_parameter("vio_pose_topic", vio_pose_topic);
 
+	// tracker tuning parameters initialized with defaults for non-ZED fallback
+	double gating_threshold = 3.5;
+	int min_hits = 20;
+	int max_age = 8;
+	double max_position_jump = 2.0;
+	int conf_to_tent_threshold = 5;
+	int tent_init_buffer = 5;
+
 	if (!zed_sdk)
 	{	
 		RCLCPP_INFO(this->get_logger(), "ZED SDK not found, using front camera detection topic: %s", front_cam_detection_topic.c_str());
@@ -90,6 +99,16 @@ public:
 		this->declare_parameter<bool>("sim");
 		// show YOLO bounding boxes on output frames
 		this->declare_parameter<bool>("show_detections");
+		this->declare_parameter<double>("pool_floor_z", -2.1);
+		this->declare_parameter<double>("pool_surface_z", 0.0);
+
+		// tracker tuning parameters
+		this->declare_parameter<double>("gating_threshold", 3.5);
+		this->declare_parameter<int>("min_hits", 20);
+		this->declare_parameter<int>("max_age", 8);
+		this->declare_parameter<double>("max_position_jump", 2.0);
+		this->declare_parameter<int>("conf_to_tent_threshold", 5);
+		this->declare_parameter<int>("tent_init_buffer", 5);
 	
 		// get parameters
 		int frame_rate;
@@ -109,6 +128,15 @@ public:
 		this->get_parameter("stream_port", stream_port);
 		this->get_parameter("sim", sim);
 		this->get_parameter("show_detections", show_detections);
+		this->get_parameter("pool_floor_z", pool_floor_z);
+		this->get_parameter("pool_surface_z", pool_surface_z);
+
+		this->get_parameter("gating_threshold", gating_threshold);
+		this->get_parameter("min_hits", min_hits);
+		this->get_parameter("max_age", max_age);
+		this->get_parameter("max_position_jump", max_position_jump);
+		this->get_parameter("conf_to_tent_threshold", conf_to_tent_threshold);
+		this->get_parameter("tent_init_buffer", tent_init_buffer);
 
 		RCLCPP_INFO(this->get_logger(), "[INIT] ZED params: sim=%s, use_stream=%s, stream=%s:%d, frame_rate=%d",
 			sim ? "true" : "false", use_stream ? "true" : "false", stream_ip.c_str(), stream_port, frame_rate);
@@ -140,9 +168,17 @@ public:
 			throw;
 		}
 #endif
-}
+	}
 	// Object Tracker
-	object_tracker = ObjectTracker(new_object_distance_threshold);
+	object_tracker = ObjectTracker(
+		new_object_distance_threshold,
+		gating_threshold,
+		min_hits,
+		max_age,
+		max_position_jump,
+		conf_to_tent_threshold,
+		tent_init_buffer
+	);
 	// Publishers
 	object_map_publisher = this->create_publisher<auv_msgs::msg::VisionObjectArray>(object_map_topic, 10);
 	pose_publisher = this->create_publisher<geometry_msgs::msg::PoseStamped>(vio_pose_topic, 10);
@@ -161,6 +197,22 @@ public:
 	}
 }
 private:
+	std::map<std::string, Track> persistent_objects;
+	double pool_floor_z;
+	double pool_surface_z;
+
+	bool is_unique_object(const std::string& label) const {
+		return label == "gate" || label == "bin" || label == "table" || label == "board" || label == "octagon";
+	}
+
+	bool is_floor_bound(const std::string& label) const {
+		return label == "bin" || label == "table";
+	}
+
+	bool is_surface_bound(const std::string& label) const {
+		return label == "gate" || label == "octagon";
+	}
+
 	void detection_callback(const vision_msgs::msg::Detection2DArray::SharedPtr msg)
 	{
 #ifdef HAS_ZED_SDK
@@ -235,19 +287,46 @@ private:
 	void publish_object_map(const std::vector<Track>& tracks)
 	{
 		auv_msgs::msg::VisionObjectArray object_map_msg;
-		// for each track, publish as VisionObject
-		for (const auto& track : tracks)
-		{
-			if (track.state != TrackState::CONFIRMED) {
-			    continue;
+
+		std::vector<Track> publish_tracks;
+
+		// --- Process Active Tracks ---
+		for (const auto& track : tracks) {
+			if (track.state == TrackState::CONFIRMED) {
+				if (is_unique_object(track.label)) {
+					// Update global memory for unique items
+					persistent_objects[track.label] = track;
+				} else {
+					// Add regular confirmed tracks to the publish list
+					publish_tracks.push_back(track);
+				}
 			}
+		}
+
+		// Add all persistent unique tracks
+		for (const auto& [label, perm_track] : persistent_objects) {
+			publish_tracks.push_back(perm_track);
+		}
+
+		// for each track, publish as VisionObject
+		for (const auto& track : publish_tracks)
+		{
 			auv_msgs::msg::VisionObject object_msg;
 			object_msg.label = track.label;
 			object_msg.id = track.id;
 			Eigen::Vector3d position = track.get_position();
 			object_msg.x = position(0);
 			object_msg.y = position(1);
-			object_msg.z = position(2);
+
+			// --- Z-Axis Depth Constraints ---
+			if (is_floor_bound(track.label)) {
+				object_msg.z = pool_floor_z;
+			} else if (is_surface_bound(track.label)) {
+				object_msg.z = pool_surface_z;
+			} else {
+				object_msg.z = position(2);
+			}
+
 			object_msg.theta_z = 0.0; // TODO: set orientation if available
 			object_msg.confidence = track.confidence;
 			object_map_msg.array.push_back(object_msg);

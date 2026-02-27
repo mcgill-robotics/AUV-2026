@@ -19,9 +19,22 @@ object_detection:
 object_map:
   map_topic: /vision/object_map
   pose_topic: /vision/vio_pose
+  confidence_threshold: 0.5
+  max_range: 10.0
+  use_stream: true
   stream_ip: "127.0.0.1"
   stream_port: 30000
   frame_rate: 30
+  show_detections: true
+  new_object_min_distance_threshold: 0.5
+  pool_floor_z: -2.1
+  pool_surface_z: 0.0
+  gating_threshold: 3.5
+  min_hits: 20
+  max_age: 8
+  max_position_jump: 2.0
+  conf_to_tent_threshold: 5
+  tent_init_buffer: 5
   log_level: info
 
 general:

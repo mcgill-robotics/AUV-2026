@@ -44,7 +44,15 @@ struct Track {
 class ObjectTracker {
 public: 
 
-    explicit ObjectTracker(const float min_new_track_distance = 0.5);
+    explicit ObjectTracker(
+        float min_new_track_distance = 0.5,
+        float gating_threshold = 3.5,
+        int min_hits = 20,
+        int max_age = 8,
+        float max_position_jump = 2.0,
+        int conf_to_tent_threshold = 5,
+        int tent_init_buffer = 5
+    );
 
     ~ObjectTracker() = default;
 
@@ -103,6 +111,8 @@ private:
         const std::vector<double>& confidences
     );
 
+    // Step 7: Post-processing to anchor gate to sawfish/shark midpoint
+    void refine_gate_position();
 
     std::vector<Track> tracks;
 
@@ -110,14 +120,14 @@ private:
     float min_new_track_distance;   // set within constructor
         
     // Tuning Parameters
-    float gating_threshold = 3.5;   // Mahalanobis gate (~3 sigma)
-    int min_hits = 20;              // CONSECUTIVE frames to confirm
-    int max_age = 8;                // Frames to keep lost track
-    float max_position_jump = 2.0;  // Max jump (meters) - higher to handle VIO rotation errors
+    float gating_threshold;         // Mahalanobis gate (~3 sigma)
+    int min_hits;                   // CONSECUTIVE frames to confirm
+    int max_age;                    // Frames to keep lost track
+    float max_position_jump;        // Max jump (meters) - higher to handle VIO rotation errors
 
     // Track State Transition Parameters
-    int conf_to_tent_threshold = 5; // Misses before downgrading CONFIRMED -> TENTATIVE
-    int tent_init_buffer = 5;       // Extra frames allowed for initialization before zombie cull
+    int conf_to_tent_threshold;     // Misses before downgrading CONFIRMED -> TENTATIVE
+    int tent_init_buffer;           // Extra frames allowed for initialization before zombie cull
 
     std::vector<std::pair<size_t,size_t>> matches;
 

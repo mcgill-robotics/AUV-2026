@@ -2,11 +2,25 @@
 #include <hungarian.hpp>
 
 
-ObjectTracker::ObjectTracker(const float min_new_track_distance) {
+ObjectTracker::ObjectTracker(
+    float min_new_track_distance,
+    float gating_threshold,
+    int min_hits,
+    int max_age,
+    float max_position_jump,
+    int conf_to_tent_threshold,
+    int tent_init_buffer
+) {
     this->tracks = std::vector<Track>();
-    this->min_new_track_distance = min_new_track_distance;
-
     this->matches = std::vector<std::pair<size_t, size_t>>();
+
+    this->min_new_track_distance = min_new_track_distance;
+    this->gating_threshold = gating_threshold;
+    this->min_hits = min_hits;
+    this->max_age = max_age;
+    this->max_position_jump = max_position_jump;
+    this->conf_to_tent_threshold = conf_to_tent_threshold;
+    this->tent_init_buffer = tent_init_buffer;
 }
 
 // destructor implicitly defined
@@ -34,10 +48,10 @@ KalmanFilter ObjectTracker::create_kf(const Eigen::Vector3d& initial_pos) {
          0, 0, 1;
 
     // Reasonable covariance matrices
-    // Q (Process Noise): Small for static objects
-    Q << 0.01, 0, 0, 
-         0, 0.01, 0, 
-         0, 0, 0.01;
+    // Q (Process Noise): Extremely small for static objects (enforces heavy inertia)
+    Q << 0.001, 0, 0, 
+         0, 0.001, 0, 
+         0, 0, 0.001;
          
     // R (Measurement Noise): Initial placeholder, will be overwritten by ZED cov
     R << 0.1, 0, 0, 
@@ -97,6 +111,9 @@ std::vector<Track> ObjectTracker::update(
     // 6. Create new tracks
     create_new_tracks(unmatched_dets, measurements, classes, orientations, confidences);
     
+    // 7. Post-processing: Improve Gate Position
+    refine_gate_position();
+
     return tracks;
 }  
 
@@ -386,5 +403,30 @@ void ObjectTracker::create_new_tracks(
         new_track.kf = create_kf(measurements[det_idx]);
 
         tracks.push_back(new_track);
+    }
+}
+
+void ObjectTracker::refine_gate_position() {
+    // The gate bounding box is large and its ZED 3D center can be jittery.
+    // The shark and sawfish are anchored inside the gate, providing a stable midpoint.
+    Track* gate_track = nullptr;
+    Track* shark_track = nullptr;
+    Track* sawfish_track = nullptr;
+
+    for (auto& t : tracks) {
+        if (t.label == "gate") gate_track = &t;
+        else if (t.label == "shark") shark_track = &t;
+        else if (t.label == "sawfish") sawfish_track = &t;
+    }
+
+    if (gate_track && shark_track && sawfish_track) {
+        Eigen::Vector3d midpoint = (shark_track->kf.state() + sawfish_track->kf.state()) / 2.0;
+
+        // Apply refinement if the fish midpoint is physically plausible (e.g. within 5 meters of gate)
+        if ((gate_track->kf.state() - midpoint).norm() < 5.0) {
+            // Apply a very high confidence measurement update to pull the gate to the fish midpoint
+            Eigen::Matrix3d tiny_R = Eigen::Matrix3d::Identity() * 0.001;
+            gate_track->kf.update(midpoint, tiny_R);
+        }
     }
 }
