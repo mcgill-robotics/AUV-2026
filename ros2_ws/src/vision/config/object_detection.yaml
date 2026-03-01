@@ -3,7 +3,7 @@ front_cam:
   enhanced_topic: /vision/front_cam/image_enhanced
   detection_topic: /vision/front_cam/detections
 # relative to src directory
-  model_relative_path: models/frontcam.pt
+  model_relative_path: models/frontcam.engine
   class_names:
     - "gate"
     - "lane_marker"
@@ -16,7 +16,7 @@ front_cam:
     - "shark"
     - "sawfish"
 # QOL queue size, how many messages to buffer if the node can't process them fast enough
-  queue_size: 1
+  queue_size: 10
   publish_annotated_image: true
 
 down_cam:

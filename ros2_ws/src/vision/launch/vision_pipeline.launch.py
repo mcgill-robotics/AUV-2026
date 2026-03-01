@@ -48,24 +48,24 @@ def generate_launch_description():
     od_log_level = default_config["object_detection"]["log_level"]
     om_log_level = default_config["object_map"]["log_level"]
     
-    enhancement_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(os.path.join(vision_dir, "launch", "image_enhancement.launch.py")),
-        # use dictionary unpacking to convert from dict to list of tuples for better readability
-        launch_arguments={
-            "front_cam_topic": front_cam_topic,
-            "down_cam_topic": down_cam_topic,
-            "front_enhanced_topic": front_enhanced_topic,
-            "down_enhanced_topic": down_enhanced_topic,
-            "sim": LaunchConfiguration("sim"),
-            "use_sim_time": LaunchConfiguration("sim"),
-            "log_level": ie_log_level
-        }.items()
-    )
+    # enhancement_launch = IncludeLaunchDescription(
+    #     PythonLaunchDescriptionSource(os.path.join(vision_dir, "launch", "image_enhancement.launch.py")),
+    #     # use dictionary unpacking to convert from dict to list of tuples for better readability
+    #     launch_arguments={
+    #         "front_cam_topic": front_cam_topic,
+    #         "down_cam_topic": down_cam_topic,
+    #         "front_enhanced_topic": front_enhanced_topic,
+    #         "down_enhanced_topic": down_enhanced_topic,
+    #         "sim": LaunchConfiguration("sim"),
+    #         "use_sim_time": LaunchConfiguration("sim"),
+    #         "log_level": ie_log_level
+    #     }.items()
+    # )
     
     object_detection_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(vision_dir, "launch", "object_detection.launch.py")),
         launch_arguments={
-            "front_enhanced_topic": front_enhanced_topic,
+            "front_enhanced_topic": front_cam_topic,
             "down_enhanced_topic": down_enhanced_topic,
             "front_detections_topic": front_detections_topic,
             "down_detections_topic": down_detections_topic,
@@ -114,7 +114,7 @@ def generate_launch_description():
     launch_description.add_action(sim_arg)
     launch_description.add_action(front_model_arg)
     launch_description.add_action(down_model_arg)
-    launch_description.add_action(enhancement_launch)
+    # launch_description.add_action(enhancement_launch)
     launch_description.add_action(object_detection_launch)
     launch_description.add_action(object_map_node)
     

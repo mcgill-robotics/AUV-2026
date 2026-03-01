@@ -1,6 +1,6 @@
 # not the standard ROS node config parameters, these are topics passed to the vision pipeline launch file
 camera:
-  front_cam_topic: /zed/zed_node/rgb/color/rect/image
+  front_cam_topic: /zed/zed_node/rgb/color/rect/image/compressed # TODO: SIMPLIFY THE CONFIGS TO NOT GET LOST 
   down_cam_topic: /vision/down_cam/image_raw
 
 image_enhancement:
@@ -12,7 +12,7 @@ object_detection:
   front_detections_topic: /vision/front_cam/detections
   down_detections_topic: /vision/down_cam/detections
 # relative to src directory
-  front_model_relative_path: models/frontcam.pt
+  front_model_relative_path: models/frontcam.engine
   down_model_relative_path: models/downcam.pt
   log_level: info
 
@@ -26,7 +26,7 @@ object_map:
   stream_ip: "127.0.0.1"
   stream_port: 30000
   frame_rate: 30
-  show_detections: true
+  show_detections: false
   new_object_min_distance_threshold: 0.5
   pool_floor_z: -2.1
   pool_surface_z: 0.0
