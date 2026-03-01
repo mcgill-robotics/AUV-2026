@@ -69,6 +69,7 @@ def generate_launch_description():
             {'input_topic': front_cam_topic},
             {'output_topic': LaunchConfiguration('front_enhanced_topic')},
             {'compressed': LaunchConfiguration('compressed')},
+            {'queue_size': default_config["front_cam"]["queue_size"]},
         ],
         arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')]
     )
@@ -81,6 +82,7 @@ def generate_launch_description():
             {'input_topic': down_cam_topic},
             {'output_topic': LaunchConfiguration('down_enhanced_topic')},
             {'compressed': LaunchConfiguration('compressed')},
+            {'queue_size': default_config["down_cam"]["queue_size"]},
         ],
         arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')]
     )
