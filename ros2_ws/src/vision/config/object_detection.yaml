@@ -36,4 +36,5 @@ down_cam:
   publish_annotated_image: true
   
 general:
+  compressed: false
   log_level: info

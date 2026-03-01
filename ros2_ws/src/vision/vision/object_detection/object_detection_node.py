@@ -25,6 +25,7 @@ class ObjectDetectorNode():
         self.node.declare_parameter('output_topic', Parameter.Type.STRING)
         self.node.declare_parameter('queue_size', Parameter.Type.INTEGER)
         self.node.declare_parameter('publish_annotated_image', False)
+        self.node.declare_parameter("compressed", Parameter.Type.BOOL)
  
 
         self.class_names = list(self.node.get_parameter('class_names').get_parameter_value().string_array_value)
@@ -34,6 +35,7 @@ class ObjectDetectorNode():
         output_topic = self.node.get_parameter('output_topic').get_parameter_value().string_value
         queue_size = self.node.get_parameter('queue_size').get_parameter_value().integer_value
         self.publish_annotated_image = self.node.get_parameter('publish_annotated_image').get_parameter_value().bool_value
+        self.compressed = self.node.get_parameter('compressed').get_parameter_value().bool_value
 
         # Load YOLO
         self.bridge = CvBridge()
@@ -87,9 +89,12 @@ class ObjectDetectorNode():
         
         self.node.get_logger().info(f"{self.node.get_name()} initialized.")
 
-    def image_callback(self, msg: CompressedImage):
+    def image_callback(self, msg: Image | CompressedImage):
         try:
-            img = self.bridge.compressed_imgmsg_to_cv2(msg, "bgr8") 
+            if self.compressed:
+                img = self.bridge.compressed_imgmsg_to_cv2(msg, "bgr8")
+            else:
+                img = self.bridge.imgmsg_to_cv2(msg, "bgr8") 
         except Exception as e:
             self.node.get_logger().error(f"cv_bridge failed: {e}")
             return

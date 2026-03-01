@@ -1,6 +1,6 @@
 # not the standard ROS node config parameters, these are topics passed to the vision pipeline launch file
 camera:
-  front_cam_topic: /zed/zed_node/rgb/color/rect/image/compressed # TODO: SIMPLIFY THE CONFIGS TO NOT GET LOST 
+  front_cam_topic: /zed/zed_node/rgb/color/rect/image
   down_cam_topic: /vision/down_cam/image_raw
 
 image_enhancement:
@@ -40,3 +40,4 @@ object_map:
 
 general:
   sim: false
+  compressed: true

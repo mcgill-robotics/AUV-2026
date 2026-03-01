@@ -52,6 +52,14 @@ def generate_launch_description():
         description="Path to the down camera object detection model file."
     )
     
+    compressed_arg = DeclareLaunchArgument(
+        "compressed",
+        default_value=str(default_config["general"]["compressed"]),
+        description=(
+            "Whether input image topics are compressed image message topics"
+        )
+    )
+    
     front_detection_node = Node(
         package='vision',
         executable='front_cam_object_detection.py',
@@ -63,6 +71,7 @@ def generate_launch_description():
             {'output_topic': LaunchConfiguration('front_detections_topic')},
             {'queue_size': default_config["front_cam"]["queue_size"]},
             {'publish_annotated_image': default_config["front_cam"].get("publish_annotated_image", False)},
+            {'compressed': LaunchConfiguration('compressed')}
         ],
         arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')]
     )
@@ -77,6 +86,7 @@ def generate_launch_description():
             {'output_topic': LaunchConfiguration('down_detections_topic')},
             {'queue_size': default_config["down_cam"]["queue_size"]},
             {'publish_annotated_image': default_config["down_cam"].get("publish_annotated_image", False)},
+            {'compressed': LaunchConfiguration('compressed')}
         ],
         arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')]
     )
@@ -88,6 +98,7 @@ def generate_launch_description():
     launch_description.add_action(down_enhanced_topic_arg)
     launch_description.add_action(front_detections_topic_arg)
     launch_description.add_action(down_detections_topic_arg)
+    launch_description.add_action(compressed_arg)
     
     launch_description.add_action(front_detection_node)
     launch_description.add_action(down_detection_node)

@@ -20,8 +20,15 @@ def generate_launch_description():
         "sim",
         default_value=str(default_config["general"]["sim"]),
         description=(
-            "Whether to run in simulation mode. In simulation mode, input topics "
-            "are assumed to be in compressed image format and use_sim_time is enabled."
+            "Whether to use simulation time. Should be true when running in simulation and false when running on the real AUV."
+        )
+    )
+    
+    compressed_arg = DeclareLaunchArgument(
+        "compressed",
+        default_value=str(default_config["general"]["compressed"]),
+        description=(
+            "Whether input image topics are compressed image message topics. Appends 'compressed' to the end of expected input topic names if true."
         )
     )
     
@@ -48,29 +55,30 @@ def generate_launch_description():
     od_log_level = default_config["object_detection"]["log_level"]
     om_log_level = default_config["object_map"]["log_level"]
     
-    # enhancement_launch = IncludeLaunchDescription(
-    #     PythonLaunchDescriptionSource(os.path.join(vision_dir, "launch", "image_enhancement.launch.py")),
-    #     # use dictionary unpacking to convert from dict to list of tuples for better readability
-    #     launch_arguments={
-    #         "front_cam_topic": front_cam_topic,
-    #         "down_cam_topic": down_cam_topic,
-    #         "front_enhanced_topic": front_enhanced_topic,
-    #         "down_enhanced_topic": down_enhanced_topic,
-    #         "sim": LaunchConfiguration("sim"),
-    #         "use_sim_time": LaunchConfiguration("sim"),
-    #         "log_level": ie_log_level
-    #     }.items()
-    # )
+    enhancement_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(os.path.join(vision_dir, "launch", "image_enhancement.launch.py")),
+        # use dictionary unpacking to convert from dict to list of tuples for better readability
+        launch_arguments={
+            "front_cam_topic": front_cam_topic,
+            "down_cam_topic": down_cam_topic,
+            "front_enhanced_topic": front_enhanced_topic,
+            "down_enhanced_topic": down_enhanced_topic,
+            "compressed": LaunchConfiguration("compressed"),
+            "use_sim_time": LaunchConfiguration("sim"),
+            "log_level": ie_log_level
+        }.items()
+    )
     
     object_detection_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(vision_dir, "launch", "object_detection.launch.py")),
         launch_arguments={
-            "front_enhanced_topic": front_cam_topic,
+            "front_enhanced_topic": front_enhanced_topic,
             "down_enhanced_topic": down_enhanced_topic,
             "front_detections_topic": front_detections_topic,
             "down_detections_topic": down_detections_topic,
             "front_model": LaunchConfiguration("front_model_relative_path"),
             "down_model": LaunchConfiguration("down_model_relative_path"),
+            "compressed": LaunchConfiguration("compressed"),
             "use_sim_time": LaunchConfiguration("sim"),
             "log_level": od_log_level
         }.items()
@@ -112,9 +120,10 @@ def generate_launch_description():
     
     launch_description = LaunchDescription()
     launch_description.add_action(sim_arg)
+    launch_description.add_action(compressed_arg)
     launch_description.add_action(front_model_arg)
     launch_description.add_action(down_model_arg)
-    # launch_description.add_action(enhancement_launch)
+    launch_description.add_action(enhancement_launch)
     launch_description.add_action(object_detection_launch)
     launch_description.add_action(object_map_node)
     

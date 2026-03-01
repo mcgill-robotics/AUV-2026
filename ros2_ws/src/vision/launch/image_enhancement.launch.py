@@ -41,23 +41,23 @@ def generate_launch_description():
         default_value=default_config["down_cam"]["enhanced_topic"],
         description='Down enhanced image topic'
     )
-    sim_arg = DeclareLaunchArgument(
-        'sim',
-        default_value=str(default_config["general"]["sim"]),
-        description='Whether running in simulation mode'
+    compressed_arg = DeclareLaunchArgument(
+        'compressed',
+        default_value=str(default_config["general"]["compressed"]),
+        description='Whether running in with compressed image topics'
     )
     
     front_cam_topic = PythonExpression([
         "'",
         LaunchConfiguration('front_cam_topic'),
         "'",
-        " + ('/compressed' if ",LaunchConfiguration('sim'), " else '')"
+        " + ('/compressed' if ",LaunchConfiguration('compressed'), " else '')"
     ])
     down_cam_topic = PythonExpression([
         "'",
         LaunchConfiguration('down_cam_topic'),
         "'",
-        " + ('/compressed' if ",LaunchConfiguration('sim'), " else '')",
+        " + ('/compressed' if ",LaunchConfiguration('compressed'), " else '')",
     ])
 
     front_cam_enhancement_node = Node(
@@ -68,7 +68,7 @@ def generate_launch_description():
         parameters=[
             {'input_topic': front_cam_topic},
             {'output_topic': LaunchConfiguration('front_enhanced_topic')},
-            {'sim': LaunchConfiguration('sim')},
+            {'compressed': LaunchConfiguration('compressed')},
         ],
         arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')]
     )
@@ -80,7 +80,7 @@ def generate_launch_description():
         parameters=[
             {'input_topic': down_cam_topic},
             {'output_topic': LaunchConfiguration('down_enhanced_topic')},
-            {'sim': LaunchConfiguration('sim')},
+            {'compressed': LaunchConfiguration('compressed')},
         ],
         arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')]
     )
@@ -91,7 +91,7 @@ def generate_launch_description():
     launch_description.add_action(down_cam_topic_arg)
     launch_description.add_action(front_enhanced_topic_arg)
     launch_description.add_action(down_enhanced_topic_arg)
-    launch_description.add_action(sim_arg)
+    launch_description.add_action(compressed_arg)
     
     launch_description.add_action(front_cam_enhancement_node)
     launch_description.add_action(down_cam_enhancement_node)
