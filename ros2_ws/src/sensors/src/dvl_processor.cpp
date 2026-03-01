@@ -1,4 +1,5 @@
 #include "sensors/dvl_processor.hpp"
+#include "sensors/utils.hpp"
 
 namespace sensors {
 
@@ -13,15 +14,15 @@ DvlProcessor::DvlProcessor() : Node("dvl_processor") {
     //quarternion rotation from dvl inertial frame to pool inertial frame
     //DVL posts data with +X forward, +Y right, and +Z downward. 
     //Pool inertial uses +X forward, +Y left, and +Z up.
-    this->declare_parameter<std::vector<double>>("q_ii2", {1.0, 0.0, 0.0, 0.0});
-    std::vector<double> q_ii2_vec;
-    this->get_parameter("q_ii2", q_ii2_vec);
-    q_ii2_ = Quatd(q_ii2_vec[0], q_ii2_vec[1], q_ii2_vec[2], q_ii2_vec[3]);
+    this->declare_parameter<std::vector<double>>("q_pi2", {1.0, 0.0, 0.0, 0.0});
+    std::vector<double> q_pi2_vec;
+    this->get_parameter("q_pi2", q_pi2_vec);
+    q_pi2_ = sensors::math::quatFromParamWxyz(q_pi2_vec);
 
     this->declare_parameter<std::vector<double>>("q_vd", {1.0, 0.0, 0.0, 0.0});
     std::vector<double> q_vd_vec;
     this->get_parameter("q_vd", q_vd_vec);
-    q_vd_ = Quatd(q_vd_vec[0], q_vd_vec[1], q_vd_vec[2], q_vd_vec[3]);
+    q_vd_ = sensors::math::quatFromParamWxyz(q_vd_vec);
 
 
     this->declare_parameter<std::string>("frame_id_global", "pool_link");
@@ -65,20 +66,26 @@ void DvlProcessor::dvl_callback(const nav_msgs::msg::Odometry::SharedPtr msg) {
 DvlData_DvlFrame DvlProcessor::parse_dvl(const nav_msgs::msg::Odometry& msg) const {
     DvlData_DvlFrame dvl_raw;
 
-    dvl_raw.r_di_i2 = Vec3(msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z);
-    dvl_raw.v_di_d = Vec3(msg.twist.twist.linear.x, msg.twist.twist.linear.y, msg.twist.twist.linear.z);
+    dvl_raw.r_di2_i2 = Vec3(msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z);
+    dvl_raw.v_di2_d = Vec3(msg.twist.twist.linear.x, msg.twist.twist.linear.y, msg.twist.twist.linear.z);
     
     return dvl_raw; 
 }
 
 DvlData_InertialFrame DvlProcessor::process_dvl(const DvlData_DvlFrame& dvl_raw) const {
     DvlData_InertialFrame dvl_inertial;
+    Vec3 r_i2p_p = r_dv_v_;
+    Vec3 r_di2_p = q_pi2_ * dvl_raw.r_di2_i2;
+    RCLCPP_INFO(this->get_logger(), "r_di2_p: %f, %f, %f", r_di2_p.x(), r_di2_p.y(), r_di2_p.z());
+    Vec3 r_vd_v = -r_dv_v_;
+    Vec3 r_vd_p = q_iv_ * r_vd_v;
+
+
+    dvl_inertial.r_vp_p = r_i2p_p + r_di2_p + r_vd_p;
     
-    //Transforms position vector from dvl inertial frame to pool inertial frame
-    //Rotates vector from vehicle to dvl to pool inertial frame
-    dvl_inertial.r_vi_i = (q_ii2_ * dvl_raw.r_di_i2) - (q_iv_ * r_dv_v_);
-    
-    dvl_inertial.v_vi_i = q_iv_ * q_vd_ * dvl_raw.v_di_d;
+    // Velocity transformation not yet supported, it would involve more complex calculations using 
+    // the orientation, angular velocity, and the raw velocity data.
+    dvl_inertial.v_vp_p = Vec3(0.0, 0.0, 0.0); 
     
     return dvl_inertial;
 }
@@ -86,9 +93,9 @@ DvlData_InertialFrame DvlProcessor::process_dvl(const DvlData_DvlFrame& dvl_raw)
 geometry_msgs::msg::PointStamped DvlProcessor::compose_position_msg(const DvlData_InertialFrame& dvl_inertial) const {
     geometry_msgs::msg::PointStamped msg_out;
     msg_out.header.frame_id = frame_id_global_;
-    msg_out.point.x = dvl_inertial.r_vi_i.x();
-    msg_out.point.y = dvl_inertial.r_vi_i.y();
-    msg_out.point.z = dvl_inertial.r_vi_i.z();
+    msg_out.point.x = dvl_inertial.r_vp_p.x();
+    msg_out.point.y = dvl_inertial.r_vp_p.y();
+    msg_out.point.z = dvl_inertial.r_vp_p.z();
     
     return msg_out;
 }
@@ -96,9 +103,9 @@ geometry_msgs::msg::PointStamped DvlProcessor::compose_position_msg(const DvlDat
 geometry_msgs::msg::TwistStamped DvlProcessor::compose_velocity_msg(const DvlData_InertialFrame& dvl_inertial) const {
     geometry_msgs::msg::TwistStamped msg_out;
     msg_out.header.frame_id = frame_id_global_;    
-    msg_out.twist.linear.x = dvl_inertial.v_vi_i.x();
-    msg_out.twist.linear.y = dvl_inertial.v_vi_i.y();
-    msg_out.twist.linear.z = dvl_inertial.v_vi_i.z();
+    msg_out.twist.linear.x = dvl_inertial.v_vp_p.x();
+    msg_out.twist.linear.y = dvl_inertial.v_vp_p.y();
+    msg_out.twist.linear.z = dvl_inertial.v_vp_p.z();
     
     return msg_out;
 }

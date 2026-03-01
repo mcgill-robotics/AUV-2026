@@ -29,6 +29,17 @@ namespace sensors
             std::bind(&State_aggregator::depth_callback, this, std::placeholders::_1)
         );
 
+        dvl_position_sub_ = this->create_subscription<geometry_msgs::msg::PointStamped>(
+            "auv_frame/dvl/position",
+            1,
+            std::bind(&State_aggregator::dvl_position_callback, this, std::placeholders::_1)
+        );
+
+        dvl_velocity_sub_ = this->create_subscription<geometry_msgs::msg::TwistStamped>(
+            "auv_frame/dvl/velocity",
+            1,
+            std::bind(&State_aggregator::dvl_velocity_callback, this, std::placeholders::_1)
+        );
 
         pose_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>(
             "state/pose",
@@ -37,7 +48,7 @@ namespace sensors
 
         // Initialize state variables
         current_depth_ = 0.0;
-        current_position_ = Vec3::Zero();
+        current_position_dvl_ = Vec3::Zero();
         current_velocity_ = Vec3::Zero();
         current_orientation_.w = 1.0;
         current_orientation_.x = 0.0;
@@ -66,6 +77,24 @@ namespace sensors
         current_depth_ = depth_in->data;
     }
 
+    // DVL position callback
+    void State_aggregator::dvl_position_callback(const geometry_msgs::msg::PointStamped::SharedPtr position_in)
+    {
+        // Update current position from DVL
+        current_position_dvl_(0) = position_in->point.x;
+        current_position_dvl_(1) = position_in->point.y;
+        current_position_dvl_(2) = position_in->point.z;
+    }
+
+    // DVL velocity callback
+    void State_aggregator::dvl_velocity_callback(const geometry_msgs::msg::TwistStamped::SharedPtr velocity_in)
+    {
+        // Update current velocity from DVL
+        current_velocity_(0) = velocity_in->twist.linear.x;
+        current_velocity_(1) = velocity_in->twist.linear.y;
+        current_velocity_(2) = velocity_in->twist.linear.z;
+    }
+
     // Publish aggregated state
     void State_aggregator::publish_state()
     {
@@ -74,9 +103,9 @@ namespace sensors
         pose_msg.header.frame_id = frame_id_global_;
 
         pose_msg.pose.orientation = current_orientation_;
-        pose_msg.pose.position.x = current_position_(0);
-        pose_msg.pose.position.y = current_position_(1);
-        pose_msg.pose.position.z = -current_depth_; // Assuming down is negative z
+        pose_msg.pose.position.x = current_position_dvl_(0);
+        pose_msg.pose.position.y = current_position_dvl_(1);
+        pose_msg.pose.position.z = -current_depth_; // Down is negative Z
 
         pose_pub_->publish(pose_msg);
 }

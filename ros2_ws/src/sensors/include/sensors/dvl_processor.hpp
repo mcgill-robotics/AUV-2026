@@ -16,14 +16,14 @@ namespace sensors
 
     // Struct to hold the raw data from the DVL sensor
     struct DvlData_DvlFrame {
-        Vec3 r_di_i2; 
-        Vec3 v_di_d;  
+        Vec3 r_di2_i2; 
+        Vec3 v_di2_d;  
     };
 
     // Struct to hold the transformed dvl data in the pool inertial frame
     struct DvlData_InertialFrame {
-        Vec3 r_vi_i; 
-        Vec3 v_vi_i; 
+        Vec3 r_vp_p; 
+        Vec3 v_vp_p; 
     };
 
     class DvlProcessor : public rclcpp::Node {
@@ -62,7 +62,7 @@ namespace sensors
         Vec3 r_dv_v_; 
         std::string frame_id_global_;
         Quatd q_iv_; 
-        Quatd q_ii2_;
+        Quatd q_pi2_;
         Quatd q_vd_;
     };
 

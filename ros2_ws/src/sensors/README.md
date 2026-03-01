@@ -20,6 +20,7 @@ These processed sensor streams are used downstream by the **EKF**, **controller*
     - [**3. Orientation**](#3-orientation)
   - [Depth Sensor Processing](#depth-sensor-processing)
   - [DVL Processing](#dvl-processing)
+    - [**1.Transformation Logic**](#1transformation-logic)
   - [Usage](#usage)
   - [Nodes](#nodes)
     - [Published Topics](#published-topics)
@@ -182,50 +183,44 @@ $r_v^{vs}$: the vector from the sensor to the vehicle frame, expressed in the ve
 ## DVL Processing
 
 
-The DVL provides position data for the sensor's location relative to the pool frame. It utilizes an internal Kalman Filter to fuse IMU and acoustic velocity measurements for dead-reckoning position estimation. All relevant documentation about the DVL a50 can be [here](https://docs.waterlinked.com/dvl/dvl-a50/) 
+The DVL provides position data for the sensor's location relative to the pool frame. It utilizes an internal Kalman Filter to fuse IMU and acoustic velocity measurements for dead-reckoning position estimation. All relevant documentation about the DVL a50 can be [here](https://docs.waterlinked.com/dvl/dvl-a50/). 
 
 As mentioned above, we operate in three coordinate reference frames:
-- **Inertial Frame ($i$):** Fixed global reference (the pool).
+- **Pool Inertial Frame ($p$):** Origin located at the AUV's starting point. 
+- **DVL Inertial Frame ($i2$):** Origin located the DVL's starting point.
 - **Vehicle Frame ($v$):** origin at the AUV's **Center of Mass (CM)**.
-- **Sensor Frame ($s$):** origin at the DVL's physical mounting point.
+- **DVL Body Frame ($d$):** origin at the DVL's physical mounting point.
 
-Because the DVL output represents the sensor location ($s$) and not the AUV's Center of Mass ($v$), the raw coordinates must be transformed into the inertial frame.
+Because the DVL output represents the DVL's location ($d$) and not the AUV's Center of Mass ($v$), the raw coordinates must be transformed into the pool frame before adding the offset between the DVL inertial frame($i2$) and the pool inertial frame ($p$).
 
-### **1. Homogeneous Transformation Logic**
+### **1.Transformation Logic**
 
-To map the sensor frame directly to the inertial frame, we define a $4 \times 4$ homogeneous transformation matrix, $T_{is}$. This matrix incorporates the rotation to align axes and the translation to shift the origin:
-
-$$
-T_{is} = \begin{bmatrix} 
-C_{is} & r_i^{si} \\
-0_{1\times3} & 1
-\end{bmatrix}
-$$
-
-Where:
-- $C_{is}$: Rotation matrix from sensor to inertial frame (derived from IMU quaternion).
-- $r_i^{si}$: The raw $(x, y, z)$ position vector reported by the DVL.
-
-### **2. Mathematical Transformation Equation**
-
-The position of the vehicle's Center of Mass in the inertial frame, $r_i^{vi}$, is calculated by applying the transformation matrix to the physical offset vector:
+To calculate the AUV's position in the $p$ frame, we need to go from the $p$ frame to the $i2$ frame, then from the $i2$ frame to the $d$ frame, then from the $d$ frame to the $v$ frame:
 
 $$
-\begin{bmatrix}
-r_i^{vi} \\\\
-1
-\end{bmatrix} 
-= T_{is} 
-\begin{bmatrix}
-r_s^{vs} \\\\
-1
-\end{bmatrix}
+r_p^{vp} = r_p^{i2p} + r_{p}^{di2} + r_p^{vd}
 $$
 
-Where:
-- $r_i^{vi}$: Position of the vehicle Center of Mass in the pool inertial frame.
-- $r_s^{vs}$: Constant offset vector from the DVL sensor to the Center of Mass, expressed in the sensor's local frame (obtained from CAD).
----
+Since our DVL gives us $r_{i2}^{di2}$ and our CAD gives us $r_v^{vd}$, we re-express the above equation 
+as:  
+
+$$
+r_p^{vp} = r_p^{i2p} + C_{pi2}  r_{i2}^{di2} + C_{pv}  r_v^{vd}
+$$
+
+Let's know figure out how we can get the three remaining variables in the equation. 
+
+- $r_p^{i2p}$ is equal to $r_v^{dv}$. This is because the vector from the AUV's starting point to the DVL's starting point
+is simply the vector from the vehicle frame to the DVL frame at startup. 
+
+- Based on the coordinate system adopted by our DVL, we also can calcaulate the
+rotation matrix from the DVL's inertial frame to the pool inertial frame, giving us $C_{pi2}$. 
+
+ - Finally, $C_{pv}$ can be obtained from our IMU readings. 
+
+As for calculating the AUV's velocity from the DVL's velocity measurements, it invloves more complex calculations
+involving the orientation and angular velocity of the AUV. It is currently not supported. 
+
 
 ## Usage
 

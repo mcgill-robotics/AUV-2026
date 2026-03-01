@@ -3,6 +3,8 @@
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <geometry_msgs/msg/vector3_stamped.hpp>
+#include <geometry_msgs/msg/point_stamped.hpp>
+#include <geometry_msgs/msg/twist_stamped.hpp>
 #include <message_filters/subscriber.h>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 
@@ -32,9 +34,13 @@ namespace sensors
 
                 rclcpp::Subscription<imu_msg>::SharedPtr imu_sub_;
                 rclcpp::Subscription<float64_msg>::SharedPtr depth_sub_;
+                rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr dvl_position_sub_;
+                rclcpp::Subscription<geometry_msgs::msg::TwistStamped>::SharedPtr dvl_velocity_sub_;
 
                 void imu_callback(const imu_msg::SharedPtr imu_in);
                 void depth_callback(const float64_msg::SharedPtr depth_in);
+                void dvl_position_callback(const geometry_msgs::msg::PointStamped::SharedPtr position_in);
+                void dvl_velocity_callback(const geometry_msgs::msg::TwistStamped::SharedPtr velocity_in);
                 void publish_state();                
 
                 geometry_msgs::msg::PoseStamped current_pose_; //Final aggregated pose message
@@ -42,7 +48,7 @@ namespace sensors
                 double publish_frequency_; // Hz
 
                 double current_depth_; // Depth Sensor
-                Vec3 current_position_; // X,Y,Z postion from DVL
+                Vec3 current_position_dvl_; // X,Y,Z postion from DVL
                 Vec3 current_velocity_; // DVL
                 geometry_msgs::msg::Quaternion current_orientation_; // Imu
 

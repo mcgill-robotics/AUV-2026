@@ -66,6 +66,13 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(imu_processor_file)
     )
 
+    dvl_processor_file = os.path.join(
+        sensors_pkg_path, "launch", "dvl_processor.launch.py"
+    )
+    dvl_processor = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(dvl_processor_file)
+    )
+
     # Get the sim parameter value
     sim = LaunchConfiguration("sim")
 
@@ -78,6 +85,7 @@ def generate_launch_description():
             launch_Xsens_Driver,
             depth_processor,
             imu_processor,
+            dvl_processor,
         ]
     )
 
