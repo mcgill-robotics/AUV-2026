@@ -5,9 +5,10 @@ from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument
+from launch.conditions import IfCondition
 from launch_ros.actions import Node
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration,PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 
 def generate_launch_description():
     vision_dir = get_package_share_directory("vision")
@@ -29,6 +30,14 @@ def generate_launch_description():
         default_value=str(default_config["general"]["compressed"]),
         description=(
             "Whether input image topics are compressed image message topics. Appends 'compressed' to the end of expected input topic names if true."
+        )
+    )
+    
+    use_enhance_arg = DeclareLaunchArgument(
+        "enhance_images",
+        default_value=str(default_config["general"]["enhance_images"]),
+        description=(
+            "Whether to run the image enhancement nodes. If false, object detection nodes will subscribe directly to raw camera topics instead of enhanced image topics."
         )
     )
     
@@ -66,14 +75,26 @@ def generate_launch_description():
             "compressed": LaunchConfiguration("compressed"),
             "use_sim_time": LaunchConfiguration("sim"),
             "log_level": ie_log_level
-        }.items()
+        }.items(),
+        condition=IfCondition(LaunchConfiguration("enhance_images"))
     )
+    
+    # because launch configuration parameters are not evaluated in this script but rather passed in to ROS context directly, the ROS manager will evaluate these python expression to determine the actual topic names to remap to for the object detection nodes. If enhance_images is true, remap to the enhanced image topics, otherwise remap to the raw camera topics
+    object_detection_front_input = PythonExpression([
+        "'", front_enhanced_topic, 
+        "' if '", LaunchConfiguration("enhance_images"), "' == 'True' else '", 
+        front_cam_topic,"'"," + ('/compressed' if ",LaunchConfiguration('compressed'), " else '')"
+    ])
+    object_detection_down_input = PythonExpression([
+        "'", down_enhanced_topic, 
+        "' if '", LaunchConfiguration("enhance_images"), "' == 'True' else '", down_cam_topic, "'"," + ('/compressed' if ",LaunchConfiguration('compressed'), " else '')"
+    ])
     
     object_detection_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(vision_dir, "launch", "object_detection.launch.py")),
         launch_arguments={
-            "front_enhanced_topic": front_enhanced_topic,
-            "down_enhanced_topic": down_enhanced_topic,
+            "front_enhanced_topic": object_detection_front_input,
+            "down_enhanced_topic": object_detection_down_input,
             "front_detections_topic": front_detections_topic,
             "down_detections_topic": down_detections_topic,
             "front_model": PathJoinSubstitution([vision_dir, LaunchConfiguration("front_model_relative_path")]),
@@ -121,6 +142,7 @@ def generate_launch_description():
     launch_description = LaunchDescription()
     launch_description.add_action(sim_arg)
     launch_description.add_action(compressed_arg)
+    launch_description.add_action(use_enhance_arg)
     launch_description.add_action(front_model_arg)
     launch_description.add_action(down_model_arg)
     launch_description.add_action(enhancement_launch)

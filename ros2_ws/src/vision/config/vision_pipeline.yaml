@@ -41,3 +41,4 @@ object_map:
 general:
   sim: false
   compressed: true
+  enhance_images: true
