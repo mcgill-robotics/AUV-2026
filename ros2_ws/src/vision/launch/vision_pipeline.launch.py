@@ -7,7 +7,7 @@ from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument
 from launch_ros.actions import Node
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration,PathJoinSubstitution
 
 def generate_launch_description():
     vision_dir = get_package_share_directory("vision")
@@ -34,12 +34,12 @@ def generate_launch_description():
     
     front_model_arg = DeclareLaunchArgument(
         "front_model_relative_path",
-        default_value=os.path.join(vision_dir, default_config["object_detection"]["front_model_relative_path"]),
+        default_value=default_config["object_detection"]["front_model_relative_path"],
         description="Path to the front camera object detection model file."
     )
     down_model_arg = DeclareLaunchArgument(
         "down_model_relative_path",
-        default_value=os.path.join(vision_dir, default_config["object_detection"]["down_model_relative_path"]),
+        default_value=default_config["object_detection"]["down_model_relative_path"],
         description="Path to the down camera object detection model file."
     )
     # topic names pulled from config directly
@@ -76,8 +76,8 @@ def generate_launch_description():
             "down_enhanced_topic": down_enhanced_topic,
             "front_detections_topic": front_detections_topic,
             "down_detections_topic": down_detections_topic,
-            "front_model": LaunchConfiguration("front_model_relative_path"),
-            "down_model": LaunchConfiguration("down_model_relative_path"),
+            "front_model": PathJoinSubstitution([vision_dir, LaunchConfiguration("front_model_relative_path")]),
+            "down_model": PathJoinSubstitution([vision_dir, LaunchConfiguration("down_model_relative_path")]),
             "compressed": LaunchConfiguration("compressed"),
             "use_sim_time": LaunchConfiguration("sim"),
             "log_level": od_log_level

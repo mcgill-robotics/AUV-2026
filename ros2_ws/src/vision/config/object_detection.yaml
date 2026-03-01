@@ -3,7 +3,7 @@ front_cam:
   enhanced_topic: /vision/front_cam/image_enhanced
   detection_topic: /vision/front_cam/detections
 # relative to src directory
-  model_relative_path: models/frontcam.engine
+  model_relative_path: models/frontcam.pt
   class_names:
     - "gate"
     - "lane_marker"
