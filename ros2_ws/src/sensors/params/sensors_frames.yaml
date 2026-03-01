@@ -31,9 +31,9 @@ dvl_processor:
     r_dv_v: [0.084, -0.0685, -0.122]
   
     #Orientation offset as quaternion from non inertial dvl frame to AUV frame. (w,x,y,z) 
-    q_vd: [0.7071, 0.7071, 0.0, 0.0]
+    q_vd: [0.0, 1.0, 0.0, 0.0]
     
     # Orientation offset as quaternion from DVL inertial frame to pool inertial frame. (w,x,y,z)
-    q_pi2: [0.7071, 0.7071, 0.0, 0.0]
+    q_pi2: [0.0, 1.0, 0.0, 0.0]
 
     
