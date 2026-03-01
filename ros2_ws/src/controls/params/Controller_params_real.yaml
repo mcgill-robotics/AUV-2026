@@ -6,26 +6,26 @@ attitude_controller:
     P_ez: 6.0
     P_wx: 1.0
     P_wy: 1.0
-    P_wz: 1.0
-    buoyancy: 278.0 # [N]
+    P_wz: 2.0
+    buoyancy: 275.4 # [N]
     r_bv_v: [0.0, 0.0, 0.023] # [m] From CAD Model    
     enabled: false
 
 depth_controller:
   ros__parameters:
     control_loop_hz: 10.0
-    KP: 10.0
-    KD: 50.0
+    KP: 60.0
+    KD: 60.0
     KI: 0.0
     I_MAX: 10.0
-    net_buoyancy: 13.7 # Newtons. TODO: Tune during pool test
+    net_buoyancy: 14.5 # Newtons.
     enabled: false
 
 x_controller:
   ros__parameters:
     control_loop_hz: 10.0
-    KP: 10.0
-    KD: 50.0
+    KP: 60.0
+    KD: 60.0
     KI: 0.0
     I_MAX: 10.0
     enabled: false
@@ -33,8 +33,8 @@ x_controller:
 y_controller:
   ros__parameters:
     control_loop_hz: 10.0
-    KP: 10.0
-    KD: 50.0
+    KP: 60.0
+    KD: 60.0
     KI: 0.0
     I_MAX: 10.0
     enabled: false
