@@ -31,21 +31,21 @@ class EnhanceNode(Node):
             self.output_topic = output_topic
             
         self.for_sim = self.get_parameter("sim").value
-        image_format = Image
+        input_format = Image
         if self.for_sim:
-            image_format = CompressedImage
+            input_format = CompressedImage
             self.get_logger().warn(
                 ("WARNING: EnhanceNode running in simulation mode:"
                  " input topic is assumed to be in compressed image format,"
-                 " output topic will also be compressed.")
+                 " output enhancement will be uncompressed.")
             )
         self.subscription = self.create_subscription(
-			image_format, # Image message type
+			input_format, # Image message type
 			self.input_topic, # Topic name
 			self.enhancement_callback, # Callback, called on message received
 			10 # QoS: if received messages > this #, start dropping oldest received ones
 		)
-        self.publisher = self.create_publisher(image_format, self.output_topic, 10)
+        self.publisher = self.create_publisher(Image, self.output_topic, 10)
         self.get_logger().info(
             (f"EnhanceNode initialized with "
             f"input topic: {self.input_topic} and "
@@ -77,7 +77,7 @@ class EnhanceNode(Node):
             with np.errstate(invalid='raise'):
                 enhanced_image = self.enhancer.enhance(cv_image)
             # OpenCV -> ROS2
-            enhanced_msg = self.br.cv2_to_compressed_imgmsg(enhanced_image)
+            enhanced_msg = self.br.cv2_to_imgmsg(enhanced_image, encoding="bgr8")
         else:
             # ROS2 -> OpenCV
             cv_image = self.br.imgmsg_to_cv2(msg, desired_encoding="bgr8")
@@ -85,5 +85,5 @@ class EnhanceNode(Node):
             with np.errstate(invalid='raise'):
                 enhanced_image = self.enhancer.enhance(cv_image)
             # OpenCV -> ROS2
-            enhanced_msg = self.br.cv2_to_imgmsg(enhanced_image)
+            enhanced_msg = self.br.cv2_to_imgmsg(enhanced_image, encoding="bgr8")
         return enhanced_msg

@@ -1,49 +1,35 @@
 {
-    "context": "../",
-    "dockerFile": "../Docker/dev/Dockerfile",
-    "build": {
-		"args": {
-			"WORKSPACE": "${containerWorkspaceFolder}"
-		}
-	},
-    "remoteUser" : "root",
-    "runArgs": [
-        // This will allow you to use a ptrace-based debugger like C++, Go, and Rust.
-	    // "--network=host",
-        "--cap-add=SYS_PTRACE",
-        "--security-opt=seccomp:unconfined",
-        "--security-opt=apparmor:unconfined",
+    "name": "AUV Dev (CPU)",
+    "dockerComposeFile": "../Docker/dev/docker-compose.yml",
+    "service": "cpu",
+    "runServices": ["cpu"],
 
-        // GUI support
-        "--env=DISPLAY=${localEnv:DISPLAY}",
-        "--volume=/tmp/.X11-unix:/tmp/.X11-unix:rw",
+    "workspaceFolder": "/root/AUV-2026",
+    "remoteUser": "root",
 
-        // Shared memory (needed for rqt, Foxglove bridge stability)
-        "--ipc=host"
-    ],
-    "containerEnv": {
-		"DISPLAY": "${localEnv:DISPLAY}", // Needed for GUI try ":0" for windows
-		"WAYLAND_DISPLAY": "${localEnv:WAYLAND_DISPLAY}",
-		"XDG_RUNTIME_DIR": "${localEnv:XDG_RUNTIME_DIR}",
-		"PULSE_SERVER": "${localEnv:PULSE_SERVER}",
-		"LIBGL_ALWAYS_SOFTWARE": "1" // Needed for software rendering of opengl
-	},
+    // This is vital for connecting to Unity on Windows/Mac
+    // It maps localhost:10000 (Container) -> localhost:10000 (Host)
+    // "forwardPorts": [10000],
+
+    // Everything else (Env, Mounts, Privileged) is now inherited 
+    // from docker-compose.yml, so we don't repeat it here.
+
     "customizations": {
         "vscode": {
             "extensions": [
                 "althack.ament-task-provider",
-				"betwo.b2-catkin-tools",
-				"DotJoshJohnson.xml",
-				"ms-azuretools.vscode-docker",
-				"ms-iot.vscode-ros",
-				"ms-python.python",
-				"ms-vscode.cpptools",
-				"redhat.vscode-yaml",
-				"smilerobotics.urdf",
-				"streetsidesoftware.code-spell-checker",
-				"twxs.cmake",
-				"yzhang.markdown-all-in-one",
-				"zachflower.uncrustify"
+                "betwo.b2-catkin-tools",
+                "DotJoshJohnson.xml",
+                "ms-azuretools.vscode-docker",
+                "ms-iot.vscode-ros",
+                "ms-python.python",
+                "ms-vscode.cpptools",
+                "redhat.vscode-yaml",
+                "smilerobotics.urdf",
+                "streetsidesoftware.code-spell-checker",
+                "twxs.cmake",
+                "yzhang.markdown-all-in-one",
+                "zachflower.uncrustify"
             ]
         }
     },
@@ -55,6 +41,5 @@
         }
     ],
 
-    "workspaceFolder": "/root/AUV-2026",
     "forwardPorts": [10000]
 }
