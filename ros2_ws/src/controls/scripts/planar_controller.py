@@ -7,7 +7,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPo
 from rcl_interfaces.msg import SetParametersResult
 from controls.pid import PID
 
-from geometry_msgs.msg import Wrench
+from geometry_msgs.msg import Wrench, PointStamped
 from std_msgs.msg import Float64
 
 
@@ -29,7 +29,7 @@ class AxisController(Node):
         )
 
         self.pub_effort = self.create_publisher(Wrench, f'/controls/{axis_name}_effort', qos)
-        self.sub_position = self.create_subscription(Float64, f'auv_frame/{axis_name}', self.position_callback, qos)
+        self.sub_position = self.create_subscription(PointStamped, f'auv_frame/dvl/position', self.position_callback, qos)
         self.setpoint_sub = self.create_subscription(Float64, f'/controls/{axis_name}_setpoint', self.setpoint_callback, qos)
 
         self.declare_parameter('control_loop_hz', 10.0)
@@ -62,7 +62,10 @@ class AxisController(Node):
 
     def position_callback(self, msg):
         self.previous_position = self.current_position
-        self.current_position = msg.data
+        if self.axis_name == 'x':
+            self.current_position = msg.point.x
+        elif self.axis_name == 'y':
+            self.current_position = msg.point.y
 
     def setpoint_callback(self, msg):
         self.setpoint = msg.data

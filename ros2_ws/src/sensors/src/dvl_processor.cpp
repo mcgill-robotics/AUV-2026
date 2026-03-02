@@ -76,7 +76,6 @@ DvlData_InertialFrame DvlProcessor::process_dvl(const DvlData_DvlFrame& dvl_raw)
     DvlData_InertialFrame dvl_inertial;
     Vec3 r_i2p_p = r_dv_v_;
     Vec3 r_di2_p = q_pi2_ * dvl_raw.r_di2_i2;
-    RCLCPP_INFO(this->get_logger(), "r_di2_p: %f, %f, %f", r_di2_p.x(), r_di2_p.y(), r_di2_p.z());
     Vec3 r_vd_v = -r_dv_v_;
     Vec3 r_vd_p = q_iv_ * r_vd_v;
 
