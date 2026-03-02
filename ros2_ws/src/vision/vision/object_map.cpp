@@ -29,15 +29,9 @@ public:
     {
 	RCLCPP_INFO(this->get_logger(), "[INIT] ObjectMapNode constructor started");
 	// adding "this" boilerplate for methods called from rclcpp Node base class
+	// Removing ALL default parameters to ensure we explicitly set everything we need for both ZED and non-ZED modes, and to avoid accidentally relying on defaults that might not be what we expect (these were originally kept for debugging)
 	// ZED SDK usage
-	this->declare_parameter<bool>("zed_sdk", true);
-	// minimum distance to consider a detection as a new object
-	this->declare_parameter("new_object_min_distance_threshold", 0.5);
-	
-	// only needed in constructor
-	float new_object_distance_threshold;
-	this->get_parameter("new_object_min_distance_threshold", new_object_distance_threshold);
-	this->get_parameter("zed_sdk", zed_sdk);
+	zed_sdk = this->declare_parameter<bool>("zed_sdk");	
 	RCLCPP_INFO(this->get_logger(), "[INIT] zed_sdk param: %s", zed_sdk ? "true" : "false");
 	bool sdk_available = false;
 // compile time check for ZED SDK see CMakeLists.txt
@@ -48,26 +42,31 @@ public:
 	zed_sdk &= sdk_available;
 
 	// Subscriber for front cam detections (YOLO from Python node)
-	this->declare_parameter<string>("front_cam_detection_topic");
-	this->declare_parameter<string>("object_map_topic");
-	this->declare_parameter<string>("vio_pose_topic");
-
-	string front_cam_detection_topic;
-	string object_map_topic;
-	string vio_pose_topic;
-
-	this->get_parameter("front_cam_detection_topic", front_cam_detection_topic);
-	this->get_parameter("object_map_topic", object_map_topic);
-	this->get_parameter("vio_pose_topic", vio_pose_topic);
-
-	// tracker tuning parameters initialized with defaults for non-ZED fallback
-	double gating_threshold = 3.5;
-	int min_hits = 20;
-	int max_age = 8;
-	double max_position_jump = 2.0;
-	int conf_to_tent_threshold = 5;
-	int tent_init_buffer = 5;
-
+	string front_cam_detection_topic = this->declare_parameter<string>("front_cam_detection_topic");
+	// Publisher for object map
+	string object_map_topic = this->declare_parameter<string>("object_map_topic");
+	// Publisher for VIO pose
+	// TODO: this should be a subscriber to the DVL pose
+	string vio_pose_topic = this->declare_parameter<string>("vio_pose_topic");
+	
+	// tracker tuning parameters used in both ZED and non-ZED fallback
+	// minimum distance from existing tracks for a new detection to be considered a new object rather than a new measurement of an existing object
+	float new_object_min_distance_threshold = this->declare_parameter<float>("new_object_min_distance_threshold");
+	// gating threshold for associating detections to existing tracks (in Mahalanobis distance)
+	double gating_threshold  = this->declare_parameter<double>("gating_threshold");
+	// number of consecutive detections needed to confirm a new track
+	int min_hits = this->declare_parameter<int>("min_hits");
+	// number of consecutive missed detections before a track is deleted
+	int max_age = this->declare_parameter<int>("max_age");
+	// maximum allowed jump in position for an object between consecutive detections
+	double max_position_jump = this->declare_parameter<double>("max_position_jump");
+	// confidence threshold for associating a detection to an existing track rather than initializing a new track
+	int conf_to_tent_threshold = this->declare_parameter<int>("conf_to_tent_threshold");
+	// number of consecutive detections below confidence threshold before a track is deleted
+	int tent_init_buffer = this->declare_parameter<int>("tent_init_buffer");
+	
+	bool enable_gate_midpoint_refinement = this->declare_parameter<bool>("enable_gate_midpoint_refinement");
+		
 	if (!zed_sdk)
 	{	
 		RCLCPP_INFO(this->get_logger(), "ZED SDK not found, using front camera detection topic: %s", front_cam_detection_topic.c_str());
@@ -84,87 +83,35 @@ public:
 			front_cam_detection_topic, 10, std::bind(&ObjectMapNode::detection_callback, this, std::placeholders::_1)
 		);
 
-		// ZED Parameters
-		this->declare_parameter<int>("frame_rate");
+		// --- ZED Parameters ---
+		// frame rate for ZED camera
+		int frame_rate = this->declare_parameter<int>("frame_rate");
 		// confidence threshold for YOLO detections
-		this->declare_parameter<float>("confidence_threshold");
+		float confidence_threshold = this->declare_parameter<float>("confidence_threshold");
 		// maximum distance to consider a detection for object mapping
-		this->declare_parameter<float>("max_range");
+		float max_range_distance_threshold = this->declare_parameter<float>("max_range");
 		// use UDP stream for input frames
-		this->declare_parameter<bool>("use_stream");
+		bool use_stream = this->declare_parameter<bool>("use_stream");
 		// UDP stream IP and port
-		this->declare_parameter<string>("stream_ip", "127.0.0.1");
-		this->declare_parameter<int>("stream_port");
+		string stream_ip = this->declare_parameter<string>("stream_ip", "127.0.0.1");
+		int stream_port = this->declare_parameter<int>("stream_port");
 		// whether run in simulation or real-world (affects ZED SDK settings)
-		this->declare_parameter<bool>("sim");
+		bool sim = this->declare_parameter<bool>("sim");
 		// show YOLO bounding boxes on output frames
-		this->declare_parameter<bool>("show_detections");
-
+		bool show_detections = this->declare_parameter<bool>("show_detections");
+		// max depth from ZED camera to consider a new object
+		int zed_depth_confidence_threshold = this->declare_parameter<int>("zed_depth_confidence_threshold");
+		
 		// physical tracking constraints
-		this->declare_parameter<bool>("enable_gate_top_crop", true);
-		this->declare_parameter<bool>("enable_z_axis_locking", true);
-		this->declare_parameter<bool>("enable_gate_midpoint_refinement", true);
-		this->declare_parameter<bool>("enable_octagon_xy_inheritance", true);
-		this->declare_parameter<double>("gate_top_crop_ratio", 0.40);
-		this->declare_parameter<double>("max_pipe_distance", 7.0);
-		this->declare_parameter<double>("pool_floor_z", -2.1);
-		this->declare_parameter<double>("pool_surface_z", 0.0);
-		this->declare_parameter<std::vector<std::string>>("unique_objects", {"gate", "bin", "table", "board", "octagon"});
-		this->declare_parameter<std::vector<std::string>>("floor_objects", {"bin", "table"});
-		this->declare_parameter<std::vector<std::string>>("surface_objects", {"gate", "octagon"});
-
-		// tracker tuning parameters
-		this->declare_parameter<double>("gating_threshold", 3.5);
-		this->declare_parameter<int>("min_hits", 20);
-		this->declare_parameter<int>("max_age", 8);
-		this->declare_parameter<double>("max_position_jump", 2.0);
-		this->declare_parameter<int>("conf_to_tent_threshold", 5);
-		this->declare_parameter<int>("tent_init_buffer", 5);
-
-		// zed sdk tuning parameters
-		this->declare_parameter<int>("zed_depth_confidence_threshold", 90);
-	
-		// get parameters
-		int frame_rate;
-		float confidence_threshold;
-		float max_range_distance_threshold;
-		bool use_stream;
-		string stream_ip;
-		int stream_port;
-		bool sim;
-		bool show_detections;
-		int zed_depth_confidence_threshold;
-
+		enable_gate_top_crop = this->declare_parameter("enable_gate_top_crop", this->enable_gate_top_crop);
+		enable_z_axis_locking = this->declare_parameter<bool>("enable_z_axis_locking");
+		enable_octagon_xy_inheritance = this->declare_parameter<bool>("enable_octagon_xy_inheritance");
+		pool_floor_z = this->declare_parameter<double>("pool_floor_z");
+		pool_surface_z = this->declare_parameter<double>("pool_surface_z");
+		unique_objects = this->declare_parameter<std::vector<std::string>>("unique_objects", {"gate", "bin", "table", "board", "octagon"});
+		floor_objects = this->declare_parameter<std::vector<std::string>>("floor_objects", {"bin", "table"});
+		surface_objects = this->declare_parameter<std::vector<std::string>>("surface_objects", {"gate", "octagon"});
 		
-		this->get_parameter("gate_top_crop_ratio", gate_top_crop_ratio);
-		this->get_parameter("max_pipe_distance", max_pipe_distance);
-
-		this->get_parameter("frame_rate", frame_rate);
-		this->get_parameter("confidence_threshold", confidence_threshold);
-		this->get_parameter("max_range", max_range_distance_threshold);
-		this->get_parameter("use_stream", use_stream);
-		this->get_parameter("stream_ip", stream_ip);
-		this->get_parameter("stream_port", stream_port);
-		this->get_parameter("sim", sim);
-		this->get_parameter("show_detections", show_detections);
-		this->get_parameter("zed_depth_confidence_threshold", zed_depth_confidence_threshold);
-		
-		this->get_parameter("enable_gate_top_crop", this->enable_gate_top_crop);
-		this->get_parameter("enable_z_axis_locking", this->enable_z_axis_locking);
-		this->get_parameter("enable_gate_midpoint_refinement", this->enable_gate_midpoint_refinement);
-		this->get_parameter("enable_octagon_xy_inheritance", this->enable_octagon_xy_inheritance);
-		this->get_parameter("pool_floor_z", pool_floor_z);
-		this->get_parameter("pool_surface_z", pool_surface_z);
-		this->get_parameter("unique_objects", unique_objects);
-		this->get_parameter("floor_objects", floor_objects);
-		this->get_parameter("surface_objects", surface_objects);
-
-		this->get_parameter("gating_threshold", gating_threshold);
-		this->get_parameter("min_hits", min_hits);
-		this->get_parameter("max_age", max_age);
-		this->get_parameter("max_position_jump", max_position_jump);
-		this->get_parameter("conf_to_tent_threshold", conf_to_tent_threshold);
-		this->get_parameter("tent_init_buffer", tent_init_buffer);
 
 		RCLCPP_INFO(this->get_logger(), "[INIT] ZED params: sim=%s, use_stream=%s, stream=%s:%d, frame_rate=%d",
 			sim ? "true" : "false", use_stream ? "true" : "false", stream_ip.c_str(), stream_port, frame_rate);
@@ -200,14 +147,14 @@ public:
 	}
 	// Object Tracker
 	object_tracker = ObjectTracker(
-		new_object_distance_threshold,
+		new_object_min_distance_threshold,
 		gating_threshold,
 		min_hits,
 		max_age,
 		max_position_jump,
 		conf_to_tent_threshold,
 		tent_init_buffer,
-		this->enable_gate_midpoint_refinement
+		enable_gate_midpoint_refinement
 	);
 	// Publishers
 	object_map_publisher = this->create_publisher<auv_msgs::msg::VisionObjectArray>(object_map_topic, 10);
@@ -228,10 +175,9 @@ public:
 }
 private:
 	std::map<std::string, Track> persistent_objects;
-	bool enable_gate_top_crop = true;
-	bool enable_z_axis_locking = true;
-	bool enable_gate_midpoint_refinement = true;
-	bool enable_octagon_xy_inheritance = true;
+	bool enable_gate_top_crop;
+	bool enable_z_axis_locking;
+	bool enable_octagon_xy_inheritance;
 	double pool_floor_z;
 	double pool_surface_z;
 	double gate_top_crop_ratio;
