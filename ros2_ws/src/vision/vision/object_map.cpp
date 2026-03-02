@@ -64,24 +64,41 @@ public:
 	int conf_to_tent_threshold = this->declare_parameter<int>("conf_to_tent_threshold");
 	// number of consecutive detections below confidence threshold before a track is deleted
 	int tent_init_buffer = this->declare_parameter<int>("tent_init_buffer");
-	
+
 	bool enable_gate_midpoint_refinement = this->declare_parameter<bool>("enable_gate_midpoint_refinement");
 		
+	// Object Tracker, used in both ZED and non-ZED modes, so that we maintain a consistent object map output regardless of input source
+	object_tracker = ObjectTracker(
+		new_object_min_distance_threshold,
+		gating_threshold,
+		min_hits,
+		max_age,
+		max_position_jump,
+		conf_to_tent_threshold,
+		tent_init_buffer,
+		enable_gate_midpoint_refinement
+	);
+	// Publishers
+	object_map_publisher = this->create_publisher<auv_msgs::msg::VisionObjectArray>(object_map_topic, 10);
+
+	// Subscriber for world depth (from depth sensor)
+	depth_subscriber = this->create_subscription<std_msgs::msg::Float64 >(
+		"/sensors/depth/z", 10, std::bind(&ObjectMapNode::depth_callback, this, std::placeholders::_1)
+	);
+	// Subscribe to 2D detections
+	detection_subscriber = this->create_subscription<vision_msgs::msg::Detection2DArray>(
+		front_cam_detection_topic, 10, std::bind(&ObjectMapNode::detection_callback, this, std::placeholders::_1)
+	);
+
 	if (!zed_sdk)
 	{	
 		RCLCPP_INFO(this->get_logger(), "ZED SDK not found, using front camera detection topic: %s", front_cam_detection_topic.c_str());
-		front_cam_subscriber = this->create_subscription<auv_msgs::msg::VisionObjectArray>(
-			"/vision/front_cam/object_detection_legacy", 10, std::bind(&ObjectMapNode::front_cam_callback, this, std::placeholders::_1)
-		);
 	}
 	else
 	{
 		RCLCPP_INFO(this->get_logger(), "ZED SDK found, using ZED camera for object mapping with external detections from: %s", front_cam_detection_topic.c_str());
 		
-		// Subscribe to 2D detections
-		detection_subscriber = this->create_subscription<vision_msgs::msg::Detection2DArray>(
-			front_cam_detection_topic, 10, std::bind(&ObjectMapNode::detection_callback, this, std::placeholders::_1)
-		);
+
 
 		// --- ZED Parameters ---
 		// frame rate for ZED camera
@@ -145,24 +162,8 @@ public:
 		}
 #endif
 	}
-	// Object Tracker
-	object_tracker = ObjectTracker(
-		new_object_min_distance_threshold,
-		gating_threshold,
-		min_hits,
-		max_age,
-		max_position_jump,
-		conf_to_tent_threshold,
-		tent_init_buffer,
-		enable_gate_midpoint_refinement
-	);
-	// Publishers
-	object_map_publisher = this->create_publisher<auv_msgs::msg::VisionObjectArray>(object_map_topic, 10);
+	// Publisher for VIO pose from ZED SDK
 	pose_publisher = this->create_publisher<geometry_msgs::msg::PoseStamped>(vio_pose_topic, 10);
-	// Subscriber for depth
-	depth_subscriber = this->create_subscription<std_msgs::msg::Float64 >(
-		"/sensors/depth/z", 10, std::bind(&ObjectMapNode::depth_callback, this, std::placeholders::_1)
-	);
 	RCLCPP_INFO(this->get_logger(), "Object Map Node has been initialized");
 	if (zed_sdk)
 	{
