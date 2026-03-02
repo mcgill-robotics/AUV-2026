@@ -140,3 +140,39 @@ Algorithms can be set in the node scripts (`front_image_enhancement.py` and `dow
 | `front_cam_enhanced_topic` | `/vision/front_cam/image_enhanced` | Output enhanced front camera topic |
 | `down_cam_enhanced_topic` | `/vision/down_cam/image_enhanced` | Output enhanced down camera topic |
 | `sim` | `false` | Enable simulation mode |
+
+### Object Map
+
+The `object_map` node aggregates 2D object detections from the YOLO inference node (`object_detection`) and projects them into a persistent 3D world map relative to the AUV. It uses the ZED SDK neural depth sensing for 3D estimation and a custom `ObjectTracker` pipeline to maintain object permanence across complex frames.
+
+#### Tracking Architecture
+The tracking system operates using a multi-step data association pipeline designed to handle noise, occlusions, and false positives in underwater environments:
+
+1. **3D Projection (ZED SDK Integration):** 
+   - 2D Bounding Boxes published by the YOLO node are intercepted by `ObjectMapNode`.
+   - These 2D bounds are ingested into the ZED SDK (`ZEDDetection::process_detections`), which leverages neural depth sensing and stereo triangulation to extract real-world 3D coordinates relative to the left camera lens.
+   - The coordinates are then transformed into the global `world` frame using the VIO positional data published by the ZED SDK.
+
+2. **Persistent Tracking (Kalman Filter + Hungarian Algorithm):**
+   - **State Estimation:** Every tracked object is assigned a constant-velocity Kalman Filter (`KalmanFilter.cpp`). This allows the tracker to predict where an object *should* be in the next frame based on its previous trajectory.
+   - **Cost Matrix:** When new detections arrive, the system computes the Mahalanobis Distance between the predicted positions of existing tracks and the new incoming measurements.
+   - **Data Association:** The Hungarian Matcher (`ObjectTracker::match_tracks`) solves the linear assignment problem using this cost matrix, pairing incoming detections to existing tracks while minimizing overall distance error.
+   - **Track Lifecycle:** Unmatched detections spawn new `TENTATIVE` tracks. If a track is consistently matched across several frames, it becomes `CONFIRMED`. If a confirmed track loses sight of the object, the Kalman Filter continues predicting its location for a configured `max_age` duration before the track is finally purged.
+
+3. **Categorization:** 
+   - Dynamically groups objects into `unique_objects` (only one instance allowed to exist globally), `floor_objects` (locked to pool floor), and `surface_objects` (locked to pool surface).
+
+#### Physical Constraints
+Applies game-specific logic to improve tracking accuracy and patch noisy vision data:
+- **Gate Top Crop:** Ignores the bottom portion of gate bounding boxes to prevent depth errors caused by the pool floor.
+- **Z-Axis Locking:** Forces specific objects (e.g., bins, tables) to snap to the known depths of the pool floor or surface.
+- **Midpoint Refinement:** Centers the gate position between detected shark and sawfish markers.
+- **Octagon Inheritance:** Inherits the XY position of the octagon directly from the more reliably detected table.
+
+#### Usage
+
+The object map node is launched automatically as part of the `vision_pipeline.launch.py`. It subscribes to the 2D detections publised by the YOLO node and the camera images/depth.
+
+#### Parameters
+
+All configuration parameters for the `object_map` node, including Kalman/Hungarian tracker tuning thresholds and constraint feature toggles, are found in `config/vision_pipeline.yaml`.

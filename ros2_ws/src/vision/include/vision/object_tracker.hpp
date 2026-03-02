@@ -51,7 +51,8 @@ public:
         int max_age = 8,
         float max_position_jump = 2.0,
         int conf_to_tent_threshold = 5,
-        int tent_init_buffer = 5
+        int tent_init_buffer = 5,
+        bool enable_gate_midpoint_refinement = true
     );
 
     ~ObjectTracker() = default;
@@ -111,7 +112,8 @@ private:
         const std::vector<double>& confidences
     );
 
-    // Step 7: Post-processing to anchor gate to sawfish/shark midpoint
+    // Step 7: Post-processing constraints applied to tracking states
+    void apply_physical_constraints();
     void refine_gate_position();
 
     std::vector<Track> tracks;
@@ -129,6 +131,8 @@ private:
     int conf_to_tent_threshold;     // Misses before downgrading CONFIRMED -> TENTATIVE
     int tent_init_buffer;           // Extra frames allowed for initialization before zombie cull
 
+    bool enable_gate_midpoint_refinement;
+    
     std::vector<std::pair<size_t,size_t>> matches;
 
     // Known object limits (prevents creating too many tracks per class)

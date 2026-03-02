@@ -9,7 +9,8 @@ ObjectTracker::ObjectTracker(
     int max_age,
     float max_position_jump,
     int conf_to_tent_threshold,
-    int tent_init_buffer
+    int tent_init_buffer,
+    bool enable_gate_midpoint_refinement
 ) {
     this->tracks = std::vector<Track>();
     this->matches = std::vector<std::pair<size_t, size_t>>();
@@ -21,6 +22,7 @@ ObjectTracker::ObjectTracker(
     this->max_position_jump = max_position_jump;
     this->conf_to_tent_threshold = conf_to_tent_threshold;
     this->tent_init_buffer = tent_init_buffer;
+    this->enable_gate_midpoint_refinement = enable_gate_midpoint_refinement;
 }
 
 // destructor implicitly defined
@@ -111,8 +113,8 @@ std::vector<Track> ObjectTracker::update(
     // 6. Create new tracks
     create_new_tracks(unmatched_dets, measurements, classes, orientations, confidences);
     
-    // 7. Post-processing: Improve Gate Position
-    refine_gate_position();
+    // 7. Post-processing: Apply physical domain constraints to tracking state
+    apply_physical_constraints();
 
     return tracks;
 }  
@@ -362,7 +364,9 @@ void ObjectTracker::create_new_tracks(
 
         int current_count = 0;
         for (const auto& t : tracks) {
-            if (t.label == label) current_count++;
+            if (t.label == label) {
+                current_count++;
+            }
         }
 
         // If we already have number of tracks for that class, skip creation
@@ -403,6 +407,14 @@ void ObjectTracker::create_new_tracks(
         new_track.kf = create_kf(measurements[det_idx]);
 
         tracks.push_back(new_track);
+    }
+}
+
+void ObjectTracker::apply_physical_constraints() {
+    // Apply physical realm constraints that affect the tracked position 
+    // Currently, we refine the gate position using left and right shark/sawfish positions.
+    if (enable_gate_midpoint_refinement) {
+        refine_gate_position();
     }
 }
 

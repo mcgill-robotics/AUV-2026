@@ -100,7 +100,7 @@ class ObjectDetectorNode():
             return
 
         try:
-            results_list = self.model.predict(img, iou=0.1, agnostic_nms=True, device=self.device, verbose=False)  
+            results_list = self.model.predict(img, iou=0.1, agnostic_nms=False, device=self.device, verbose=False)  
         except Exception as e:
             self.node.get_logger().error(f"YOLO failed: {e}")
             return

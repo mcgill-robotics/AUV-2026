@@ -99,8 +99,19 @@ public:
 		this->declare_parameter<bool>("sim");
 		// show YOLO bounding boxes on output frames
 		this->declare_parameter<bool>("show_detections");
+
+		// physical tracking constraints
+		this->declare_parameter<bool>("enable_gate_top_crop", true);
+		this->declare_parameter<bool>("enable_z_axis_locking", true);
+		this->declare_parameter<bool>("enable_gate_midpoint_refinement", true);
+		this->declare_parameter<bool>("enable_octagon_xy_inheritance", true);
+		this->declare_parameter<double>("gate_top_crop_ratio", 0.40);
+		this->declare_parameter<double>("max_pipe_distance", 7.0);
 		this->declare_parameter<double>("pool_floor_z", -2.1);
 		this->declare_parameter<double>("pool_surface_z", 0.0);
+		this->declare_parameter<std::vector<std::string>>("unique_objects", {"gate", "bin", "table", "board", "octagon"});
+		this->declare_parameter<std::vector<std::string>>("floor_objects", {"bin", "table"});
+		this->declare_parameter<std::vector<std::string>>("surface_objects", {"gate", "octagon"});
 
 		// tracker tuning parameters
 		this->declare_parameter<double>("gating_threshold", 3.5);
@@ -124,6 +135,10 @@ public:
 		bool show_detections;
 		int zed_depth_confidence_threshold;
 
+		
+		this->get_parameter("gate_top_crop_ratio", gate_top_crop_ratio);
+		this->get_parameter("max_pipe_distance", max_pipe_distance);
+
 		this->get_parameter("frame_rate", frame_rate);
 		this->get_parameter("confidence_threshold", confidence_threshold);
 		this->get_parameter("max_range", max_range_distance_threshold);
@@ -133,8 +148,16 @@ public:
 		this->get_parameter("sim", sim);
 		this->get_parameter("show_detections", show_detections);
 		this->get_parameter("zed_depth_confidence_threshold", zed_depth_confidence_threshold);
+		
+		this->get_parameter("enable_gate_top_crop", this->enable_gate_top_crop);
+		this->get_parameter("enable_z_axis_locking", this->enable_z_axis_locking);
+		this->get_parameter("enable_gate_midpoint_refinement", this->enable_gate_midpoint_refinement);
+		this->get_parameter("enable_octagon_xy_inheritance", this->enable_octagon_xy_inheritance);
 		this->get_parameter("pool_floor_z", pool_floor_z);
 		this->get_parameter("pool_surface_z", pool_surface_z);
+		this->get_parameter("unique_objects", unique_objects);
+		this->get_parameter("floor_objects", floor_objects);
+		this->get_parameter("surface_objects", surface_objects);
 
 		this->get_parameter("gating_threshold", gating_threshold);
 		this->get_parameter("min_hits", min_hits);
@@ -183,7 +206,8 @@ public:
 		max_age,
 		max_position_jump,
 		conf_to_tent_threshold,
-		tent_init_buffer
+		tent_init_buffer,
+		this->enable_gate_midpoint_refinement
 	);
 	// Publishers
 	object_map_publisher = this->create_publisher<auv_msgs::msg::VisionObjectArray>(object_map_topic, 10);
@@ -204,19 +228,44 @@ public:
 }
 private:
 	std::map<std::string, Track> persistent_objects;
+	bool enable_gate_top_crop = true;
+	bool enable_z_axis_locking = true;
+	bool enable_gate_midpoint_refinement = true;
+	bool enable_octagon_xy_inheritance = true;
 	double pool_floor_z;
 	double pool_surface_z;
+	double gate_top_crop_ratio;
+	double max_pipe_distance;
+	std::vector<std::string> unique_objects;
+	std::vector<std::string> floor_objects;
+	std::vector<std::string> surface_objects;
 
 	bool is_unique_object(const std::string& label) const {
-		return label == "gate" || label == "bin" || label == "table" || label == "board" || label == "octagon";
+		return std::find(unique_objects.begin(), unique_objects.end(), label) != unique_objects.end();
 	}
 
 	bool is_floor_bound(const std::string& label) const {
-		return label == "bin" || label == "table";
+		return std::find(floor_objects.begin(), floor_objects.end(), label) != floor_objects.end();
 	}
 
 	bool is_surface_bound(const std::string& label) const {
-		return label == "gate" || label == "octagon";
+		return std::find(surface_objects.begin(), surface_objects.end(), label) != surface_objects.end();
+	}
+
+	// --- Post-Processing Physical Constraints ---
+	void apply_z_axis_depth_constraints(auv_msgs::msg::VisionObject& object_msg, const Eigen::Vector3d& filter_position) const {
+		if (!enable_z_axis_locking) {
+			object_msg.z = filter_position(2);
+			return;
+		}
+
+		if (is_floor_bound(object_msg.label)) {
+			object_msg.z = pool_floor_z;
+		} else if (is_surface_bound(object_msg.label)) {
+			object_msg.z = pool_surface_z;
+		} else {
+			object_msg.z = filter_position(2);
+		}
 	}
 
 	void detection_callback(const vision_msgs::msg::Detection2DArray::SharedPtr msg)
@@ -238,7 +287,7 @@ private:
 		std::vector<double> filtered_confidences;
 
 		for (size_t i = 0; i < measurements.size(); ++i) {
-			// Filter: Skip pipes detected more than 7m away (unreliable at distance)
+			// Filter: Skip pipes detected further than our distance threshold
 			if (classes[i] == "red_pipe" || classes[i] == "white_pipe") {
 				// We don't have the raw camera-frame position here easily, but the world 
 				// position's distance from the camera pose is roughly the same.
@@ -246,7 +295,7 @@ private:
 				auto cam_pose = zed_detector->GetCameraPose();
 				Eigen::Vector3d cam_trans = std::get<0>(cam_pose);
 				double dist_from_robot = (measurements[i] - cam_trans).norm();
-				if (dist_from_robot > 7.0) {
+				if (dist_from_robot > max_pipe_distance) {
 					continue;
 				}
 			}
@@ -310,13 +359,20 @@ private:
 		}
 
 		// Add all persistent unique tracks
-		for (const auto& [label, perm_track] : persistent_objects) {
+		for (auto& [label, perm_track] : persistent_objects) {
+			if (enable_octagon_xy_inheritance && label == "octagon") {
+				continue; // Completely ignore real octagon tracks
+			}
 			publish_tracks.push_back(perm_track);
 		}
 
 		// for each track, publish as VisionObject
 		for (const auto& track : publish_tracks)
 		{
+			if (enable_octagon_xy_inheritance && track.label == "octagon") {
+				continue; // Ignore any real active non-unique octagon tracks (if any)
+			}
+
 			auv_msgs::msg::VisionObject object_msg;
 			object_msg.label = track.label;
 			object_msg.id = track.id;
@@ -324,18 +380,29 @@ private:
 			object_msg.x = position(0);
 			object_msg.y = position(1);
 
-			// --- Z-Axis Depth Constraints ---
-			if (is_floor_bound(track.label)) {
-				object_msg.z = pool_floor_z;
-			} else if (is_surface_bound(track.label)) {
-				object_msg.z = pool_surface_z;
-			} else {
-				object_msg.z = position(2);
-			}
+			// --- Post-Processing Physical Constraints ---
+			apply_z_axis_depth_constraints(object_msg, position);
 
 			object_msg.theta_z = 0.0; // TODO: set orientation if available
 			object_msg.confidence = track.confidence;
 			object_map_msg.array.push_back(object_msg);
+
+			// --- Post-Processing Physical Constraints ---
+			// The octagon always sits directly beneath the table.
+			// Vision on the octagon is unreliable due to water surface distortion/reflections.
+			// Thus, we inherit the reliable 2D position of the table by generating a synthetic octagon.
+			if (enable_octagon_xy_inheritance && track.label == "table") {
+				auv_msgs::msg::VisionObject octagon_msg;
+				octagon_msg.label = "octagon";
+				octagon_msg.id = track.id + 1000; // Create unique synthetic ID
+				octagon_msg.x = position(0);
+				octagon_msg.y = position(1);
+				octagon_msg.z = pool_surface_z;
+
+				octagon_msg.theta_z = 0.0;
+				octagon_msg.confidence = track.confidence;
+				object_map_msg.array.push_back(octagon_msg);
+			}
 		}
 		object_map_publisher->publish(object_map_msg);
 		rclcpp::Time pipeline_end_time = this->now();
@@ -365,29 +432,9 @@ private:
 		for(const auto& detection : msg->detections) {
 			sl::CustomBoxObjectData box;
 			box.unique_object_id = sl::generate_unique_id();
-			
-			// 2D Bounding Box
-			// vision_msgs/BoundingBox2D is centered (cx, cy, w, h)
-			// ZED SDK expects corners: top-left ?? No, let's check CustomBoxObjectData
-			// "bounding_box_2d: 2D bounding box of the object in the image (4 corners)"
-			
-			float cx = detection.bbox.center.position.x;
-			float cy = detection.bbox.center.position.y;
-			float w = detection.bbox.size_x;
-			float h = detection.bbox.size_y;
-			
-			float left = cx - w / 2.0f;
-			float top = cy - h / 2.0f;
-			float right = cx + w / 2.0f;
-			float bottom = cy + h / 2.0f;
-			
-			std::vector<sl::uint2> bbox_2d(4);
-			bbox_2d[0] = sl::uint2(static_cast<unsigned int>(left), static_cast<unsigned int>(top));     // Top-Left
-			bbox_2d[1] = sl::uint2(static_cast<unsigned int>(right), static_cast<unsigned int>(top));    // Top-Right
-			bbox_2d[2] = sl::uint2(static_cast<unsigned int>(right), static_cast<unsigned int>(bottom)); // Bottom-Right
-			bbox_2d[3] = sl::uint2(static_cast<unsigned int>(left), static_cast<unsigned int>(bottom));  // Bottom-Left
-			box.bounding_box_2d = bbox_2d;
-			
+            
+            box.label = -1; // Default to unknown
+
 			// Label & Confidence (taking top hypothesis)
 			if (!detection.results.empty()) {
 				box.probability = detection.results[0].hypothesis.score;
@@ -396,20 +443,39 @@ private:
                 auto it = std::find(ID_TO_LABEL.begin(), ID_TO_LABEL.end(), label);
                 if (it != ID_TO_LABEL.end()) {
                     box.label = std::distance(ID_TO_LABEL.begin(), it);
-                } else {
-                    // Fallback or skip?
-                    // For now, let's keep it as is or default to something?
-                    // If ZED receives an invalid label ID, it might crash or ignore.
-                    // Let's assume 0 ("gate") or continue?
-                    // Ideally we should skip this detection if label is unknown.
-                    // But maybe we can just set a safe default.
-                    box.label = -1; // Unknown
-                    // But we should probably skip adding it to zed_detections if it's invalid.
                 }
 			}
-			
+
             if (box.label != -1) {
 			    box.is_static = true;
+			    
+			    // 2D Bounding Box
+			    float cx = detection.bbox.center.position.x;
+			    float cy = detection.bbox.center.position.y;
+			    float w = detection.bbox.size_x;
+			    float h = detection.bbox.size_y;
+			    
+			    // --- Post-Processing Physical Constraints ---
+			    // If the object is a gate, only feed the ZED SDK the top portion of the bounding box.
+			    // The gate's legs extend deep into noisy acoustic territory causing bad depth estimations.
+			    if (enable_gate_top_crop && ID_TO_LABEL[box.label] == "gate") {
+			        float original_top = cy - h / 2.0f;
+			        h = h * gate_top_crop_ratio;
+			        cy = original_top + h / 2.0f;
+			    }
+
+			    float left = cx - w / 2.0f;
+			    float top = cy - h / 2.0f;
+			    float right = cx + w / 2.0f;
+			    float bottom = cy + h / 2.0f;
+			    
+			    std::vector<sl::uint2> bbox_2d(4);
+			    bbox_2d[0] = sl::uint2(static_cast<unsigned int>(left), static_cast<unsigned int>(top));     // Top-Left
+			    bbox_2d[1] = sl::uint2(static_cast<unsigned int>(right), static_cast<unsigned int>(top));    // Top-Right
+			    bbox_2d[2] = sl::uint2(static_cast<unsigned int>(right), static_cast<unsigned int>(bottom)); // Bottom-Right
+			    bbox_2d[3] = sl::uint2(static_cast<unsigned int>(left), static_cast<unsigned int>(bottom));  // Bottom-Left
+			    box.bounding_box_2d = bbox_2d;
+
 			    zed_detections.push_back(box);
             }
 		}
