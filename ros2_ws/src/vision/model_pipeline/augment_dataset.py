@@ -200,7 +200,6 @@ def run_visualization(img_files, lbl_input_dir, output_dir, transform, num_vis):
     vis_dir = output_dir / "visualization"
     vis_dir.mkdir(parents=True, exist_ok=True)
     
-    import random
     selected = random.sample(img_files, min(len(img_files), num_vis))
     
     print(f"Generating {len(selected)} visualization samples in {vis_dir}...")
