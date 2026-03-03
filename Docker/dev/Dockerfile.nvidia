@@ -50,6 +50,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         lsb-release \
         ca-certificates \
         sudo \
+        vim \
         # ZED SDK Dependencies
         zstd \
         libusb-1.0-0-dev \
