@@ -5,7 +5,7 @@ from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument
-from launch.conditions import IfCondition
+from launch.conditions import IfCondition,UnlessCondition
 from launch_ros.actions import Node
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
@@ -65,6 +65,17 @@ def generate_launch_description():
     om_log_level = default_config["object_map"]["log_level"]
     
     zed_wrapper_path = get_package_share_directory("zed_wrapper")
+    
+    zed_real_wrapper_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(os.path.join(zed_wrapper_path, "launch", "zed_camera.launch.py")),
+        launch_arguments={
+            "camera_model": "zed2i",
+            "ros_params_override_path": PathJoinSubstitution([vision_dir, "config", "zed_wrapper_real.yaml"]),
+            "node_log_type": "log"
+        }.items(),
+        condition=UnlessCondition(LaunchConfiguration("sim"))
+    )
+
     zed_sim_wrapper_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(zed_wrapper_path, "launch", "zed_camera.launch.py")),
         launch_arguments={
@@ -75,8 +86,9 @@ def generate_launch_description():
             "stream_port": "30000",
             "ros_params_override_path": PathJoinSubstitution([vision_dir, "config", "zed_wrapper_unity_sim.yaml"]),
             "node_log_type": "log"
-        }.items()
-    ) 
+        }.items(),
+        condition=IfCondition(LaunchConfiguration("sim"))
+    )
     
     enhancement_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(vision_dir, "launch", "image_enhancement.launch.py")),
@@ -167,6 +179,7 @@ def generate_launch_description():
     launch_description.add_action(use_enhance_arg)
     launch_description.add_action(front_model_arg)
     launch_description.add_action(down_model_arg)
+    launch_description.add_action(zed_real_wrapper_launch)
     launch_description.add_action(zed_sim_wrapper_launch)
     launch_description.add_action(enhancement_launch)
     launch_description.add_action(object_detection_launch)
