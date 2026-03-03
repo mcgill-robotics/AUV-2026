@@ -64,6 +64,20 @@ def generate_launch_description():
     od_log_level = default_config["object_detection"]["log_level"]
     om_log_level = default_config["object_map"]["log_level"]
     
+    zed_wrapper_path = get_package_share_directory("zed_wrapper")
+    zed_sim_wrapper_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(os.path.join(zed_wrapper_path, "launch", "zed_camera.launch.py")),
+        launch_arguments={
+            "use_sim_time": "true",
+            "sim_mode": "true",
+            "camera_model": "zedx",
+            "stream_address": "127.0.0.1",
+            "stream_port": "30000",
+            "ros_params_override_path": PathJoinSubstitution([vision_dir, "config", "zed_wrapper_unity_sim.yaml"]),
+            "node_log_type": "log"
+        }.items()
+    ) 
+    
     enhancement_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(vision_dir, "launch", "image_enhancement.launch.py")),
         # use dictionary unpacking to convert from dict to list of tuples for better readability
@@ -153,6 +167,7 @@ def generate_launch_description():
     launch_description.add_action(use_enhance_arg)
     launch_description.add_action(front_model_arg)
     launch_description.add_action(down_model_arg)
+    launch_description.add_action(zed_sim_wrapper_launch)
     launch_description.add_action(enhancement_launch)
     launch_description.add_action(object_detection_launch)
     launch_description.add_action(object_map_node)

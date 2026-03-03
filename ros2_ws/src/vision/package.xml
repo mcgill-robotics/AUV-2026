@@ -30,6 +30,7 @@
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>eigen3_cmake_module</exec_depend>
+  <exec_depend>zed_wrapper</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
