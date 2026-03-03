@@ -68,6 +68,5 @@
     ],
     "ros.distro": "humble",
     "python-envs.defaultEnvManager": "ms-python.python:system",
-    "python-envs.pythonProjects": [],
-    "ROS2.distro": "humble"
+    "python-envs.pythonProjects": []
 }
