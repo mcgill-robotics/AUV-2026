@@ -48,7 +48,6 @@ public:
 		const string & stream_ip,
 		int stream_port,
 		ZEDCameraModel camera_model,
-		bool show_detections,
 		int zed_depth_confidence_threshold,
 		function<void(const string&)> log_debug,
 		function<void(const string&)> log_info,
@@ -96,7 +95,6 @@ private:
     bool use_stream;
     string stream_ip;
     int stream_port;
-    bool show_detections;
     int zed_depth_confidence_threshold;
     bool debug_logs;
     

@@ -114,21 +114,20 @@ public:
 		int stream_port = this->declare_parameter<int>("stream_port");
 		// whether run in simulation or real-world (affects ZED SDK settings)
 		bool sim = this->declare_parameter<bool>("sim");
-		// show YOLO bounding boxes on output frames
-		bool show_detections = this->declare_parameter<bool>("show_detections");
 		// max depth from ZED camera to consider a new object
 		int zed_depth_confidence_threshold = this->declare_parameter<int>("zed_depth_confidence_threshold");
 		
 		// physical tracking constraints
-		enable_gate_top_crop = this->declare_parameter("enable_gate_top_crop", this->enable_gate_top_crop);
+		enable_gate_top_crop = this->declare_parameter<bool>("enable_gate_top_crop");
+		gate_top_crop_ratio = this->declare_parameter<double>("gate_top_crop_ratio");
 		enable_z_axis_locking = this->declare_parameter<bool>("enable_z_axis_locking");
 		enable_octagon_xy_inheritance = this->declare_parameter<bool>("enable_octagon_xy_inheritance");
 		pool_floor_z = this->declare_parameter<double>("pool_floor_z");
 		pool_surface_z = this->declare_parameter<double>("pool_surface_z");
-		unique_objects = this->declare_parameter<std::vector<std::string>>("unique_objects", {"gate", "bin", "table", "board", "octagon"});
-		floor_objects = this->declare_parameter<std::vector<std::string>>("floor_objects", {"bin", "table"});
-		surface_objects = this->declare_parameter<std::vector<std::string>>("surface_objects", {"gate", "octagon"});
-		
+		unique_objects = this->declare_parameter<std::vector<std::string>>("unique_objects");
+		floor_objects = this->declare_parameter<std::vector<std::string>>("floor_objects");
+		surface_objects = this->declare_parameter<std::vector<std::string>>("surface_objects");
+		max_pipe_distance = this->declare_parameter<double>("max_pipe_distance");
 
 		RCLCPP_INFO(this->get_logger(), "[INIT] ZED params: sim=%s, use_stream=%s, stream=%s:%d, frame_rate=%d",
 			sim ? "true" : "false", use_stream ? "true" : "false", stream_ip.c_str(), stream_port, frame_rate);
@@ -145,7 +144,6 @@ public:
 				stream_ip,
 				stream_port,
 				camera_model,
-				show_detections,
 				zed_depth_confidence_threshold,
 				// add callbacks to use rclcpp logging
 				[this] (const string& msg) { RCLCPP_DEBUG(this->get_logger(), "%s", msg.c_str()); },

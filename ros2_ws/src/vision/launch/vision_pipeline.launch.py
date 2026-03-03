@@ -123,7 +123,6 @@ def generate_launch_description():
                 "use_stream": default_config["object_map"]["use_stream"],
                 "stream_ip": default_config["object_map"]["stream_ip"],
                 "stream_port": default_config["object_map"]["stream_port"],
-                "show_detections": default_config["object_map"]["show_detections"],
                 "pool_floor_z": default_config["object_map"]["pool_floor_z"],
                 "pool_surface_z": default_config["object_map"]["pool_surface_z"],
                 "unique_objects": default_config["object_map"]["unique_objects"],

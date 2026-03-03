@@ -26,13 +26,12 @@ object_map:
   stream_ip: "127.0.0.1"
   stream_port: 30000
   frame_rate: 30
-  show_detections: false
   new_object_min_distance_threshold: 0.5
 
   # Feature Toggles (Game-Specific Constraints)
   enable_gate_top_crop: true # Removes bottom 60% of bounding box for gate to ignore legs/pool floor noise
   enable_z_axis_locking: true # Forces specific unique objects to snap to pool floor/surface Z coordinates
-  enable_gate_midpoint_refinement: false # Uses surrounding shark/sawfish tracks to perfectly center the gate
+  enable_gate_midpoint_refinement: true # Uses surrounding shark/sawfish tracks to perfectly center the gate
   enable_octagon_xy_inheritance: true # Ignores true octagon detections, creates synthetic octagon directly above the table
   gate_top_crop_ratio: 0.50 # The ratio (0.0 to 1.0) of the gate bounding box to keep from the top edge
   max_pipe_distance: 7.0 # Truncates tracking of red/white pipes beyond this distance to reduce noise in map
