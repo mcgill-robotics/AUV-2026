@@ -82,16 +82,16 @@ The package provides five ROS nodes: `depth_controller`, `attitude_controller`, 
 - `depth_controller` input: `/auv_frame/depth`, `/controls/depth_setpoint`
 
 - `depth_controller` output: `/controls/depth_effort`
-- `x_controller` input: `/auv_frame/x`, `/controls/x_setpoint`
+- `x_controller` input: `auv_frame/dvl/position`, `/controls/x_setpoint`
 - `x_controller` output: `/controls/x_effort`
-- `y_controller` input: `/auv_frame/y`, `/controls/y_setpoint`
+- `y_controller` input: `auv_frame/dvl/position`, `/controls/y_setpoint`
 - `y_controller` output: `/controls/y_effort`
 
 - `attitude_controller` input: `/auv_frame/imu`, `quaternion_setpoint`
 
 - `attitude_controller` output: `/controls/attitude_effort`
 
-- `superimposer` input: `/controls/depth_effort`, `/controls/attitude_effort`, `processed/imu`
+- `superimposer` input: `/controls/depth_effort`, `/controls/attitude_effort`, `/controls/x_effort`, `/controls/y_effort`, `processed/imu`
 
 - `superimposer` output: `/controls/combined_effort`
 
@@ -100,11 +100,11 @@ The package provides five ROS nodes: `depth_controller`, `attitude_controller`, 
 
  Topic | Message | Description |
 | ------ | ------- | ---------- |
-| `/controls/depth_effort` | `geometry_msgs/Wrench` | Depth controller effort (force.z) in the pool frame |
-| `/controls/x_effort` | `geometry_msgs/Wrench` | X-axis controller effort in the pool frame |
-| `/controls/y_effort` | `geometry_msgs/Wrench` | Y-axis controller effort in the pool frame |
-| `/controls/attitude_effort` | `geometry_msgs/Wrench` | Attitude controller effort (torques) |
-| `/controls/total_effort` | `geometry_msgs/Wrench` | Sum of depth and attitude efforts with optional biases |
+| `/controls/depth_effort` | `geometry_msgs/Wrench` | Depth controller effort (force.z) in the **pool frame** |
+| `/controls/x_effort` | `geometry_msgs/Wrench` | X-axis controller effort in the **pool frame** |
+| `/controls/y_effort` | `geometry_msgs/Wrench` | Y-axis controller effort in the **pool frame** |
+| `/controls/attitude_effort` | `geometry_msgs/Wrench` | Attitude controller effort (torques) in the **body frame** |
+| `/controls/total_effort` | `geometry_msgs/Wrench` | Sum of depth and attitude efforts with optional biases in the **body frame** |
 
 
 ### Subscribed Topics
@@ -113,9 +113,8 @@ The package provides five ROS nodes: `depth_controller`, `attitude_controller`, 
 | ------ | ------- | ---------- |
 | `/auv_frame/depth` | `std_msgs/Float64` | Current depth estimate |
 | `/auv_frame/imu` | `sensor_msgs/Imu` | Orientation and angular velocity for attitude control |
-| `/auv_frame/x` | `std_msgs/Float64` | AUV's position along the X-axis in the pool frame | 
-| `/auv_frame/y` | `std_msgs/Float64` | AUV's position along the Y-axis in the pool frame | 
-| `/controls/depth_setpoint` | `std_msgs/Float64` | Desired depth setpoint |
+| `auv_frame/dvl/position` | `geometry_msgs/Float64` | AUV's position in the pool frame from the DVL | 
+| `/controls/depth_setpoint` | `std_msgs/Float64` | Desired vehicle depth |
 | `/controls/quaternion_setpoint` | `geometry_msgs/Quaternion` | Desired vehicle orientation |
 | `/controls/x_setpoint` | `std_msgs/Float64` | Desired vehicle position along the X-axis | 
 | `/controls/y_setpoint` | `std_msgs/Float64` | Desired vehicle position along the Y-axis | 
@@ -152,7 +151,7 @@ The package provides five ROS nodes: `depth_controller`, `attitude_controller`, 
 
 After build is complete, make the packages visible to ROS
 
-	source install/setup.bash
+	source ros2_ws/install/setup.bash
 
 ### Running
 
