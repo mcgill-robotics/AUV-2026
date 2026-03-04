@@ -304,7 +304,11 @@ void ObjectTracker::update_matched_tracks(
         // TODO: Update to the time data type instead of using ints
         track.age = 0;
         track.confidence = confidences[meas_idx];
-        track.theta_z = orientations[meas_idx]; 
+        
+        // Don't overwrite the calculated gate orientation with the default measurement orientation
+        if (!track.has_orientation) {
+            track.theta_z = orientations[meas_idx]; 
+        }
 
         
         if (track.state == TrackState::TENTATIVE && track.consecutive_hits >= min_hits) {
@@ -412,33 +416,65 @@ void ObjectTracker::create_new_tracks(
 
 void ObjectTracker::apply_physical_constraints() {
     // Apply physical realm constraints that affect the tracked position 
-    // Currently, we refine the gate position using left and right shark/sawfish positions.
-    if (enable_gate_midpoint_refinement) {
-        refine_gate_position();
-    }
+    // Currently, we refine the gate position and orientation using left and right shark/sawfish positions.
+    apply_gate_physical_constraints();
 }
 
-void ObjectTracker::refine_gate_position() {
-    // The gate bounding box is large and its ZED 3D center can be jittery.
-    // The shark and sawfish are anchored inside the gate, providing a stable midpoint.
+void ObjectTracker::apply_gate_physical_constraints() {
     Track* gate_track = nullptr;
     Track* shark_track = nullptr;
     Track* sawfish_track = nullptr;
 
+    // Single loop to find all necessary tracks
     for (auto& t : tracks) {
+        // Only use confirmed tracks for refinement and orientation
+        if (t.state != TrackState::CONFIRMED) continue;
+
         if (t.label == "gate") gate_track = &t;
         else if (t.label == "shark") shark_track = &t;
         else if (t.label == "sawfish") sawfish_track = &t;
     }
 
     if (gate_track && shark_track && sawfish_track) {
-        Eigen::Vector3d midpoint = (shark_track->kf.state() + sawfish_track->kf.state()) / 2.0;
+        Eigen::Vector3d p_shark = shark_track->kf.state();
+        Eigen::Vector3d p_sawfish = sawfish_track->kf.state();
+        Eigen::Vector3d p_gate = gate_track->kf.state();
+        
+        // 1. Position Refinement
+        if (enable_gate_midpoint_refinement) {
+            Eigen::Vector3d midpoint = (p_shark + p_sawfish) / 2.0;
 
-        // Apply refinement if the fish midpoint is physically plausible (e.g. within 5 meters of gate)
-        if ((gate_track->kf.state() - midpoint).norm() < 5.0) {
-            // Apply a very high confidence measurement update to pull the gate to the fish midpoint
-            Eigen::Matrix3d tiny_R = Eigen::Matrix3d::Identity() * 0.001;
-            gate_track->kf.update(midpoint, tiny_R);
+            // Apply refinement if the fish midpoint is physically plausible (e.g. within 5 meters of gate)
+            if ((p_gate - midpoint).norm() < 5.0) {
+                // Apply a very high confidence measurement update to pull the gate to the fish midpoint
+                Eigen::Matrix3d tiny_R = Eigen::Matrix3d::Identity() * 0.001;
+                gate_track->kf.update(midpoint, tiny_R);
+                // Update p_gate for orientation calculation
+                p_gate = gate_track->kf.state();
+            }
         }
+
+        // 2. Orientation Calculation
+        // Vector along the gate posts
+        double dx = p_sawfish.x() - p_shark.x();
+        double dy = p_sawfish.y() - p_shark.y();
+        
+        // Normal vector perpendicular to the gate plane (facing either forwards or backwards)
+        double nx = -dy;
+        double ny = dx;
+        
+        // We want the normal to consistently point towards the map origin (for easy offsetting).
+        // Check if the normal points away from the origin (dot product > 0). If so, flip it.
+        if ((nx * p_gate.x() + ny * p_gate.y()) > 0) {
+            nx = -nx;
+            ny = -ny;
+        }
+        
+        // The yaw angle represents the normal vector pointing through the gate
+        double yaw = std::atan2(ny, nx);
+        
+        gate_track->theta_z = yaw;
+        gate_track->has_orientation = true;
     }
 }
+

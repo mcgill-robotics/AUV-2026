@@ -38,7 +38,7 @@ object_map:
   pool_floor_z: -2.1
   pool_surface_z: 0.0
   unique_objects: ["gate", "bin", "table", "board", "octagon"]
-  floor_objects: ["bin", "table"]
+  floor_objects: ["bin", "table", "lane_marker", "board"]
   surface_objects: ["gate", "octagon"]
 
   # Tracker Parameters

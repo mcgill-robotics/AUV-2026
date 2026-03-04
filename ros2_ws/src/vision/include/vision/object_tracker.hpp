@@ -33,6 +33,7 @@ struct Track {
     KalmanFilter kf;
 
     double theta_z = 0.0;
+    bool has_orientation = false;
     double confidence = 0.0;
 
     Eigen::Vector3d get_position() const {
@@ -114,7 +115,7 @@ private:
 
     // Step 7: Post-processing constraints applied to tracking states
     void apply_physical_constraints();
-    void refine_gate_position();
+    void apply_gate_physical_constraints();
 
     std::vector<Track> tracks;
 
