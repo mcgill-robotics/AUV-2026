@@ -22,16 +22,23 @@ Here is a description of the available parameters:
 | `sim` | `bool` | Determines whether to use simulation time. Should be true when running in simulation and false when running on the real AUV. |
 | `use_ground_truth` | `bool` | Determines whether to use ground truth pose and twist data from the simulator. Parameter is only relevant if sim is true. | 
 
-
-
 ### Steps
-
+(If using sim, follow step 1 and 2, otherwise move on to step 3)
 1. Launch the sim and toggle the **connect to ROS** button and stream IMU data
 2. Follow the steps inside AUV-2026/Docker/dev to start up the Docker development environment
-3. Launch the planner launch file
+3. Build the project in AUV-2026/ directory and source the work space
 ```bash
-ros2 launch planner planner_launch.py
+./build.sh
+source ros2_ws/install/setup.bash
 ```
+4. Launch the planner launch file
+```bash
+ros2 launch planner planner.launch.py
+```
+
+To launch specific missions, **TODO make a mission controls planner**
+
+
 
 ## ROS Nodes
 The package provides a single ROS Node: `RootNode` 
