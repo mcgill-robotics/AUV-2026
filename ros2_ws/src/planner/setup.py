@@ -1,4 +1,6 @@
 from setuptools import find_packages, setup
+from glob import glob
+import os
 
 package_name = 'planner'
 
@@ -10,6 +12,8 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + "planner"]),
         ('share/' + "planner" , ['package.xml']),
+        (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
+        (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
     ],
     install_requires=['setuptools', 
 					  'py_trees',
@@ -26,7 +30,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'basic_behaviour_tree = planner.basic_behaviour_tree:main',
+            'planner_node = planner.RootTree:main',
             'yaw_behaviour_tree = planner.rotationLeafs.BehaviourTreeYaw:main'
         ],
     },

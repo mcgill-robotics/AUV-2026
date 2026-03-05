@@ -13,9 +13,24 @@ class YawReader(py_trees.behaviour.Behaviour):
 	This behaviour reads the current quaternion from the IMU,
 	converts it to YAW and compares it to the user defined target YAW.
 	It then writes the YAW error to the blackboard for other behaviours to use.
+
+	Fields: node : the ROS2 node for subscribing to topics
+	blackboard_odom : the blackboard client for reading/writing odometry data
+	latest_imu_msg : the latest IMU message received from the topic
+	tolerance : the acceptable error in yaw to consider the target reached
+	prev_yaw : the previous yaw value for unwrapping
+	yaw_unwrapped : the unwrapped yaw value to handle continuous rotation beyond 360 degrees
 	"""
 	
-	def __init__(self, node: Node, name="YawReader"):
+	def __init__(self, node: Node, name="YawReader") -> None:
+		"""
+                Initializes the node and blackboard client for this behaviour.
+
+                Inputs: rclpy.node.Node    : node - the ROS2 node to use for subscribing to topics 
+                        str                : name - the name of the behaviour 
+
+                Outputs: None
+                """   
 		# To change to ODOM when state aggregator is done, for now use IMU
 		super().__init__(name)
 		self.node = node
@@ -29,12 +44,12 @@ class YawReader(py_trees.behaviour.Behaviour):
 		self.blackboard_odom = py_trees.blackboard.Client(name=self.name)
 		
 
-	def setup(self):
+	def setup(self) -> None:
 		"""
 		Description: Sets up a subscriber to listen to IMU message. Sets up
 		the needed blackboard keys
 
-		Arguments: None
+		Inputs: None
 
 		Outputs: Nothing
 		"""
@@ -64,7 +79,7 @@ class YawReader(py_trees.behaviour.Behaviour):
 		and writes it to the blackboard. Sets the latest_imu_msg for processing in update. It
 		serves as a flag that we have received at least one IMU message.
 
-		Arguments: 
+		Inputs: 
 			geometry_msgs.msg.QuaternionStamped: msg (refer to ROS docs) -- The msg from the IMU
 
 		Outputs: Nothing
@@ -91,7 +106,7 @@ class YawReader(py_trees.behaviour.Behaviour):
 		Description: On every tick, this method checks the current yaw against the target yaw.
 		It computes the yaw error and writes it to the blackboard for other behaviours to use.
 
-		Arguments: None
+		Inputs: None
 
 		Outputs: A Status of either SUCCESS, RUNNING, FAILURE depending on whether the target yaw
 		has been reached within tolerance.

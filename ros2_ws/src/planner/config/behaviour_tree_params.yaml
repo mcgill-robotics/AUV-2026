@@ -1,0 +1,4 @@
+general:
+  tick_rate       : 1.0
+  sim             : true
+  use_ground_truth: true

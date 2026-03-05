@@ -76,6 +76,8 @@ class BatteryChecker(py_trees.behaviour.Behaviour):
 		if (self.blackboard_client_battery.embedded.battery_level1 < 15.0 and \
 			self.blackboard_client_battery.embedded.battery_level2 < 15.0):
 			return Status.FAILURE # Status.FAILURE will crash the root, which we plan to be the whole tree or start a recovery action from Dougie to surface
+					      # TODO: Make this more robust by not just crashing the tree but starting a recovery action 
+					      
 		
 		# If any publishers in the Behaviour, publish here
 

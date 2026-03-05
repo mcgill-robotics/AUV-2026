@@ -6,13 +6,16 @@ class userInputYaw(py_trees.behaviour.Behaviour):
 	""" 
 	This behaviour gets user input for target yaw angle 
 	and writes it to the blackboard for other behaviours to use
+
+	Fields: rclpy.Node: node         : the ROS2 node for logging and debugging purposes
+	py_trees.blackboard blackboard   : the blackboard client for reading/writing the target yaw
 	"""
 	def __init__(self, node, name="userInputYaw"):
 		"""
 		Initializes the userInputYaw behaviour. Initializes the blackboard
 		with a goal target_yaw key, which will be used by other behaviours in the tree.
 
-		Arguments:
+		Inputs:
 			rclpy.Node: node -- The ROS2 node to use for logging and debugging purposes
 			str: name        -- The name of the behaviour (default: "userInputYaw")
 		"""
@@ -36,7 +39,7 @@ class userInputYaw(py_trees.behaviour.Behaviour):
 		is None (no input yet) or a string (target has been achieved). If there are no target yaw set, it prompts the user
 		to input a target yaw angle in degrees, which it then writes to the blackboard.
 
-		Arguments: None
+		Inputs: None
 
 		Outputs: py_trees.common.Status.SUCCESS once a target yaw is set
 		"""
