@@ -6,7 +6,7 @@ This directory contains the Docker setup for local development on x86_64 machine
 
 ### For Everyone
 *   **Docker Engine** & **Docker Compose**.
-*   **Disk Space:** Ensure you have at least **25GB** free (CUDA and PyTorch are large).
+*   **Disk Space:** Ensure you have at least **40GB** free (CUDA and PyTorch are large).
 
 ### For NVIDIA GPU Users
 If you have an NVIDIA GPU, you must install the **NVIDIA Container Toolkit** to allow Docker to access your hardware.
@@ -74,7 +74,13 @@ cd /root/AUV-2026
 source ros2_ws/install/setup.bash
 ```
 
-## 4. Connecting to Unity Simulation
+## 4. Connecting to Unity Simulation & Networking
+
+### Standardized ROS Domain
+We standardize **`ROS_DOMAIN_ID=0`** across all our Docker containers (Dev, Jetson, Simulation). This ensures seamless communication between:
+*   The Docker container and the Host machine.
+*   The Docker container and the Unity Simulation (which defaults to ID 0).
+*   Multiple robots/machines on the same network (e.g., Topside <-> AUV).
 
 This setup uses **Host Networking**, meaning the container shares `localhost` with your computer.
 
