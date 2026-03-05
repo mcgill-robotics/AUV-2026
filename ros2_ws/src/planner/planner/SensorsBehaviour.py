@@ -105,10 +105,10 @@ class SensorsBehaviour(py_trees.behaviour.Behaviour):
                 self.blackboard.vision.object_map = self.current_object_map
                 
                 # Current Debugger output, to look into PyTrees's own blackboard visualizer
-                self.node.get_logger().info(f"Pose: {self.blackboard.sensors.pose}")
-                self.node.get_logger().info(f"Twist: {self.blackboard.sensors.twist}")
-                self.node.get_logger().info(f"Object Map: {self.blackboard.vision.object_map}")
-                self.node.get_logger().info("--------------------------------------------------")      
+                #self.node.get_logger().info(f"Pose: {self.blackboard.sensors.pose}")
+                #self.node.get_logger().info(f"Twist: {self.blackboard.sensors.twist}")
+                #self.node.get_logger().info(f"Object Map: {self.blackboard.vision.object_map}")
+                #self.node.get_logger().info("--------------------------------------------------")      
 
                 return py_trees.common.Status.RUNNING
 
@@ -142,4 +142,3 @@ class SensorsBehaviour(py_trees.behaviour.Behaviour):
                 Outputs: None
                 """
                 self.current_object_map = msg
-                self.get_logger().info(f"Received new object map with {len(msg.objects)} objects.")
