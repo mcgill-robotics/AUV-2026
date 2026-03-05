@@ -28,6 +28,7 @@ setup(
     entry_points={
         'console_scripts': [
             'drytest_foxglove = telemetry.drytest_foxglove:main',
+            'vision_to_foxglove = telemetry.vision_to_foxglove:main',
         ],
     },
 )

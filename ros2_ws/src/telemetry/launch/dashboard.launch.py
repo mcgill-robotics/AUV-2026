@@ -43,9 +43,17 @@ def generate_launch_description():
         output='screen'
     )
 
+    vision_to_foxglove_node = Node(
+        package='telemetry',
+        executable='vision_to_foxglove',
+        name='vision_to_foxglove',
+        output='screen'
+    )
+
     return LaunchDescription([
         port_arg,
         address_arg,
         foxglove_bridge,
         dry_test_node,
+        vision_to_foxglove_node,
     ])
