@@ -25,6 +25,14 @@ def generate_launch_description():
         )
     )
     
+    wrapper_stream_arg = DeclareLaunchArgument(
+        "wrapper_stream_enabled",
+        default_value=str(default_config["general"]["use_wrapper_stream"]),
+        description=(
+            "Whether to use the stream server for the ZED wrapper."
+        )
+    )
+    
     compressed_arg = DeclareLaunchArgument(
         "compressed",
         default_value=str(default_config["general"]["compressed"]),
@@ -70,8 +78,11 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(os.path.join(zed_wrapper_path, "launch", "zed_camera.launch.py")),
         launch_arguments={
             "camera_model": "zed2i",
+            "stream_enabled": LaunchConfiguration("wrapper_stream_enabled"),
+            "stream_address": default_config["general"]["wrapper_stream_ip"],
+            "stream_port": str(default_config["general"]["wrapper_stream_port"]),
             "ros_params_override_path": PathJoinSubstitution([vision_dir, "config", "zed_wrapper_real.yaml"]),
-            "node_log_type": "log"
+            "node_log_type": "both"
         }.items(),
         condition=UnlessCondition(LaunchConfiguration("sim"))
     )
@@ -79,13 +90,15 @@ def generate_launch_description():
     zed_sim_wrapper_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(zed_wrapper_path, "launch", "zed_camera.launch.py")),
         launch_arguments={
-            "use_sim_time": "true",
-            "sim_mode": "true",
             "camera_model": "zedx",
-            "stream_address": "127.0.0.1",
-            "stream_port": "30000",
+            "stream_enabled": LaunchConfiguration("wrapper_stream_enabled"),
+            "stream_address": default_config["general"]["wrapper_stream_ip"],
+            "stream_port": str(default_config["general"]["wrapper_stream_port"]),
+            "sim_mode": "true",
+            "sim_address": default_config["general"]["sim_ip"],
+            "sim_port": str(default_config["general"]["sim_port"]),
             "ros_params_override_path": PathJoinSubstitution([vision_dir, "config", "zed_wrapper_unity_sim.yaml"]),
-            "node_log_type": "log"
+            "node_log_type": "both"
         }.items(),
         condition=IfCondition(LaunchConfiguration("sim"))
     )
@@ -146,9 +159,9 @@ def generate_launch_description():
                 "confidence_threshold": default_config["object_map"]["confidence_threshold"],
                 "zed_depth_confidence_threshold": default_config["object_map"]["zed_depth_confidence_threshold"],
                 "max_range": default_config["object_map"]["max_range"],
-                "use_stream": default_config["object_map"]["use_stream"],
-                "stream_ip": default_config["object_map"]["stream_ip"],
-                "stream_port": default_config["object_map"]["stream_port"],
+                "use_stream": default_config["general"]["use_wrapper_stream"],
+                "stream_ip": default_config["general"]["wrapper_stream_ip"],
+                "stream_port": default_config["general"]["wrapper_stream_port"],
                 "pool_floor_z": default_config["object_map"]["pool_floor_z"],
                 "pool_surface_z": default_config["object_map"]["pool_surface_z"],
                 "unique_objects": default_config["object_map"]["unique_objects"],
@@ -175,6 +188,7 @@ def generate_launch_description():
     
     launch_description = LaunchDescription()
     launch_description.add_action(sim_arg)
+    launch_description.add_action(wrapper_stream_arg)
     launch_description.add_action(compressed_arg)
     launch_description.add_action(use_enhance_arg)
     launch_description.add_action(front_model_arg)

@@ -6,7 +6,7 @@ camera:
 image_enhancement:
   front_enhanced_topic: /vision/front_cam/image_enhanced
   down_enhanced_topic: /vision/down_cam/image_enhanced
-  log_level: info
+  log_level: warn
 
 object_detection:
   front_detections_topic: /vision/front_cam/detections
@@ -14,7 +14,7 @@ object_detection:
 # relative to src directory
   front_model_relative_path: models/frontcam.pt
   down_model_relative_path: models/downcam.pt
-  log_level: info
+  log_level: warn
 
 object_map:
   map_topic: /vision/object_map
@@ -22,9 +22,6 @@ object_map:
   confidence_threshold: 0.5
   zed_depth_confidence_threshold: 90
   max_range: 9.0
-  use_stream: true
-  stream_ip: "127.0.0.1"
-  stream_port: 30000
   frame_rate: 30
   new_object_min_distance_threshold: 0.5
 
@@ -51,6 +48,14 @@ object_map:
   log_level: info
 
 general:
+  # whether to use the ZED wrapper in simulation mode (true) or with a real camera (false)
   sim: false
+  sim_ip: "127.0.0.1"
+  sim_port: 30000
+  # whether to use the wrapper as a streaming server that multiple nodes can subscribe to
+  use_wrapper_stream: true
+  wrapper_stream_ip: "127.0.0.1"
+  wrapper_stream_port: 30000
+  # sim is what the wrapper listens to (the Unity sim stream), stream is what the wrapper republishes as a ROS topic for the rest of the vision pipeline to use
   compressed: true
   enhance_images: true
