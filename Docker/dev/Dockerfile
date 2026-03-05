@@ -54,7 +54,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # ROS Build Tools
     python3-colcon-common-extensions \
     python3-rosdep \
-    python3-vcstool \
+    python3-vcstools \
+    # Hardware & Devices
     tar \
     v4l-utils \
     usbutils \
@@ -99,6 +100,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-diagnostic-updater \
     ros-${ROS_DISTRO}-usb-cam \
     ros-${ROS_DISTRO}-zed-msgs \
+    ros-${ROS_DISTRO}-rosidl-default-generators \
+    ros-${ROS_DISTRO}-vision-msgs \
     # Planner packages
     ros-${ROS_DISTRO}-py-trees \
     ros-${ROS_DISTRO}-py-trees-ros-interfaces \
@@ -107,34 +110,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-py-trees-ros-viewer \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
-
-# ----------------------------------------------------------
-# Install micro-ROS Agent (for microcontroller communication)
-# ------------------------------------------
-WORKDIR /opt/ros/micro_ros_ws
-RUN git clone -b ${ROS_DISTRO} https://github.com/micro-ROS/micro_ros_setup.git src/micro_ros_setup
-
-RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \
-    colcon build \
-        --parallel-workers $(nproc) \
-        --merge-install \
-        --event-handlers console_direct+ \
-        --base-paths src \
-        --cmake-args -DCMAKE_BUILD_TYPE=Release && \
-    . /opt/ros/micro_ros_ws/install/setup.sh && \
-    MICROROS_PREFIX=$(ros2 pkg prefix micro_ros_setup) && \
-    ros2 run micro_ros_setup create_ws.sh src "$MICROROS_PREFIX/config/agent_ros2_packages.txt" "$MICROROS_PREFIX/config/agent_uros_packages.repos" && \
-    colcon build \
-        --packages-up-to micro_ros_agent $@ \
-        --parallel-workers $(nproc) \
-        --merge-install \
-        --event-handlers console_direct+ \
-        --cmake-args \
-            "-DUAGENT_BUILD_EXECUTABLE=OFF" \
-            "-DUAGENT_P2P_PROFILE=OFF" \
-            "--no-warn-unused-cli" && \
-    rm -rf build src log
-WORKDIR /root
 
 # ---------------------------------------------------------
 # 3. Install Python ML & Vision Dependencies (CPU)
@@ -190,7 +165,7 @@ COPY .colcon ${COLCON_HOME}/
 WORKDIR /home/$USERNAME/AUV-2026
 
 # Add source commands to bashrc
-RUN echo "source /opt/ros/${ROS_DISTRO}/local_setup.bash && source /opt/ros/micro_ros_ws/install/local_setup.bash" >> ~/.bashrc && \
+RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc && \
     echo "if [ -f ~/AUV-2026/ros2_ws/install/setup.bash ]; then source ~/AUV-2026/ros2_ws/install/setup.bash; fi" >> ~/.bashrc
 
 # Entrypoint uses fixuid to remap UID/GID if running with --user
