@@ -86,9 +86,6 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(os.path.join(zed_wrapper_path, "launch", "zed_camera.launch.py")),
         launch_arguments={
             "camera_model": "zed2i",
-            "stream_enabled": LaunchConfiguration("wrapper_stream_enabled"),
-            "stream_address": default_config["general"]["wrapper_stream_ip"],
-            "stream_port": str(default_config["general"]["wrapper_stream_port"]),
             "ros_params_override_path": PathJoinSubstitution([vision_dir, "config", "zed_wrapper_real.yaml"]),
             "node_log_type": "log"
         }.items(),
@@ -99,9 +96,6 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(os.path.join(zed_wrapper_path, "launch", "zed_camera.launch.py")),
         launch_arguments={
             "camera_model": "zedx",
-            "stream_enabled": LaunchConfiguration("wrapper_stream_enabled"),
-            "stream_address": default_config["general"]["wrapper_stream_ip"],
-            "stream_port": str(default_config["general"]["wrapper_stream_port"]),
             "sim_mode": "true",
             "sim_address": default_config["general"]["sim_ip"],
             "sim_port": str(default_config["general"]["sim_port"]),
