@@ -113,7 +113,7 @@ public:
 		// use UDP stream for input frames
 		bool use_stream = this->declare_parameter<bool>("use_stream");
 		// UDP stream IP and port
-		string stream_ip = this->declare_parameter<string>("stream_ip", "127.0.0.1");
+		string stream_ip = this->declare_parameter<string>("stream_address");
 		int stream_port = this->declare_parameter<int>("stream_port");
 		// whether run in simulation or real-world (affects ZED SDK settings)
 		bool sim = this->declare_parameter<bool>("sim");

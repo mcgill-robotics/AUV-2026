@@ -55,7 +55,7 @@ general:
   sim_port: 30000
   # whether to use the wrapper as a streaming server that multiple nodes can subscribe to
   use_wrapper_stream: true
-  wrapper_stream_ip: "127.0.0.1"
+  wrapper_stream_ip: "127.0.1.1"
   wrapper_stream_port: 30000
   # sim is what the wrapper listens to (the Unity sim stream), stream is what the wrapper republishes as a ROS topic for the rest of the vision pipeline to use
   compressed: true
