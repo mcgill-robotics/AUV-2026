@@ -66,10 +66,27 @@ bool ZEDDetection::init_zed()
 	    init_params.input.setFromStream(stream_ip.c_str(), stream_port);
 	}
 
-	log_info("[INIT] Calling zed.open()...");
-	sl::ERROR_CODE err = zed->open(init_params);
-	if (err != sl::ERROR_CODE::SUCCESS) {
-		log_error("Failed to open ZED: " + string(sl::toString(err).c_str()));
+	log_info("[INIT] Calling zed->open()...");
+
+	int attempt = 0;
+	int max_attempts = 5;
+	sl::ERROR_CODE err = sl::ERROR_CODE::FAILURE;
+	while (attempt < max_attempts) {
+		zed = make_unique<sl::Camera>();
+		err = zed->open(init_params);
+		if (err == sl::ERROR_CODE::SUCCESS) {
+			log_info("[INIT] zed->open() succeeded on attempt " + to_string(attempt + 1));
+			break;
+		} else {
+			log_warn("Failed to open ZED (attempt " + to_string(attempt + 1) + "): " + string(sl::toString(err).c_str()));
+			zed->close(); // Ensure any partial connections are closed before retrying
+			zed.reset();
+			this_thread::sleep_for(chrono::seconds(2)); // Wait before retrying
+		}
+		attempt++;
+	}
+	if (!zed || err != sl::ERROR_CODE::SUCCESS) {
+		log_error("Failed to open ZED after " + to_string(max_attempts) + " attempts: " + string(sl::toString(err).c_str()));
 		return false;
 	}
 

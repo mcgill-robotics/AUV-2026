@@ -82,7 +82,7 @@ def generate_launch_description():
             "stream_address": default_config["general"]["wrapper_stream_ip"],
             "stream_port": str(default_config["general"]["wrapper_stream_port"]),
             "ros_params_override_path": PathJoinSubstitution([vision_dir, "config", "zed_wrapper_real.yaml"]),
-            "node_log_type": "both"
+            "node_log_type": "log"
         }.items(),
         condition=UnlessCondition(LaunchConfiguration("sim"))
     )
@@ -98,7 +98,7 @@ def generate_launch_description():
             "sim_address": default_config["general"]["sim_ip"],
             "sim_port": str(default_config["general"]["sim_port"]),
             "ros_params_override_path": PathJoinSubstitution([vision_dir, "config", "zed_wrapper_unity_sim.yaml"]),
-            "node_log_type": "both"
+            "node_log_type": "log"
         }.items(),
         condition=IfCondition(LaunchConfiguration("sim"))
     )
