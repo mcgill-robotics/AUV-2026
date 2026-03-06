@@ -41,9 +41,16 @@ def generate_launch_description():
         default_value=default_config["down_cam"]["enhanced_topic"],
         description='Down enhanced image topic'
     )
+    
+    use_sim_time_arg = DeclareLaunchArgument(
+        'use_sim_time',
+        default_value='false',
+        description='Whether to use simulation time'
+    )
+    
     compressed_arg = DeclareLaunchArgument(
         'compressed',
-        default_value=str(default_config["general"]["compressed"]),
+        default_value=str(default_config["general"]["compressed"]).lower(),
         description='Whether running in with compressed image topics'
     )
     
@@ -51,13 +58,13 @@ def generate_launch_description():
         "'",
         LaunchConfiguration('front_cam_topic'),
         "'",
-        " + ('/compressed' if ",LaunchConfiguration('compressed'), " else '')"
+        " + ('/compressed' if '",LaunchConfiguration('compressed'),"' == 'true' else '')"
     ])
     down_cam_topic = PythonExpression([
         "'",
         LaunchConfiguration('down_cam_topic'),
         "'",
-        " + ('/compressed' if ",LaunchConfiguration('compressed'), " else '')",
+        " + ('/compressed' if '",LaunchConfiguration('compressed'),"' == 'true' else '')",
     ])
 
     front_cam_enhancement_node = Node(
@@ -70,6 +77,7 @@ def generate_launch_description():
             {'output_topic': LaunchConfiguration('front_enhanced_topic')},
             {'compressed': LaunchConfiguration('compressed')},
             {'queue_size': default_config["front_cam"]["queue_size"]},
+            {'use_sim_time': LaunchConfiguration('use_sim_time')},
         ],
         arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')]
     )
@@ -83,6 +91,7 @@ def generate_launch_description():
             {'output_topic': LaunchConfiguration('down_enhanced_topic')},
             {'compressed': LaunchConfiguration('compressed')},
             {'queue_size': default_config["down_cam"]["queue_size"]},
+            {'use_sim_time': LaunchConfiguration('use_sim_time')},
         ],
         arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')]
     )
@@ -94,6 +103,7 @@ def generate_launch_description():
     launch_description.add_action(front_enhanced_topic_arg)
     launch_description.add_action(down_enhanced_topic_arg)
     launch_description.add_action(compressed_arg)
+    launch_description.add_action(use_sim_time_arg)
     
     launch_description.add_action(front_cam_enhancement_node)
     launch_description.add_action(down_cam_enhancement_node)

@@ -223,6 +223,7 @@ private:
 			RCLCPP_WARN(this->get_logger(), "[CB] zed_detector is null, skipping");
 			return;
 		}
+		frame_collection_time = rclcpp::Time(msg->header.stamp, this->get_clock()->get_clock_type());
 		std::vector<sl::CustomBoxObjectData> zed_detections = extract_ZED_detections(msg);
 		// Convert ROS message to ZED SDK CustomBoxObjectData
 		zed_detector->process_detections(zed_detections);
@@ -384,7 +385,7 @@ private:
 		object_map_publisher->publish(object_map_msg);
 		rclcpp::Time pipeline_end_time = this->now();
 		rclcpp::Duration time_diff = pipeline_end_time - frame_collection_time;
-		RCLCPP_DEBUG(this->get_logger(), "Object map pipeline latency: %.9f seconds", time_diff.seconds());
+		RCLCPP_INFO(this->get_logger(), "Object map pipeline latency: %.9f seconds", time_diff.seconds());
 	}
 
 	void publish_pose(const std::tuple<Eigen::Vector3d,Eigen::Vector4d>& pose)
@@ -456,8 +457,6 @@ private:
 			    zed_detections.push_back(box);
             }
 		}
-
-		frame_collection_time = this->now();
 		return zed_detections;
 	}
 #endif

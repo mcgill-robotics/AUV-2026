@@ -10,5 +10,6 @@ down_cam:
   queue_size: 10
 
 general:
+  use_sim_time: false
   compressed: false
   log_level: info

@@ -54,10 +54,16 @@ def generate_launch_description():
     
     compressed_arg = DeclareLaunchArgument(
         "compressed",
-        default_value=str(default_config["general"]["compressed"]),
+        default_value=str(default_config["general"]["compressed"]).lower(),
         description=(
             "Whether input image topics are compressed image message topics"
         )
+    )
+    
+    use_sim_time_arg = DeclareLaunchArgument(
+        "use_sim_time",
+        default_value="false",
+        description="Whether to use simulation time"
     )
     
     front_detection_node = Node(
@@ -71,7 +77,8 @@ def generate_launch_description():
             {'output_topic': LaunchConfiguration('front_detections_topic')},
             {'queue_size': default_config["front_cam"]["queue_size"]},
             {'publish_annotated_image': default_config["front_cam"].get("publish_annotated_image", False)},
-            {'compressed': LaunchConfiguration('compressed')}
+            {'compressed': LaunchConfiguration('compressed')},
+            {'use_sim_time': LaunchConfiguration('use_sim_time')}
         ],
         arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')]
     )
@@ -86,7 +93,8 @@ def generate_launch_description():
             {'output_topic': LaunchConfiguration('down_detections_topic')},
             {'queue_size': default_config["down_cam"]["queue_size"]},
             {'publish_annotated_image': default_config["down_cam"].get("publish_annotated_image", False)},
-            {'compressed': LaunchConfiguration('compressed')}
+            {'compressed': LaunchConfiguration('compressed')},
+            {'use_sim_time': LaunchConfiguration('use_sim_time')}
         ],
         arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')]
     )
@@ -99,6 +107,7 @@ def generate_launch_description():
     launch_description.add_action(front_detections_topic_arg)
     launch_description.add_action(down_detections_topic_arg)
     launch_description.add_action(compressed_arg)
+    launch_description.add_action(use_sim_time_arg)
     
     launch_description.add_action(front_detection_node)
     launch_description.add_action(down_detection_node)

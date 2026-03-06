@@ -19,15 +19,23 @@ def generate_launch_description():
     
     sim_arg = DeclareLaunchArgument(
         "sim",
-        default_value=str(default_config["general"]["sim"]),
+        default_value=str(default_config["general"]["sim"]).lower(),
         description=(
             "Whether to use simulation time. Should be true when running in simulation and false when running on the real AUV."
         )
     )
     
+    use_sim_time_arg = DeclareLaunchArgument(
+        "use_sim_time",
+        default_value=str(default_config["general"]["use_sim_time"]).lower(),
+        description=(
+            "Whether to set the use_sim_time parameter for all nodes in the vision pipeline. Should be true when running in simulation and false when running on the real AUV. If true, all nodes will subscribe to the /clock topic for time synchronization. If false, all nodes will use the system clock."
+        )
+    )
+    
     wrapper_stream_arg = DeclareLaunchArgument(
         "wrapper_stream_enabled",
-        default_value=str(default_config["general"]["use_wrapper_stream"]),
+        default_value=str(default_config["general"]["use_wrapper_stream"]).lower(),
         description=(
             "Whether to use the stream server for the ZED wrapper."
         )
@@ -35,7 +43,7 @@ def generate_launch_description():
     
     compressed_arg = DeclareLaunchArgument(
         "compressed",
-        default_value=str(default_config["general"]["compressed"]),
+        default_value=str(default_config["general"]["compressed"]).lower(),
         description=(
             "Whether input image topics are compressed image message topics. Appends 'compressed' to the end of expected input topic names if true."
         )
@@ -43,7 +51,7 @@ def generate_launch_description():
     
     use_enhance_arg = DeclareLaunchArgument(
         "enhance_images",
-        default_value=str(default_config["general"]["enhance_images"]),
+        default_value=str(default_config["general"]["enhance_images"]).lower(),
         description=(
             "Whether to run the image enhancement nodes. If false, object detection nodes will subscribe directly to raw camera topics instead of enhanced image topics."
         )
@@ -98,6 +106,7 @@ def generate_launch_description():
             "sim_address": default_config["general"]["sim_ip"],
             "sim_port": str(default_config["general"]["sim_port"]),
             "ros_params_override_path": PathJoinSubstitution([vision_dir, "config", "zed_wrapper_unity_sim.yaml"]),
+            "use_sim_time": LaunchConfiguration("use_sim_time"),
             "node_log_type": "log"
         }.items(),
         condition=IfCondition(LaunchConfiguration("sim"))
@@ -112,7 +121,7 @@ def generate_launch_description():
             "front_enhanced_topic": front_enhanced_topic,
             "down_enhanced_topic": down_enhanced_topic,
             "compressed": LaunchConfiguration("compressed"),
-            "use_sim_time": LaunchConfiguration("sim"),
+            "use_sim_time": LaunchConfiguration("use_sim_time"),
             "log_level": ie_log_level
         }.items(),
         condition=IfCondition(LaunchConfiguration("enhance_images"))
@@ -121,12 +130,12 @@ def generate_launch_description():
     # because launch configuration parameters are not evaluated in this script but rather passed in to ROS context directly, the ROS manager will evaluate these python expression to determine the actual topic names to remap to for the object detection nodes. If enhance_images is true, remap to the enhanced image topics, otherwise remap to the raw camera topics
     object_detection_front_input = PythonExpression([
         "'", front_enhanced_topic, 
-        "' if '", LaunchConfiguration("enhance_images"), "' == 'True' else '", 
-        front_cam_topic,"'"," + ('/compressed' if ",LaunchConfiguration('compressed'), " else '')"
+        "' if '", LaunchConfiguration("enhance_images"), "' == 'true' else '", 
+        front_cam_topic,"'"," + ('/compressed' if '",LaunchConfiguration('compressed'),"' == 'true' else '')"
     ])
     object_detection_down_input = PythonExpression([
         "'", down_enhanced_topic, 
-        "' if '", LaunchConfiguration("enhance_images"), "' == 'True' else '", down_cam_topic, "'"," + ('/compressed' if ",LaunchConfiguration('compressed'), " else '')"
+        "' if '", LaunchConfiguration("enhance_images"), "' == 'true' else '", down_cam_topic, "'"," + ('/compressed' if '",LaunchConfiguration('compressed'),"' == 'true' else '')"
     ])
     
     object_detection_launch = IncludeLaunchDescription(
@@ -139,7 +148,8 @@ def generate_launch_description():
             "front_model": PathJoinSubstitution([vision_dir, LaunchConfiguration("front_model_relative_path")]),
             "down_model": PathJoinSubstitution([vision_dir, LaunchConfiguration("down_model_relative_path")]),
             "compressed": LaunchConfiguration("compressed"),
-            "use_sim_time": LaunchConfiguration("sim"),
+            "sim": LaunchConfiguration("sim"),
+            "use_sim_time": LaunchConfiguration("use_sim_time"),
             "log_level": od_log_level
         }.items()
     )
@@ -180,7 +190,7 @@ def generate_launch_description():
                 "conf_to_tent_threshold": default_config["object_map"]["conf_to_tent_threshold"],
                 "tent_init_buffer": default_config["object_map"]["tent_init_buffer"],
                 "sim": LaunchConfiguration("sim"),
-                "use_sim_time": LaunchConfiguration("sim")
+                "use_sim_time": LaunchConfiguration("use_sim_time")
             }
         ],
         arguments=['--ros-args', '--log-level', om_log_level]
@@ -188,6 +198,7 @@ def generate_launch_description():
     
     launch_description = LaunchDescription()
     launch_description.add_action(sim_arg)
+    launch_description.add_action(use_sim_time_arg)
     launch_description.add_action(wrapper_stream_arg)
     launch_description.add_action(compressed_arg)
     launch_description.add_action(use_enhance_arg)

@@ -6,7 +6,7 @@ camera:
 image_enhancement:
   front_enhanced_topic: /vision/front_cam/image_enhanced
   down_enhanced_topic: /vision/down_cam/image_enhanced
-  log_level: warn
+  log_level: info
 
 object_detection:
   front_detections_topic: /vision/front_cam/detections
@@ -14,7 +14,7 @@ object_detection:
 # relative to src directory
   front_model_relative_path: models/frontcam.pt
   down_model_relative_path: models/downcam.pt
-  log_level: warn
+  log_level: info
 
 object_map:
   map_topic: /vision/object_map
@@ -48,6 +48,7 @@ object_map:
   log_level: info
 
 general:
+  use_sim_time: false # determine time based on /clock topic (should be true for sim, false for real robot)
   # whether to use the ZED wrapper in simulation mode (true) or with a real camera (false)
   sim: false
   sim_ip: "127.0.0.1"
