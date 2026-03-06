@@ -108,10 +108,12 @@ private:
     function<void(const string&, long)> log_warn_throttle;    
     
     
-    sl::Camera zed;
+    std::unique_ptr<sl::Camera> zed;
     ZEDCameraModel camera_model;
     sl::RuntimeParameters runtime_params;
     sl::ObjectDetectionRuntimeParameters obj_runtime_param;
+    sl::Objects objects_;           // Pre-allocated object container
+    sl::Pose cam_pose_;             // Pre-allocated pose object
     
     vector<Eigen::Vector3d> measurements;
 	vector<Eigen::Matrix3d> covariances;

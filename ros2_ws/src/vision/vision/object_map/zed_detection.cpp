@@ -67,19 +67,18 @@ bool ZEDDetection::init_zed()
 	}
 
 	log_info("[INIT] Calling zed.open()...");
-	sl::ERROR_CODE err = zed.open(init_params);
+	sl::ERROR_CODE err = zed->open(init_params);
 	if (err != sl::ERROR_CODE::SUCCESS) {
 		log_error("Failed to open ZED: " + string(sl::toString(err).c_str()));
 		return false;
 	}
-	log_info("[INIT] zed.open() succeeded");
 
 	// Enable positional tracking for VIO
 	log_info("[INIT] Enabling positional tracking...");
 	sl::PositionalTrackingParameters pos_param;
 	pos_param.enable_imu_fusion = true;
 	pos_param.set_floor_as_origin = false;
-	err = zed.enablePositionalTracking(pos_param);
+	err = zed->enablePositionalTracking(pos_param);
 	if (err != sl::ERROR_CODE::SUCCESS) {
 		log_error("Failed to enable positional tracking: " + string(sl::toString(err).c_str()));
 		return false;
@@ -92,7 +91,7 @@ bool ZEDDetection::init_zed()
 	obj_param.detection_model = sl::OBJECT_DETECTION_MODEL::CUSTOM_BOX_OBJECTS;
 	obj_param.enable_tracking = false;
 	obj_param.max_range = max_range;
-	err = zed.enableObjectDetection(obj_param);
+	err = zed->enableObjectDetection(obj_param);
 	if (err != sl::ERROR_CODE::SUCCESS) {
 		log_error("Failed to enable object detection: " + string(sl::toString(err).c_str()));
 		return false;
@@ -117,27 +116,25 @@ void ZEDDetection::process_detections(const std::vector<sl::CustomBoxObjectData>
 	log_info("[CB] check_zed_status OK, ingesting custom boxes...");
 	
 	// Ingest custom boxes
-	zed.ingestCustomBoxObjects(detections);
+	zed->ingestCustomBoxObjects(detections);
 	log_info("[CB] Ingested, retrieving objects...");
 
-	sl::Objects objects;
-	zed.retrieveObjects(objects, obj_runtime_param);
-	log_info("[CB] Retrieved " + to_string(objects.object_list.size()) + " objects");
+	zed->retrieveObjects(objects_, obj_runtime_param);
+	log_info("[CB] Retrieved " + to_string(objects_.object_list.size()) + " objects");
 	// if (debug_logs) {
 	//     LogDebugTable(detections, objects);
 	// }
 	// Get VIO pose
 	log_info("[CB] Getting VIO pose...");
-	sl::Pose cam_pose;
-	sl::POSITIONAL_TRACKING_STATE tracking_state = zed.getPosition(cam_pose, sl::REFERENCE_FRAME::WORLD);
+	sl::POSITIONAL_TRACKING_STATE tracking_state = zed->getPosition(cam_pose_, sl::REFERENCE_FRAME::WORLD);
 	// Check tracking state and warn every second
 	if (tracking_state != sl::POSITIONAL_TRACKING_STATE::OK) {
 	    log_warn_throttle("VIO tracking not OK - " + string(sl::toString(tracking_state).c_str()), 1000);
 	    // return;
 	}
-	log_debug("[CB] VIO pose retrieved, camera pose: [" + to_string(cam_pose.getTranslation().x) + ", " + to_string(cam_pose.getTranslation().y) + ", " + to_string(cam_pose.getTranslation().z)+ "]");
+	log_debug("[CB] VIO pose retrieved, camera pose: [" + to_string(cam_pose_.getTranslation().x) + ", " + to_string(cam_pose_.getTranslation().y) + ", " + to_string(cam_pose_.getTranslation().z)+ "]");
 	log_debug("[CB] VIO OK, determining world positions...");
-	determine_world_position_zed_2D_boxes(objects, cam_pose);
+	determine_world_position_zed_2D_boxes(objects_, cam_pose_);
 	log_info("[CB] process_detections complete");
 }
 
@@ -156,16 +153,18 @@ std::tuple<Eigen::Vector3d,Eigen::Vector4d> ZEDDetection::GetCameraPose()
 
 ZEDDetection::~ZEDDetection()
 {
-    if (zed.isOpened()) {
-        zed.close();
-    }
+	if (zed) {
+		log_info("Closing ZED camera...");
+		zed->close();
+		log_info("ZED camera closed");
+	}
 }
 
 bool ZEDDetection::check_zed_status()
 {
     // Grab frame
-	log_debug("[CB] check_zed_status: calling zed.grab()...");
-	sl::ERROR_CODE grab_status = zed.grab(runtime_params);
+	log_debug("[CB] check_zed_status: calling zed->grab()...");
+	sl::ERROR_CODE grab_status = zed->grab(runtime_params);
 	if (grab_status == sl::ERROR_CODE::CORRUPTED_FRAME) {
 	    log_warn("Corrupted frame detected - skipping");
 	    return false;
@@ -178,7 +177,7 @@ bool ZEDDetection::check_zed_status()
 	}
 	log_debug("[CB] check_zed_status: grab OK, checking health...");
 
-	sl::HealthStatus health = zed.getHealthStatus();
+	sl::HealthStatus health = zed->getHealthStatus();
 	// Check frame health, only log every 5 seconds
 	if (health.low_image_quality) {
 	    log_warn_throttle("Low image quality", 5000);
