@@ -4,7 +4,7 @@ import yaml
 from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument
+from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument,TimerAction
 from launch.conditions import IfCondition,UnlessCondition
 from launch_ros.actions import Node
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -194,6 +194,11 @@ def generate_launch_description():
             }
         ],
         arguments=['--ros-args', '--log-level', om_log_level]
+    )
+    # wait 3 seconds before launching node to ensure zed wrapper is able to open and stream on port
+    object_map_node = TimerAction(
+        period=3.0,
+        actions=[object_map_node]
     )
     
     launch_description = LaunchDescription()
