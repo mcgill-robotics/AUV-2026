@@ -164,7 +164,7 @@ def generate_launch_description():
                 "zed_depth_confidence_threshold": default_config["object_map"]["zed_depth_confidence_threshold"],
                 "max_range": default_config["object_map"]["max_range"],
                 "use_stream": default_config["general"]["use_wrapper_stream"],
-                "stream_ip": default_config["general"]["wrapper_stream_ip"],
+                "stream_address": default_config["general"]["wrapper_stream_ip"],
                 "stream_port": default_config["general"]["wrapper_stream_port"],
                 "pool_floor_z": default_config["object_map"]["pool_floor_z"],
                 "pool_surface_z": default_config["object_map"]["pool_surface_z"],
