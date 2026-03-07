@@ -6,6 +6,7 @@ if [ -z "$1" ] || [[ "$1" == --* ]]; then
     exit 1
 fi
 
+MODEL_PATH="$1"
 shift # shift past the first argument (model filepath)
 
 while [[ "$#" -gt 0 ]]; do
@@ -32,4 +33,4 @@ fi
 
 python3 fix_labels.py
 python3 organize_dataset.py $ORGANIZE_ARGS
-python3 training.py --custom-model "$1" $TRAINING_ARGS
+python3 training.py --custom-model "$MODEL_PATH" $TRAINING_ARGS
