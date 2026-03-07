@@ -90,6 +90,7 @@ RUN echo "# R${L4T_MAJOR} (release), REVISION: ${L4T_MINOR}" > /etc/nv_tegra_rel
     libdraco-dev \
     libgeographic-dev \
     libusb-1.0-0-dev \
+    nlohmann-json3-dev \
     python3 \
     python3-dev \
     python3-pip \
