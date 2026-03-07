@@ -18,6 +18,9 @@
 #include "object.hpp"
 #include <algorithm>
 
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+
 using namespace std;
 // alias for milliseconds with double precision
 using double_ms = std::chrono::duration<double, std::milli>;
@@ -200,16 +203,16 @@ private:
 	// --- Post-Processing Physical Constraints ---
 	void apply_z_axis_depth_constraints(auv_msgs::msg::VisionObject& object_msg, const Eigen::Vector3d& filter_position) const {
 		if (!enable_z_axis_locking) {
-			object_msg.z = filter_position(2);
+			object_msg.pose.position.z = filter_position(2);
 			return;
 		}
 
 		if (is_floor_bound(object_msg.label)) {
-			object_msg.z = pool_floor_z;
+			object_msg.pose.position.z = pool_floor_z;
 		} else if (is_surface_bound(object_msg.label)) {
-			object_msg.z = pool_surface_z;
+			object_msg.pose.position.z = pool_surface_z;
 		} else {
-			object_msg.z = filter_position(2);
+			object_msg.pose.position.z = filter_position(2);
 		}
 	}
 
@@ -287,6 +290,8 @@ private:
 	void publish_object_map(const std::vector<Track>& tracks)
 	{
 		auv_msgs::msg::VisionObjectArray object_map_msg;
+		object_map_msg.header.stamp = frame_collection_time;
+		object_map_msg.header.frame_id = "map";
 
 		std::vector<Track> publish_tracks;
 
@@ -295,7 +300,16 @@ private:
 			if (track.state == TrackState::CONFIRMED) {
 				if (is_unique_object(track.label)) {
 					// Update global memory for unique items
+					bool has_saved_orientation = persistent_objects[track.label].has_orientation;
+					double saved_theta_z = persistent_objects[track.label].theta_z;
+
 					persistent_objects[track.label] = track;
+
+					// Preserve the saved orientation if the new track doesn't have one
+					if (!track.has_orientation && has_saved_orientation) {
+						persistent_objects[track.label].has_orientation = true;
+						persistent_objects[track.label].theta_z = saved_theta_z;
+					}
 				} else {
 					// Add regular confirmed tracks to the publish list
 					publish_tracks.push_back(track);
@@ -319,16 +333,26 @@ private:
 			}
 
 			auv_msgs::msg::VisionObject object_msg;
+			object_msg.header.stamp = frame_collection_time;
+			object_msg.header.frame_id = "map";
+			
 			object_msg.label = track.label;
 			object_msg.id = track.id;
 			Eigen::Vector3d position = track.get_position();
-			object_msg.x = position(0);
-			object_msg.y = position(1);
+			
+			// Position
+			object_msg.pose.position.x = position(0);
+			object_msg.pose.position.y = position(1);
 
 			// --- Post-Processing Physical Constraints ---
 			apply_z_axis_depth_constraints(object_msg, position);
 
-			object_msg.theta_z = 0.0; // TODO: set orientation if available
+			// Orientation
+			tf2::Quaternion q;
+			q.setRPY(0.0, 0.0, track.theta_z);
+			object_msg.pose.orientation = tf2::toMsg(q);
+			object_msg.has_orientation = track.has_orientation;
+
 			object_msg.confidence = track.confidence;
 			object_map_msg.array.push_back(object_msg);
 
@@ -338,13 +362,21 @@ private:
 			// Thus, we inherit the reliable 2D position of the table by generating a synthetic octagon.
 			if (enable_octagon_xy_inheritance && track.label == "table") {
 				auv_msgs::msg::VisionObject octagon_msg;
+				octagon_msg.header.stamp = frame_collection_time;
+				octagon_msg.header.frame_id = "map";
+				
 				octagon_msg.label = "octagon";
 				octagon_msg.id = track.id + 1000; // Create unique synthetic ID
-				octagon_msg.x = position(0);
-				octagon_msg.y = position(1);
-				octagon_msg.z = pool_surface_z;
+				
+				octagon_msg.pose.position.x = position(0);
+				octagon_msg.pose.position.y = position(1);
+				octagon_msg.pose.position.z = pool_surface_z;
 
-				octagon_msg.theta_z = 0.0;
+				tf2::Quaternion q_oct;
+				q_oct.setRPY(0.0, 0.0, 0.0);
+				octagon_msg.pose.orientation = tf2::toMsg(q_oct);
+				octagon_msg.has_orientation = false;
+				
 				octagon_msg.confidence = track.confidence;
 				object_map_msg.array.push_back(octagon_msg);
 			}

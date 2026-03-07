@@ -234,14 +234,6 @@ void ZEDDetection::determine_world_position_zed_2D_boxes(const sl::Objects& zed_
 		// Get covariance in world frame
 		Eigen::Matrix3d cov_world = get_world_covariance(obj.position_covariance, rotation);
 
-		// Filter: Skip far-away pipes
-		if (label_str == "red_pipe" || label_str == "white_pipe") {
-			float dist = std::sqrt(pos.x * pos.x + pos.y * pos.y + pos.z * pos.z);
-			if (dist > 7.0) {
-				continue;
-			}
-		}
-
 		measurements.push_back(world_pos);
 		covariances.push_back(cov_world);
 		classes.push_back(label_str);

@@ -19,6 +19,8 @@ set(ROS_DEPS
     std_msgs
     geometry_msgs
     vision_msgs
+    tf2
+    tf2_geometry_msgs
 )
 set(CPP_LIBS
     OpenCV
