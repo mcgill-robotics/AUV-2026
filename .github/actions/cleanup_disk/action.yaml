@@ -1,0 +1,72 @@
+name: Cleanup disk
+description: Github actions contains many packages we don't need for our docker builds (e.g. .NET, Android SDK, GHC, hosted toolcache). This action removes them to free up disk space.
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      name: Cleanup
+      run: |
+        echo "=== Before Cleanup ==="
+        df -h
+        # Calculate initial usage in 1K-blocks for accuracy
+        INITIAL_USAGE=$(df / --output=used | tail -n 1)
+
+        # 1. Android Library
+        sudo rm -rf /usr/local/lib/android
+
+        # 2. .NET Runtime
+        sudo rm -rf /usr/share/dotnet
+
+        # 3. Haskell / GHC
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /usr/local/.ghcup
+
+        # 4. Hosted Tool Cache (CodeQL, Go, etc.)
+        sudo rm -rf /opt/hostedtoolcache
+        
+        # 5. Swift, Java, Julia
+        sudo rm -rf /usr/share/swift
+        sudo rm -rf /usr/lib/jvm
+        sudo rm -rf /usr/local/julia*
+
+        # 6. Microsoft & Browser tools & Cloud CLIs
+        sudo rm -rf /usr/local/share/powershell
+        sudo rm -rf /usr/local/share/chromium
+        sudo rm -rf /usr/local/lib/node_modules
+        sudo rm -rf /opt/microsoft 
+        sudo rm -rf /opt/google
+        sudo rm -rf /opt/az
+
+        # 6. Microsoft & Browser tools
+        sudo rm -rf /usr/local/share/powershell
+        sudo rm -rf /usr/local/share/chromium
+        sudo rm -rf /usr/local/lib/node_modules
+
+        # 7. Docker Cache (Pre-loaded images)
+        sudo docker image prune -af
+        sudo docker builder prune -af
+
+        # 8. Move Docker to /mnt if available (usually 60GB+ vs root 20GB)
+        if [ -d "/mnt" ]; then
+            echo "Moving Docker data to /mnt for more space..."
+            sudo systemctl stop docker
+            sudo mkdir -p /mnt/docker
+            # We use rsync to preserve permissions and copy existing data
+            # -a: archive mode, -q: quiet
+            sudo rsync -aq /var/lib/docker/ /mnt/docker/
+            sudo rm -rf /var/lib/docker
+            sudo ln -s /mnt/docker /var/lib/docker
+            sudo systemctl start docker
+            echo "Docker moved to /mnt successfully."
+            df -h /mnt
+        fi
+
+        echo "=== After Cleanup ==="
+        df -h
+        
+        FINAL_USAGE=$(df / --output=used | tail -n 1)
+        RECLAIMED=$((INITIAL_USAGE - FINAL_USAGE))
+        # Convert from 1K-blocks to GB
+        RECLAIMED_GB=$(echo "scale=2; $RECLAIMED/1024/1024" | bc)
+        echo "Total reclaimed space: ${RECLAIMED_GB}GB"

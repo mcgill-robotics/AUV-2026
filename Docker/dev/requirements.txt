@@ -1,0 +1,9 @@
+ultralytics>=8.2.0
+pandas
+scipy
+notebook
+roboflow>=1.1.0
+albumentations
+typing_extensions
+sympy
+cython

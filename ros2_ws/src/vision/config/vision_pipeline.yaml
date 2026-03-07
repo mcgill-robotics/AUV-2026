@@ -1,0 +1,56 @@
+# not the standard ROS node config parameters, these are topics passed to the vision pipeline launch file
+camera:
+  front_cam_topic: /zed/zed_node/rgb/color/rect/image
+  down_cam_topic: /vision/down_cam/image_raw
+
+image_enhancement:
+  front_enhanced_topic: /vision/front_cam/image_enhanced
+  down_enhanced_topic: /vision/down_cam/image_enhanced
+  log_level: info
+
+object_detection:
+  front_detections_topic: /vision/front_cam/detections
+  down_detections_topic: /vision/down_cam/detections
+# relative to src directory
+  front_model_relative_path: models/frontcam.pt
+  down_model_relative_path: models/downcam.pt
+  log_level: info
+
+object_map:
+  map_topic: /vision/object_map
+  pose_topic: /vision/vio_pose
+  confidence_threshold: 0.5
+  zed_depth_confidence_threshold: 90
+  max_range: 9.0
+  use_stream: true
+  stream_ip: "127.0.0.1"
+  stream_port: 30000
+  frame_rate: 30
+  new_object_min_distance_threshold: 0.5
+
+  # Feature Toggles (Game-Specific Constraints)
+  enable_gate_top_crop: true # Removes bottom 60% of bounding box for gate to ignore legs/pool floor noise
+  enable_z_axis_locking: true # Forces specific unique objects to snap to pool floor/surface Z coordinates
+  enable_gate_midpoint_refinement: true # Uses surrounding shark/sawfish tracks to perfectly center the gate
+  enable_octagon_xy_inheritance: true # Ignores true octagon detections, creates synthetic octagon directly above the table
+  gate_top_crop_ratio: 0.50 # The ratio (0.0 to 1.0) of the gate bounding box to keep from the top edge
+  max_pipe_distance: 7.0 # Truncates tracking of red/white pipes beyond this distance to reduce noise in map
+  pool_floor_z: -2.1
+  pool_surface_z: 0.0
+  unique_objects: ["gate", "bin", "table", "board", "octagon"]
+  floor_objects: ["bin", "table", "lane_marker", "board"]
+  surface_objects: ["gate", "octagon"]
+
+  # Tracker Parameters
+  gating_threshold: 3.5 # Mahalanobis distance threshold (~3 sigma) for associating detections to tracks
+  min_hits: 20 # Consecutive frames a detection must be matched to confirm a new track
+  max_age: 8 # Number of frames to keep a lost track alive before deleting it
+  max_position_jump: 2.0 # Maximum allowed distance (meters) between predictions and measurements
+  conf_to_tent_threshold: 5 # Number of consecutive missed frames before a CONFIRMED track degrades to TENTATIVE
+  tent_init_buffer: 5 # Extra frames allowed for a new TENTATIVE track to initialize before being deleted if unmatched
+  log_level: info
+
+general:
+  sim: false
+  compressed: true
+  enhance_images: true
