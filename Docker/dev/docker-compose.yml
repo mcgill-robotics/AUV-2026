@@ -15,15 +15,15 @@ services:
     privileged: true # Covers SYS_PTRACE, seccomp, apparmor
 
     environment:
+      - ROS_DOMAIN_ID=0
       - DISPLAY=${DISPLAY}
       - QT_X11_NO_MITSHM=1
       - LIBGL_ALWAYS_SOFTWARE=1
-      - ROS_DOMAIN_ID=0
       # Added to match original devcontainer features:
       - WAYLAND_DISPLAY=${WAYLAND_DISPLAY}
       - XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}
       - PULSE_SERVER=${PULSE_SERVER}
-    
+
     user: "douglas"
     volumes:
       - ../../:/home/douglas/AUV-2026
@@ -59,7 +59,7 @@ services:
             - driver: nvidia
               count: all
               capabilities: [ gpu ]
-    
+
     environment:
       - NVIDIA_DRIVER_CAPABILITIES=all
       - NVIDIA_VISIBLE_DEVICES=all
