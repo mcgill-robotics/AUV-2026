@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>propulsion</name>
+  <version>0.1.0</version>
+  <description>
+	  Package for moving the AUV. Designed to abstract away the mechanical 
+	  implementation details of the propulsion mechanism.
+  </description>
+	  
+  <maintainer email="dev@mcgillrobotics.com">McGill Robotics</maintainer>
+  <license>GPLv3</license>
+  <url type="repository">https://github.com/mcgill-robotics/AUV-2026</url>
+  <author email="nadim.asmar@mail.mcgill.ca">Nadim Asmar</author>
+
+<buildtool_depend>ament_python</buildtool_depend>
+
+
+        <exec_depend>rclpy</exec_depend>             
+        <exec_depend>geometry_msgs</exec_depend>     
+        <exec_depend>auv_msgs</exec_depend>          
+        <exec_depend>launch</exec_depend>            
+        <exec_depend>launch_ros</exec_depend>        
+        <exec_depend>python3-numpy</exec_depend> 
+
+<export>
+        <build_type>ament_python</build_type>      
+</export>
+
+</package>

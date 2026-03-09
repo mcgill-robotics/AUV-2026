@@ -55,5 +55,6 @@
         }
     ],
 
-    "workspaceFolder": "/root/AUV-2026"
+    "workspaceFolder": "/root/AUV-2026",
+    "forwardPorts": [10000]
 }
