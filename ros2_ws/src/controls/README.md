@@ -143,6 +143,8 @@ The package provides five ROS nodes: `depth_controller`, `attitude_controller`, 
 
 - `numpy` - used by the PID controller
 
+- `sensors` - for utility functions
+
 ### Building
 
 	source /opt/ros/humble/setup.bash

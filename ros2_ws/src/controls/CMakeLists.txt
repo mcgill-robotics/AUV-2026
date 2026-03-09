@@ -23,6 +23,7 @@ find_package(nav_msgs REQUIRED)
 find_package(message_filters REQUIRED)
 find_package(eigen3_cmake_module REQUIRED)
 find_package(Eigen3 REQUIRED)
+find_package(sensors REQUIRED)
 
 add_executable(attitude_controller
   src/attitude_controller.cpp)
@@ -47,7 +48,8 @@ ament_target_dependencies(attitude_controller
   geometry_msgs
   nav_msgs
   message_filters
-  Eigen3)
+  Eigen3
+  sensors)
 
 ament_target_dependencies(superimposer
   rclcpp

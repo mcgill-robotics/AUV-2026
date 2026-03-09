@@ -1,4 +1,5 @@
 #include "controls/attitude_controller.hpp"
+#include "sensors/utils.hpp"
 
 namespace controls
 {
@@ -92,6 +93,7 @@ namespace controls
     Vec3 AttitudeController::feedback_effort(const quatd& q_iv2)
     {
         quatd q_error = q_iv_.conjugate() * q_iv2;
+        q_error = sensors::math::canonicalizeShortest(q_error);
         Vec3 error_vector = Vec3(q_error.x(), q_error.y(), q_error.z());
         Vec3 feedback = P_e_ * error_vector - P_w_ * w_iv_;
         return feedback;
