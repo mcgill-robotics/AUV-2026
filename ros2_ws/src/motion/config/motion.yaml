@@ -1,0 +1,8 @@
+# Motion action server parameters
+navigation_server:
+  ros__parameters:
+    # Feedback loop rate
+    feedback_rate_hz: 10.0
+
+    # State topic
+    state_topic: "state/pose"
