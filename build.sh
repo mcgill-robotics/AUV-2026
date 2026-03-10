@@ -30,7 +30,7 @@ if [ -d "ros2_ws/src" ]; then
     EXCLUDE_PKGS+=(--packages-skip zed-ros2-wrapper zed_ros2 zed_components zed_msgs zed_wrapper)
   fi
   cd ros2_ws
-  rosdep install --from-paths src --ignore-src -r -y --skip-keys="zed zed_msgs zed_components"
+  # rosdep install --from-paths src --ignore-src -r -y --skip-keys="zed zed_msgs zed_components"
   colcon build "${EXCLUDE_PKGS[@]}"
   cd -
 else
