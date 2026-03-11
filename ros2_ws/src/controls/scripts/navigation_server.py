@@ -23,11 +23,13 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 
-from geometry_msgs.msg import PoseStamped, Quaternion
+from geometry_msgs.msg import PoseStamped, Quaternion, Vector3
 from std_msgs.msg import Float64
 from auv_msgs.action import AUVNavigate
 
-from controls.utils import yaw_from_quaternion, quaternion_from_yaw, normalize_angle
+from controls.utils import normalize_angle, yaw_from_quaternion
+import numpy as np
+from scipy.spatial.transform import Rotation
 
 
 class NavigationServer(Node):
@@ -38,7 +40,7 @@ class NavigationServer(Node):
 
         # ── Parameters ───────────────────────────────────────────────────────
         self.declare_parameter('feedback_rate_hz', 10.0)
-        self.declare_parameter('state_topic', '/auv/ground_truth/pose')
+        self.declare_parameter('state_topic', 'state/pose')
 
         self.feedback_rate_hz = self.get_parameter('feedback_rate_hz').value
         state_topic = self.get_parameter('state_topic').value
@@ -127,11 +129,11 @@ class NavigationServer(Node):
                 return result
 
         # ── Compute absolute target ──────────────────
-        target_x, target_y, target_z, target_yaw = self._compute_absolute_target(goal)
-        self._log_target(goal, target_x, target_y, target_z, target_yaw)
+        target_x, target_y, target_z, target_quat = self._compute_absolute_target(goal)
+        self._log_target(goal, target_x, target_y, target_z, target_quat)
 
         # ── Publish setpoints to controllers ─────────
-        self._publish_setpoints(goal, target_x, target_y, target_z, target_yaw)
+        self._publish_setpoints(goal, target_x, target_y, target_z, target_quat)
 
         # ── Feedback loop ────────────────────────────
         feedback_msg = AUVNavigate.Feedback()
@@ -161,13 +163,18 @@ class NavigationServer(Node):
                 continue
 
             current = self.current_pose.pose
-            current_yaw = yaw_from_quaternion(current.orientation)
 
             # Compute errors (only for controlled DOFs)
             pos_error = self._compute_position_error(
                 goal, current, target_x, target_y, target_z
             )
-            yaw_error = abs(normalize_angle(target_yaw - current_yaw)) if goal.do_yaw else 0.0
+            
+            if goal.do_yaw:
+                current_yaw = yaw_from_quaternion(current.orientation)
+                target_yaw = yaw_from_quaternion(target_quat)
+                yaw_error = abs(normalize_angle(target_yaw - current_yaw))
+            else:
+                yaw_error = 0.0
 
             # Check convergence
             pos_converged = pos_error <= goal.position_tolerance
@@ -180,6 +187,11 @@ class NavigationServer(Node):
 
             # Publish feedback
             feedback_msg.current_pose = current
+            feedback_msg.position_error_3d = Vector3(
+                x=(current.position.x - target_x) if goal.do_x else 0.0,
+                y=(current.position.y - target_y) if goal.do_y else 0.0,
+                z=(current.position.z - target_z) if goal.do_z else 0.0
+            )
             feedback_msg.position_error = pos_error
             feedback_msg.yaw_error = yaw_error
             feedback_msg.time_in_tolerance = time_in_tolerance
@@ -221,37 +233,46 @@ class NavigationServer(Node):
     def _compute_absolute_target(self, goal):
         """Resolve the goal into absolute pool-frame coordinates."""
         current = self.current_pose.pose
-        current_yaw = yaw_from_quaternion(current.orientation)
-        goal_yaw = yaw_from_quaternion(goal.target_pose.orientation)
+        r_current = Rotation.from_quat([current.orientation.x, current.orientation.y, 
+                                        current.orientation.z, current.orientation.w])
 
         if not goal.is_relative:
             # Absolute target - use directly
             target_x = goal.target_pose.position.x
             target_y = goal.target_pose.position.y
             target_z = goal.target_pose.position.z
-            target_yaw = goal_yaw
+            target_quat = goal.target_pose.orientation
         else:
-            dx = goal.target_pose.position.x
-            dy = goal.target_pose.position.y
-            dz = goal.target_pose.position.z
+            vec_offset = np.array([
+                goal.target_pose.position.x,
+                goal.target_pose.position.y,
+                goal.target_pose.position.z
+            ])
 
             if goal.is_local_frame:
-                # Rotate body-frame offsets by current yaw
-                cos_yaw = math.cos(current_yaw)
-                sin_yaw = math.sin(current_yaw)
-                pool_dx = cos_yaw * dx - sin_yaw * dy
-                pool_dy = sin_yaw * dx + cos_yaw * dy
-                target_x = current.position.x + pool_dx
-                target_y = current.position.y + pool_dy
+                # Rotate body-frame offsets by the AUV's full 3D orientation
+                pool_vec = r_current.apply(vec_offset)
+                target_x = current.position.x + pool_vec[0]
+                target_y = current.position.y + pool_vec[1]
+                target_z = current.position.z + pool_vec[2]
             else:
                 # Field-centric: offsets are already in pool frame
-                target_x = current.position.x + dx
-                target_y = current.position.y + dy
+                target_x = current.position.x + vec_offset[0]
+                target_y = current.position.y + vec_offset[1]
+                target_z = current.position.z + vec_offset[2]
 
-            target_z = current.position.z + dz
-            target_yaw = normalize_angle(current_yaw + goal_yaw)
+            # Convert goal rotation to Scipy Rotation
+            r_goal = Rotation.from_quat([
+                goal.target_pose.orientation.x, goal.target_pose.orientation.y,
+                goal.target_pose.orientation.z, goal.target_pose.orientation.w
+            ])
+            
+            # Local rotation composition: R_target = R_current * R_goal
+            r_target = r_current * r_goal
+            q_arr = r_target.as_quat()
+            target_quat = Quaternion(x=q_arr[0], y=q_arr[1], z=q_arr[2], w=q_arr[3])
 
-        return target_x, target_y, target_z, target_yaw
+        return target_x, target_y, target_z, target_quat
 
     def _compute_position_error(self, goal, current, target_x, target_y, target_z):
         """Compute position error considering only controlled DOFs."""
@@ -268,7 +289,7 @@ class NavigationServer(Node):
     # Setpoint publishing
     # ─────────────────────────────────────────────────────────────────────────
 
-    def _publish_setpoints(self, goal, target_x, target_y, target_z, target_yaw):
+    def _publish_setpoints(self, goal, target_x, target_y, target_z, target_quat):
         """Publish setpoints to the relevant PID controllers."""
         if goal.do_z:
             msg = Float64()
@@ -286,14 +307,13 @@ class NavigationServer(Node):
             self.pub_y_sp.publish(msg)
 
         if goal.do_yaw:
-            quat_msg = quaternion_from_yaw(target_yaw)
-            self.pub_quat_sp.publish(quat_msg)
+            self.pub_quat_sp.publish(target_quat)
 
     # ─────────────────────────────────────────────────────────────────────────
     # Utilities
     # ─────────────────────────────────────────────────────────────────────────
 
-    def _log_target(self, goal, x, y, z, yaw):
+    def _log_target(self, goal, x, y, z, target_quat):
         """Log a human-readable description of the goal."""
         parts = []
         if goal.do_x:
@@ -303,7 +323,9 @@ class NavigationServer(Node):
         if goal.do_z:
             parts.append(f'z={z:.2f}')
         if goal.do_yaw:
-            parts.append(f'yaw={math.degrees(yaw):.1f}deg')
+            r = Rotation.from_quat([target_quat.x, target_quat.y, target_quat.z, target_quat.w])
+            yaw = r.as_euler('ZYX', degrees=True)[0]
+            parts.append(f'yaw={yaw:.1f}deg')
 
         mode = 'absolute'
         if goal.is_relative and goal.is_local_frame:
