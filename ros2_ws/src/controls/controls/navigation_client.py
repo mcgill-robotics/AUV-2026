@@ -29,6 +29,7 @@ class NavigationClient(Node):
                 goal_to_send = AUVNavigate.Goal()
 
                 # Match the goal to send with the goal message type
+                goal_to_send.target_pose = goal_msg.target_pose
                 goal_to_send.do_x = goal_msg.do_x
                 goal_to_send.do_y = goal_msg.do_y
                 goal_to_send.do_z = goal_msg.do_z
