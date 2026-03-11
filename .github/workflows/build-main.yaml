@@ -97,6 +97,7 @@ jobs:
     - name: Run colcon build in container
       run: |
         docker run --rm \
+          --user $(id -u):$(id -g) \
           -v ${{ github.workspace }}:/workspace \
           -w /workspace \
           mcgillrobotics/auv_2026:dev-arm64 \
