@@ -249,7 +249,7 @@ class NavigationServer(Node):
                 goal.target_pose.position.z
             ])
 
-            if goal.is_robot_centric:
+            if goal.is_local_frame:
                 # Rotate body-frame offsets by the AUV's full 3D orientation
                 pool_vec = r_current.apply(vec_offset)
                 target_x = current.position.x + pool_vec[0]
@@ -328,10 +328,10 @@ class NavigationServer(Node):
             parts.append(f'yaw={yaw:.1f}deg')
 
         mode = 'absolute'
-        if goal.is_relative and goal.is_robot_centric:
-            mode = 'robot-centric relative'
+        if goal.is_relative and goal.is_local_frame:
+            mode = 'local frame relative'
         elif goal.is_relative:
-            mode = 'field-centric relative'
+            mode = 'map frame relative'
 
         self.get_logger().info(
             f'Navigating ({mode}): {", ".join(parts)} '

@@ -7,7 +7,7 @@ bool do_z                            # Control Z (depth)
 bool do_yaw                          # Control yaw heading
 
 bool is_relative                     # If true, target is relative to current pose
-bool is_robot_centric                # If true AND is_relative, offsets are in body frame (forward/sway/heave)
+bool is_local_frame                  # If true AND is_relative, offsets are in body frame (forward/sway/heave)
 
 float64 position_tolerance           # Meters - convergence threshold for position
 float64 yaw_tolerance                # Radians - convergence threshold for yaw
