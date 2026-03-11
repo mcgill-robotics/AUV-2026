@@ -27,11 +27,13 @@ For training on synthetic data generated from Unity, follow this pipeline to ens
     1. Do **NOT** add any pre-processing/augmentation; this is handled in the training notebook.
     2. The name of the dataset version does not matter.
 4. On the new dataset version, click download dataset
+    1. Select export format YOLOv11
+    2. Choose download zip to computer
 5. Move the data into `AUV-2026/ros2_ws/src/vision/model_pipeline/data/raw_import/{images, labels, data.yaml}` (create directories if necessary)
 6. Download the yolo model trained on simulation data from the [Drive](https://drive.google.com/drive/folders/1gnvU_EYM1NlcfZJZPfqre9U-cagVTcNy), the file is called `yolov11s_augmented_synthetic_best_model.pt`
 7. Move the synthetic model into `AUV-2026/ros2_ws/src/vision/model_pipeline`
-6. Run `./training.sh yolov11s_augmented_synthetic_best_model.pt` inside the docker container (synthetic model is the one you downloaded in the previous step).
-7. The pytorch model will be at `runs/detect/yolo11s/weights/best.pt`.
+8. Run `./training.sh yolov11s_augmented_synthetic_best_model.pt` inside the docker container (synthetic model is the one you downloaded in the previous step).
+9. The pytorch model will be at `runs/detect/yolo11s/weights/best.pt`.
 
 ### Fine-tuning Advanced Usage
 
@@ -59,10 +61,11 @@ The default parameters for the training script are set to values that we found t
 |  | `--workers` | Number of dataloader workers | `2` |
 |  | `--cache` | Cache images for faster training | `False` |
 
-To pass any of these arguments, simply add them to the end of the `training.sh` command. For example, if you wanted to train a medium model with 90% training and 5% validation for 1 epoch, you would run the following command: `
+wo pass any of these arguments, simply add them to the end of the `training.sh` command. For example, if you wanted to train a medium model for 1 epoch with input data `./data` you would run the following command:
 ```bash
-./training.sh yolov11s_augmented_synthetic_best_model.pt "--size m --train 0.9 --val 0.05" --training-args "--epochs 1"
+./training.sh yolov11s_augmented_synthetic_best_model.pt --training-args "--size m --epochs 1" --organize-args "--input ./data"
 ```
+To train a model from scratch (no fine tuning), specify one of the base models (for example yolov8n.pt) instead of yolov11s\_augmented\_synthetic\_best\_model.pt
 ## Optimize the model
 Run this **ON THE JETSON**: 
 

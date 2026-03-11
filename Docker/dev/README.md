@@ -6,7 +6,7 @@ This directory contains the Docker setup for local development on x86_64 machine
 
 ### For Everyone
 *   **Docker Engine** & **Docker Compose**.
-*   **Disk Space:** Ensure you have at least **25GB** free (CUDA and PyTorch are large).
+*   **Disk Space:** Ensure you have at least **40GB** free (CUDA and PyTorch are large).
 
 ### For NVIDIA GPU Users
 If you have an NVIDIA GPU, you must install the **NVIDIA Container Toolkit** to allow Docker to access your hardware.
@@ -106,7 +106,7 @@ To ensure the container can communicate with the simulation running on Windows, 
     ```
 3.  **(NVIDIA Only)** To use ZED Simulation mode:
     ```bash
-    ros2 launch zed_wrapper zed_camera.launch.py camera_model:=zedx stream_address:=127.0.0.1 sim_mode:=true stream_port:=30000 ros_params_override_path:=ros2_ws/src/vision/config/zed_wrapper_unity_sim.yaml
+    ros2 launch zed_wrapper zed_camera.launch.py camera_model:=zedx stream_address:=127.0.0.1 sim_mode:=true stream_port:=30000 ros_params_override_path:=Docker/dev/unity_sim_zed_config.yaml
     ```
 
 ## 5. Troubleshooting
