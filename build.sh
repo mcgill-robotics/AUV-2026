@@ -5,9 +5,10 @@ set -euo pipefail
 # Do we want to remove install/build/log directories before building?
 CLEAN_BUILD=false
 DEBUG_BUILD=false
+OFFLINE_BUILD=false
 PACKAGE_TO_BUILD=""
 
-while getopts ":cdp:" flag; do
+while getopts ":cdop:" flag; do
     case "${flag}" in
         c) 
             echo "Flag -c was set. ros2_ws packages will be built from scratch"
@@ -17,12 +18,16 @@ while getopts ":cdp:" flag; do
             echo "Flag -d was set. Debug build enabled."
             DEBUG_BUILD=true
             ;;
+        o)
+            echo "Flag -o was set. Building in offline mode."
+            OFFLINE_BUILD=true
+            ;;
         p)
             echo "Flag -p was set. Building up to package: ${OPTARG}"
             PACKAGE_TO_BUILD="${OPTARG}"
             ;;
         *)
-            echo "Usage: $0 [-c] [-d] [-p <package_name>]"
+            echo "Usage: $0 [-c] [-d] [-o] [-p <package_name>]"
             exit 1
             ;;
     esac
@@ -50,6 +55,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROS_DISTRO=humble
 ROS_INSTALL=/opt/ros/$ROS_DISTRO/setup.bash
 
+SUBMODULE_ERROR_CODE=0
 # Initialize all git submodules
 # Skip in CI since GitHub Actions checkout already fetches submodules (avoids permission issues)
 if [ -z "${CI:-}" ]; then
@@ -57,8 +63,11 @@ if [ -z "${CI:-}" ]; then
     git config --global --add safe.directory $(pwd)/ros2_ws/src/Xsens_MTi_Driver || $SUDO git config --system --add safe.directory $(pwd)/ros2_ws/src/Xsens_MTi_Driver
     git config --global --add safe.directory $(pwd)/ros2_ws/src/ros-tcp-endpoint || $SUDO git config --system --add safe.directory $(pwd)/ros2_ws/src/ros-tcp-endpoint
     git config --global --add safe.directory $(pwd)/ros2_ws/src/zed-ros2-wrapper || $SUDO git config --system --add safe.directory $(pwd)/ros2_ws/src/zed-ros2-wrapper
-
-    # git submodule update --init --recursive --rebase
+    # do not exit on error
+    set +e
+    git submodule update --init --recursive
+    SUBMODULE_ERROR_CODE=$?
+    set -e
 else
     echo "Running in CI, skipping git submodule update (already handled by checkout action)."
 fi
@@ -184,6 +193,12 @@ if [ "$CLEAN_BUILD" = true ]; then
     done
 fi
 
+OFFLINE_CMAKE_ARGS=""
+if [ "$OFFLINE_BUILD" = true ]; then
+    echo "    -> Building in offline mode. CMake will not attempt to fetch any content from any remote."
+    OFFLINE_CMAKE_ARGS="-DFETCHCONTENT_FULLY_DISCONNECTED=ON -DFETCHCONTENT_UPDATES_DISCONNECTED=ON"
+fi
+
 if [ "$DEBUG_BUILD" = true ]; then
     echo "    -> Performing Debug Build of packages: ${PKGS[*]}"
     # Output to console, interleaving build output for better visibility
@@ -195,6 +210,7 @@ if [ "$DEBUG_BUILD" = true ]; then
             -DCMAKE_BUILD_TYPE=RelWithDebInfo  \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
             -DIS_JETSON_CI=$IS_JETSON_CI \
+            $OFFLINE_CMAKE_ARGS \
         --executor sequential \
         $([ -n "$PACKAGE_TO_BUILD" ] && echo "--packages-up-to $PACKAGE_TO_BUILD")
 else
@@ -205,6 +221,7 @@ else
         --cmake-args \
             -DCMAKE_BUILD_TYPE=Release \
             -DIS_JETSON_CI=$IS_JETSON_CI \
+            $OFFLINE_CMAKE_ARGS \
         --event-handlers console_cohesion+ \
         --parallel-workers $(nproc) \
         $([ -n "$PACKAGE_TO_BUILD" ] && echo "--packages-up-to $PACKAGE_TO_BUILD")
@@ -216,6 +233,11 @@ fi
 # ---------------------------------------------------------
 if [ "$CAN_BUILD_ZED" = false ] && [ -f "$ZED_DIR/AMENT_IGNORE" ]; then
     rm "$ZED_DIR/AMENT_IGNORE"
+fi
+
+if [ $SUBMODULE_ERROR_CODE -ne 0 ]; then
+    echo -e "\n⚠️  Warning: git submodule update failed with code $SUBMODULE_ERROR_CODE. Submodules may not be properly initialized."
+    echo "Please run 'git submodule update --init --recursive' manually to ensure all submodules are correctly set up."
 fi
 
 echo -e "\n✅ Build Complete. Don't forget to source:"
