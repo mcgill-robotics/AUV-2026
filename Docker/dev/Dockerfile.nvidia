@@ -239,6 +239,7 @@ RUN if getent group $USER_GID; then \
         && chmod 0440 /etc/sudoers.d/$USERNAME \
         && usermod -aG video,render -s /bin/bash $USERNAME
 
+
 # Install fixuid for dynamic UID/GID remapping at runtime
 ARG FIXUID_VERSION=0.6.0
 RUN ARCH="$(dpkg --print-architecture)" && \

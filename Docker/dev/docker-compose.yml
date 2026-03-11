@@ -23,6 +23,7 @@ services:
       - WAYLAND_DISPLAY=${WAYLAND_DISPLAY}
       - XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}
       - PULSE_SERVER=${PULSE_SERVER}
+
     user: "douglas"
     volumes:
       - ../../:/home/douglas/AUV-2026
@@ -58,6 +59,7 @@ services:
             - driver: nvidia
               count: all
               capabilities: [ gpu ]
+
     environment:
       - NVIDIA_DRIVER_CAPABILITIES=all
       - NVIDIA_VISIBLE_DEVICES=all
