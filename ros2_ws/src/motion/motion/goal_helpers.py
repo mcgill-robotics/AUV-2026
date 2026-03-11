@@ -35,8 +35,19 @@ def _make_goal(
     timeout: float = _DEFAULT_TIMEOUT,
 ) -> AUVNavigate.Goal:
     """Construct an AUVNavigate.Goal with all fields set."""
-    # TODO: Create and return an AUVNavigate.Goal with all fields populated
-    pass
+    goal = AUVNavigate.Goal()
+    goal.target_pose = target_pose
+    goal.do_x = do_x
+    goal.do_y = do_y
+    goal.do_z = do_z
+    goal.do_yaw = do_yaw
+    goal.is_relative = is_relative
+    goal.is_robot_centric = is_robot_centric
+    goal.position_tolerance = position_tolerance
+    goal.yaw_tolerance = yaw_tolerance
+    goal.hold_time = hold_time
+    goal.timeout = timeout
+    return goal
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -59,8 +70,14 @@ def move_to_pose(
         hold_time: Seconds to hold within tolerance before SUCCESS.
         timeout: Seconds before FAILURE (0 = no timeout).
     """
-    # TODO
-    pass
+    return _make_goal(
+        target_pose=pose,
+        do_x=True, do_y=True, do_z=True, do_yaw=True,
+        position_tolerance=tolerance,
+        yaw_tolerance=yaw_tolerance,
+        hold_time=hold_time,
+        timeout=timeout,
+    )
 
 
 def move_global(
@@ -85,8 +102,18 @@ def move_global(
         hold_time: Seconds to hold within tolerance before SUCCESS.
         timeout: Seconds before FAILURE (0 = no timeout).
     """
-    # TODO
-    pass
+    pose = Pose()
+    pose.position = Point(x=x, y=y, z=z)
+    do_yaw = yaw is not None
+    pose.orientation = quaternion_from_yaw(yaw) if do_yaw else Quaternion(w=1.0)
+    return _make_goal(
+        target_pose=pose,
+        do_x=True, do_y=True, do_z=True, do_yaw=do_yaw,
+        position_tolerance=tolerance,
+        yaw_tolerance=yaw_tolerance,
+        hold_time=hold_time,
+        timeout=timeout,
+    )
 
 
 def set_depth(
@@ -103,8 +130,16 @@ def set_depth(
         hold_time: Seconds to hold within tolerance before SUCCESS.
         timeout: Seconds before FAILURE (0 = no timeout).
     """
-    # TODO
-    pass
+    pose = Pose()
+    pose.position.z = z
+    pose.orientation = Quaternion(w=1.0)
+    return _make_goal(
+        target_pose=pose,
+        do_z=True,
+        position_tolerance=tolerance,
+        hold_time=hold_time,
+        timeout=timeout,
+    )
 
 
 def set_global_yaw(
@@ -121,8 +156,15 @@ def set_global_yaw(
         hold_time: Seconds to hold within tolerance before SUCCESS.
         timeout: Seconds before FAILURE (0 = no timeout).
     """
-    # TODO
-    pass
+    pose = Pose()
+    pose.orientation = quaternion_from_yaw(yaw_rad)
+    return _make_goal(
+        target_pose=pose,
+        do_yaw=True,
+        yaw_tolerance=tolerance,
+        hold_time=hold_time,
+        timeout=timeout,
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -154,8 +196,22 @@ def move_robot_centric(
         hold_time: Seconds to hold within tolerance before SUCCESS.
         timeout: Seconds before FAILURE (0 = no timeout).
     """
-    # TODO: Auto-detect which DOFs to enable based on non-zero values
-    pass
+    do_pos = (forward != 0.0 or sway != 0.0 or heave != 0.0)
+    do_yaw = (dyaw != 0.0)
+
+    pose = Pose()
+    pose.position = Point(x=forward, y=sway, z=heave)
+    pose.orientation = quaternion_from_yaw(dyaw)
+    return _make_goal(
+        target_pose=pose,
+        do_x=do_pos, do_y=do_pos, do_z=do_pos, do_yaw=do_yaw,
+        is_relative=True,
+        is_robot_centric=True,
+        position_tolerance=tolerance,
+        yaw_tolerance=yaw_tolerance,
+        hold_time=hold_time,
+        timeout=timeout,
+    )
 
 
 def translate_field_centric(
@@ -176,8 +232,18 @@ def translate_field_centric(
         hold_time: Seconds to hold within tolerance before SUCCESS.
         timeout: Seconds before FAILURE (0 = no timeout).
     """
-    # TODO
-    pass
+    pose = Pose()
+    pose.position = Point(x=dx, y=dy, z=dz)
+    pose.orientation = Quaternion(w=1.0)
+    return _make_goal(
+        target_pose=pose,
+        do_x=True, do_y=True, do_z=True,
+        is_relative=True,
+        is_robot_centric=False,
+        position_tolerance=tolerance,
+        hold_time=hold_time,
+        timeout=timeout,
+    )
 
 
 def rotate_relative(
@@ -194,8 +260,16 @@ def rotate_relative(
         hold_time: Seconds to hold within tolerance before SUCCESS.
         timeout: Seconds before FAILURE (0 = no timeout).
     """
-    # TODO
-    pass
+    pose = Pose()
+    pose.orientation = quaternion_from_yaw(dyaw_rad)
+    return _make_goal(
+        target_pose=pose,
+        do_yaw=True,
+        is_relative=True,
+        yaw_tolerance=tolerance,
+        hold_time=hold_time,
+        timeout=timeout,
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -219,5 +293,15 @@ def stabilize(
         yaw_tolerance: Yaw convergence threshold in radians.
         timeout: Seconds before FAILURE (0 = no timeout).
     """
-    # TODO
-    pass
+    pose = Pose()
+    pose.orientation = Quaternion(w=1.0)
+    return _make_goal(
+        target_pose=pose,
+        do_x=True, do_y=True, do_z=True, do_yaw=True,
+        is_relative=True,
+        is_robot_centric=False,
+        position_tolerance=tolerance,
+        yaw_tolerance=yaw_tolerance,
+        hold_time=hold_time,
+        timeout=timeout,
+    )
