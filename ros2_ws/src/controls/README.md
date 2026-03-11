@@ -25,59 +25,72 @@ This process occurs in three stages:
 
 
 ## Overview
-The controls package implements separate depth and attitude controllers. The depth controller uses a PID loop on `/processed/depth` and publishes a vertical effort on `/controls/depth_effort`. The attitude controller uses IMU orientation (`processed/imu`) and a target quaternion (`quaternion_setpoint`) to publish torques on `/controls/attitude_effort`. The superimposer node sums both efforts, applies optional bias terms, and publishes `/controls/combined_effort` for propulsion.
+The controls package implements separate depth, planar, and attitude controllers. The depth controller uses a PID loop on `/processed/depth` and publishes a vertical effort on `/controls/depth_effort`. The attitude controller uses IMU orientation (`processed/imu`) and a target quaternion (`quaternion_setpoint`) to publish torques on `/controls/attitude_effort`. The superimposer node sums all efforts, applies optional bias terms, and publishes `/controls/combined_effort` for propulsion.
+
+Additionally, the **Navigation Server** acts as a high-level orchestrator. It hosts an Action Server (`/motion/navigate`) that accepts goal poses and handles computing errors, resolving coordinates, publishing setpoints to the underlying PID controllers, and reporting convergence.
 
 
 ## Usage
-The controls package is not for direct use, it is used through publishing setpoints. By default, the controllers are disabled at startup. 
+The controls package is not for direct use, it is used through publishing setpoints or via the Navigation Server. By default, the controllers are disabled at startup. 
 
 To activate the attitude controller:
 
         ros2 param set attitude_controller enabled true
 
-
 To activate the depth controller:
 
         ros2 param set depth_controller enabled true
-
-
 
 To activate the X-axis controller:
 
         ros2 param set x_controller enabled true
 
-
-
 To activate the y-axis controller:
 
         ros2 param set y_controller enabled true
 
-
+### Raw Setpoint Publishing
 Publishing a depth setpoint onto `/controls/depth_setpoint`:
-
 
         ros2 topic pub /controls/depth_setpoint std_msgs/msg/Float64 "{data: 1.5}" 
 
-
 Publishing a depth setpoint onto `/controls/x_setpoint`:
-
 
         ros2 topic pub /controls/x_setpoint std_msgs/msg/Float64 "{data: 2.0}" 
 
-
 Publishing a depth setpoint onto `/controls/y_setpoint`:
 
-
         ros2 topic pub /controls/y_setpoint std_msgs/msg/Float64 "{data: 2.0}" 
-
 
 Publishing an attitude setpoint onto `/controls/quaternion_setpoint`:
 
         ros2 topic pub /controls/quaternion_setpoint geometry_msgs/msg/Quaternion "{x: 0, y: 0, z: 0.7071, w: 0.7071}"
 
+### Navigation Server (Action Client)
+To send a test 3D goal to the Navigation Server via the ROS 2 Action CLI:
+
+        ros2 action send_goal /motion/navigate auv_msgs/action/AUVNavigate "{
+          target_pose: {
+            position: {x: 1.0, y: 1.0, z: 1.0},
+            orientation: {x: 0.0, y: 0.0, z: 0.7071, w: 0.7071}
+          },
+          do_x: true,
+          do_y: true,
+          do_z: true,
+          do_yaw: true,
+          is_relative: false,
+          is_robot_centric: false,
+          position_tolerance: 0.1,
+          yaw_tolerance: 0.1,
+          hold_time: 2.0,
+          timeout: 30.0
+        }" --feedback
+
+To send a goal programmatically using Python, utilize the `goal_helpers` library included in `controls/goal_helpers.py`. See `test_nav.py` for examples.
+
 
 ## Nodes
-The package provides five ROS nodes: `depth_controller`, `attitude_controller`, `x_controller`, `y_controller` and `superimposer`.
+The package provides six ROS nodes: `depth_controller`, `attitude_controller`, `x_controller`, `y_controller`, `superimposer`, and `navigation_server`.
 
 - `depth_controller` input: `/auv_frame/depth`, `/controls/depth_setpoint`
 
@@ -94,6 +107,10 @@ The package provides five ROS nodes: `depth_controller`, `attitude_controller`, 
 - `superimposer` input: `/controls/depth_effort`, `/controls/attitude_effort`, `/controls/x_effort`, `/controls/y_effort`, `processed/imu`
 
 - `superimposer` output: `/controls/combined_effort`
+
+- `navigation_server` input: `/state/pose` (geometry_msgs/PoseStamped)
+
+- `navigation_server` output: Action Server `/motion/navigate`, publishers pointing to `/controls/depth_setpoint`, `/controls/x_setpoint`, `/controls/y_setpoint`, `/controls/quaternion_setpoint`
 
 
 ### Published Topics
@@ -143,7 +160,7 @@ The package provides five ROS nodes: `depth_controller`, `attitude_controller`, 
 
 - `numpy` - used by the PID controller
 
-- `sensors` - for utility functions
+- `scipy` - Used by `navigation_server` and `controls.utils` for 3D coordinate transformations.
 
 ### Building
 
