@@ -12,7 +12,7 @@ without manually setting boolean flags. Example usage::
 
 from geometry_msgs.msg import Pose, Point, Quaternion
 from auv_msgs.action import AUVNavigate
-from motion.utils import quaternion_from_yaw
+from controls.utils import quaternion_from_yaw
 
 # Default tolerances used across all helpers
 _DEFAULT_POS_TOL = 0.1     # meters

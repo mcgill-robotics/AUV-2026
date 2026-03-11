@@ -18,6 +18,7 @@
   <depend>nav_msgs</depend>
   <depend>message_filters</depend>
   <depend>sensors</depend>
+  <depend>auv_msgs</depend>
 
 
   <build_depend>eigen3_cmake_module</build_depend>

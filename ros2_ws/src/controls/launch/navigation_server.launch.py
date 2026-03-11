@@ -6,13 +6,13 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     config = os.path.join(
-        get_package_share_directory('motion'), 'config', 'motion.yaml'
+        get_package_share_directory('controls'), 'params', 'navigation_server.yaml'
     )
 
     return LaunchDescription([
         Node(
-            package='motion',
-            executable='navigation_server',
+            package='controls',
+            executable='navigation_server.py',
             name='navigation_server',
             parameters=[config],
             output='screen',

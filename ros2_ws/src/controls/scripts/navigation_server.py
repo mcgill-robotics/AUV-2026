@@ -27,7 +27,7 @@ from geometry_msgs.msg import PoseStamped, Quaternion
 from std_msgs.msg import Float64
 from auv_msgs.action import AUVNavigate
 
-from motion.utils import yaw_from_quaternion, quaternion_from_yaw, normalize_angle
+from controls.utils import yaw_from_quaternion, quaternion_from_yaw, normalize_angle
 
 
 class NavigationServer(Node):
