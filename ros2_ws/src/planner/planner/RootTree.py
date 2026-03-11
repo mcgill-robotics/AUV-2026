@@ -1,6 +1,7 @@
 import py_trees
 import py_trees_ros
 import rclpy
+from controls import navigation_client
 from rclpy.node import Node
 from . import SensorsBehaviour
 from . import TemplateBehaviour
@@ -16,8 +17,15 @@ class RootTree(Node):
     """
     def __init__(self):
         super().__init__("RootTreeNode")
-        root = py_trees.composites.Parallel("Root", policy=py_trees.common.ParallelPolicy.SuccessOnAll()) # SUCCESS_ON_ALL means the root will only return success if all children return success
         
+        # Set the root of the tree and navigation client instance 
+        root = py_trees.composites.Parallel("Root", policy=py_trees.common.ParallelPolicy.SuccessOnAll()) # SUCCESS_ON_ALL means the root will only return success if all children return success
+        self.navigation_client = navigation_client.NavigationClient(name="NavigationClientNode")
+        
+        self.blackboard = py_trees.blackboard.Client(name="RootTreeBlackboard")
+        self.blackboard.register_key(key="/navigation_client", access=py_trees.common.Access.WRITE)
+        self.blackboard.navigation_client = self.navigation_client
+                
         # Add the sensors behaviour as a child running in parallel to the rest of the tree.
         # This allows the rest of the tree to access the latest sensor data snapshot at each tick.
         sensors_reader = SensorsBehaviour.SensorsBehaviour(node=self, name="Sensors Reader")
