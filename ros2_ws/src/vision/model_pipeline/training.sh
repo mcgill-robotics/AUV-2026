@@ -34,3 +34,4 @@ fi
 python3 fix_labels.py
 python3 organize_dataset.py $ORGANIZE_ARGS
 python3 training.py --custom-model "$MODEL_PATH" $TRAINING_ARGS
+
