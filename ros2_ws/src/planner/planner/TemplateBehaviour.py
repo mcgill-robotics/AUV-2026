@@ -27,6 +27,7 @@ class TemplateBehaviour(py_trees.behaviour.Behaviour):
                 super().__init__(name)
                 self.node = node
                 self.blackboard = py_trees.blackboard.Client(name=self.name)
+                self.sent_goal = False
 
 
         def setup(self) -> None:
@@ -38,7 +39,8 @@ class TemplateBehaviour(py_trees.behaviour.Behaviour):
                 #self.blackboard.register_key(key="/sensors/twist", access=py_trees.common.Access.WRITE)
                 #self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.WRITE)
                 
-
+                self.blackboard.register_key(key="/navigation_client", access=py_trees.common.Access.READ)
+                
         def update(self) -> py_trees.common.Status:
                 """
                 Description: This function is called every tick. It should contain the logic of the behaviour, and return a Status based on the result of that logic.
@@ -50,4 +52,24 @@ class TemplateBehaviour(py_trees.behaviour.Behaviour):
                          py_trees.common.Status.RUNNING if it is still running.
                  
                 """
+                
+                # EXAMPLE: Create a navigation goal and send it using the navigation client from the blackboard
+                self.node.get_logger().info("Template Behaviour Tick")
+                if self.sent_goal == False:
+                        nav_client = self.blackboard.navigation_client
+                        goal_msg = auv_msgs.action.AUVNavigate.Goal()
+                        goal_msg.do_x = True
+                        goal_msg.do_y = False
+                        goal_msg.do_z = False
+                        goal_msg.do_yaw = False
+                        goal_msg.is_relative = True
+                        goal_msg.is_local_frame = True
+                        goal_msg.position_tolerance = 0.5
+                        goal_msg.yaw_tolerance = 0.1
+                        goal_msg.hold_time = 2.0
+                        goal_msg.timeout = 30.0
+                        nav_client.send_navigation_goal(goal_msg)
+                        
+                        self.sent_goal = True
+                
                 return py_trees.common.Status.RUNNING

@@ -1,8 +1,11 @@
+from zmq import has
+
 import py_trees
 import py_trees_ros
 import rclpy
 from controls import navigation_client
 from rclpy.node import Node
+from rclpy.executors import MultiThreadedExecutor
 from . import SensorsBehaviour
 from . import TemplateBehaviour
 
@@ -21,10 +24,13 @@ class RootTree(Node):
         # Set the root of the tree and navigation client instance 
         root = py_trees.composites.Parallel("Root", policy=py_trees.common.ParallelPolicy.SuccessOnAll()) # SUCCESS_ON_ALL means the root will only return success if all children return success
         self.navigation_client = navigation_client.NavigationClient(name="NavigationClientNode")
+        self.navigation_client_ongoing_goal = navigation_client.current_goal_handle # Store the goal handle of the currently active goal, if any, to allow for cancellation when a new goal is sent.
         
         self.blackboard = py_trees.blackboard.Client(name="RootTreeBlackboard")
         self.blackboard.register_key(key="/navigation_client", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key="/navigation_client_ongoing_goal", access=py_trees.common.Access.WRITE)
         self.blackboard.navigation_client = self.navigation_client
+        self.blackboard.navigation_client_ongoing_goal = self.navigation_client_ongoing_goal
                 
         # Add the sensors behaviour as a child running in parallel to the rest of the tree.
         # This allows the rest of the tree to access the latest sensor data snapshot at each tick.
@@ -54,14 +60,21 @@ class RootTree(Node):
 
 def main():
     rclpy.init()
-    node = RootTree()
+    planner_node = RootTree()
+    action_client_node = planner_node.navigation_client # Get the navigation client node from the planner to spin it in parallel since it 
+                                                        #has its own executor and needs to be spun to process action results and feedback
+    
+    executor = MultiThreadedExecutor(num_threads=4)
+    executor.add_node(planner_node)
+    executor.add_node(action_client_node)
     while rclpy.ok():
         try:
-            rclpy.spin(node)
-        
+            executor.spin()
         except KeyboardInterrupt:
-            node.get_logger().info("Shutting down yaw BT node")
-            node.destroy_node()
+            planner_node.get_logger().info("Shutting down yaw BT node")
+            executor.shutdown()
+            action_client_node.destroy_node()
+            planner_node.destroy_node()
             rclpy.shutdown()
 
 

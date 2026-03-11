@@ -10,7 +10,7 @@ class NavigationClient(Node):
         def __init__(self, name="navigation_client"):
                 """ Initializes the navigation client node. """
                 super().__init__(name)
-                self._action_client = ActionClient(self, AUVNavigate, 'navigate_to_pose')
+                self._action_client = ActionClient(self, AUVNavigate, '/motion/navigate')
                 self.current_goal_handle = None # Store the goal handle of the currently active goal, if any, to allow for cancellation when a new goal is sent.)
 
         def send_navigation_goal(self, goal_msg: AUVNavigate) -> None:
@@ -40,7 +40,6 @@ class NavigationClient(Node):
                 goal_to_send.hold_time = goal_msg.hold_time
                 goal_to_send.timeout = goal_msg.timeout
 
-                self._action_client.wait_for_server()
                 self._send_goal_future = self._action_client.send_goal_async(goal_to_send, feedback_callback=self.feedback_callback)
                 self._send_goal_future.add_done_callback(self.goal_response_callback)
 
