@@ -2,6 +2,7 @@
 
 import math
 from geometry_msgs.msg import Quaternion
+from scipy.spatial.transform import Rotation
 
 
 def yaw_from_quaternion(q: Quaternion) -> float:
@@ -16,9 +17,9 @@ def yaw_from_quaternion(q: Quaternion) -> float:
     Returns:
         Yaw angle in radians, range [-pi, pi].
     """
-    siny_cosp = 2.0 * (q.w * q.z + q.x * q.y)
-    cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
-    return math.atan2(siny_cosp, cosy_cosp)
+    r = Rotation.from_quat([q.x, q.y, q.z, q.w])
+    euler = r.as_euler('ZYX', degrees=False)
+    return euler[0]
 
 
 def quaternion_from_yaw(yaw: float) -> Quaternion:
@@ -30,12 +31,9 @@ def quaternion_from_yaw(yaw: float) -> Quaternion:
     Returns:
         geometry_msgs/Quaternion with roll=0, pitch=0.
     """
-    return Quaternion(
-        x=0.0,
-        y=0.0,
-        z=math.sin(yaw / 2.0),
-        w=math.cos(yaw / 2.0),
-    )
+    r = Rotation.from_euler('Z', yaw, degrees=False)
+    q_arr = r.as_quat()
+    return Quaternion(x=q_arr[0], y=q_arr[1], z=q_arr[2], w=q_arr[3])
 
 
 def normalize_angle(angle: float) -> float:

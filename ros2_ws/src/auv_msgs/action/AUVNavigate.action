@@ -20,6 +20,7 @@ string message
 ---
 # ── feedback ──
 geometry_msgs/Pose current_pose      # Current AUV pose in pool frame
-float64 position_error               # Distance from target (meters)
+geometry_msgs/Vector3 position_error_3d # Vector of positional errors (x, y, z) in meters
+float64 position_error               # Magnitude distance from target (meters)
 float64 yaw_error                    # Yaw error (radians)
 float64 time_in_tolerance            # How long within tolerance so far (seconds)
