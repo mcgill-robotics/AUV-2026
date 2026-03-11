@@ -1,3 +1,4 @@
+import geometry_msgs
 import py_trees
 import rclpy
 from rclpy.node import Node
@@ -58,6 +59,14 @@ class TemplateBehaviour(py_trees.behaviour.Behaviour):
                 if self.sent_goal == False:
                         nav_client = self.blackboard.navigation_client
                         goal_msg = auv_msgs.action.AUVNavigate.Goal()
+                        goal_msg.target_pose.position.x = 15.0
+                        goal_msg.target_pose.position.y = 0.0
+                        goal_msg.target_pose.position.z = 0.0
+                        goal_msg.target_pose.orientation.x = 0.0
+                        goal_msg.target_pose.orientation.y = 0.0
+                        goal_msg.target_pose.orientation.z = 0.0
+                        goal_msg.target_pose.orientation.w = 1.0
+                        
                         goal_msg.do_x = True
                         goal_msg.do_y = False
                         goal_msg.do_z = False
@@ -66,7 +75,7 @@ class TemplateBehaviour(py_trees.behaviour.Behaviour):
                         goal_msg.is_local_frame = True
                         goal_msg.position_tolerance = 0.5
                         goal_msg.yaw_tolerance = 0.1
-                        goal_msg.hold_time = 2.0
+                        goal_msg.hold_time = 3.0
                         goal_msg.timeout = 30.0
                         nav_client.send_navigation_goal(goal_msg)
                         

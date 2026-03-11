@@ -24,7 +24,7 @@ class RootTree(Node):
         # Set the root of the tree and navigation client instance 
         root = py_trees.composites.Parallel("Root", policy=py_trees.common.ParallelPolicy.SuccessOnAll()) # SUCCESS_ON_ALL means the root will only return success if all children return success
         self.navigation_client = navigation_client.NavigationClient(name="NavigationClientNode")
-        self.navigation_client_ongoing_goal = navigation_client.current_goal_handle # Store the goal handle of the currently active goal, if any, to allow for cancellation when a new goal is sent.
+        self.navigation_client_ongoing_goal = self.navigation_client.current_goal_handle # Store the goal handle of the currently active goal, if any, to allow for cancellation when a new goal is sent.
         
         self.blackboard = py_trees.blackboard.Client(name="RootTreeBlackboard")
         self.blackboard.register_key(key="/navigation_client", access=py_trees.common.Access.WRITE)

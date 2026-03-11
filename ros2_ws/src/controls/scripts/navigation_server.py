@@ -38,7 +38,7 @@ class NavigationServer(Node):
 
         # ── Parameters ───────────────────────────────────────────────────────
         self.declare_parameter('feedback_rate_hz', 10.0)
-        self.declare_parameter('state_topic', 'state/pose')
+        self.declare_parameter('state_topic', '/auv/ground_truth/pose')
 
         self.feedback_rate_hz = self.get_parameter('feedback_rate_hz').value
         state_topic = self.get_parameter('state_topic').value
