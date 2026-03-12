@@ -16,8 +16,10 @@
     <node pkg="vision" exec="front_image_enhancement" name="front_image_enhancement" output="screen">
         <param name="input_topic" value="$(var front_cam_topic)"/>
         <param name="output_topic" value="$(var front_enhanced_topic)"/>
+        <param name="depth_topic" value="$(var front_cam_depth_topic)"/>
         <param name="publish_rate_hz" value="$(var publish_rate)"/>
         <param name="sim" value="$(var sim)"/>
+        <param name="dsc_model_path" value="$(find-pkg-share vision)/models/dsc_pipeline.pt"/>
     </node>
 
     <node pkg="vision" exec="down_image_enhancement" name="down_image_enhancement" output="screen">

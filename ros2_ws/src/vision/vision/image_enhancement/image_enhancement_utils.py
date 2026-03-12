@@ -79,7 +79,7 @@ class ImageEnhancement():
         # Depth subscription (optional)
         if self.depth_topic:
             self.depth_sub = self.node.create_subscription(
-                Image,  # Depth is typically uncompressed 32FC1 or 16UC1
+                image_format,
                 self.depth_topic,
                 self._depth_callback,
                 10
@@ -98,11 +98,12 @@ class ImageEnhancement():
         self.br = CvBridge()
         
         self.node.get_logger().info(
-            f"EnhanceNode initialized: {self.input_topic} -> {self.output_topic} @ {self.publish_rate_hz}Hz"
+            f"EnhanceNode initialized: {self.input_topic} + {self.depth_topic} -> {self.output_topic} @ {self.publish_rate_hz}Hz"
         )
         self.node.get_logger().info(f"Using: {self.enhancer}")
 
     def _image_callback(self, msg):
+        self.node.get_logger().debug("Received new image message.", once=True)  # Log once when new images start coming in
         try:
             if self.for_sim:
                 cv_image = self.br.compressed_imgmsg_to_cv2(msg, desired_encoding="bgr8")
@@ -117,9 +118,13 @@ class ImageEnhancement():
             self.node.get_logger().error(f"Failed to convert image: {e}")
 
     def _depth_callback(self, msg):
+        self.node.get_logger().debug("Received new depth message.", once=True)  # Log once when new depth data starts coming in
         try:
-            # passthrough preserves original encoding (32FC1, 16UC1, etc.)
-            depth_image = self.br.imgmsg_to_cv2(msg, desired_encoding="passthrough")
+            if self.for_sim:
+                # passthrough preserves original encoding (32FC1, 16UC1, etc.)
+                depth_image = self.br.compressed_imgmsg_to_cv2(msg, desired_encoding="passthrough")
+            else:
+                depth_image = self.br.imgmsg_to_cv2(msg, desired_encoding="passthrough")
             
             with self._lock:
                 self._latest_depth = depth_image.astype(np.float32)
@@ -129,11 +134,16 @@ class ImageEnhancement():
     def _timer_callback(self):
         with self._lock:
             if not self._new_image_available or self._latest_image is None:
+                self.node.get_logger().debug("No new image available for enhancement. Skipping this cycle.", throttle_duration_sec=1)
                 return  # No new image to process
+            
+            if self.requires_depth and self._latest_depth is None:
+                self.node.get_logger().warn("Enhancer requires depth but no depth data available yet. Skipping enhancement.",throttle_duration_sec=1)
+                return  # Depth required but not available, skip enhancement for now
             
             # Grab copies to release lock quickly
             image = self._latest_image
-            depth = self._latest_depth  # May be None
+            depth = self._latest_depth
             header = self._latest_header
             self._new_image_available = False
         

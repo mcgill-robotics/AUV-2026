@@ -32,6 +32,10 @@ class ImageEnhancer(ABC):
     def enhance(self, image: np.ndarray, depth: Optional[np.ndarray] = None) -> np.ndarray:
         pass
     
+    @abstractmethod
+    def add_algorithm(self, algorithm: EnhancementAlgorithm):
+        pass
+    
     def __str__(self) -> str:
         algos = '\n\t'.join([f"{i}. {algo.algorithm_name()}" for i, algo in enumerate(self.algorithms,1)])
         return f"{self.type} Image Enhancer with algorithms [\n\t{algos}\n]"
@@ -52,7 +56,12 @@ class CPUImageEnhancer(ImageEnhancer):
     """
     def __init__(self, *algorithms):
         super().__init__("CPU", *algorithms)
-
+    
+    def add_algorithm(self, algorithm: EnhancementAlgorithm):
+        if not isinstance(algorithm, EnhancementAlgorithm):
+            raise TypeError("Only EnhancementAlgorithm instances can be added to CPUImageEnhancer.")
+        self.algorithms.append(algorithm)
+    
     def enhance(self, image: np.ndarray, depth: Optional[np.ndarray] = None) -> np.ndarray:
         # CPU algorithms don't use depth; parameter accepted for API consistency
         for algorithm in self.algorithms:

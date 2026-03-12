@@ -42,6 +42,11 @@ class GPUImageEnhancer(ImageEnhancer):
         self.algorithms = list(algorithms)
         super().__init__("GPU", *algorithms)
 
+    def add_algorithm(self, algorithm: EnhancementAlgorithmGPU):
+        if not isinstance(algorithm, EnhancementAlgorithmGPU):
+            raise TypeError("Only EnhancementAlgorithmGPU instances can be added to GPUImageEnhancer.")
+        self.algorithms.append(algorithm)
+    
     @torch.inference_mode()
     def enhance(self, image_np: np.ndarray, depth_np: np.ndarray) -> np.ndarray:
         # np array (H,W,C) uint8 -> torch Tensor (1,C,H,W) float32, normalized to [0,1]
@@ -92,10 +97,10 @@ class DeepSeeColor(EnhancementAlgorithmGPU):
         self.pipeline = dsc_pipeline.DeepSeeColorPipeline().from_JIT_trace(pipeline_model_path, device=self.device)
         self.pipeline.eval()
 
-    def apply_algorithm(self, image: torch.Tensor, depth: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def apply_algorithm(self, image: torch.Tensor, depth: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         with torch.no_grad():
             enhanced_rgb = self.pipeline(image, depth)
-        return enhanced_rgb
+        return enhanced_rgb,depth # Return depth unchanged for now, in case future algorithms want to use it. We can also consider adding a passthrough algorithm that explicitly does nothing to depth for clarity.
     def algorithm_name(self) -> str:
         return "Dehazing - DeepSeeColor"
     
