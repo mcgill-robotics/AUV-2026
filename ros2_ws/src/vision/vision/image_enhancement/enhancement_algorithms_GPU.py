@@ -3,7 +3,10 @@ import kornia
 import numpy as np
 import os
 from abc import ABC, abstractmethod
+from typing import Optional
 from enhancement_algorithms import ImageEnhancer, EnhancementAlgorithm
+
+import DSC_pipeline as dsc_pipeline
 
 class EnhancementAlgorithmGPU(EnhancementAlgorithm):
     def __init__(self, device=None):
@@ -15,7 +18,7 @@ class EnhancementAlgorithmGPU(EnhancementAlgorithm):
         return f"Enhancement Algorithm on GPU: {self.algorithm_name()}"
 
     @abstractmethod
-    def apply_algorithm(self, image: torch.Tensor) -> torch.Tensor:
+    def apply_algorithm(self, image: torch.Tensor, depth: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
         Input: (B, C, H, W) float32 Tensor, Range [0, 1]
         Output: (B, C, H, W) float32 Tensor, Range [0, 1]
@@ -23,8 +26,9 @@ class EnhancementAlgorithmGPU(EnhancementAlgorithm):
         """
         pass
 
-    def __call__(self, image: torch.Tensor) -> torch.Tensor:
-        return self.apply_algorithm(image)
+    @torch.inference_mode()
+    def __call__(self, image: torch.Tensor, depth: Optional[torch.Tensor] = None) -> torch.Tensor:
+        return self.apply_algorithm(image, depth)
 
 class GPUImageEnhancer(ImageEnhancer):
     """Aggregation of enhancement algorithms on GPU
@@ -38,14 +42,24 @@ class GPUImageEnhancer(ImageEnhancer):
         self.algorithms = list(algorithms)
         super().__init__("GPU", *algorithms)
 
-    def enhance(self, image_np: np.ndarray) -> np.ndarray:
+    @torch.inference_mode()
+    def enhance(self, image_np: np.ndarray, depth_np: Optional[np.ndarray] = None) -> np.ndarray:
         # np array (H,W,C) -> torch Tensor (C,H,W) and move to GPU
-        tensor = kornia.utils.image_to_tensor(image_np).float() / 255.0
+        tensor = kornia.utils.image_to_tensor(image_np).float().div_(255.0)
         # move to GPU and add batch dimension (1,C,H,W)
-        tensor = tensor.to(self.device).unsqueeze(0)
+        tensor = tensor.to(self.device, non_blocking=True).unsqueeze_(0)
+
+        # Convert depth if provided
+        depth_tensor = None
+        if depth_np is not None:
+            depth_tensor = torch.from_numpy(depth_np).float().to(self.device, non_blocking=True)
+            if depth_tensor.ndim == 2:
+                depth_tensor = depth_tensor.unsqueeze(0).unsqueeze(0)  # (1, 1, H, W)
+            elif depth_tensor.ndim == 3:
+                depth_tensor = depth_tensor.unsqueeze(0)  # (1, C, H, W)
 
         for algo in self.algorithms:
-            tensor = algo(tensor)
+            tensor = algo(tensor, depth_tensor)
 
         # tensor (1,C,H,W) on GPU -> np array (H,W,C) on CPU
         enhanced_np = kornia.utils.tensor_to_image(tensor.squeeze(0).cpu())
@@ -62,76 +76,20 @@ class DeepSeeColor(EnhancementAlgorithmGPU):
     Original Paper: 
     S. Jamieson, J. P. How and Y. Girdhar, "DeepSeeColor: Realtime Adaptive Color Correction for Autonomous Underwater Vehicles via Deep Learning Methods," 2023 IEEE International Conference on Robotics and Automation (ICRA), London, United Kingdom, 2023, pp. 3095-3101, doi: 10.1109/ICRA48891.2023.10160477.
     """
-    def __init__(self, bs_model_class, da_model_class, 
-                 bs_ckpt_path: str, da_ckpt_path: str, device=None):
+    def __init__(self, pipeline_model_path, device=None):
         super().__init__(device)
         
-        if not os.path.exists(bs_ckpt_path):
-            raise FileNotFoundError(f"BS Model Checkpoint not found at: {bs_ckpt_path}")
-        if not os.path.exists(da_ckpt_path):
-            raise FileNotFoundError(f"DA Model Checkpoint not found at: {da_ckpt_path}")
+        if not os.path.exists(pipeline_model_path):
+            raise FileNotFoundError(f"Pipeline Model Checkpoint not found at: {pipeline_model_path}")
 
         # Initialize Models
-        self.bs_model = bs_model_class().to(self.device)
-        self.da_model = da_model_class().to(self.device)
-        
-        # Load Weights
-        self.bs_model.load_state_dict(torch.load(bs_ckpt_path, map_location=self.device))
-        self.da_model.load_state_dict(torch.load(da_ckpt_path, map_location=self.device))
-        
-        self.bs_model.eval()
-        self.da_model.eval()
+        self.pipeline = dsc_pipeline.DeepSeeColorPipeline().from_JIT_trace(pipeline_model_path, device=self.device)
+        self.pipeline.eval()
 
-        # Pre-allocate kernel for depth morphology to avoid overhead
-        self.morph_kernel = torch.ones(3, 3, device=self.device)
-
-    def apply_algorithm(self, image: torch.Tensor) -> torch.Tensor:
-        # Note: This pipeline requires DEPTH.
-        # The abstract base class `apply_algorithm` only accepts `image`.
-        # OPTION A: We change the architecture to pass kwargs.
-        # OPTION B: We assume depth is stacked in the image tensor (4 channels: RGBD).
-        # For this implementation, let's assume the input is RGBD (4 channels).
-        
-        if image.shape[1] == 4:
-            rgb = image[:, :3, :, :]
-            depth = image[:, 3:4, :, :] # Keep channel dim: (B, 1, H, W)
-        else:
-            # Fallback/Warning if no depth provided. 
-            # This specific algorithm CANNOT run without depth.
-            raise ValueError("DeepLearningDehazingGPU requires a 4-channel input (RGB+Depth).")
-
-        # 1. Depth Pre-processing (GPU)
-        # Assume depth is normalized [0,1] or needs scaling? 
-        # Based on previous code: depth was / 1000.0. 
-        # Here we assume the input tensor is already prepared or we scale it.
-        # Let's assume input depth channel is raw meters for safety or check max value.
-        
-        # Morphological Closing on Depth
-        depth = kornia.morphology.closing(depth, self.morph_kernel)
-
-        # 2. BS Model
-        direct, backscatter = self.bs_model(rgb, depth)
-
-        # 3. Intermediate Processing (Z-Score & Clamping)
-        direct_mean = direct.mean(dim=[2, 3], keepdim=True)
-        direct_std = direct.std(dim=[2, 3], keepdim=True)
-        
-        # Add epsilon to std to prevent div by zero
-        direct_z = (direct - direct_mean) / (direct_std + 1e-8)
-        clamped_z = torch.clamp(direct_z, -5, 5)
-
-        epsilon = torch.tensor([1. / 255], device=self.device)
-        direct_input_da = torch.clamp(
-            (clamped_z * direct_std) + torch.maximum(direct_mean, epsilon), 0, 1
-        )
-
-        # 4. DA Model
-        f, J = self.da_model(direct_input_da, depth)
-
-        # Return the corrected image J.
-        # We clamp to ensure valid range.
-        return torch.clamp(J, 0, 1)
-
+    def apply_algorithm(self, image: torch.Tensor, depth: Optional[torch.Tensor] = None) -> torch.Tensor:
+        with torch.no_grad():
+            enhanced_rgb = self.pipeline(image, depth)
+        return enhanced_rgb
     def algorithm_name(self) -> str:
         return "Dehazing - DeepSeeColor"
     
@@ -140,12 +98,12 @@ class DeepSeeColor(EnhancementAlgorithmGPU):
 # 4. CONTRAST ENHANCEMENT ALGORITHMS
 
 class CLAHEEnhancementGPU(EnhancementAlgorithmGPU):
-    def __init__(self, clip_limit=2.0, grid_size=(8, 8), device='cuda'):
+    def __init__(self, clip_limit=2.0, grid_size=(8, 8), device=None):
+        super().__init__(device)
         self.clip_limit = clip_limit
         self.grid_size = grid_size
-        super().__init__(device)
         
-    def apply_algorithm(self, image: torch.Tensor) -> torch.Tensor:
+    def apply_algorithm(self, image: torch.Tensor, depth: Optional[torch.Tensor] = None) -> torch.Tensor:
         return kornia.enhance.equalize_clahe(image, self.clip_limit, self.grid_size)
 
     def algorithm_name(self) -> str:
