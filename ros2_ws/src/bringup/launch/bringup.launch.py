@@ -19,11 +19,13 @@ def generate_launch_description():
         sensors_pkg_path = get_package_share_directory("sensors")
         propulsion_pkg_path = get_package_share_directory("propulsion")
         controls_pkg_path = get_package_share_directory("controls")
+        planner_pkg_path = get_package_share_directory("planner")
         ros_tcp_endpoint_pkg_path = get_package_share_directory("ros_tcp_endpoint")
 
         sensors_launch_file = os.path.join(sensors_pkg_path, "launch", "sensors.launch.py")
         propulsion_pkg_file = os.path.join(propulsion_pkg_path, "launch", "propulsion.launch.py")
         controls_launch_file = os.path.join(controls_pkg_path, "launch", "controls.launch.py")
+        planner_launch_file = os.path.join(planner_pkg_path, "launch", "planner.launch.py")
         ros_tcp_endpoint_launch_file = os.path.join(ros_tcp_endpoint_pkg_path, "launch", "endpoint.py")
 
 
@@ -42,6 +44,11 @@ def generate_launch_description():
         launch_arguments={"sim": sim}.items() 
         )
 
+        launch_planner = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(planner_launch_file), 
+        launch_arguments={"sim": sim}.items() 
+        )
+
         sim_group = GroupAction(
         condition=IfCondition(sim),
         actions=[ IncludeLaunchDescription(
@@ -53,5 +60,6 @@ def generate_launch_description():
             launch_sensors,
             launch_propulsion,
             launch_controls,
+            launch_planner,
             sim_group
         ])

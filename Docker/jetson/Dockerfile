@@ -217,6 +217,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-$ROS_DISTRO-joy-teleop \
     ros-$ROS_DISTRO-rosidl-default-generators \
     ros-$ROS_DISTRO-vision-msgs \
+    # Planner packages
+    ros-${ROS_DISTRO}-py-trees \
+    ros-${ROS_DISTRO}-py-trees-ros-interfaces \
+    ros-${ROS_DISTRO}-py-trees-ros \
+    ros-${ROS_DISTRO}-py-trees-ros-tutorials \
+    ros-${ROS_DISTRO}-py-trees-ros-viewer \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
