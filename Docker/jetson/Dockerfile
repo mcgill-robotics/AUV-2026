@@ -98,6 +98,7 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone &
     libswscale-dev \
     libwayland-dev \
     libxkbcommon-dev \
+    libopenblas-dev \
     && rm -rf /var/lib/apt/lists/* && apt-get clean
 
 # ===== ZED SDK Installation =====
@@ -143,23 +144,23 @@ WORKDIR /opt/ros/micro_ros_ws
 RUN git clone -b $ROS_DISTRO https://github.com/micro-ROS/micro_ros_setup.git src/micro_ros_setup
 RUN . /opt/ros/$ROS_DISTRO/setup.bash && \
     colcon build \
-        --parallel-workers $(nproc) \
-        --merge-install \
-        --event-handlers console_direct+ \
-        --base-paths src \
-        --cmake-args -DCMAKE_BUILD_TYPE=Release && \
+    --parallel-workers $(nproc) \
+    --merge-install \
+    --event-handlers console_direct+ \
+    --base-paths src \
+    --cmake-args -DCMAKE_BUILD_TYPE=Release && \
     . /opt/ros/micro_ros_ws/install/setup.sh && \
     MICROROS_PREFIX=$(ros2 pkg prefix micro_ros_setup) && \
     ros2 run micro_ros_setup create_ws.sh src "$MICROROS_PREFIX/config/agent_ros2_packages.txt" "$MICROROS_PREFIX/config/agent_uros_packages.repos" && \
     colcon build \
-        --packages-up-to micro_ros_agent $@ \
-        --parallel-workers $(nproc) \
-        --merge-install \
-        --event-handlers console_direct+ \
-        --cmake-args \
-            "-DUAGENT_BUILD_EXECUTABLE=OFF" \
-            "-DUAGENT_P2P_PROFILE=OFF" \
-            "--no-warn-unused-cli" && \
+    --packages-up-to micro_ros_agent $@ \
+    --parallel-workers $(nproc) \
+    --merge-install \
+    --event-handlers console_direct+ \
+    --cmake-args \
+    "-DUAGENT_BUILD_EXECUTABLE=OFF" \
+    "-DUAGENT_P2P_PROFILE=OFF" \
+    "--no-warn-unused-cli" && \
     rm -rf build src log
 
 # ===== CUDA Sparse Libraries & Python AI Stack =====
@@ -182,13 +183,14 @@ RUN mkdir -p /tmp/cudss && cd /tmp/cudss && \
     cp -a ${CUSPARSE_SOLVER_NAME}/lib/* /usr/local/cuda/lib64/ && \
     rm -rf /tmp/cudss
 RUN pip install --no-cache-dir --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} --ignore-installed sympy cython --upgrade
-RUN pip install --no-cache-dir torch torchvision
 
+# Install PyTorch and Torchvision from the Jetson index (CUDA enabled)
+RUN pip install --no-cache-dir torch torchvision --index-url https://pypi.jetson-ai-lab.io/jp6/cu126
 # Pinned to v8.2.0 for reproducible builds
 ARG ULTRALYTICS_REF=v8.2.0
 RUN git clone --depth 1 --branch ${ULTRALYTICS_REF} https://github.com/ultralytics/ultralytics.git && \
     cd ultralytics && \
-    sed -i '/"numpy>=1.23.0"/d; /"opencv-python>=4.6.0"/d; /"numpy<2.0.0"/d' pyproject.toml && \
+    sed -i -E '/"(numpy|opencv-python|torch|torchvision)[>=<~]/d' pyproject.toml && \
     pip install --no-cache-dir --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} . && \
     cd .. && \
     rm -rf ultralytics
