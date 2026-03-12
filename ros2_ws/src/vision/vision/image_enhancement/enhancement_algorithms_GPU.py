@@ -3,7 +3,7 @@ import kornia
 import numpy as np
 import os
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, Tuple
 from enhancement_algorithms import ImageEnhancer, EnhancementAlgorithm
 
 import DSC_pipeline as dsc_pipeline
@@ -18,7 +18,7 @@ class EnhancementAlgorithmGPU(EnhancementAlgorithm):
         return f"Enhancement Algorithm on GPU: {self.algorithm_name()}"
 
     @abstractmethod
-    def apply_algorithm(self, image: torch.Tensor, depth: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def apply_algorithm(self, image: torch.Tensor, depth: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Input: (B, C, H, W) float32 Tensor, Range [0, 1]
         Output: (B, C, H, W) float32 Tensor, Range [0, 1]
@@ -27,7 +27,7 @@ class EnhancementAlgorithmGPU(EnhancementAlgorithm):
         pass
 
     @torch.inference_mode()
-    def __call__(self, image: torch.Tensor, depth: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def __call__(self, image: torch.Tensor, depth: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         return self.apply_algorithm(image, depth)
 
 class GPUImageEnhancer(ImageEnhancer):
@@ -43,7 +43,7 @@ class GPUImageEnhancer(ImageEnhancer):
         super().__init__("GPU", *algorithms)
 
     @torch.inference_mode()
-    def enhance(self, image_np: np.ndarray, depth_np: Optional[np.ndarray] = None) -> np.ndarray:
+    def enhance(self, image_np: np.ndarray, depth_np: np.ndarray) -> np.ndarray:
         # np array (H,W,C) uint8 -> torch Tensor (1,C,H,W) float32, normalized to [0,1]
         tensor = (torch.from_numpy(image_np)
                   .to(self.device, dtype=torch.float32, non_blocking=True)
@@ -61,7 +61,7 @@ class GPUImageEnhancer(ImageEnhancer):
                 depth_tensor = depth_tensor.unsqueeze(0)  # (1, C, H, W)
 
         for algo in self.algorithms:
-            tensor = algo(tensor, depth_tensor)
+            tensor, depth_tensor = algo(tensor, depth_tensor)
 
         # (1,C,H,W) -> (H,W,C) uint8 numpy array
         return (tensor.squeeze(0)
@@ -109,8 +109,9 @@ class CLAHEEnhancementGPU(EnhancementAlgorithmGPU):
         self.clip_limit = clip_limit
         self.grid_size = grid_size
         
-    def apply_algorithm(self, image: torch.Tensor, depth: Optional[torch.Tensor] = None) -> torch.Tensor:
-        return kornia.enhance.equalize_clahe(image, self.clip_limit, self.grid_size)
+    def apply_algorithm(self, image: torch.Tensor, depth: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        enhanced_image = kornia.enhance.equalize_clahe(image, self.clip_limit, self.grid_size)
+        return enhanced_image, depth
 
     def algorithm_name(self) -> str:
         return "Contrast Enhancement - CLAHE"
