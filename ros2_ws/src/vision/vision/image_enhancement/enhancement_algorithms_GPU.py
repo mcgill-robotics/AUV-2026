@@ -44,15 +44,17 @@ class GPUImageEnhancer(ImageEnhancer):
 
     @torch.inference_mode()
     def enhance(self, image_np: np.ndarray, depth_np: Optional[np.ndarray] = None) -> np.ndarray:
-        # np array (H,W,C) -> torch Tensor (C,H,W) and move to GPU
-        tensor = kornia.utils.image_to_tensor(image_np).float().div_(255.0)
-        # move to GPU and add batch dimension (1,C,H,W)
-        tensor = tensor.to(self.device, non_blocking=True).unsqueeze_(0)
+        # np array (H,W,C) uint8 -> torch Tensor (1,C,H,W) float32, normalized to [0,1]
+        tensor = (torch.from_numpy(image_np)
+                  .to(self.device, dtype=torch.float32, non_blocking=True)
+                  .permute(2, 0, 1)   # (H,W,C) -> (C,H,W) pytorch format
+                  .unsqueeze_(0)      # (C,H,W) -> (1,C,H,W) for batch
+                  .div_(255.0))
 
         # Convert depth if provided
         depth_tensor = None
         if depth_np is not None:
-            depth_tensor = torch.from_numpy(depth_np).float().to(self.device, non_blocking=True)
+            depth_tensor = torch.from_numpy(depth_np).to(self.device, dtype=torch.float32, non_blocking=True)
             if depth_tensor.ndim == 2:
                 depth_tensor = depth_tensor.unsqueeze(0).unsqueeze(0)  # (1, 1, H, W)
             elif depth_tensor.ndim == 3:
@@ -61,10 +63,14 @@ class GPUImageEnhancer(ImageEnhancer):
         for algo in self.algorithms:
             tensor = algo(tensor, depth_tensor)
 
-        # tensor (1,C,H,W) on GPU -> np array (H,W,C) on CPU
-        enhanced_np = kornia.utils.tensor_to_image(tensor.squeeze(0).cpu())
-        # clip to 0,1 and convert back to uint8
-        return (np.clip(enhanced_np, 0, 1) * 255).astype(np.uint8)
+        # (1,C,H,W) -> (H,W,C) uint8 numpy array
+        return (tensor.squeeze(0)
+                .permute(1, 2, 0)
+                .mul_(255.0)
+                .clamp_(0, 255)
+                .to(dtype=torch.uint8)
+                .cpu()
+                .numpy())
 
 # 1. COLOR CORRECTION ALGORITHMS
 
