@@ -7,7 +7,7 @@ import os
 import numpy as np
 import cv2
 
-import DeepSeeColor as dsc
+from vision.image_enhancement import DeepSeeColor as dsc
 
 class DeepSeeColorPipeline(nn.Module):
     """

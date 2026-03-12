@@ -4,9 +4,9 @@ import numpy as np
 import os
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple
-from enhancement_algorithms import ImageEnhancer, EnhancementAlgorithm
+from vision.image_enhancement.enhancement_algorithms import ImageEnhancer, EnhancementAlgorithm
 
-import DSC_pipeline as dsc_pipeline
+from vision.image_enhancement import DSC_pipeline as dsc_pipeline
 
 class EnhancementAlgorithmGPU(EnhancementAlgorithm):
     def __init__(self, device=None):
