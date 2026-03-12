@@ -3,6 +3,8 @@ import argparse
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
+import cv2
 
 import DeepSeeColor as dsc
 
@@ -88,6 +90,25 @@ def export_pipeline(bs_model_path, da_model_path, height=600,width=960):
     
     return torch.jit.trace(pipeline, (dummy_img, dummy_depth))
 
+def test_pipeline(pipeline_model_path, test_image_path, test_depth_path,output_path):
+    device = torch.device('cuda')
+    
+    # Load and preprocess test image and depth
+    img = cv2.imread(test_image_path)  # Assuming 3-channel RGB image
+    depth = cv2.imread(test_depth_path, cv2.IMREAD_ANYDEPTH)  # Assuming single-channel depth image
+    
+    img_tensor = torch.from_numpy(img).float().permute(2, 0, 1).unsqueeze(0).to(device) / 255.0
+    depth_tensor = torch.from_numpy(depth).float().unsqueeze(0).unsqueeze(0).to(device) / 1000.0
+    
+    pipeline = torch.jit.load(pipeline_model_path).to(device)
+    pipeline.eval()
+    with torch.no_grad():
+        output = pipeline(img_tensor[:, :3, :, :], depth_tensor)
+    
+    output_img = (output.squeeze(0).permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
+    cv2.imwrite(output_path, output_img)
+    print(f"Test output saved as {output_path}")
+
 def main():
     parser = argparse.ArgumentParser(
         description="Export BackscatterNet and DeattenuateNet as a single JIT-traceable pipeline for GPU inference.",
@@ -95,6 +116,7 @@ def main():
         epilog="""
 Examples:
     python3 DSC_pipeline.py --bs-model-path path/to/bs_model.pt --da-model-path path/to/da_model.pt --output-path dsc_pipeline.pt
+    python3 DSC_pipeline.py --bs-model-path path/to/bs_model.pt --da-model-path path/to/da_model.pt --output-path dsc_pipeline.pt --sim --test-image-path path/to/test_image.png --test-depth-path path/to/test_depth.png
         """
         )
     
@@ -123,6 +145,26 @@ Examples:
         help="Models take simulation image, i.e. 960x600 instead of 672x376."
     )
     
+    parser.add_argument(
+        "--test-image-path",
+        type=str,
+        default=None,
+        help="Optional path to a test RGB image (4-channel .jpg) to run through the pipeline after export for verification. Must be used in conjunction with --test-depth-path."
+    )
+    
+    parser.add_argument(
+        "--test-depth-path",
+        type=str,
+        default=None,
+        help="Optional path to a test depth image (single-channel .png) to run through the pipeline after export for verification. Must be used in conjunction with --test-image-path."
+    )
+    
+    parser.add_argument(
+        "--test-output-path",
+        type=str,
+        default="dsc_test_output.png",
+        help="Path to save the test output image after running the pipeline on the test image and depth. Default is dsc_test_output.png."
+    )
     args = parser.parse_args()
     
     height = 600 if args.sim else 376
@@ -131,6 +173,10 @@ Examples:
     pipeline = export_pipeline(args.bs_model_path, args.da_model_path, height, width)
     torch.jit.save(pipeline, args.output_path)
     print(f"Pipeline exported and saved to {args.output_path}")
+    
+    if args.test_image_path and args.test_depth_path:
+        print("Running test on provided image and depth...")
+        test_pipeline(args.output_path, args.test_image_path, args.test_depth_path,args.test_output_path)
     
 if __name__ == "__main__":
     main()
