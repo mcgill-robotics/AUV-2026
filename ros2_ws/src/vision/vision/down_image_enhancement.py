@@ -14,8 +14,6 @@ def main(args=None):
     
     enhance_node = image_enhancement_utils.EnhanceNode(
         node_name="down_image_enhancement",
-        input_topic="sensors/down_cam/image_raw",
-        output_topic="vision/down_cam/image_enhanced",
         enhancer=enhancer
     )
     rclpy.spin(enhance_node)

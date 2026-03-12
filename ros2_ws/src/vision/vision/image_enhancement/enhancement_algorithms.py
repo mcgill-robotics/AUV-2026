@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-from typing import Tuple
+from typing import Tuple, Optional
 from abc import ABC, abstractmethod
 
 class EnhancementAlgorithm(ABC):
@@ -29,15 +29,15 @@ class ImageEnhancer(ABC):
         self.type = device_type
     
     @abstractmethod
-    def enhance(self, image: np.ndarray) -> np.ndarray:
+    def enhance(self, image: np.ndarray, depth: Optional[np.ndarray] = None) -> np.ndarray:
         pass
     
     def __str__(self) -> str:
         algos = '\n\t'.join([f"{i}. {algo.algorithm_name()}" for i, algo in enumerate(self.algorithms,1)])
         return f"{self.type} Image Enhancer with algorithms [\n\t{algos}\n]"
     
-    def __call__(self, image: np.ndarray) -> np.ndarray:
-        return self.enhance(image)
+    def __call__(self, image: np.ndarray, depth: Optional[np.ndarray] = None) -> np.ndarray:
+        return self.enhance(image, depth)
 
 class CPUEnhancementAlgorithm(EnhancementAlgorithm):
     def __str__(self):
@@ -53,7 +53,8 @@ class CPUImageEnhancer(ImageEnhancer):
     def __init__(self, *algorithms):
         super().__init__("CPU", *algorithms)
 
-    def enhance(self, image: np.ndarray) -> np.ndarray:
+    def enhance(self, image: np.ndarray, depth: Optional[np.ndarray] = None) -> np.ndarray:
+        # CPU algorithms don't use depth; parameter accepted for API consistency
         for algorithm in self.algorithms:
             image = algorithm(image)
         return image
