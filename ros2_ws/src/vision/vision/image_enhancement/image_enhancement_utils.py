@@ -11,47 +11,48 @@ import threading
 from vision.image_enhancement import enhancement_algorithms as enhance
 from vision.image_enhancement import enhancement_algorithms_GPU as GPUenhance
 
-class EnhanceNode(Node):
+class ImageEnhancement():
     def __init__(
         self,
-        node_name: str,
+        node: Node,
         enhancer: enhance.ImageEnhancer | GPUenhance.GPUImageEnhancer,
     ):
-        super().__init__(node_name)
         # for now only GPU algorithms require depth
         # TODO: separate GPU logic in enhancement_algorithms_GPU from requiring depth
+        
+        self.node = node
         self.requires_depth = isinstance(enhancer, GPUenhance.GPUImageEnhancer)
         if self.requires_depth:
-            self.get_logger().info("Enhancer requires depth input.")
-        self.declare_parameter("input_topic",Parameter.Type.STRING)
-        self.declare_parameter("output_topic",Parameter.Type.STRING)
+            self.node.get_logger().info("Enhancer requires depth input.")
+        self.node.declare_parameter("input_topic",Parameter.Type.STRING)
+        self.node.declare_parameter("output_topic",Parameter.Type.STRING)
         if self.requires_depth:
-            self.declare_parameter("depth_topic", Parameter.Type.STRING)
+            self.node.declare_parameter("depth_topic", Parameter.Type.STRING)
         else:
-            self.declare_parameter("depth_topic", Parameter.Type.STRING, None)  # Declare but allow None for non-depth algorithms
-        self.declare_parameter("publish_rate_hz", Parameter.Type.INTEGER)
-        self.declare_parameter("sim", Parameter.Type.BOOL)
+            self.node.declare_parameter("depth_topic", Parameter.Type.STRING, None)  # Declare but allow None for non-depth algorithms
+        self.node.declare_parameter("publish_rate_hz", Parameter.Type.INTEGER)
+        self.node.declare_parameter("sim", Parameter.Type.BOOL)
         
-        self.input_topic: str = self.get_parameter("input_topic").get_parameter_value().string_value
-        self.output_topic: str = self.get_parameter("output_topic").get_parameter_value().string_value
+        self.input_topic: str = self.node.get_parameter("input_topic").get_parameter_value().string_value
+        self.output_topic: str = self.node.get_parameter("output_topic").get_parameter_value().string_value
         if self.requires_depth:
-            self.get_logger().warn(
+            self.node.get_logger().warn(
                 "EnhanceNode initialized with a GPU enhancer that requires depth. Make sure to provide a valid depth topic."
             )
-            self.depth_topic = self.get_parameter("depth_topic").get_parameter_value().string_value
+            self.depth_topic = self.node.get_parameter("depth_topic").get_parameter_value().string_value
             if not self.depth_topic:
-                self.get_logger().error("Depth topic is required for this enhancer but was not provided. Please set the 'depth_topic' parameter.")
-                self.get_logger().fatal("Shutting down EnhanceNode due to missing depth topic.")
+                self.node.get_logger().error("Depth topic is required for this enhancer but was not provided. Please set the 'depth_topic' parameter.")
+                self.node.get_logger().fatal("Shutting down EnhanceNode due to missing depth topic.")
                 raise RuntimeError("Depth topic is required for this enhancer but was not provided.")
         else:
             self.depth_topic = None
-        self.publish_rate_hz: int = self.get_parameter("publish_rate_hz").get_parameter_value().integer_value    
-        self.for_sim: bool = self.get_parameter("sim").get_parameter_value().bool_value
+        self.publish_rate_hz: int = self.node.get_parameter("publish_rate_hz").get_parameter_value().integer_value    
+        self.for_sim: bool = self.node.get_parameter("sim").get_parameter_value().bool_value
         
         image_format = Image
         if self.for_sim:
             image_format = CompressedImage
-            self.get_logger().warn(
+            self.node.get_logger().warn(
                 "EnhanceNode running in simulation mode: using compressed image format."
             )
         
@@ -61,45 +62,45 @@ class EnhanceNode(Node):
         self._latest_image: Optional[np.ndarray] = None
         # depth is optional, so it can be None if not provided or if the depth callback hasn't received data yet
         self._latest_depth: Optional[np.ndarray] = None
-        # latest between image and depth (if provided) header for timestamping output
+        # latest image  header for timestamping output
         self._latest_header = None
         # flag to indicate if a new image has been received since the last enhancement, so we don't run enhancement unnecessarily if no new data is available
         self._new_image_available = False
         
         # Image subscription
-        self.image_sub = self.create_subscription(
+        self.image_sub = self.node.create_subscription(
             image_format,
             self.input_topic,
             self._image_callback,
             10
         )
-        self.get_logger().info(f"Subscribed to image topic: {self.input_topic}")
+        self.node.get_logger().info(f"Subscribed to image topic: {self.input_topic}")
         
         # Depth subscription (optional)
         if self.depth_topic:
-            self.depth_sub = self.create_subscription(
+            self.depth_sub = self.node.create_subscription(
                 Image,  # Depth is typically uncompressed 32FC1 or 16UC1
                 self.depth_topic,
                 self._depth_callback,
                 10
             )
-            self.get_logger().info(f"Subscribed to depth topic: {self.depth_topic}")
+            self.node.get_logger().info(f"Subscribed to depth topic: {self.depth_topic}")
         else:
             self.depth_sub = None
             
-        self.publisher = self.create_publisher(image_format, self.output_topic, 10)
+        self.publisher = self.node.create_publisher(image_format, self.output_topic, 10)
         
         # Timer-driven enhancement
         timer_period = 1.0 / self.publish_rate_hz
-        self.timer = self.create_timer(timer_period, self._timer_callback)
+        self.timer = self.node.create_timer(timer_period, self._timer_callback)
         
         self.enhancer = enhancer
         self.br = CvBridge()
         
-        self.get_logger().info(
+        self.node.get_logger().info(
             f"EnhanceNode initialized: {self.input_topic} -> {self.output_topic} @ {self.publish_rate_hz}Hz"
         )
-        self.get_logger().info(f"Using: {self.enhancer}")
+        self.node.get_logger().info(f"Using: {self.enhancer}")
 
     def _image_callback(self, msg):
         try:
@@ -113,7 +114,7 @@ class EnhanceNode(Node):
                 self._latest_header = msg.header
                 self._new_image_available = True
         except cv2.error as e:
-            self.get_logger().error(f"Failed to convert image: {e}")
+            self.node.get_logger().error(f"Failed to convert image: {e}")
 
     def _depth_callback(self, msg):
         try:
@@ -123,7 +124,7 @@ class EnhanceNode(Node):
             with self._lock:
                 self._latest_depth = depth_image.astype(np.float32)
         except cv2.error as e:
-            self.get_logger().error(f"Failed to convert depth: {e}")
+            self.node.get_logger().error(f"Failed to convert depth: {e}")
 
     def _timer_callback(self):
         with self._lock:
@@ -137,7 +138,7 @@ class EnhanceNode(Node):
             self._new_image_available = False
         
         try:
-            self.get_logger().info("Running enhancement algorithm...",once=True)  # Log once when enhancement starts
+            self.node.get_logger().info("Running enhancement algorithm...",once=True)  # Log once when enhancement starts
             with np.errstate(invalid='raise'):
                 enhanced_image = self.enhancer.enhance(image, depth)
             
@@ -150,7 +151,7 @@ class EnhanceNode(Node):
             self.publisher.publish(enhanced_msg)
             
         except (cv2.error, FloatingPointError) as e:
-            self.get_logger().error(f"Enhancement failed: {e}. Falling back to original image.")
+            self.node.get_logger().error(f"Enhancement failed: {e}. Falling back to original image.")
             # Publish original image if enhancement fails
             if self.for_sim:
                 fallback_msg = self.br.cv2_to_compressed_imgmsg(image)

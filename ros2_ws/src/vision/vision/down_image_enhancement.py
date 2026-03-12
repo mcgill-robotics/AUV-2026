@@ -7,18 +7,19 @@ from vision.image_enhancement import enhancement_algorithms_GPU as GPUenhance
 def main(args=None):
     rclpy.init(args=args)
 
+    node = rclpy.create_node("down_image_enhancement")
     enhancer = enhance.CPUImageEnhancer(
         enhance.DCPEnhancement(),
         enhance.CLAHEEnhancement()
     )
     
-    enhance_node = image_enhancement_utils.EnhanceNode(
-        node_name="down_image_enhancement",
+    image_enhance = image_enhancement_utils.ImageEnhancement(
+        node=node,
         enhancer=enhancer
     )
-    rclpy.spin(enhance_node)
+    rclpy.spin(node)
 
-    enhance_node.destroy_node()
+    node.destroy_node()
     rclpy.shutdown()
 
 if __name__ == "__main__":
