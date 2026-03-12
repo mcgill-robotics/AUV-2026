@@ -185,7 +185,7 @@ RUN mkdir -p /tmp/cudss && cd /tmp/cudss && \
 RUN pip install --no-cache-dir --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} --ignore-installed sympy cython --upgrade
 
 # Install PyTorch and Torchvision from the Jetson index (CUDA enabled)
-RUN pip install --no-cache-dir torch torchvision --index-url https://pypi.jetson-ai-lab.io/jp6/cu126
+RUN pip install --no-cache-dir --force-reinstall torch torchvision --index-url https://pypi.jetson-ai-lab.io/jp6/cu126
 # Pinned to v8.2.0 for reproducible builds
 ARG ULTRALYTICS_REF=v8.2.0
 RUN git clone --depth 1 --branch ${ULTRALYTICS_REF} https://github.com/ultralytics/ultralytics.git && \
