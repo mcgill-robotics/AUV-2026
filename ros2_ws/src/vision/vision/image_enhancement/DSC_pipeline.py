@@ -3,6 +3,7 @@ import argparse
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import os
 import numpy as np
 import cv2
 
@@ -17,25 +18,41 @@ class DeepSeeColorPipeline(nn.Module):
     """
     epsilon: torch.Tensor  # Type hint for registered buffer
     
-    def __init__(self, bs_model_path, da_model_path, closing_kernel=7):
+    def __init__(self, closing_kernel=7):
         super().__init__()
-        
-        # backscatter net as submodule of pipeline
-        self.bs_model = dsc.BackscatterNet()
-        self.bs_model.load_state_dict(torch.load(bs_model_path))
-        self.bs_model.eval()
-        
-        # deattenuate net as submodule of pipeline
-        self.da_model = dsc.DeattenuateNet()
-        self.da_model.load_state_dict(torch.load(da_model_path))
-        self.da_model.eval()
-        
         # Pre-calculate morphology parameters
         self.kernel_size = closing_kernel
         self.pad = closing_kernel // 2
         
         # since we will be doing a lot of clamping to 1/255, we can pre-store that as a buffer to avoid overhead
         self.register_buffer('epsilon', torch.tensor(1.0 / 255.0))
+
+    @classmethod
+    def from_JIT_trace(cls, model_path, device=None):
+        """
+        Load a JIT-traced pipeline model from the specified path.
+        """
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"JIT Pipeline Model not found at: {model_path}")
+        if device is None:
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')     
+        return torch.jit.load(model_path).to(device)
+    
+    def load_backscatter_weights(self, bs_ckpt_path):
+        if not os.path.exists(bs_ckpt_path):
+            raise FileNotFoundError(f"BackscatterNet Model Checkpoint not found at: {bs_ckpt_path}")
+        # backscatter net as submodule of pipeline
+        self.bs_model = dsc.BackscatterNet()
+        self.bs_model.load_state_dict(torch.load(bs_ckpt_path))
+        self.bs_model.eval()
+        
+    def load_deattenuate_weights(self, da_ckpt_path):
+        if not os.path.exists(da_ckpt_path):
+            raise FileNotFoundError(f"DeattenuateNet Model Checkpoint not found at: {da_ckpt_path}")
+        # deattenuate net as submodule of pipeline
+        self.da_model = dsc.DeattenuateNet()
+        self.da_model.load_state_dict(torch.load(da_ckpt_path))
+        self.da_model.eval()
 
     def _morphological_closing(self, depth):
         # Native PyTorch Closing (Dilation -> Erosion), this mimics the kornia morphology.closing but is fully differentiable and has no overhead from switching to CPU or using kornia. We use max pooling to achieve dilation and erosion.
@@ -82,7 +99,11 @@ def export_pipeline(bs_model_path, da_model_path, height=600,width=960):
     print(f"  - Image size: {width}x{height}")
     device = torch.device('cuda')
     
-    pipeline = DeepSeeColorPipeline(bs_model_path, da_model_path).to(device)
+    pipeline = DeepSeeColorPipeline().to(device)
+    
+    pipeline.load_backscatter_weights(bs_model_path)
+    pipeline.load_deattenuate_weights(da_model_path)
+    pipeline.to(device)
     pipeline.eval()
     
     dummy_img = torch.rand(1, 3, height, width).to(device)
@@ -100,7 +121,7 @@ def test_pipeline(pipeline_model_path, test_image_path, test_depth_path,output_p
     img_tensor = torch.from_numpy(img).float().permute(2, 0, 1).unsqueeze(0).to(device) / 255.0
     depth_tensor = torch.from_numpy(depth).float().unsqueeze(0).unsqueeze(0).to(device) / 1000.0
     
-    pipeline = torch.jit.load(pipeline_model_path).to(device)
+    pipeline = DeepSeeColorPipeline.from_JIT_trace(pipeline_model_path, device=device)
     pipeline.eval()
     with torch.no_grad():
         output = pipeline(img_tensor[:, :3, :, :], depth_tensor)
