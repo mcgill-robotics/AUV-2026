@@ -4,8 +4,8 @@ teleop_converter:
     # Scaling (forces in Newtons, torques in Nm)
     surge_scale: 20.0
     sway_scale: 20.0
-    heave_scale: 40.0
-    yaw_scale: 5.0
+    heave_scale: 20.0
+    yaw_scale: 2.0
     roll_scale: 2.0
     pitch_scale: 2.0
     

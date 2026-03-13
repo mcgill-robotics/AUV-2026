@@ -1,0 +1,113 @@
+{
+        "globalVariables": {},
+        "userNodes": {},
+        "playbackConfig": {
+                "speed": 1
+        },
+        "layout": {
+                "first": "3D!main",
+                "second": {
+                        "first": "Tab!control",
+                        "second": "RawMessages!feedback",
+                        "direction": "column",
+                        "splitPercentage": 70
+                },
+                "direction": "row",
+                "splitPercentage": 60
+        },
+        "configById": {
+                "3D!main": {
+                        "cameraState": {
+                                "perspective": true,
+                                "distance": 8,
+                                "phi": 60,
+                                "theta": 45,
+                                "target": [
+                                        0,
+                                        0,
+                                        0
+                                ],
+                                "targetOffset": [
+                                        0,
+                                        0,
+                                        0
+                                ]
+                        },
+                        "followMode": "follow-pose",
+                        "followTf": "base_link",
+                        "scene": {},
+                        "transforms": {
+                                "showLabel": true,
+                                "axisScale": 0.5
+                        },
+                        "topics": {
+                                "/tf": {
+                                        "visible": true
+                                },
+                                "/state/pose": {
+                                        "visible": true
+                                }
+                        },
+                        "layers": {
+                                "grid": {
+                                        "layerId": "foxglove.Grid",
+                                        "position": [
+                                                0,
+                                                0,
+                                                -4
+                                        ]
+                                }
+                        }
+                },
+                "Tab!control": {
+                        "activeTabIdx": 0,
+                        "tabs": [
+                                {
+                                        "title": "Teleop (Wrench)",
+                                        "layout": "Publish!wrench"
+                                },
+                                {
+                                        "title": "Individual Thrusters",
+                                        "layout": "Publish!thrusters"
+                                },
+                                {
+                                        "title": "Setpoints",
+                                        "layout": {
+                                                "first": "Publish!depth_sp",
+                                                "second": "Publish!quat_sp",
+                                                "direction": "column",
+                                                "splitPercentage": 50
+                                        }
+                                }
+                        ]
+                },
+                "Publish!wrench": {
+                        "topicName": "/controls/effort",
+                        "datatype": "geometry_msgs/msg/Wrench",
+                        "buttonText": "Publish Wrench",
+                        "value": "{\n  \"force\": { \"x\": 0.0, \"y\": 0.0, \"z\": 0.0 },\n  \"torque\": { \"x\": 0.0, \"y\": 0.0, \"z\": 0.0 }\n}"
+                },
+                "Publish!thrusters": {
+                        "topicName": "/propulsion/microseconds",
+                        "datatype": "auv_msgs/msg/ThrusterMicroseconds",
+                        "buttonText": "Publish PWM",
+                        "value": "{\n  \"thruster_1\": 1500,\n  \"thruster_2\": 1500,\n  \"thruster_3\": 1500,\n  \"thruster_4\": 1500,\n  \"thruster_5\": 1500,\n  \"thruster_6\": 1500,\n  \"thruster_7\": 1500,\n  \"thruster_8\": 1500\n}"
+                },
+                "Publish!depth_sp": {
+                        "topicName": "/controls/depth_setpoint",
+                        "datatype": "std_msgs/msg/Float64",
+                        "buttonText": "Set Depth",
+                        "value": "{ \"data\": 1.0 }"
+                },
+                "Publish!quat_sp": {
+                        "topicName": "/controls/quaternion_setpoint",
+                        "datatype": "geometry_msgs/msg/Quaternion",
+                        "buttonText": "Set Orientation",
+                        "value": "{ \"x\": 0.0, \"y\": 0.0, \"z\": 0.0, \"w\": 1.0 }"
+                },
+                "RawMessages!feedback": {
+                        "topicPath": "/propulsion/forces",
+                        "diffEnabled": false
+                }
+        }
+}
