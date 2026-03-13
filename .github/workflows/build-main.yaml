@@ -97,6 +97,7 @@ jobs:
     - name: Run colcon build in container
       run: |
         docker run --rm \
+          --user $(id -u):$(id -g) \
           -v ${{ github.workspace }}:/workspace \
           -w /workspace \
           mcgillrobotics/auv_2026:dev-arm64 \
@@ -110,9 +111,9 @@ jobs:
             cd ros2_ws
             
             # Install dependencies using rosdep
-            apt-get update
+            sudo apt-get update
             rosdep update --rosdistro \$ROS_DISTRO
-            rosdep install --from-paths src --ignore-src --rosdistro \$ROS_DISTRO -y || true
+            sudo rosdep install --from-paths src --ignore-src --rosdistro \$ROS_DISTRO -y || true
             
             # Build specified packages
             echo 'Building packages: ${{ steps.packages.outputs.packages }}'
