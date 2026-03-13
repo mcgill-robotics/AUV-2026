@@ -6,7 +6,7 @@ FROM ${IMAGE_NAME}
 
 ARG ZED_SDK_MAJOR=5
 ARG ZED_SDK_MINOR=1
-ARG ZED_SDK_PATCH=0
+ARG ZED_SDK_PATCH=1
 ARG L4T_MAJOR=36
 ARG L4T_MINOR=4
 # Optional: Override ZED SDK URL
@@ -18,6 +18,10 @@ ARG ZED_SDK_RUN="ZED_SDK_installer.run"
 
 # ROS2 distribution
 ARG ROS2_DIST=humble
+
+# UBUNTU Versions
+ARG UBUNTU_RELEASE=22
+ARG UBUNTU_MINOR_RELEASE=04
 
 # ZED ROS2 Wrapper dependencies version
 ARG XACRO_VERSION=2.0.8
@@ -37,6 +41,16 @@ ARG ROBOT_STATE_PUBLISHER_VERSION=3.5.2
 ARG USB_CAM_VERSION=0.8.1
 ARG IMAGE_COMMON_VERSION=3.1.12
 ARG MAVROS_VERSION=2.10.1
+# CI has a different runner than the jetson (notably git permissions are different and there is no GPU)
+# Unlike the nvidia dev container, we cannot just install stubs to satisfy the linker, so we just forego installing the zed sdk in CI for the jetson, which is fine since we should test it locally anyways
+ARG CI
+RUN if [ "$CI" = "true" ]; then \
+        echo "Building container for CI"; \
+    else \
+        echo "Building container locally"; \
+    fi
+# set it as env var so build scripts can see it
+ENV CI=${CI}
 
 # Make pip work
 ENV PYPI_URL=https://pypi.jetson-ai-lab.io/jp6/cu126
@@ -53,6 +67,8 @@ ENV LC_ALL=C.UTF-8
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Europe/Paris 
 ENV ROS_DISTRO=${ROS2_DIST}
+# assume anything trying to build this container is for jetson, whether CI or physical jetson hardware
+ENV IS_JETSON=true
 
 # Check that this SDK URL exists
 RUN if [ "$(curl -L -I "${ZED_SDK_URL}" -o /dev/null -s -w '%{http_code}\n' | head -n 1)" = "200" ]; then \
@@ -200,6 +216,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-$ROS_DISTRO-joy \
     ros-$ROS_DISTRO-joy-teleop \
     ros-$ROS_DISTRO-rosidl-default-generators \
+    ros-$ROS_DISTRO-vision-msgs \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -208,20 +225,48 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # do not clutter our ros2_ws
 WORKDIR /opt/dependencies_ws
 
-RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
-  colcon build --parallel-workers $(nproc) --symlink-install \
+RUN . /opt/ros/$ROS_DISTRO/install/setup.bash && \
+  colcon build --parallel-workers $(nproc) --merge-install \
   --event-handlers console_direct+ --base-paths src \
   --cmake-args ' -DCMAKE_BUILD_TYPE=Release' \
   ' -DCMAKE_LIBRARY_PATH=/usr/local/cuda/lib64/stubs' \
   ' -DCMAKE_CXX_FLAGS="-Wl,--allow-shlib-undefined"' \
-  ' --no-warn-unused-cli' "
+  ' --no-warn-unused-cli' && \
+  rm -rf build src log
+
+# install micro-ROS
+WORKDIR /opt/ros/micro_ros_ws
+# add repository and 
+RUN git clone -b $ROS_DISTRO https://github.com/micro-ROS/micro_ros_setup.git src/micro_ros_setup
+# build micro-ROS package and agent
+RUN . /opt/ros/$ROS_DISTRO/install/setup.bash && \
+    . /opt/dependencies_ws/install/setup.bash && \
+    colcon build \
+        --parallel-workers $(nproc) \
+        --merge-install \
+        --event-handlers console_direct+ \
+        --base-paths src \
+        --cmake-args -DCMAKE_BUILD_TYPE=Release && \
+    . /opt/ros/micro_ros_ws/install/setup.sh && \
+    MICROROS_PREFIX=$(ros2 pkg prefix micro_ros_setup) && \
+    ros2 run micro_ros_setup create_ws.sh src "$MICROROS_PREFIX/config/agent_ros2_packages.txt" "$MICROROS_PREFIX/config/agent_uros_packages.repos" && \
+    colcon build \
+        --packages-up-to micro_ros_agent $@ \
+        --parallel-workers $(nproc) \
+        --merge-install \
+        --event-handlers console_direct+ \
+        --cmake-args \
+            "-DUAGENT_BUILD_EXECUTABLE=OFF" \
+            "-DUAGENT_P2P_PROFILE=OFF" \
+            "--no-warn-unused-cli" && \
+    rm -rf build src log
 
 # Get CUDA dependencies to install torch and torchvision
 WORKDIR /root
-RUN CUSPARSE_LIBRARY_NAME="cusparselt-local-tegra-repo-ubuntu2204-0.8.1_0.8.1-1_arm64.deb" && \
+RUN CUSPARSE_LIBRARY_NAME="cusparselt-local-tegra-repo-ubuntu${UBUNTU_RELEASE}${UBUNTU_MINOR_RELEASE}-0.8.1_0.8.1-1_arm64.deb" && \
     wget https://developer.download.nvidia.com/compute/cusparselt/0.8.1/local_installers/${CUSPARSE_LIBRARY_NAME} && \
     dpkg -i ${CUSPARSE_LIBRARY_NAME} && \
-    cp /var/cusparselt-local-tegra-repo-ubuntu2204-0.8.1/cusparselt-*-keyring.gpg /usr/share/keyrings/ && \
+    cp /var/cusparselt-local-tegra-repo-ubuntu${UBUNTU_RELEASE}${UBUNTU_MINOR_RELEASE}-0.8.1/cusparselt-*-keyring.gpg /usr/share/keyrings/ && \
     apt-get update && \
     apt-get -y install cusparselt-cuda-12 && \
     rm -rf ${CUSPARSE_LIBRARY_NAME} && \
@@ -234,16 +279,19 @@ RUN mkdir -p tmp_cudss && cd tmp_cudss && \
     tar xf ${CUSPARSE_SOLVER_NAME}.tar.xz && \
     cp -a ${CUSPARSE_SOLVER_NAME}/include/* /usr/local/cuda/include/ && \
     cp -a ${CUSPARSE_SOLVER_NAME}/lib/* /usr/local/cuda/lib64/ && \
-	rm -rf ${CUSPARSE_SOLVER_NAME} ${CUSPARSE_SOLVER_NAME}.tar.xz
+    rm -rf ${CUSPARSE_SOLVER_NAME} ${CUSPARSE_SOLVER_NAME}.tar.xz
 
 # Install ultralytics, avoid reinstalling numpy and opencv (torch, tensorflow and torchvision installed in the .toml file, cuda supported cause pip index is Jetpack6 one)
 RUN pip install --no-cache-dir --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} --ignore-install sympy \ 
     cython --upgrade
 
+# Manually install pytorch because it's not present in the base image
+RUN pip install --no-cache-dir torch torchvision
+
 RUN git clone https://github.com/ultralytics/ultralytics.git && \
     cd ultralytics && \
     sed -i '/"numpy>=1.23.0"/d; /"opencv-python>=4.6.0"/d; /"numpy<2.0.0"/d' pyproject.toml && \
-    pip install --no-cache-dir --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} -e . && \
+    pip install --no-cache-dir --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} . && \
     cd .. && \
     rm -rf ultralytics
 
@@ -286,8 +334,17 @@ ENV COLCON_HOME=/home/$USERNAME/.colcon
 # move repo defaults.yaml to container, CI is run from Docker/jetson so need to go up 2 levels
 COPY .colcon ${COLCON_HOME}/
 
+# add ultralytics config dir to avoid storing settings in temp
+RUN mkdir -p /home/$USERNAME/.config/Ultralytics
+
 WORKDIR /home/$USERNAME/AUV-2026
 
 # Source env variables
-RUN echo "source /opt/ros/humble/install/setup.bash && source /root/dependencies_ws/install/setup.bash && source /root/AUV-2026/ros2_ws/install/setup.bash" >> ~/.bashrc
+# We use /opt/dependencies_ws which is readable by all
+RUN echo "source /opt/ros/humble/setup.bash && source /opt/dependencies_ws/install/local_setup.bash && source /opt/ros/micro_ros_ws/install/local_setup.bash && source /home/$USERNAME/AUV-2026/ros2_ws/install/setup.bash" >> ~/.bashrc 
+RUN echo 'AMENT_PREFIX_PATH=$(echo $AMENT_PREFIX_PATH | sed -E "s|/opt/ros/humble/install:/opt/ros/humble$|/opt/ros/humble:/opt/ros/humble/install|")' >> ~/.bashrc
+
+# Entrypoint uses fixuid to remap UID/GID if running with --user
+ENTRYPOINT ["fixuid", "-q"]
+
 CMD ["bash"]

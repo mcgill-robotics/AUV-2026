@@ -4,11 +4,21 @@
 # ---------------------------------------------------------
 FROM althack/ros2:humble-dev
 
+# CI has a different runner than the jetson (notably git permissions are different and there is no GPU)
+ARG CI
+RUN if [ "$CI" = "true" ]; then \
+        echo "Building container for CI"; \
+    else \
+        echo "Building container locally"; \
+    fi
+# set it as env var so build scripts can see it
+ENV CI=${CI}
 # Set environment variables
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     DEBIAN_FRONTEND=noninteractive \
-    ROS_DISTRO=humble
+    ROS_DISTRO=humble \
+    IS_JETSON=false
 
 # ---------------------------------------------------------
 # 1. Install System Dependencies & Tools
@@ -45,7 +55,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-colcon-common-extensions \
     python3-rosdep \
     python3-vcstool \
-    sudo \
     tar \
     v4l-utils \
     usbutils \
@@ -75,6 +84,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-nmea-msgs \
     ros-${ROS_DISTRO}-marine-sensor-msgs \
     ros-${ROS_DISTRO}-marine-acoustic-msgs \
+    ros-${ROS_DISTRO}-vision-msgs \
     # Image & Transport
     ros-${ROS_DISTRO}-image-transport \
     ros-${ROS_DISTRO}-image-transport-plugins \
@@ -92,24 +102,50 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
+# ----------------------------------------------------------
+# Install micro-ROS Agent (for microcontroller communication)
+# ------------------------------------------
+WORKDIR /opt/ros/micro_ros_ws
+RUN git clone -b ${ROS_DISTRO} https://github.com/micro-ROS/micro_ros_setup.git src/micro_ros_setup
+
+RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \
+    colcon build \
+        --parallel-workers $(nproc) \
+        --merge-install \
+        --event-handlers console_direct+ \
+        --base-paths src \
+        --cmake-args -DCMAKE_BUILD_TYPE=Release && \
+    . /opt/ros/micro_ros_ws/install/setup.sh && \
+    MICROROS_PREFIX=$(ros2 pkg prefix micro_ros_setup) && \
+    ros2 run micro_ros_setup create_ws.sh src "$MICROROS_PREFIX/config/agent_ros2_packages.txt" "$MICROROS_PREFIX/config/agent_uros_packages.repos" && \
+    colcon build \
+        --packages-up-to micro_ros_agent $@ \
+        --parallel-workers $(nproc) \
+        --merge-install \
+        --event-handlers console_direct+ \
+        --cmake-args \
+            "-DUAGENT_BUILD_EXECUTABLE=OFF" \
+            "-DUAGENT_P2P_PROFILE=OFF" \
+            "--no-warn-unused-cli" && \
+    rm -rf build src log
+WORKDIR /root
+
 # ---------------------------------------------------------
 # 3. Install Python ML & Vision Dependencies (CPU)
 # ---------------------------------------------------------
 COPY Docker/dev/requirements.txt Docker/dev/constraints.txt /tmp/
-
-# Upgrade pip/setuptools (Required to build modern ML wheels)
-RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel
 
 RUN pip3 install --no-cache-dir -c /tmp/constraints.txt torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
 RUN pip3 install --no-cache-dir -c /tmp/constraints.txt "opencv-python==4.10.0.84"
 
 # Install other requirements (Pip will skip torch since it's already done)
-RUN pip3 install --no-cache-dir -c /tmp/constraints.txt -r /tmp/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip3 install --ignore-installed -c /tmp/constraints.txt -r /tmp/requirements.txt
 
 # DOWNGRADE Setuptools for ROS 2
 # Restores compatibility with 'colcon build'
-RUN pip3 install --no-cache-dir "setuptools==65.5.1"
+RUN pip3 install --no-cache-dir --force-reinstall "setuptools==65.5.1"
 
 # ---------------------------------------------------------
 # 4. Environment Setup
@@ -148,7 +184,7 @@ COPY .colcon ${COLCON_HOME}/
 WORKDIR /home/$USERNAME/AUV-2026
 
 # Add source commands to bashrc
-RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc && \
+RUN echo "source /opt/ros/${ROS_DISTRO}/local_setup.bash && source /opt/ros/micro_ros_ws/install/local_setup.bash" >> ~/.bashrc && \
     echo "if [ -f ~/AUV-2026/ros2_ws/install/setup.bash ]; then source ~/AUV-2026/ros2_ws/install/setup.bash; fi" >> ~/.bashrc
 
 # Entrypoint uses fixuid to remap UID/GID if running with --user

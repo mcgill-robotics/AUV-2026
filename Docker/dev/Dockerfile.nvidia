@@ -22,6 +22,7 @@ ARG ZED_SDK_PATCH=1
 ARG CUDA_MAJOR=12
 ARG CUDA_MINOR=8
 ARG UBUNTU_RELEASE=22
+ARG UBUNTU_MINOR_RELEASE=04
 ARG TENSORRT_MAJOR=10
 ARG TENSORRT_MINOR=9
 
@@ -32,7 +33,8 @@ ENV LANG=C.UTF-8 \
         ROS_DISTRO=humble \
         # Critical for ZED SDK to access hardware
         NVIDIA_DRIVER_CAPABILITIES=all \
-        TZ=Europe/Paris
+        TZ=Europe/Paris \
+        IS_JETSON=false
 
 # ---------------------------------------------------------
 # 1. Install System Dependencies & ROS 2 Setup
@@ -48,6 +50,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         lsb-release \
         ca-certificates \
         sudo \
+        vim \
         # ZED SDK Dependencies
         zstd \
         libusb-1.0-0-dev \
@@ -78,7 +81,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Add ROS 2 Humble Repository
 RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg && \
         echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null
-
+# Note that the CI does not have access to NVIDIA hardware, so we manually install the stubs only on CI to satisfy the linker when building ZED dependent packages
+ARG CI
+RUN if [ "$CI" = "true" ]; then \
+        echo "Installing ZED stubs for CI"; \
+        # Install CUDA keyring to access NVIDIA packages (needed for stubs), sed to remove '.' 22.04 -> 2204
+        curl -fsSL https://developer.download.nvidia.com/compute/cuda/repos/ubuntu${UBUNTU_RELEASE}${UBUNTU_MINOR_RELEASE}/x86_64/cuda-keyring_1.1-1_all.deb -o /tmp/cuda-keyring.deb && \
+        sudo dpkg -i /tmp/cuda-keyring.deb && \
+        # Install NVIDIA driver stubs (allows linker to find CUDA symbols when building ZED dependent packages, even though we won't actually be able to run them in CI). There is a third package 'libcuda.so' but it these two depend on libcuda and so apt installs it for us
+        apt-get update && apt-get install -y \
+        libnvidia-decode-550 \
+        libnvidia-encode-550 && \
+        rm /tmp/cuda-keyring.deb && \
+        rm -rf /var/lib/apt/lists/* && \
+        apt-get clean; \
+    else \
+        echo "Building container locally"; \
+    fi
+# set it as env var so build scripts can see it
+ENV CI=${CI}
 # Install ROS 2 Desktop (Includes Rviz, RQT, etc.)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ros-${ROS_DISTRO}-desktop \
@@ -101,6 +122,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ros-${ROS_DISTRO}-mavros-msgs \
         ros-${ROS_DISTRO}-marine-sensor-msgs \
         ros-${ROS_DISTRO}-marine-acoustic-msgs \
+        ros-${ROS_DISTRO}-vision-msgs \
         # Visualization Tools
         ros-${ROS_DISTRO}-rqt-image-view \
         ros-${ROS_DISTRO}-rqt-graph \
@@ -113,8 +135,36 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         # Build Tools
         python3-colcon-common-extensions \
         python3-rosdep \
-        python3-vcstools \
+        python3-vcstool \
         && rm -rf /var/lib/apt/lists/*
+
+# ----------------------------------------------------------
+# Install micro-ROS Agent (for microcontroller communication)
+# ------------------------------------------
+WORKDIR /opt/ros/micro_ros_ws
+RUN git clone -b ${ROS_DISTRO} https://github.com/micro-ROS/micro_ros_setup.git src/micro_ros_setup
+
+RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \
+    colcon build \
+        --parallel-workers $(nproc) \
+        --merge-install \
+        --event-handlers console_direct+ \
+        --base-paths src \
+        --cmake-args -DCMAKE_BUILD_TYPE=Release && \
+    . /opt/ros/micro_ros_ws/install/setup.sh && \
+    MICROROS_PREFIX=$(ros2 pkg prefix micro_ros_setup) && \
+    ros2 run micro_ros_setup create_ws.sh src "$MICROROS_PREFIX/config/agent_ros2_packages.txt" "$MICROROS_PREFIX/config/agent_uros_packages.repos" && \
+    colcon build \
+        --packages-up-to micro_ros_agent $@ \
+        --parallel-workers $(nproc) \
+        --merge-install \
+        --event-handlers console_direct+ \
+        --cmake-args \
+            "-DUAGENT_BUILD_EXECUTABLE=OFF" \
+            "-DUAGENT_P2P_PROFILE=OFF" \
+            "--no-warn-unused-cli" && \
+    rm -rf build log
+WORKDIR /root
 
 # ---------------------------------------------------------
 # 2. Install ZED SDK (Parameterized)
@@ -166,7 +216,8 @@ RUN mkdir -p /tmp/fake_cv_headless && \
 # Install actual requirements
 # Ensure Docker/dev/constraints.txt DOES NOT contain opencv lines
 COPY Docker/dev/requirements.txt Docker/dev/constraints.txt /tmp/
-RUN pip3 install --no-cache-dir --ignore-installed  -c /tmp/constraints.txt -r /tmp/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+        pip3 install --ignore-installed -c /tmp/constraints.txt -r /tmp/requirements.txt
 
 # DOWNGRADE Setuptools for ROS 2
 # ROS 2 Humble's colcon build system breaks with Setuptools >= 70.
@@ -206,8 +257,8 @@ COPY .colcon ${COLCON_HOME}/
 
 WORKDIR /home/$USERNAME/AUV-2026
 # Add source commands to bashrc
-RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc && \
-        echo 'if [ -f "$HOME/AUV-2026/ros2_ws/install/setup.bash" ]; then source "$HOME/AUV-2026/ros2_ws/install/setup.bash"; fi' >> ~/.bashrc
+RUN echo "source /opt/ros/${ROS_DISTRO}/local_setup.bash && source /opt/ros/micro_ros_ws/install/local_setup.bash" >> ~/.bashrc && \
+    echo "if [ -f ~/AUV-2026/ros2_ws/install/setup.bash ]; then source ~/AUV-2026/ros2_ws/install/setup.bash; fi" >> ~/.bashrc
 
 # Entrypoint uses fixuid to remap UID/GID if running with --user
 ENTRYPOINT ["fixuid", "-q"]
