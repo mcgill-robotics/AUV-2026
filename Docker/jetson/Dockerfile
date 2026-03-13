@@ -41,6 +41,7 @@ ARG ROBOT_STATE_PUBLISHER_VERSION=3.5.2
 ARG USB_CAM_VERSION=0.8.1
 ARG IMAGE_COMMON_VERSION=3.1.12
 ARG MAVROS_VERSION=2.10.1
+ARG MARINE_ACOUSTIC_MSGS_VERSION=2.1.0
 # CI has a different runner than the jetson (notably git permissions are different and there is no GPU)
 # Unlike the nvidia dev container, we cannot just install stubs to satisfy the linker, so we just forego installing the zed sdk in CI for the jetson, which is fine since we should test it locally anyways
 ARG CI
@@ -109,6 +110,7 @@ RUN echo "# R${L4T_MAJOR} (release), REVISION: ${L4T_MINOR}" > /etc/nv_tegra_rel
     libdraco-dev \
     libgeographic-dev \
     libusb-1.0-0-dev \
+    nlohmann-json3-dev \
     python3 \
     python3-dev \
     python3-pip \
@@ -173,6 +175,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libglew-dev \
     libjpeg-dev \
     libpng-dev \
+    libserialport-dev \
     libswscale-dev \
     libwayland-dev \
     libxkbcommon-dev \
@@ -208,6 +211,9 @@ RUN wget https://github.com/ros/xacro/archive/refs/tags/${XACRO_VERSION}.tar.gz 
     # clean up unneeded source folders
     rm -rf geographic-info && \
     rm -rf mavros && \
+    rm -rf geographic-info && \
+    wget https://github.com/apl-ocean-engineering/marine_msgs/archive/refs/tags/${MARINE_ACOUSTIC_MSGS_VERSION}.tar.gz -O - | tar -xvz && \
+    mv marine_msgs-${MARINE_ACOUSTIC_MSGS_VERSION} marine_msgs && \
     rm -rf /opt/dependencies_ws/src/.cache
 
 # ROS packages that do not depend on OpenCV/that ZED wrapper doesn't depend on can be installed here
