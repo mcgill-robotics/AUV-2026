@@ -62,6 +62,7 @@ namespace sensors
         Vec3 r_dv_v_; 
         std::string frame_id_global_;
         Quatd q_iv_; 
+        Vec3 w_v_;
         Quatd q_pi2_;
         Quatd q_vd_;
     };

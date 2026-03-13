@@ -193,7 +193,7 @@ As mentioned above, we operate in three coordinate reference frames:
 
 Because the DVL output represents the DVL's location ($d$) and not the AUV's Center of Mass ($v$), the raw coordinates must be transformed into the pool frame before adding the offset between the DVL inertial frame($i2$) and the pool inertial frame ($p$).
 
-### **1.Transformation Logic**
+### **1. Position Transformation Logic**
 
 To calculate the AUV's position in the $p$ frame, we need to go from the $p$ frame to the $i2$ frame, then from the $i2$ frame to the $d$ frame, then from the $d$ frame to the $v$ frame:
 
@@ -221,11 +221,52 @@ rotation matrix from the DVL's inertial frame to the pool inertial frame, giving
 As for calculating the AUV's velocity from the DVL's velocity measurements, it invloves more complex calculations
 involving the orientation and angular velocity of the AUV. It is currently not supported. 
 
+### **2. Velocity Transformation Logic**
+The DVL provides velocity readings of the DVL in the the DVL's body frame. We want to convert them into velocity
+measurements of the AUV in the inertial pool frame. 
+
+From 3D-kinematics:
+
+$$
+v^b = v^a + \omega \times r^{ba}_i + (v^{ba})_{xyz}
+$$
+
+Where:
+$v_b$ = velocity of $b$ in the inertial frame of reference
+
+$v_a$ = velocity of $a$ in the inertial frame of reference
+
+$v^{ba}$ = velocity of “$b$ with respect to $a$” as measured by an
+observer attached to the rotating x, y, z frame of reference that is mounted on $a$
+
+$\omega$ = angular velocity of the x, y, z frame of reference, in the inertial frame of reference
+
+$r^{ba}_i$ = postion of “$b$ with respect to $a$”, expressed in the inertial frame
+
+Now let us apply this equation on the AUV and DVL, with the pool frame being the "inertial frame" and the AUV vehicle frame being the "rotating x, y, z frame".
+
+$$
+v_p^{dvl}= v_p^{auv} + \omega \times r^{dvl,auv}_p + (v^{dvl,auv})_{v}
+$$
+
+Since the dvl is physically fixed on the auv, $(v^{dvl,auv})_{v} = 0$. The DVL gives us $v^{dvl}$, so we can isolate and solve for $v^{auv}$
+
+$$
+v_p^{auv}= v_p^{dvl} - \omega_p \times r^{dvl,auv}_p 
+$$
+
+Finally rewriting the above values in the frames they are "given" in:
+
+$$
+v_p^{auv}= C_{pv}  C_{v,dvl}  v_{dvl}^{dvl} - C_{pv}(\omega_v \times r^{dvl,auv}_v) 
+$$
+
+
+A good exercise would be re-applying the equation at the beginning of this section and take $b$ to be $auv$ and $a$ to to be $dvl$. You should arrive to the same final expression for $v^{auv}$. 
 
 ## Usage
 
 This package is not used directly by operators. It runs alongside the sensor drivers and publishes processed data for the estimation stack.
-
 
 ---
 

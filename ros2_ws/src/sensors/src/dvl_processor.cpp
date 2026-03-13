@@ -47,6 +47,10 @@ void DvlProcessor::imu_callback(const sensor_msgs::msg::Imu::SharedPtr msg) {
     q_iv_.x() = msg->orientation.x;
     q_iv_.y() = msg->orientation.y;
     q_iv_.z() = msg->orientation.z;
+
+    w_v_.x() = msg->angular_velocity.x;
+    w_v_.y() = msg->angular_velocity.y;
+    w_v_.z() = msg->angular_velocity.z;
 }
 
 
@@ -82,10 +86,11 @@ DvlData_InertialFrame DvlProcessor::process_dvl(const DvlData_DvlFrame& dvl_raw)
 
     dvl_inertial.r_vp_p = r_i2p_p + r_di2_p + r_vd_p;
     
-    // Velocity transformation not yet supported, it would involve more complex calculations using 
-    // the orientation, angular velocity, and the raw velocity data.
-    dvl_inertial.v_vp_p = Vec3(0.0, 0.0, 0.0); 
+    // Velocity transformation
+    Quatd q_id = q_iv_ * q_vd_;
+    Vec3 v_di_p = q_id * dvl_raw.v_di2_d;
     
+    dvl_inertial.v_vp_p = v_di_p - q_iv_ * (w_v_.cross(r_dv_v_));
     return dvl_inertial;
 }
 
