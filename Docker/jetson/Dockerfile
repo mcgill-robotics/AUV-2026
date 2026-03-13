@@ -192,7 +192,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
    && apt-get clean
 
 WORKDIR /root/dependencies_ws
-RUN git clone --recursive https://github.com/ndahn/dvl_a50.git src/dvl_a50
 
 RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
   colcon build --parallel-workers $(nproc) --symlink-install \
