@@ -1,0 +1,15 @@
+# not the standard ROS node config parameters, these are topics passed to the image enhancement launch file
+front_cam:
+  cam_topic: /zed/zed_node/rgb/color/rect/image
+  enhanced_topic: /vision/front_cam/image_enhanced
+  queue_size: 10
+
+down_cam:
+  cam_topic: /vision/down_cam/image_raw # add /compressed to the node publishing it
+  enhanced_topic: /vision/down_cam/image_enhanced
+  queue_size: 10
+
+general:
+  use_sim_time: false
+  compressed: false
+  log_level: info
