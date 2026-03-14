@@ -32,8 +32,8 @@ DvlProcessor::DvlProcessor() : Node("dvl_processor") {
     imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
         "auv_frame/imu", 10, std::bind(&DvlProcessor::imu_callback, this, std::placeholders::_1));
 
-    dvl_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
-        "dvl/odometry", 10, std::bind(&DvlProcessor::dvl_callback, this, std::placeholders::_1));
+    dvl_sub_ = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
+        "dvl/dead_reckoning", 10, std::bind(&DvlProcessor::dvl_callback, this, std::placeholders::_1));
     
 
     position_pub_ = this->create_publisher<geometry_msgs::msg::PointStamped>("auv_frame/dvl/position", 10); 
@@ -54,8 +54,8 @@ void DvlProcessor::imu_callback(const sensor_msgs::msg::Imu::SharedPtr msg) {
 }
 
 
-//Function takes new odometry messages and pushes them through the data pipeline.
-void DvlProcessor::dvl_callback(const nav_msgs::msg::Odometry::SharedPtr msg) {
+//Function takes new dead reckoning messages and pushes them through the data pipeline.
+void DvlProcessor::dvl_callback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg) {
     DvlData_DvlFrame dvl_raw = parse_dvl(*msg);
     
     DvlData_InertialFrame dvl_inertial = process_dvl(dvl_raw);
@@ -67,11 +67,11 @@ void DvlProcessor::dvl_callback(const nav_msgs::msg::Odometry::SharedPtr msg) {
     velocity_pub_->publish(vel_msg);
 }
 
-DvlData_DvlFrame DvlProcessor::parse_dvl(const nav_msgs::msg::Odometry& msg) const {
+DvlData_DvlFrame DvlProcessor::parse_dvl(const geometry_msgs::msg::PoseWithCovarianceStamped& msg) const {
     DvlData_DvlFrame dvl_raw;
 
     dvl_raw.r_di2_i2 = Vec3(msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z);
-    dvl_raw.v_di2_d = Vec3(msg.twist.twist.linear.x, msg.twist.twist.linear.y, msg.twist.twist.linear.z);
+    dvl_raw.v_di2_d = Vec3(0.0, 0.0, 0.0);
     
     return dvl_raw; 
 }
