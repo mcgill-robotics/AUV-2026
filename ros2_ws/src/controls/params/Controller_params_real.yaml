@@ -1,6 +1,6 @@
 attitude_controller:
   ros__parameters:
-    control_loop_rate: 10.0
+    control_loop_rate: 25.0
     P_ex: 6.0
     P_ey: 6.0
     P_ez: 6.0
@@ -8,7 +8,7 @@ attitude_controller:
     P_wy: 1.0
     P_wz: 2.0
     buoyancy: 275.4 # [N]
-    r_bv_v: [0.0, 0.0, 0.023] # [m] From CAD Model    
+    r_bv_v: [0.0, 0.0, 0.001] # [m] Tuned in pool tests.    
     enabled: false
 
 depth_controller:
@@ -24,7 +24,7 @@ depth_controller:
 x_controller:
   ros__parameters:
     control_loop_hz: 10.0
-    KP: 60.0
+    KP: 15.0
     KD: 60.0
     KI: 0.0
     I_MAX: 10.0
@@ -33,7 +33,7 @@ x_controller:
 y_controller:
   ros__parameters:
     control_loop_hz: 10.0
-    KP: 60.0
+    KP: 15.0
     KD: 60.0
     KI: 0.0
     I_MAX: 10.0

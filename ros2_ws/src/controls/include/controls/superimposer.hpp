@@ -55,12 +55,12 @@ namespace controls
                         wrench_msg attitude_effort_; // Last received attitude effort
                         wrench_msg x_effort_; // Last received x effort
                         wrench_msg y_effort_; // Last received y effort
-                        std::unique_ptr<double> effort_bias_force_x; // Bias effort to be added to the combined effort (optional)
-                        std::unique_ptr<double> effort_bias_force_y; 
-                        std::unique_ptr<double> effort_bias_force_z; 
-                        std::unique_ptr<double> effort_bias_torque_x; 
-                        std::unique_ptr<double> effort_bias_torque_y; 
-                        std::unique_ptr<double> effort_bias_torque_z;
+                        double effort_bias_force_x; // Bias effort to be added to the combined effort (optional)
+                        double effort_bias_force_y; 
+                        double effort_bias_force_z; 
+                        double effort_bias_torque_x; 
+                        double effort_bias_torque_y; 
+                        double effort_bias_torque_z;
                         double publish_hz_;
 
 

@@ -13,7 +13,7 @@ namespace controls
         this->declare_parameter<double>("P_wz", 1.0);
         this->declare_parameter<double>("buoyancy", 278.0); // Newtons
         this->declare_parameter<std::vector<double>>("r_bv_v", {0.0, 0.0, 0.023}); // [m] From CAD Model
-        this->declare_parameter<double>("control_loop_hz", 10.0); // Control loop frequency
+        this->declare_parameter<double>("control_loop_hz", 25.0); // Control loop frequency
         this->declare_parameter<bool>("enabled", false);
 
         this->get_parameter("P_ex", P_ex_);

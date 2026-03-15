@@ -45,13 +45,13 @@ namespace controls
        this->declare_parameter<double>("effort_bias_torque_x", 0.0);
        this->declare_parameter<double>("effort_bias_torque_y", 0.0);
        this->declare_parameter<double>("effort_bias_torque_z", 0.0);
-       this->declare_parameter<double>("publish_hz", 20.0); // publish frequency
-       effort_bias_force_x = std::make_unique<double>(this->get_parameter("effort_bias_force_x").as_double());
-       effort_bias_force_y = std::make_unique<double>(this->get_parameter("effort_bias_force_y").as_double());
-       effort_bias_force_z = std::make_unique<double>(this->get_parameter("effort_bias_force_z").as_double());
-       effort_bias_torque_x = std::make_unique<double>(this->get_parameter("effort_bias_torque_x").as_double());
-       effort_bias_torque_y = std::make_unique<double>(this->get_parameter("effort_bias_torque_y").as_double());
-       effort_bias_torque_z = std::make_unique<double>(this->get_parameter("effort_bias_torque_z").as_double());
+       this->declare_parameter<double>("publish_hz", 30.0); // publish frequency
+       effort_bias_force_x = this->get_parameter("effort_bias_force_x").as_double();
+       effort_bias_force_y = this->get_parameter("effort_bias_force_y").as_double();
+       effort_bias_force_z = this->get_parameter("effort_bias_force_z").as_double();
+       effort_bias_torque_x = this->get_parameter("effort_bias_torque_x").as_double();
+       effort_bias_torque_y = this->get_parameter("effort_bias_torque_y").as_double();
+       effort_bias_torque_z = this->get_parameter("effort_bias_torque_z").as_double();
          publish_hz_ = this->get_parameter("publish_hz").as_double();
 
         publish_timer_ = this->create_wall_timer(
@@ -125,12 +125,12 @@ namespace controls
 
 
        // Combine efforts (simple summation)
-       combined_effort.force.x = total_force_body.x() + *effort_bias_force_x;
-       combined_effort.force.y = total_force_body.y() + *effort_bias_force_y;
-       combined_effort.force.z = total_force_body.z() + *effort_bias_force_z;
-       combined_effort.torque.x = attitude_effort_.torque.x + *effort_bias_torque_x;
-       combined_effort.torque.y = attitude_effort_.torque.y + *effort_bias_torque_y;
-       combined_effort.torque.z = attitude_effort_.torque.z + *effort_bias_torque_z;
+       combined_effort.force.x = total_force_body.x() + effort_bias_force_x;
+       combined_effort.force.y = total_force_body.y() + effort_bias_force_y;
+       combined_effort.force.z = total_force_body.z() + effort_bias_force_z;
+       combined_effort.torque.x = attitude_effort_.torque.x + effort_bias_torque_x;
+       combined_effort.torque.y = attitude_effort_.torque.y + effort_bias_torque_y;
+       combined_effort.torque.z = attitude_effort_.torque.z + effort_bias_torque_z;
        
        // Publish combined effort
        pub_effort_->publish(combined_effort);
