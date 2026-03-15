@@ -11,4 +11,4 @@
 	branch = main-ros2
 [submodule "ros2_ws/src/dvl_a50"]
 	path = ros2_ws/src/dvl_a50
-	url = https://github.com/ndahn/dvl_a50.git
+	url = https://github.com/mcgill-robotics/dvl_a50
