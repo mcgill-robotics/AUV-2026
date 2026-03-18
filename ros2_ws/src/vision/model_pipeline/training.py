@@ -78,7 +78,7 @@ def train(args):
     """Run YOLO training with the specified configuration."""
     
     # Paths
-    data_yaml = SCRIPT_DIR / "data/processed/data.yaml"
+    data_yaml = Path(args.data)
     
     if not data_yaml.exists():
         print(f"Error: {data_yaml} not found.")
@@ -214,6 +214,12 @@ Examples:
         "--unity",
         action="store_true",
         help="Use training parameters for unity dataset"
+    )
+    parser.add_argument(
+        "--data",
+        type=str,
+        default=str(SCRIPT_DIR) + "/data/processed/data.yaml",
+        help="data.yaml location"
     )
     
     args = parser.parse_args()
