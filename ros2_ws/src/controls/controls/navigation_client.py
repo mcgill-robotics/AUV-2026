@@ -3,15 +3,18 @@ import rclpy
 from rclpy.action import ActionClient
 from rclpy.node import Node
 from auv_msgs.action import AUVNavigate
+from . import goal_helpers
 
 class NavigationClient(Node):
         """ A client for interacting with the navigation action server. """
 
-        def __init__(self, name="navigation_client"):
+        def __init__(self, name="navigation_client", debug=False) -> None:
                 """ Initializes the navigation client node. """
                 super().__init__(name)
                 self._action_client = ActionClient(self, AUVNavigate, '/motion/navigate')
+                self.on_result_callback = self.get_result_callback # Set the on result callback to the get_result_callback method
                 self.current_goal_handle = None # Store the goal handle of the currently active goal, if any, to allow for cancellation when a new goal is sent.)
+                self.debug = debug
 
         def send_navigation_goal(self, goal_msg: AUVNavigate) -> None:
                 """ Send a navigation goal to the action server. If active goal in progress, cancel it before sending the new one.
@@ -21,7 +24,7 @@ class NavigationClient(Node):
                 
                 # Check if there is an active goal and cancel it before sending a new one
                 if self.current_goal_handle is not None:
-                        self.get_logger().info("Cancelling current navigation goal before sending a new one.")
+                        if self.debug: self.get_logger().info("Cancelling current navigation goal before sending a new one.")
                         cancel_future = self.current_goal_handle.cancel_goal_async()
                         cancel_future.add_done_callback(self.cancel_done_callback)
                 
@@ -41,7 +44,6 @@ class NavigationClient(Node):
                 goal_to_send.hold_time = goal_msg.hold_time
                 goal_to_send.timeout = goal_msg.timeout
 
-                self._action_client.wait_for_server()
                 self._send_goal_future = self._action_client.send_goal_async(goal_to_send, feedback_callback=self.feedback_callback)
                 self._send_goal_future.add_done_callback(self.goal_response_callback)
 
@@ -55,12 +57,12 @@ class NavigationClient(Node):
                 goal_handle = future.result()
                 
                 if not goal_handle.accepted:
-                        self.get_logger().info("Navigation goal rejected")
+                        if self.debug: self.get_logger().info("Navigation goal rejected")
                         return
-                self.get_logger().info("Navigation goal accepted")
+                if self.debug: self.get_logger().info("Navigation goal accepted")
                 self.current_goal_handle = goal_handle # Store the goal handle for later use (e.g., to a goal when a new one is given)
                 self._get_result_future = goal_handle.get_result_async()
-                self._get_result_future.add_done_callback(self.get_result_callback)
+                self._get_result_future.add_done_callback(self.on_result_callback)
         
         def get_result_callback(self, future: rclpy.task.Future) -> None:
                 """Callback for handling the result from the action server after the goal is completed. Sets the 
@@ -71,7 +73,7 @@ class NavigationClient(Node):
                 Outputs: None, but will log the result."""
                 
                 result = future.result()
-                self.get_logger().info(f"Navigation result received: {result}")
+                if self.debug: self.get_logger().info(f"Navigation result received: {result}")
                 self.current_goal_handle = None # Clear the current goal handle since the goal is completed
         
         def feedback_callback(self, feedback_msg: AUVNavigate.Feedback) -> None:
@@ -82,4 +84,38 @@ class NavigationClient(Node):
                 Outputs: None, but will log the result."""
                 
                 feedback = feedback_msg.feedback
-                self.get_logger().info(f"Navigation feedback: {feedback}")
+                if self.debug: self.get_logger().info(f"Navigation feedback: {feedback}")
+
+        def cancel_done_callback(self, future: rclpy.task.Future) -> None:
+                """Callback for handling the result of a goal cancellation request. Logs the result of the cancellation.
+                Invoked when the action server processes the cancellation request, which is asynchronous.
+                
+                Args: future (rclpy.task.Future): The future object representing the asynchronous cancellation response.
+                Outputs: None, but will log the result."""
+                
+                cancel_response = future.result()
+                if self.debug: self.get_logger().info(f"Navigation goal cancellation response: {cancel_response}")
+
+        def reset_action_client(self) -> None:
+                """ Resets the action client by canceling active goal and clearing the current goal handle.
+                Also sets the on restult callback to the default get_result_callback method. 
+
+                Args: None
+                Outputs: None, but will log the reset action. """
+
+                if self.current_goal_handle is not None:
+                        if self.debug: self.get_logger().info("Reset action client: Cancelling active navigation goal.")
+                        cancel_future = self.current_goal_handle.cancel_goal_async()
+                        cancel_future.add_done_callback(self.cancel_done_callback)
+                        self.current_goal_handle = None
+                self.on_result_callback = self.get_result_callback # Reset the on result callback to the default get_result_callback method
+                if self.debug: self.get_logger().info("Navigation action client has been reset.")
+        
+        def set_custom_result_callback(self, custom_callback) -> None:
+                """ Sets a custom callback for handling the result from the action server after the goal is completed. 
+
+                Args: custom_callback (function): The custom callback function to be set for handling the result.
+                Outputs: None, but will log the change of the result callback. """
+
+                self.on_result_callback = custom_callback
+                if self.debug: self.get_logger().info("Custom result callback has been set for navigation action client.")
