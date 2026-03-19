@@ -28,7 +28,7 @@ def _make_goal(
     do_z: bool = False,
     do_yaw: bool = False,
     is_relative: bool = False,
-    is_robot_centric: bool = False,
+    is_local_frame: bool = False,
     position_tolerance: float = _DEFAULT_POS_TOL,
     yaw_tolerance: float = _DEFAULT_YAW_TOL,
     hold_time: float = _DEFAULT_HOLD,
@@ -42,7 +42,7 @@ def _make_goal(
     goal.do_z = do_z
     goal.do_yaw = do_yaw
     goal.is_relative = is_relative
-    goal.is_robot_centric = is_robot_centric
+    goal.is_local_frame = is_local_frame
     goal.position_tolerance = position_tolerance
     goal.yaw_tolerance = yaw_tolerance
     goal.hold_time = hold_time
@@ -206,7 +206,7 @@ def move_robot_centric(
         target_pose=pose,
         do_x=do_pos, do_y=do_pos, do_z=do_pos, do_yaw=do_yaw,
         is_relative=True,
-        is_robot_centric=True,
+        is_local_frame=True,
         position_tolerance=tolerance,
         yaw_tolerance=yaw_tolerance,
         hold_time=hold_time,
@@ -239,7 +239,7 @@ def translate_field_centric(
         target_pose=pose,
         do_x=True, do_y=True, do_z=True,
         is_relative=True,
-        is_robot_centric=False,
+        is_local_frame=False,
         position_tolerance=tolerance,
         hold_time=hold_time,
         timeout=timeout,
@@ -299,7 +299,7 @@ def stabilize(
         target_pose=pose,
         do_x=True, do_y=True, do_z=True, do_yaw=True,
         is_relative=True,
-        is_robot_centric=False,
+        is_local_frame=False,
         position_tolerance=tolerance,
         yaw_tolerance=yaw_tolerance,
         hold_time=hold_time,
