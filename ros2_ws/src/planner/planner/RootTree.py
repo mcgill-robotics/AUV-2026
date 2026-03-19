@@ -1,5 +1,3 @@
-from zmq import has
-
 import py_trees
 import py_trees_ros
 import rclpy
@@ -8,6 +6,7 @@ from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
 from . import SensorsBehaviour
 from . import TemplateBehaviour
+from . import CustomCallbackBehaviour
 
 
 # I like my ANSI colours :DDD
@@ -27,10 +26,10 @@ class RootTree(Node):
         self.navigation_client_ongoing_goal = self.navigation_client.current_goal_handle # Store the goal handle of the currently active goal, if any, to allow for cancellation when a new goal is sent.
         
         self.blackboard = py_trees.blackboard.Client(name="RootTreeBlackboard")
-        self.blackboard.register_key(key="/navigation_client", access=py_trees.common.Access.WRITE)
-        self.blackboard.register_key(key="/navigation_client_ongoing_goal", access=py_trees.common.Access.WRITE)
-        self.blackboard.navigation_client = self.navigation_client
-        self.blackboard.navigation_client_ongoing_goal = self.navigation_client_ongoing_goal
+        self.blackboard.register_key(key="/navigation_client/client", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key="/navigation_client/ongoing_goal", access=py_trees.common.Access.WRITE)
+        self.blackboard.navigation_client.client = self.navigation_client
+        self.blackboard.navigation_client.ongoing_goal = self.navigation_client_ongoing_goal
                 
         # Add the sensors behaviour as a child running in parallel to the rest of the tree.
         # This allows the rest of the tree to access the latest sensor data snapshot at each tick.
@@ -38,7 +37,8 @@ class RootTree(Node):
 
         # Add other behaviour here as mission controls node, currently implemented a dummy leaf
         dummy_leaf = TemplateBehaviour.TemplateBehaviour(node=self, name="Dummy Leaf")
-        root.add_children([sensors_reader, dummy_leaf])
+        callback_leaf = CustomCallbackBehaviour.CustomCallback(node=self, name="Custom Callback Leaf", rotations_segments=8, angle_to_rotate_deg=360, radius_to_rotate_meter=3.0, clockwise=True)
+        root.add_children([sensors_reader, callback_leaf])
 
         # Create the behaviour tree with the root and setup the tree and call the setup of the root to initialize and setup all the
         # children behaviours recursively. This will setup all blackboards and ros2 publishers/subscribers
@@ -55,8 +55,7 @@ class RootTree(Node):
 
     def tick_tree(self):
         self.behaviour_tree.tick()
-        # For debug:
-        self.get_logger().info("Yaw Behaviour Tree Tickeddd")  
+    
 
 def main():
     rclpy.init()
