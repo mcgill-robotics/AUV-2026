@@ -78,7 +78,7 @@ def train(args):
     """Run YOLO training with the specified configuration."""
     
     # Paths
-    data_yaml = Path(args.data)
+    data_yaml = args.data
     
     if not data_yaml.exists():
         print(f"Error: {data_yaml} not found.")
@@ -217,8 +217,8 @@ Examples:
     )
     parser.add_argument(
         "--data",
-        type=str,
-        default=str(SCRIPT_DIR) + "/data/processed/data.yaml",
+        type=Path,
+        default=SCRIPT_DIR / "data" / "processed" / "data.yaml",
         help="data.yaml location"
     )
     
