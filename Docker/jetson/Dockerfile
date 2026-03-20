@@ -328,9 +328,10 @@ RUN ARCH="$(dpkg --print-architecture)" && \
     printf "user: $USERNAME\ngroup: $USERNAME\n" > /etc/fixuid/config.yml
 
 # Copy entrypoint
-COPY Docker/jetson/gpu_group_id_entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY Docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
+# Switch to the User and configure the environment
 USER $USERNAME
 
 # set colcon home after adding user
