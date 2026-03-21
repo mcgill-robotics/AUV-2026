@@ -126,6 +126,7 @@ def generate_launch_description():
                 "log_level": default_config["image_enhancement"]["front_cam"]["log_level"]
             }
         ],
+        ros_arguments=["--ros-args", "--log-level", default_config["image_enhancement"]["front_cam"]["log_level"]],
         condition=IfCondition(LaunchConfiguration("enhance_images"))
     )
     
@@ -144,6 +145,7 @@ def generate_launch_description():
                 "log_level": default_config["image_enhancement"]["down_cam"]["log_level"]
             }
         ],
+        ros_arguments=["--ros-args", "--log-level", default_config["image_enhancement"]["down_cam"]["log_level"]],
         condition=IfCondition(LaunchConfiguration("enhance_images"))
     )
     
@@ -175,7 +177,8 @@ def generate_launch_description():
                 'compressed': LaunchConfiguration("compressed"),
                 'log_level': default_config["object_detection"]["front_cam"]["log_level"]
             }
-        ]
+        ],
+        ros_arguments=["--ros-args", "--log-level", default_config["object_detection"]["front_cam"]["log_level"]]
     )
     
     down_detection_node = Node(
@@ -194,7 +197,8 @@ def generate_launch_description():
                 'compressed': LaunchConfiguration("compressed"),
                 'log_level': default_config["object_detection"]["down_cam"]["log_level"],
             }
-        ]
+        ],
+        ros_arguments=["--ros-args", "--log-level", default_config["object_detection"]["down_cam"]["log_level"]]
     )
     
     object_map_node = Node (
@@ -234,9 +238,9 @@ def generate_launch_description():
                 "tent_init_buffer": default_config["object_map"]["tent_init_buffer"],
                 "sim": LaunchConfiguration("sim"),
                 "use_sim_time": LaunchConfiguration("use_sim_time"),
-                "log_level": default_config["object_map"]["log_level"],
-            }
-        ]
+            },
+        ],
+        ros_arguments=["--ros-args", "--log-level", default_config["object_map"]["log_level"]]
     )
     # wait 3 seconds before launching node to ensure zed wrapper is able to open and stream on port
     object_map_node = TimerAction(

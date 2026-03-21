@@ -8,11 +8,11 @@ image_enhancement:
   front_cam: 
     enhanced_topic: /vision/front_cam/image_enhanced # output topic
     queue_size: 10 # QOL queue size, how many messages to buffer if the node can't process them fast enough
-    log_level: info # ros2 log level for the image enhancement node [debug, info, warn, error, fatal]
+    log_level: warn # ros2 log level for the image enhancement node [debug, info, warn, error, fatal]
   down_cam:
     enhanced_topic: /vision/down_cam/image_enhanced
     queue_size: 10
-    log_level: info
+    log_level: warn
 
 object_detection:
   front_cam:
@@ -32,7 +32,7 @@ object_detection:
       - "sawfish"
     queue_size: 10
     publish_annotated_image: true # whether to publish an annotated image with bounding boxes drawn (for visualization/debugging). will publish to detection_topic + /annotated
-    log_level: info
+    log_level: warn
   down_cam:
     enhanced_topic: /vision/down_cam/image_enhanced
     detection_topic: /vision/down_cam/detections
@@ -47,7 +47,7 @@ object_detection:
       - "shark"
     queue_size: 10
     publish_annotated_image: true
-    log_level: info
+    log_level: warn
 
 object_map:
   map_topic: /vision/object_map # final output of vision pipeline
@@ -78,7 +78,9 @@ object_map:
   max_position_jump: 2.0 # Maximum allowed distance (meters) between predictions and measurements
   conf_to_tent_threshold: 5 # Number of consecutive missed frames before a CONFIRMED track degrades to TENTATIVE
   tent_init_buffer: 5 # Extra frames allowed for a new TENTATIVE track to initialize before being deleted if unmatched
-  log_level: info
+  
+  # Debug
+  log_level: warn
 
 general:
   use_sim_time: false # determine time based on /clock topic (should be true for sim, false for real robot)
