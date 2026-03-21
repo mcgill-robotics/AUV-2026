@@ -43,7 +43,7 @@ class ImageCollectionNode(Node):
         topics = load_topics_config()
         default_front = topics['cameras']['front'] if topics else '/zed/zed_node/rgb/color/rect/image/compressed'
         default_down = topics['cameras']['down'] if topics else '/down_cam/image_raw'
-        default_depth = topics['cameras']['depth_map'] if topics else '/zed/zed_node/depth/depth_registered'
+        default_depth = topics['cameras']['depth_map'] if topics else '/zed/zed_node/depth/depth_registered/compressed'
 
         # Parameters (defaults from topics.yaml)
         self.declare_parameter('front_cam_data_dir', 'data_front_cam')
