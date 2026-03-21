@@ -17,6 +17,7 @@
       pos_tracking_enabled: true
       pos_tracking_mode: 'GEN_1'
       publish_tf: false
+      imu_fusion: true
       publish_map_tf: false
       area_memory: false
             
