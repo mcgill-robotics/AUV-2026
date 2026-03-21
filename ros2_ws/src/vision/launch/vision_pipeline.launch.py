@@ -125,7 +125,8 @@ def generate_launch_description():
                 "use_sim_time": LaunchConfiguration("use_sim_time"),
                 "log_level": default_config["image_enhancement"]["front_cam"]["log_level"]
             }
-        ]
+        ],
+        condition=IfCondition(LaunchConfiguration("enhance_images"))
     )
     
     down_cam_enhancement_node = Node (
@@ -142,18 +143,20 @@ def generate_launch_description():
                 "use_sim_time": LaunchConfiguration("use_sim_time"),
                 "log_level": default_config["image_enhancement"]["down_cam"]["log_level"]
             }
-        ]
+        ],
+        condition=IfCondition(LaunchConfiguration("enhance_images"))
     )
     
     # because launch configuration parameters are not evaluated in the launch file but rather passed in to ROS context directly, the ROS manager will evaluate these python expression to determine the actual topic names to remap to for the object detection nodes. If enhance_images is true, remap to the enhanced image topics, otherwise remap to the raw camera topics
     object_detection_front_input = PythonExpression([
         "'", front_enhanced_topic, 
         "' if '", LaunchConfiguration("enhance_images"), "' == 'true' else '", 
-        front_cam_topic,"'"," + ('/compressed' if '",LaunchConfiguration('compressed'),"' == 'true' else '')"
+        front_cam_topic, "'"
     ])
     object_detection_down_input = PythonExpression([
         "'", down_enhanced_topic, 
-        "' if '", LaunchConfiguration("enhance_images"), "' == 'true' else '", down_cam_topic, "'"," + ('/compressed' if '",LaunchConfiguration('compressed'),"' == 'true' else '')"
+        "' if '", LaunchConfiguration("enhance_images"), "' == 'true' else '", 
+        down_cam_topic, "'"
     ])
     
     front_detection_node = Node(
