@@ -83,12 +83,13 @@ def move_to_pose(
 def move_global(
     x: float,
     y: float,
-    z: float,
+    z: float = 0.0,
     yaw: float = None,
     tolerance: float = _DEFAULT_POS_TOL,
     yaw_tolerance: float = _DEFAULT_YAW_TOL,
     hold_time: float = _DEFAULT_HOLD,
     timeout: float = _DEFAULT_TIMEOUT,
+    do_z: bool = True,
 ) -> AUVNavigate.Goal:
     """Move to absolute XYZ in pool frame, optionally setting yaw.
 
@@ -101,6 +102,7 @@ def move_global(
         yaw_tolerance: Yaw convergence threshold in radians.
         hold_time: Seconds to hold within tolerance before SUCCESS.
         timeout: Seconds before FAILURE (0 = no timeout).
+        do_z: Whether to actively control depth to target Z.
     """
     pose = Pose()
     pose.position = Point(x=x, y=y, z=z)
@@ -108,7 +110,7 @@ def move_global(
     pose.orientation = quaternion_from_yaw(yaw) if do_yaw else Quaternion(w=1.0)
     return _make_goal(
         target_pose=pose,
-        do_x=True, do_y=True, do_z=True, do_yaw=do_yaw,
+        do_x=True, do_y=True, do_z=do_z, do_yaw=do_yaw,
         position_tolerance=tolerance,
         yaw_tolerance=yaw_tolerance,
         hold_time=hold_time,

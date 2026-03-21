@@ -39,7 +39,7 @@ class SensorsBehaviour(py_trees.behaviour.Behaviour):
                 self.current_object_map = None
 
 
-        def setup(self) -> None:
+        def setup(self, **kwargs) -> None:
                 """
                 Description: Sets up keys on the blackboard that this behaviour will use.
                 """

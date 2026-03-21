@@ -5,7 +5,9 @@ from rclpy.node import Node
 from std_msgs.msg import String
 from py_trees.common import Status, Access
 from py_trees.blackboard import Client
-import auv_msgs.msg
+from rclpy.action import ActionClient
+from auv_msgs.action import AUVNavigate
+from controls.goal_helpers import move_robot_centric
 
 class TemplateBehaviour(py_trees.behaviour.Behaviour):
         """
@@ -28,6 +30,7 @@ class TemplateBehaviour(py_trees.behaviour.Behaviour):
                 super().__init__(name)
                 self.node = node
                 self.blackboard = py_trees.blackboard.Client(name=self.name)
+                self.action_client = ActionClient(self.node, AUVNavigate, '/motion/navigate')
                 self.sent_goal = False
 
 
@@ -40,7 +43,7 @@ class TemplateBehaviour(py_trees.behaviour.Behaviour):
                 #self.blackboard.register_key(key="/sensors/twist", access=py_trees.common.Access.WRITE)
                 #self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.WRITE)
                 
-                self.blackboard.register_key(key="/navigation_client", access=py_trees.common.Access.READ)
+                self.action_client.wait_for_server(timeout_sec=5.0)
                 
         def update(self) -> py_trees.common.Status:
                 """
@@ -54,30 +57,12 @@ class TemplateBehaviour(py_trees.behaviour.Behaviour):
                  
                 """
                 
-                # EXAMPLE: Create a navigation goal and send it using the navigation client from the blackboard
+                # EXAMPLE: Create a navigation goal and send it using the local action client
                 self.node.get_logger().info("Template Behaviour Tick")
                 if self.sent_goal == False:
-                        nav_client = self.blackboard.navigation_client
-                        goal_msg = auv_msgs.action.AUVNavigate.Goal()
-                        goal_msg.target_pose.position.x = 15.0
-                        goal_msg.target_pose.position.y = 0.0
-                        goal_msg.target_pose.position.z = 0.0
-                        goal_msg.target_pose.orientation.x = 0.0
-                        goal_msg.target_pose.orientation.y = 0.0
-                        goal_msg.target_pose.orientation.z = 0.0
-                        goal_msg.target_pose.orientation.w = 1.0
-                        
-                        goal_msg.do_x = True
-                        goal_msg.do_y = False
-                        goal_msg.do_z = False
-                        goal_msg.do_yaw = False
-                        goal_msg.is_relative = True
-                        goal_msg.is_local_frame = True
-                        goal_msg.position_tolerance = 0.5
-                        goal_msg.yaw_tolerance = 0.1
-                        goal_msg.hold_time = 3.0
-                        goal_msg.timeout = 30.0
-                        nav_client.send_navigation_goal(goal_msg)
+                        goal_msg = move_robot_centric(forward=15.0, tolerance=0.5, yaw_tolerance=0.1, hold_time=3.0, timeout=30.0)
+                        self.action_client.send_goal_async(goal_msg)
+                        self.sent_goal = True
                         
                         self.sent_goal = True
                 

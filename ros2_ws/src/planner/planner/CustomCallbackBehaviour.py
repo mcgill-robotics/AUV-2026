@@ -1,102 +1,184 @@
-import geometry_msgs
-import py_trees
-import rclpy
-from rclpy.node import Node
-from std_msgs.msg import String
-from py_trees.common import Status, Access
-from py_trees.blackboard import Client
-from auv_msgs.action import AUVNavigate
 import math
-from controls.goal_helpers import move_robot_centric, rotate_relative, _make_goal
+import rclpy
+import py_trees
+from rclpy.node import Node
+from rclpy.action import ActionClient
+from auv_msgs.action import AUVNavigate
+from controls.goal_helpers import move_global
 
 class CustomCallback(py_trees.behaviour.Behaviour):
-    def __init__(self, name="CustomCallback", node=None, rotations_segments=5, angle_to_rotate_deg=90, radius_to_rotate_meter=20.0, clockwise=False) -> None:
+    """
+    A behavior that executes an orbital trajectory around a target point
+    by sending a sequence of discrete absolute navigation goals.
+    
+    Absolute waypoints are calculated dynamically during the update() tick,
+    allowing the path to track a moving center point and preventing the
+    accumulation of relative path drift.
+    """
+    def __init__(
+        self, 
+        name="CustomCallback", 
+        node=None, 
+        rotations_segments=5, 
+        angle_to_rotate_deg=360, 
+        radius_to_rotate_meter=20.0, 
+        clockwise=False
+    ) -> None:
         super().__init__(name)
         self.node = node
-        self.blackboard = py_trees.blackboard.Client(name=self.name)
-        self.goal_sent = False
-        self.navigation_client = None
         self.rotations_segments = rotations_segments
-        self.remaining_segments = rotations_segments
-        self.rotate_or_translate = 0  # 0 for initial state, 1 for translation in progress, 2 for rotation in progress
-        self.goal_status = None
         self.clockwise = clockwise
-
-        # Calculate the rotation and translation per segment based on the total angle to rotate and the number of segments, and store them on the blackboard for use in the custom callback
-        self.rotate_per_segment = math.radians(angle_to_rotate_deg) / self.rotations_segments
-        self.translation_per_segment = math.sqrt(2 * radius_to_rotate_meter**2 * (1 - math.cos(self.rotate_per_segment))) # This would be calculated based on the desired radius of rotation
-        self.forward = math.sin(self.rotate_per_segment/2) * self.translation_per_segment
-        self.sway = -math.cos(self.rotate_per_segment/2) * self.translation_per_segment # Currently times -1 due to frame, need to check if its a bug or no
-        self.initial_translation_tolerance = 0.4 * self.translation_per_segment
-        self.yaw_tolerance = 0.1 * self.rotate_per_segment
+        self.radius_to_rotate_meter = radius_to_rotate_meter
+        self.angle_to_rotate_rad = math.radians(angle_to_rotate_deg)
         
-        # If the rotation is clockwise, invert the angle to rotate and the sway direction
-        if self.clockwise:
-            self.rotate_per_segment = -self.rotate_per_segment
-            self.sway = -self.sway
+        self.action_client = ActionClient(self.node, AUVNavigate, '/motion/navigate')
+
+        # Calculate standard step sizes and tolerances based on the arc
+        self.rotate_per_segment = self.angle_to_rotate_rad / self.rotations_segments
         
+        # Estimate the straight-line distance of the arc segment to establish a reasonable tolerance
+        chord_length = math.sqrt(2 * radius_to_rotate_meter**2 * (1 - math.cos(self.rotate_per_segment)))
+        self.initial_translation_tolerance = 0.5 * chord_length
+        self.yaw_tolerance = 0.5 * self.rotate_per_segment
+        
+        # Add 1 to the required segments to include the initial approach vector to the perimeter
+        self.remaining_segments = self.rotations_segments + 1
+        self.is_waiting_for_result = False
+        self.mission_failed = False
+        self.current_goal_handle = None
 
-    def setup(self) -> None:
-        """
-        Description: Sets up keys on the blackboard that this behaviour will use.
-        """
-        # These blackboard keys will be used by other behaviours whenever they want to cancel this Rotation Behaviour 
-        # by writing the goal_sent to false and cancelling the ongoing goal in the navigation client.
-        # This methodology will allow this Behaviour to automatically restart all its variables on its own when it is ticked again
-        self.blackboard.register_key(key="/navigation_client/rotate_around_point/goal_sent", access=py_trees.common.Access.WRITE)
-        self.blackboard.register_key(key="/navigation_client/rotate_around_point/goal_sent", access=py_trees.common.Access.READ)
+    def setup(self, **kwargs) -> None:
+        """Called once when the BT tree is setup."""
+        if self.node:
+            self.node.get_logger().info(f"[{self.name}] Waiting for Navigation Server...")
+        self.action_client.wait_for_server(timeout_sec=5.0)
+        
+        self.blackboard = py_trees.blackboard.Client(name=self.name)
+        self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
 
-        self.blackboard.register_key(key="/navigation_client/ongoing_goal", access=py_trees.common.Access.READ)
+    def initialise(self) -> None:
+        """Called every time this behavior transitions into RUNNING."""
+        self.remaining_segments = self.rotations_segments + 1
+        self.is_waiting_for_result = False
+        self.mission_failed = False
+        self.current_goal_handle = None
+        
+        self.target_x = 13.0
+        self.target_y = 0.0
+        self.target_z = 0.0
+        
+        self.start_angle = None
 
-        self.blackboard.register_key(key="/navigation_client/client", access=py_trees.common.Access.READ)
-        self.navigation_client = self.blackboard.navigation_client.client # Get the navigation client from the blackboard to send goals in the custom callback
-
-        # Initialize the blackboard keys for the goal sent flag and ongoing goal
-        self.blackboard.navigation_client.rotate_around_point.goal_sent = False
-
-
-    def update(self) -> Status:
-        self.node.get_logger().info("Custom Callback Behaviour Tick")
-        if not self.blackboard.navigation_client.rotate_around_point.goal_sent:
-            self.navigation_client.set_custom_result_callback(self.result_callback) # Set the custom callback for handling the result from the action server
-            self.blackboard.navigation_client.rotate_around_point.goal_sent = True
-            self.remaining_segments = self.rotations_segments # Reset the remaining segments to rotate at the start of the behaviour
-
-            # Send the first goal for the first segment here, 
-            self.node.get_logger().info(f"Sending first goal for rotation around point behaviour: {self.sway} {self.forward} segments.")
-            self.navigation_client.send_navigation_goal(move_robot_centric(forward=self.forward, sway=self.sway, heave=0.0, dyaw=self.rotate_per_segment, tolerance=self.initial_translation_tolerance, yaw_tolerance=self.yaw_tolerance, hold_time=0.2, timeout=10.0)) # Send goal for translation for the next segment # Send goal for rotation for the next segment
-            #self.navigation_client.send_navigation_goal(move_robot_centric(forward=3.0, sway=0.0, heave=0.0, dyaw=0.0, tolerance=0.05, yaw_tolerance=0.1, hold_time=0.2, timeout=3.0))
-            return Status.RUNNING
-
-        elif self.blackboard.navigation_client.rotate_around_point.goal_sent and self.remaining_segments == 0 and \
-            self.blackboard.navigation_client.ongoing_goal is None: # Check if the goal has been sent, all segments have been completed, and there is no ongoing goal (i.e., the last goal has been completed)
+    def update(self) -> py_trees.common.Status:
+        """Tick function. Calculates the absolute waypoint for the current segment and sends the goal."""
+        
+        # Block execution if the AUV poses are not published yet
+        if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.pose is None:
+            self.node.get_logger().info(f"[{self.name}] Waiting for sensor pose data...", throttle_duration_sec=2.0)
+            return py_trees.common.Status.RUNNING
             
-            self.blackboard.navigation_client.rotate_around_point.goal_sent = False # Reset the goal sent flag on the blackboard to allow the behaviour to be triggered again in the future
-            self.node.get_logger().info("Completed all segments of rotation around point behaviour.")
-            return Status.SUCCESS
+        # Check for failure condition from the async callbacks
+        if self.mission_failed:
+            self.node.get_logger().error(f"[{self.name}] Orbit failed midway.")
+            return py_trees.common.Status.FAILURE
+            
+        # Completion check
+        if self.remaining_segments <= 0:
+            self.node.get_logger().info(f"[{self.name}] Completed all segments.")
+            return py_trees.common.Status.SUCCESS
 
-        elif self.blackboard.navigation_client.rotate_around_point.goal_sent and self.blackboard.navigation_client.ongoing_goal is not None:
-            self.node.get_logger().info("Goal already sent, waiting for result...")
-            return Status.RUNNING
+        # Block loop if currently navigating to a waypoint
+        if self.is_waiting_for_result:
+            return py_trees.common.Status.RUNNING
 
-        elif self.goal_status == "failure": # Check if the goal result was a failure, if so return failure and reset the goal status for the next time the behaviour is triggered
-            self.goal_status = None # Reset the goal status for the next time the behaviour is triggered
-            self.blackboard.navigation_client.rotate_around_point.goal_sent = False # Reset the goal sent flag on the blackboard to allow the behaviour to be triggered again in the future
-            self.navigation_client.reset_action_client() # Reset the navigation action client to clear any potential issues and allow for a fresh start next time the behaviour is triggered
-            self.node.get_logger().info("Rotation around point behaviour failed.")
+        # Compute current segment index (0 to N)
+        current_segment = (self.rotations_segments + 1) - self.remaining_segments
 
-            return Status.FAILURE
-        else:
-            return Status.RUNNING
+        # Target center to orbit. Placeholder values; can be read from Vision blackboard keys
+        target_x = self.target_x
+        target_y = self.target_y
+        target_z = self.target_z
 
-    def result_callback(self, future: rclpy.task.Future) -> None:
-        result_status = future.result().result.success
-        self.node.get_logger().info(f"Custom callback received result: {result_status}")
+        # Calculate the starting phase angle based on the AUV's current position relative to the target.
+        # This ensures the circle sequence starts dynamically from the AUV's angle of approach.
+        if self.start_angle is None:
+            auv_x = self.blackboard.sensors.pose.pose.position.x
+            auv_y = self.blackboard.sensors.pose.pose.position.y
+            self.start_angle = math.atan2(auv_y - target_y, auv_x - target_x)
 
-        if result_status == False:  
-            self.goal_status = "failure"
+        angle_step = self.rotate_per_segment
+        if self.clockwise:
+            angle_step = -angle_step
+            
+        current_angle = self.start_angle + (current_segment * angle_step)
 
-        if self.remaining_segments > 0 and result_status == True: # If there are remaining segments to rotate and the last goal was successful, send the next goal for the next segment
+        # Calculate absolute Cartesian coordinates on the circle
+        waypoint_x = target_x + (self.radius_to_rotate_meter * math.cos(current_angle))
+        waypoint_y = target_y + (self.radius_to_rotate_meter * math.sin(current_angle))
+        
+        # Calculate optimal yaw to face the target coordinates
+        dy = target_y - waypoint_y
+        dx = target_x - waypoint_x
+        look_at_yaw = math.atan2(dy, dx)
+
+        self.node.get_logger().info(f"[{self.name}] Sending absolute goal for segment {current_segment}/{self.rotations_segments}")
+
+        # Adjust tolerance and hold times depending on the stage of the sequence
+        tolerance = self.initial_translation_tolerance
+        hold_time = 0.2
+        
+        if current_segment == 0:
+            hold_time = 1.0
+        elif self.remaining_segments == 1:
+            tolerance = 0.3 * self.initial_translation_tolerance
+            hold_time = 1.0
+
+        goal_msg = move_global(
+            x=waypoint_x, 
+            y=waypoint_y, 
+            z=target_z, 
+            yaw=look_at_yaw, 
+            tolerance=tolerance, 
+            yaw_tolerance=self.yaw_tolerance, 
+            hold_time=hold_time, 
+            timeout=30.0,
+            do_z=False
+        )
+
+        future = self.action_client.send_goal_async(goal_msg)
+        future.add_done_callback(self._goal_response_callback)
+        
+        # Flag state to await async completion
+        self.is_waiting_for_result = True
+        return py_trees.common.Status.RUNNING
+
+    def _goal_response_callback(self, future):
+        """Async callback triggered when server accepts or rejects the goal request."""
+        goal_handle = future.result()
+        if not goal_handle.accepted:
+            self.mission_failed = True
+            return
+
+        self.current_goal_handle = goal_handle 
+        
+        result_future = goal_handle.get_result_async()
+        result_future.add_done_callback(self._goal_result_callback)
+
+    def _goal_result_callback(self, future):
+        """Async callback triggered when server finishes processing the goal."""
+        result = future.result().result
+        if result.success:
             self.remaining_segments -= 1
-            self.translation_tolerance = 0.3 *self.initial_translation_tolerance if self.remaining_segments == 1 else self.initial_translation_tolerance # Decrease the translation tolerance for the last segment to allow for proper settling into the final position
-            self.navigation_client.send_navigation_goal(move_robot_centric(forward=self.forward, sway=self.sway, heave=0.0, dyaw=self.rotate_per_segment, tolerance=self.translation_tolerance, yaw_tolerance=self.yaw_tolerance, hold_time=0.2, timeout=10.0)) 
+            self.is_waiting_for_result = False
+            self.current_goal_handle = None
+        else:
+            self.mission_failed = True
+
+    def terminate(self, new_status: py_trees.common.Status):
+        """Called if the tree aborts this branch or if it naturally finishes."""
+        if new_status == py_trees.common.Status.INVALID:
+            if self.node:
+                self.node.get_logger().warn(f"[{self.name}] Aborted branch. Canceling active goal.")
+            if self.current_goal_handle is not None:
+                self.current_goal_handle.cancel_goal_async()
+                self.current_goal_handle = None
