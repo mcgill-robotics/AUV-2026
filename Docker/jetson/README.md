@@ -22,6 +22,13 @@ This repository contains a Dockerized ROS 2 Humble development environment for t
 ### Network Configuration
 We standardize **`ROS_DOMAIN_ID=0`** across all our Docker containers. This is pre-configured in the `docker-compose.yml` environment variables. Ensure any external machines communicating with the Jetson also use `ROS_DOMAIN_ID=0`.
 
+### User Permissions Configuration
+- The container is configured to run as the `douglas` user, which is created with the same UID as the host user to ensure seamless file permissions when sharing volumes. This is achieved using the `fixuid` tool in the entrypoint script. This user also has passwordless sudo access inside the container.
+
+- To ensure the container has the necessary permissions to access GPU resources, the entrypoint to the Dockerfile is set to [gpu_group_id_entrypoint](gpu_group_id_entrypoint.sh) to dynamically determine and align group IDs. This script detects the host's GIDs for the `render` and `video` groups, resolves any conflicts, and aligns the container's groups accordingly. This allows the container to access GPU resources without requiring manual permission adjustments. Logs for this process can be accessed by running:
+```bash
+docker compose logs jetson-douglas-1
+```
 ## ⚠️ Warnings and pitfalls
 
 - When build the ROS package, make sure to source the ROS setup files first:
