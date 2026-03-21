@@ -1,0 +1,85 @@
+# AUV Dashboard Topic Configuration
+# Centralized topic definitions for Foxglove layouts and node configuration
+# Use these aliases to avoid hardcoding topic strings across the codebase
+
+# =============================================================================
+# CAMERAS
+# =============================================================================
+cameras:
+  front: /zed/zed_node/rgb/color/rect/image/compressed
+  front_raw: /zed/zed_node/rgb/color/rect/image
+  down: /down_cam/image_raw
+  depth_map: /zed/zed_node/depth/depth_registered
+
+# =============================================================================
+# SENSORS (from dev/controls branch)
+# =============================================================================
+sensors:
+  # IMU
+  imu_raw: /imu/data
+  imu_processed: /processed/imu
+  
+  # Depth
+  depth_raw: /sensors/depth/z
+  depth_processed: /processed/depth
+  
+  # DVL (Waterlinked DVL-A50)
+  dvl_velocity: /dvl/velocity              # marine_acoustic_msgs/Dvl
+  dvl_dead_reckoning: /dvl/dead_reckoning  # geometry_msgs/PoseWithCovarianceStamped
+  dvl_odometry: /dvl/odometry              # nav_msgs/Odometry
+  
+  # State Estimation
+  state_pose: /state/pose
+
+# =============================================================================
+# CONTROLS (from dev/controls branch)
+# =============================================================================
+controls:
+  # Setpoints
+  depth_setpoint: /controls/depth_setpoint
+  quaternion_setpoint: /controls/quaternion_setpoint
+  
+  # Efforts
+  depth_effort: /controls/depth_effort
+  attitude_effort: /controls/attitude_effort
+  combined_effort: /controls/combined_effort
+  
+  # Direct control input (for teleop - TBD)
+  effort: /controls/effort
+
+# =============================================================================
+# PROPULSION
+# =============================================================================
+propulsion:
+  forces: /propulsion/forces
+  microseconds: /propulsion/microseconds
+
+# =============================================================================
+# VISION
+# =============================================================================
+vision:
+  objects_3d: /vision/objects_3d
+  debug_image: /vision/debug_image
+  front_enhanced: /vision/front_cam/image_enhanced
+  down_enhanced: /vision/down_cam/image_enhanced
+
+# =============================================================================
+# TRANSFORMS
+# =============================================================================
+transforms:
+  tf: /tf
+  tf_static: /tf_static
+
+# =============================================================================
+# SERVICES
+# =============================================================================
+services:
+  toggle_front_collection: /image_collection/toggle_front_collection
+  toggle_down_collection: /image_collection/toggle_down_collection
+  toggle_depth_collection: /image_collection/toggle_depth_collection
+  
+  # Drytest
+  drytest_re_arm: /dry_test_node/re_arm
+  drytest_test_thruster: /dry_test_node/test_thruster
+  drytest_optimized: /dry_test_node/optimized_dry_test
+  drytest_simultaneous: /dry_test_node/simultaneous_test
