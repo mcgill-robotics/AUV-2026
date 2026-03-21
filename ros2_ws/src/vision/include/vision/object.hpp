@@ -7,16 +7,12 @@
 // Object class enumeration
 enum ObjectClass 
 {
-    GATE, 
-    LANE_MARKER, 
-    RED_PIPE, 
-    WHITE_PIPE, 
-    OCTAGON, 
-    TABLE, 
-    BIN, 
-    BOARD, 
-    SHARK, 
-    SAWFISH
+    BOARD_IMAGE,
+    GATE_PREQUAL,
+    SHARK,
+    SAWFISH,
+    MARKER_PREQUAL,
+    WHITE_PIPE_MEDN
 };
 
 // Detection struct
@@ -28,15 +24,11 @@ struct DetectedObject
 };
 
 // Labels for object classes
-inline const std::array<std::string, 10> ID_TO_LABEL = {
-	"gate",
-	"lane_marker",
-	"red_pipe",
-	"white_pipe",
-	"octagon",
-	"table",
-	"bin",
-	"board",
-	"shark",
-	"sawfish"
+inline const std::array<std::string, 6> ID_TO_LABEL = {
+    "board_image",
+    "gate_prequal",
+    "shark",
+    "sawfish",
+    "marker_prequal",
+    "white_pipe_medn"
 };

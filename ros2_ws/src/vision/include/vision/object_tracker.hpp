@@ -138,16 +138,20 @@ private:
 
     // Known object limits (prevents creating too many tracks per class)
     std::unordered_map<std::string, int> MAX_PER_CLASS = {
-        { "gate", 1 },
-        { "lane_marker", 2 }, 
-        { "red_pipe", 3 }, 
-        { "white_pipe", 6 }, 
-        { "octagon", 1 },
-        { "table", 1 }, 
-        { "bin", 1 }, 
-        { "board", 1 }, 
+        // { "gate", 1 },
+        // { "lane_marker", 2 }, 
+        // { "red_pipe", 3 }, 
+        // { "white_pipe", 6 }, 
+        // { "octagon", 1 },
+        // { "table", 1 }, 
+        // { "bin", 1 }, 
+        // { "board", 1 }, 
         { "shark", 2 },
-        { "sawfish", 2 }
+        { "sawfish", 2 },
+        { "board_image", 2 },
+        { "gate_prequal", 2 },
+        { "marker_prequal", 2 },
+        { "white_pipe_medn", 2 }
     };
 
 };
