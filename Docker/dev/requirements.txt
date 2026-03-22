@@ -7,3 +7,7 @@ albumentations
 typing_extensions
 sympy
 cython
+rfdetr
+pytorch_lightning
+pycocotools
+faster-coco-eval

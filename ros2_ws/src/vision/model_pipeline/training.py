@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
-Unified YOLO Training Script
+Unified Training Script
 
-Supports training YOLOv8 and YOLOv11 models with configurable parameters.
+Supports training YOLOv8, YOLOv11, and RF-DETR models with configurable parameters.
 
 Usage:
     python3 training.py --model v8   # Train YOLOv8
     python3 training.py --model v11  # Train YOLOv11
+    python3 training.py --model rfdetr  # Train RF-DETR Base
+    python3 training.py --model rfdetr --size l  # Train RF-DETR Large
     python3 training.py --model v8 --epochs 100 --batch 16
 """
 
@@ -15,8 +17,6 @@ from dataclasses import dataclass
 import os
 import shutil
 from pathlib import Path
-
-from ultralytics import YOLO
 
 # Script directory
 SCRIPT_DIR = Path(__file__).parent.resolve()
@@ -74,9 +74,10 @@ def get_model_weights(model_version: str, size: str) -> str:
         raise ValueError(f"Unknown model version: {model_version}. Use 'v8' or 'v11'.")
 
 
-def train(args):
+def train_yolo(args):
     """Run YOLO training with the specified configuration."""
-    
+    from ultralytics import YOLO
+
     # Paths
     data_yaml = args.data
     
@@ -144,14 +145,119 @@ def train(args):
     print(f"{'='*50}")
 
 
+def train_rfdetr(args):
+    """Run RF-DETR training with the specified configuration."""
+
+    # Dataset path — RF-DETR expects a COCO-format directory with
+    # train/, valid/, and test/ subdirectories each containing
+    # _annotations.coco.json plus images.
+    dataset_dir = args.dataset_dir or str(SCRIPT_DIR / "data" / "processed")
+
+    if not Path(dataset_dir).exists():
+        print(f"Error: dataset directory '{dataset_dir}' not found.")
+        print("Provide a COCO-format dataset with train/valid/test splits.")
+        return
+
+    # Output directory
+    output_dir = args.output_dir or str(SCRIPT_DIR / "runs" / "rfdetr")
+
+    # Determine model class based on size
+    rfdetr_models = {
+        "n": ("rfdetr", "RFDETRNano", "RF-DETR-Nano"),
+        "s": ("rfdetr", "RFDETRSmall", "RF-DETR-Small"),
+        "m": ("rfdetr", "RFDETRMedium", "RF-DETR-Medium"),
+        "l": ("rfdetr", "RFDETRLarge", "RF-DETR-Large"),
+    }
+
+    size = args.size
+    if size not in rfdetr_models:
+        print(f"Error: RF-DETR does not support size '{size}'. Use n/s/m/l.")
+        return
+
+    module_name, class_name, model_label = rfdetr_models[size]
+    import importlib
+    rfdetr_module = importlib.import_module(module_name)
+    RFDETRModel = getattr(rfdetr_module, class_name)
+
+    print(f"\n{'='*50}")
+    print(f"Training {model_label}")
+    print(f"  Dataset:       {dataset_dir}")
+    print(f"  Output:        {output_dir}")
+    print(f"  Epochs:        {args.epochs}")
+    print(f"  Batch size:    {args.batch}")
+    print(f"  Grad accum:    {args.grad_accum_steps}")
+    print(f"  Learning rate: {args.learning_rate}")
+    if args.resume:
+        print(f"  Resume from:   {args.resume}")
+    print(f"{'='*50}")
+
+    # Create model (optionally from a checkpoint)
+    model_kwargs = {}
+    if args.custom_model:
+        model_kwargs["pretrain_weights"] = args.custom_model
+
+    model = RFDETRModel(**model_kwargs)
+
+    # Build training kwargs
+    train_kwargs = dict(
+        dataset_dir=dataset_dir,
+        epochs=args.epochs,
+        batch_size=args.batch,
+        grad_accum_steps=args.grad_accum_steps,
+        lr=args.learning_rate,
+        output_dir=output_dir,
+        progress_bar="tqdm",          # Show per-step progress in terminal
+        tensorboard=not args.no_tensorboard,  # TensorBoard ON by default
+    )
+
+    if args.resume:
+        train_kwargs["resume"] = args.resume
+
+    if args.early_stopping:
+        train_kwargs["early_stopping"] = True
+
+    if args.wandb:
+        train_kwargs["wandb"] = True
+
+    model.train(**train_kwargs)
+
+    # Print TensorBoard instructions
+    if not args.no_tensorboard:
+        print(f"\nTensorBoard logs saved to: {output_dir}")
+        print(f"  View with: python3 -m tensorboard.main --logdir {output_dir}")
+
+    # Copy best weights to a convenient location
+    best_weights_src = Path(output_dir) / "checkpoint_best_total.pth"
+    best_weights_dst = SCRIPT_DIR / f"best_{model_label.lower().replace('-', '_')}_model.pth"
+
+    if best_weights_src.exists():
+        shutil.copy2(best_weights_src, best_weights_dst)
+        print(f"\nBest model saved to: {best_weights_dst}")
+
+    print(f"\n{'='*50}")
+    print("Training complete!")
+    print(f"{'='*50}")
+
+
+def train(args):
+    """Dispatch to the appropriate training function."""
+    if args.model == "rfdetr":
+        train_rfdetr(args)
+    else:
+        train_yolo(args)
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Train YOLO models on your custom dataset",
+        description="Train YOLO or RF-DETR models on your custom dataset",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
+        epilog="""\
 Examples:
-  python3 training.py --model v8 --size n    # Train YOLOv8-Nano
-  python3 training.py --model v11 --size s   # Train YOLOv11-Small
+  python3 training.py --model v8 --size n        # Train YOLOv8-Nano
+  python3 training.py --model v11 --size s        # Train YOLOv11-Small
+  python3 training.py --model rfdetr              # Train RF-DETR Base
+  python3 training.py --model rfdetr --size l     # Train RF-DETR Large
+  python3 training.py --model rfdetr --batch 4 --grad-accum-steps 4
   python3 training.py --epochs 50 --batch 32
         """
     )
@@ -159,21 +265,21 @@ Examples:
     parser.add_argument(
         "--model", "-m",
         type=str,
-        choices=["v8", "v11"],
+        choices=["v8", "v11", "rfdetr"],
         default="v8",
-        help="YOLO version to train (default: v8)"
+        help="Model to train: v8, v11, or rfdetr (default: v8)"
     )
     parser.add_argument(
         "--size", "-s",
         type=str,
         choices=["n", "s", "m", "l", "x"],
-        default="n",
-        help="Model size: nano, small, medium, large, xlarge (default: n)"
+        default="s",
+        help="Model size. YOLO: n/s/m/l/x. RF-DETR: n/s/m/l. (default: s)"
     )
     parser.add_argument(
         "--custom-model", "-c",
         type=str,
-        help="Train from an existing YOLO model file (default: False)"
+        help="Train from an existing model file (YOLO .pt or RF-DETR .pth)"
     )
     parser.add_argument(
         "--epochs", "-e",
@@ -185,35 +291,80 @@ Examples:
         "--batch", "-b",
         type=int,
         default=-1,
-        help="Batch size. -1 for auto (60%% GPU memory). (default: -1)"
+        help="Batch size. YOLO: -1 for auto. RF-DETR: set explicitly (default: -1)"
     )
     parser.add_argument(
         "--imgsz",
         type=int,
         default=640,
-        help="Image size for training (default: 640)"
+        help="Image size for training — YOLO only (default: 640)"
     )
     parser.add_argument(
         "--workers",
         type=int,
         default=2,
-        help="Number of dataloader workers (default: 2)"
+        help="Number of dataloader workers — YOLO only (default: 2)"
     )
     parser.add_argument(
         "--cache",
         action="store_true",
-        help="Cache images for faster training"
+        help="Cache images for faster training — YOLO only"
     )
     parser.add_argument(
         "--learning-rate", "-lr0",
         type=float,
-        default=0.0003,
-        help="Initial learning rate"
+        default=None,
+        help="Initial learning rate (default: 0.0003 for YOLO, 1e-4 for RF-DETR)"
     )
     parser.add_argument(
         "--unity",
         action="store_true",
-        help="Use training parameters for unity dataset"
+        help="Use training parameters for unity dataset — YOLO only"
+    )
+
+    # --- RF-DETR specific arguments ---
+    rfdetr_group = parser.add_argument_group("RF-DETR options")
+    rfdetr_group.add_argument(
+        "--dataset-dir",
+        type=str,
+        default=None,
+        help="Path to COCO-format dataset (train/valid/test splits). "
+             "Default: data/processed"
+    )
+    rfdetr_group.add_argument(
+        "--output-dir",
+        type=str,
+        default=None,
+        help="Directory for RF-DETR output checkpoints. Default: runs/rfdetr"
+    )
+    rfdetr_group.add_argument(
+        "--grad-accum-steps",
+        type=int,
+        default=4,
+        help="Gradient accumulation steps (default: 4). "
+             "Adjust with --batch to keep effective batch size at 16."
+    )
+    rfdetr_group.add_argument(
+        "--resume",
+        type=str,
+        default=None,
+        help="Path to a checkpoint.pth to resume training from"
+    )
+    rfdetr_group.add_argument(
+        "--early-stopping",
+        action="store_true",
+        help="Enable early stopping based on validation mAP"
+    )
+    rfdetr_group.add_argument(
+        "--no-tensorboard",
+        action="store_true",
+        default=False,
+        help="Disable TensorBoard logging (enabled by default)"
+    )
+    rfdetr_group.add_argument(
+        "--wandb",
+        action="store_true",
+        help="Enable Weights & Biases logging"
     )
     parser.add_argument(
         "--data",
@@ -223,6 +374,15 @@ Examples:
     )
     
     args = parser.parse_args()
+
+    # Apply model-specific learning rate defaults
+    if args.learning_rate is None:
+        args.learning_rate = 1e-4 if args.model == "rfdetr" else 0.0003
+
+    # Apply sensible RF-DETR batch default (instead of YOLO's -1 auto)
+    if args.model == "rfdetr" and args.batch == -1:
+        args.batch = 4
+
     train(args)
 
 
