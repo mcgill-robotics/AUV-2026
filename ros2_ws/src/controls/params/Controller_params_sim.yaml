@@ -8,7 +8,7 @@ attitude_controller:
     P_wy: 1.0
     P_wz: 1.0
     buoyancy: 264.0 # [N]
-    r_bv_v: [0.0, 0.0, 0.023] # [m] From CAD Model    
+    r_bv_v: [0.0, 0.0, 0.0] # [m] From CAD Model    
     enabled: false
 
 depth_controller:

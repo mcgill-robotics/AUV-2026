@@ -8,7 +8,7 @@ attitude_controller:
     P_wy: 1.0
     P_wz: 2.0
     buoyancy: 275.4 # [N]
-    r_bv_v: [0.0, 0.0, 0.001] # [m] Tuned in pool tests.    
+    r_bv_v: [0.0, 0.0, 0.0] # [m] Tuned in pool tests.    
     enabled: false
 
 depth_controller:
