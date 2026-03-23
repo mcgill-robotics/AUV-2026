@@ -83,7 +83,6 @@ object_map:
   log_level: warn
 
 general:
-  use_sim_time: false # determine time based on /clock topic (should be true for sim, false for real robot)
   # whether to use the ZED wrapper in simulation mode (true) or with a real camera (false)
   sim: false
   sim_ip: "127.0.0.1"

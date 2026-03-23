@@ -35,14 +35,6 @@ def generate_launch_description():
         )
     )
     
-    use_sim_time_arg = DeclareLaunchArgument(
-        "use_sim_time",
-        default_value=str(default_config["general"]["use_sim_time"]).lower(),
-        description=(
-            "Whether to set the use_sim_time parameter for all nodes in the vision pipeline. Should be true when running in simulation and false when running on the real AUV. If true, all nodes will subscribe to the /clock topic for time synchronization. If false, all nodes will use the system clock."
-        )
-    )
-    
     wrapper_stream_arg = DeclareLaunchArgument(
         "wrapper_stream_enabled",
         default_value=str(default_config["general"]["use_wrapper_stream"]).lower(),
@@ -98,7 +90,7 @@ def generate_launch_description():
             "sim_address": default_config["general"]["sim_ip"],
             "sim_port": str(default_config["general"]["sim_port"]),
             "ros_params_override_path": PathJoinSubstitution([vision_dir, "config", "zed_wrapper_unity_sim.yaml"]),
-            "use_sim_time": LaunchConfiguration("use_sim_time"),
+            "use_sim_time": LaunchConfiguration("sim"),
             "node_log_type": "log"
         }.items(),
         condition=IfCondition(LaunchConfiguration("sim"))
@@ -122,7 +114,7 @@ def generate_launch_description():
                 "output_topic": front_enhanced_topic,
                 "compressed": LaunchConfiguration("compressed"),
                 "queue_size": default_config["image_enhancement"]["front_cam"]["queue_size"],
-                "use_sim_time": LaunchConfiguration("use_sim_time"),
+                "use_sim_time": LaunchConfiguration("sim"),
                 "log_level": default_config["image_enhancement"]["front_cam"]["log_level"]
             }
         ],
@@ -141,7 +133,7 @@ def generate_launch_description():
                 "output_topic": down_enhanced_topic,
                 "compressed": LaunchConfiguration("compressed"),
                 "queue_size": default_config["image_enhancement"]["down_cam"]["queue_size"],
-                "use_sim_time": LaunchConfiguration("use_sim_time"),
+                "use_sim_time": LaunchConfiguration("sim"),
                 "log_level": default_config["image_enhancement"]["down_cam"]["log_level"]
             }
         ],
@@ -173,7 +165,7 @@ def generate_launch_description():
                 'class_names': default_config["object_detection"]["front_cam"]["class_names"],
                 'queue_size': default_config["object_detection"]["front_cam"]["queue_size"],
                 'publish_annotated_image': default_config["object_detection"]["front_cam"]["publish_annotated_image"],
-                'use_sim_time': LaunchConfiguration("use_sim_time"),
+                'use_sim_time': LaunchConfiguration("sim"),
                 'compressed': LaunchConfiguration("compressed"),
                 'log_level': default_config["object_detection"]["front_cam"]["log_level"]
             }
@@ -193,7 +185,7 @@ def generate_launch_description():
                 'class_names': default_config["object_detection"]["down_cam"]["class_names"],
                 'queue_size': default_config["object_detection"]["down_cam"]["queue_size"],
                 'publish_annotated_image': default_config["object_detection"]["down_cam"]["publish_annotated_image"],
-                'use_sim_time': LaunchConfiguration("use_sim_time"),
+                'use_sim_time': LaunchConfiguration("sim"),
                 'compressed': LaunchConfiguration("compressed"),
                 'log_level': default_config["object_detection"]["down_cam"]["log_level"],
             }
@@ -237,7 +229,7 @@ def generate_launch_description():
                 "conf_to_tent_threshold": default_config["object_map"]["conf_to_tent_threshold"],
                 "tent_init_buffer": default_config["object_map"]["tent_init_buffer"],
                 "sim": LaunchConfiguration("sim"),
-                "use_sim_time": LaunchConfiguration("use_sim_time"),
+                "use_sim_time": LaunchConfiguration("sim"),
             },
         ],
         ros_arguments=["--ros-args", "--log-level", default_config["object_map"]["log_level"]]
@@ -250,7 +242,6 @@ def generate_launch_description():
     
     launch_description = LaunchDescription()
     launch_description.add_action(sim_arg)
-    launch_description.add_action(use_sim_time_arg)
     launch_description.add_action(wrapper_stream_arg)
     launch_description.add_action(compressed_arg)
     launch_description.add_action(use_enhance_arg)
