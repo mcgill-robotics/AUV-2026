@@ -70,14 +70,22 @@ def generate_launch_description():
         default_value=default_config["object_detection"]["down_cam"]["model_relative_path"],
         description="Path to the down camera object detection model file."
     )
-        
+
+    zed_wrapper_log_type_arg = DeclareLaunchArgument(
+        "zed_wrapper_log_type",
+        default_value=default_config["general"]["zed_wrapper_log_type"],
+        description=(
+            "The log type for the zed wrapper node. Can be set to 'log' to enable logging to file, 'screen' to log to console, or 'both' to log to both."
+        )
+    )
+
     zed_wrapper_path = get_package_share_directory("zed_wrapper")
     zed_real_wrapper_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(zed_wrapper_path, "launch", "zed_camera.launch.py")),
         launch_arguments={
             "camera_model": "zed2i",
             "ros_params_override_path": PathJoinSubstitution([vision_dir, "config", "zed_wrapper_real.yaml"]),
-            "node_log_type": "log"
+            "node_log_type": LaunchConfiguration("zed_wrapper_log_type")
         }.items(),
         condition=UnlessCondition(LaunchConfiguration("sim"))
     )
@@ -91,7 +99,7 @@ def generate_launch_description():
             "sim_port": str(default_config["general"]["sim_port"]),
             "ros_params_override_path": PathJoinSubstitution([vision_dir, "config", "zed_wrapper_unity_sim.yaml"]),
             "use_sim_time": LaunchConfiguration("sim"),
-            "node_log_type": "log"
+            "node_log_type": LaunchConfiguration("zed_wrapper_log_type")
         }.items(),
         condition=IfCondition(LaunchConfiguration("sim"))
     )
@@ -247,6 +255,7 @@ def generate_launch_description():
     launch_description.add_action(use_enhance_arg)
     launch_description.add_action(front_model_arg)
     launch_description.add_action(down_model_arg)
+    launch_description.add_action(zed_wrapper_log_type_arg)
     launch_description.add_action(zed_real_wrapper_launch)
     launch_description.add_action(zed_sim_wrapper_launch)
     launch_description.add_action(front_cam_enhancement_node)

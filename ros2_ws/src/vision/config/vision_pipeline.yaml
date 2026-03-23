@@ -83,6 +83,7 @@ object_map:
   log_level: warn
 
 general:
+  # sim is what the wrapper listens to (the Unity sim stream), stream is what the wrapper republishes as a ROS topic for the rest of the vision pipeline to use
   # whether to use the ZED wrapper in simulation mode (true) or with a real camera (false)
   sim: false
   sim_ip: "127.0.0.1"
@@ -91,6 +92,6 @@ general:
   use_wrapper_stream: true
   wrapper_stream_ip: "127.0.1.1"
   wrapper_stream_port: 30000
-  # sim is what the wrapper listens to (the Unity sim stream), stream is what the wrapper republishes as a ROS topic for the rest of the vision pipeline to use
+  zed_wrapper_log_type: "log" # log, screen, or both
   compressed: true
   enhance_images: true
