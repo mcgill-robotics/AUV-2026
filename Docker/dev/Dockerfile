@@ -7,9 +7,9 @@ FROM althack/ros2:humble-dev
 # CI has a different runner than the jetson (notably git permissions are different and there is no GPU)
 ARG CI
 RUN if [ "$CI" = "true" ]; then \
-        echo "Building container for CI"; \
+    echo "Building container for CI"; \
     else \
-        echo "Building container locally"; \
+    echo "Building container locally"; \
     fi
 # set it as env var so build scripts can see it
 ENV CI=${CI}
@@ -76,7 +76,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Bridge & Teleop
     ros-${ROS_DISTRO}-joy \
     ros-${ROS_DISTRO}-joy-teleop \
-    ros-${ROS_DISTRO}-foxglove-bridge \
+    ros-${ROS_DISTRO}-foxglove-msgs \
     # Navigation & Localization
     ros-${ROS_DISTRO}-mavros \
     ros-${ROS_DISTRO}-mavros-msgs \
@@ -110,24 +110,39 @@ RUN git clone -b ${ROS_DISTRO} https://github.com/micro-ROS/micro_ros_setup.git 
 
 RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \
     colcon build \
-        --parallel-workers $(nproc) \
-        --merge-install \
-        --event-handlers console_direct+ \
-        --base-paths src \
-        --cmake-args -DCMAKE_BUILD_TYPE=Release && \
+    --parallel-workers $(nproc) \
+    --merge-install \
+    --event-handlers console_direct+ \
+    --base-paths src \
+    --cmake-args -DCMAKE_BUILD_TYPE=Release && \
     . /opt/ros/micro_ros_ws/install/setup.sh && \
     MICROROS_PREFIX=$(ros2 pkg prefix micro_ros_setup) && \
     ros2 run micro_ros_setup create_ws.sh src "$MICROROS_PREFIX/config/agent_ros2_packages.txt" "$MICROROS_PREFIX/config/agent_uros_packages.repos" && \
     colcon build \
-        --packages-up-to micro_ros_agent $@ \
-        --parallel-workers $(nproc) \
-        --merge-install \
-        --event-handlers console_direct+ \
-        --cmake-args \
-            "-DUAGENT_BUILD_EXECUTABLE=OFF" \
-            "-DUAGENT_P2P_PROFILE=OFF" \
-            "--no-warn-unused-cli" && \
+    --packages-up-to micro_ros_agent $@ \
+    --parallel-workers $(nproc) \
+    --merge-install \
+    --event-handlers console_direct+ \
+    --cmake-args \
+    "-DUAGENT_BUILD_EXECUTABLE=OFF" \
+    "-DUAGENT_P2P_PROFILE=OFF" \
+    "--no-warn-unused-cli" && \
     rm -rf build src log
+
+# ----------------------------------------------------------
+# Install Foxglove Bridge from source
+# ----------------------------------------------------------
+WORKDIR /opt/ros/foxglove_ws
+RUN git clone https://github.com/foxglove/foxglove-sdk.git src/foxglove-sdk && \
+    apt-get update && \
+    rm -rf /etc/ros/rosdep/sources.list.d/* && \
+    rosdep init && \
+    rosdep update --rosdistro ${ROS_DISTRO} && \
+    rosdep install -y --from-paths src --ignore-src --rosdistro ${ROS_DISTRO} && \
+    . /opt/ros/${ROS_DISTRO}/setup.sh && \
+    colcon build --packages-select foxglove_bridge \
+    --cmake-args -DCMAKE_BUILD_TYPE=Release && \
+    rm -rf build log src /var/lib/apt/lists/*
 WORKDIR /root
 
 # ---------------------------------------------------------
@@ -189,7 +204,7 @@ COPY .colcon ${COLCON_HOME}/
 WORKDIR /home/$USERNAME/AUV-2026
 
 # Add source commands to bashrc
-RUN echo "source /opt/ros/${ROS_DISTRO}/local_setup.bash && source /opt/ros/micro_ros_ws/install/local_setup.bash" >> ~/.bashrc && \
+RUN echo "source /opt/ros/${ROS_DISTRO}/local_setup.bash && source /opt/ros/micro_ros_ws/install/local_setup.bash && source /opt/ros/foxglove_ws/install/local_setup.bash" >> ~/.bashrc && \
     echo "if [ -f ~/AUV-2026/ros2_ws/install/setup.bash ]; then source ~/AUV-2026/ros2_ws/install/setup.bash; fi" >> ~/.bashrc
 
 # Entrypoint uses fixuid to remap UID/GID if running with --user
