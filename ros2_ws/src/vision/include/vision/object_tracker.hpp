@@ -46,6 +46,7 @@ class ObjectTracker {
 public: 
 
     explicit ObjectTracker(
+        const std::unordered_map<std::string, int>& max_per_class = {},
         float min_new_track_distance = 0.5,
         float gating_threshold = 3.5,
         int min_hits = 20,
@@ -136,18 +137,7 @@ private:
     
     std::vector<std::pair<size_t,size_t>> matches;
 
-    // Known object limits (prevents creating too many tracks per class)
-    std::unordered_map<std::string, int> MAX_PER_CLASS = {
-        { "gate", 1 },
-        { "lane_marker", 2 }, 
-        { "red_pipe", 3 }, 
-        { "white_pipe", 6 }, 
-        { "octagon", 1 },
-        { "table", 1 }, 
-        { "bin", 1 }, 
-        { "board", 1 }, 
-        { "shark", 2 },
-        { "sawfish", 2 }
-    };
+    // Known object limits (prevents creating too many tracks per class, -1 = unlimited)
+    std::unordered_map<std::string, int> max_per_class;
 
 };

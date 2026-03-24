@@ -1,5 +1,4 @@
 #include "zed_detection.hpp"
-#include "object.hpp"
 // --- CUSTOM EXCEPTIONS (UNUSED) ---
 // const char* ZedInitException::what() const noexcept
 // {
@@ -20,6 +19,7 @@ ZEDDetection::ZEDDetection(
 		int stream_port,
 		ZEDCameraModel camera_model,
 		int zed_depth_confidence_threshold,
+		const std::vector<std::string>& class_labels,
 		function<void(const string&)> log_debug,
 		function<void(const string&)> log_info,
         function<void(const string&)> log_warn,
@@ -35,6 +35,7 @@ ZEDDetection::ZEDDetection(
 		stream_port(stream_port),
 		camera_model(camera_model),
 		zed_depth_confidence_threshold(zed_depth_confidence_threshold),
+        class_labels(class_labels),
 		log_debug(log_debug),
 		log_error(log_error),
 		log_fatal(log_fatal),
@@ -238,7 +239,7 @@ void ZEDDetection::determine_world_position_zed_2D_boxes(const sl::Objects& zed_
 
 		// Get label
 		int label_idx = obj.raw_label;
-		string label_str = (static_cast<size_t>(label_idx) < ID_TO_LABEL.size()) ? string(ID_TO_LABEL[label_idx]) : to_string(label_idx);
+		string label_str = (static_cast<size_t>(label_idx) < class_labels.size()) ? string(class_labels[label_idx]) : to_string(label_idx);
 
 		// Transform to world frame
 		Eigen::Vector3d world_pos = transform_to_world(pos, rotation, pose_translation);

@@ -20,16 +20,12 @@ object_detection:
     detection_topic: /vision/front_cam/detections # output topic for detections
     model_relative_path: models/frontcam.pt # relative to src/vision directory
     class_names:
-      - "gate"
-      - "lane_marker"
-      - "red_pipe"
-      - "white_pipe"
-      - "octagon"
-      - "table"
-      - "bin"
-      - "board"
+      - "board_image"
+      - "gate_prequal"
       - "shark"
       - "sawfish"
+      - "marker_prequal"
+      - "white_pipe_medn"
     queue_size: 10
     publish_annotated_image: true # whether to publish an annotated image with bounding boxes drawn (for visualization/debugging). will publish to detection_topic + /annotated
     log_level: warn
@@ -71,6 +67,14 @@ object_map:
   floor_objects: ["bin", "table", "lane_marker", "board"]
   surface_objects: ["gate", "octagon"]
 
+  max_per_class:
+    board_image: 1
+    gate_prequal: 1
+    shark: 2
+    sawfish: 2
+    marker_prequal: 2
+    white_pipe_medn: 2
+
   # Tracker Parameters
   gating_threshold: 3.5 # Mahalanobis distance threshold (~3 sigma) for associating detections to tracks
   min_hits: 20 # Consecutive frames a detection must be matched to confirm a new track
@@ -94,4 +98,4 @@ general:
   wrapper_stream_port: 30000
   zed_wrapper_log_type: "log" # log, screen, or both
   compressed: true
-  enhance_images: true
+  enhance_images: false

@@ -208,6 +208,9 @@ def generate_launch_description():
         parameters=[
             {
                 "frame_rate": default_config["object_map"]["frame_rate"],
+                "class_labels": default_config["object_detection"]["front_cam"]["class_names"],
+                "max_per_class_labels": list(default_config["object_map"]["max_per_class"].keys()),
+                "max_per_class_values": list(default_config["object_map"]["max_per_class"].values()),
                 "zed_sdk": True,
                 "new_object_min_distance_threshold": default_config["object_map"]["new_object_min_distance_threshold"],
                 "front_cam_detection_topic": default_config["object_detection"]["front_cam"]["detection_topic"],
