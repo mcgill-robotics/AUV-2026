@@ -32,6 +32,11 @@ def generate_launch_description():
             'address': LaunchConfiguration('address'),
             'send_buffer_limit': 10000000,  # 10MB buffer for images
             'use_compression': True,
+            'best_effort_qos_topic_whitelist': [
+                '/vision/front_cam/detections/annotated/compressed',
+                '/zed/zed_node/rgb/color/rect/image/compressed',
+                '/zed/zed_node/depth/depth_registered/compressed'
+            ],
         }],
         output='screen'
     )
