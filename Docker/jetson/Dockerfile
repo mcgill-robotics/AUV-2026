@@ -45,9 +45,9 @@ ARG MAVROS_VERSION=2.10.1
 # Unlike the nvidia dev container, we cannot just install stubs to satisfy the linker, so we just forego installing the zed sdk in CI for the jetson, which is fine since we should test it locally anyways
 ARG CI
 RUN if [ "$CI" = "true" ]; then \
-    echo "Building container for CI"; \
+        echo "Building container for CI"; \
     else \
-    echo "Building container locally"; \
+        echo "Building container locally"; \
     fi
 # set it as env var so build scripts can see it
 ENV CI=${CI}
@@ -227,11 +227,11 @@ WORKDIR /opt/dependencies_ws
 
 RUN . /opt/ros/$ROS_DISTRO/install/setup.bash && \
     colcon build --parallel-workers $(nproc) --merge-install \
-    --event-handlers console_direct+ --base-paths src \
-    --cmake-args ' -DCMAKE_BUILD_TYPE=Release' \
-    ' -DCMAKE_LIBRARY_PATH=/usr/local/cuda/lib64/stubs' \
-    ' -DCMAKE_CXX_FLAGS="-Wl,--allow-shlib-undefined"' \
-    ' --no-warn-unused-cli' && \
+        --event-handlers console_direct+ --base-paths src \
+        --cmake-args ' -DCMAKE_BUILD_TYPE=Release' \
+        ' -DCMAKE_LIBRARY_PATH=/usr/local/cuda/lib64/stubs' \
+        ' -DCMAKE_CXX_FLAGS="-Wl,--allow-shlib-undefined"' \
+        ' --no-warn-unused-cli' && \
     rm -rf build src log
 
 # install micro-ROS
@@ -242,23 +242,23 @@ RUN git clone -b $ROS_DISTRO https://github.com/micro-ROS/micro_ros_setup.git sr
 RUN . /opt/ros/$ROS_DISTRO/install/setup.bash && \
     . /opt/dependencies_ws/install/setup.bash && \
     colcon build \
-    --parallel-workers $(nproc) \
-    --merge-install \
-    --event-handlers console_direct+ \
-    --base-paths src \
-    --cmake-args -DCMAKE_BUILD_TYPE=Release && \
+        --parallel-workers $(nproc) \
+        --merge-install \
+        --event-handlers console_direct+ \
+        --base-paths src \
+        --cmake-args -DCMAKE_BUILD_TYPE=Release && \
     . /opt/ros/micro_ros_ws/install/setup.sh && \
     MICROROS_PREFIX=$(ros2 pkg prefix micro_ros_setup) && \
     ros2 run micro_ros_setup create_ws.sh src "$MICROROS_PREFIX/config/agent_ros2_packages.txt" "$MICROROS_PREFIX/config/agent_uros_packages.repos" && \
     colcon build \
-    --packages-up-to micro_ros_agent $@ \
-    --parallel-workers $(nproc) \
-    --merge-install \
-    --event-handlers console_direct+ \
-    --cmake-args \
-    "-DUAGENT_BUILD_EXECUTABLE=OFF" \
-    "-DUAGENT_P2P_PROFILE=OFF" \
-    "--no-warn-unused-cli" && \
+        --packages-up-to micro_ros_agent $@ \
+        --parallel-workers $(nproc) \
+        --merge-install \
+        --event-handlers console_direct+ \
+        --cmake-args \
+            "-DUAGENT_BUILD_EXECUTABLE=OFF" \
+            "-DUAGENT_P2P_PROFILE=OFF" \
+            "--no-warn-unused-cli" && \
     rm -rf build src log
 
 # ----------------------------------------------------------

@@ -7,9 +7,9 @@ FROM althack/ros2:humble-dev
 # CI has a different runner than the jetson (notably git permissions are different and there is no GPU)
 ARG CI
 RUN if [ "$CI" = "true" ]; then \
-    echo "Building container for CI"; \
+        echo "Building container for CI"; \
     else \
-    echo "Building container locally"; \
+        echo "Building container locally"; \
     fi
 # set it as env var so build scripts can see it
 ENV CI=${CI}
@@ -110,23 +110,23 @@ RUN git clone -b ${ROS_DISTRO} https://github.com/micro-ROS/micro_ros_setup.git 
 
 RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \
     colcon build \
-    --parallel-workers $(nproc) \
-    --merge-install \
-    --event-handlers console_direct+ \
-    --base-paths src \
-    --cmake-args -DCMAKE_BUILD_TYPE=Release && \
+        --parallel-workers $(nproc) \
+        --merge-install \
+        --event-handlers console_direct+ \
+        --base-paths src \
+        --cmake-args -DCMAKE_BUILD_TYPE=Release && \
     . /opt/ros/micro_ros_ws/install/setup.sh && \
     MICROROS_PREFIX=$(ros2 pkg prefix micro_ros_setup) && \
     ros2 run micro_ros_setup create_ws.sh src "$MICROROS_PREFIX/config/agent_ros2_packages.txt" "$MICROROS_PREFIX/config/agent_uros_packages.repos" && \
     colcon build \
-    --packages-up-to micro_ros_agent $@ \
-    --parallel-workers $(nproc) \
-    --merge-install \
-    --event-handlers console_direct+ \
-    --cmake-args \
-    "-DUAGENT_BUILD_EXECUTABLE=OFF" \
-    "-DUAGENT_P2P_PROFILE=OFF" \
-    "--no-warn-unused-cli" && \
+        --packages-up-to micro_ros_agent $@ \
+        --parallel-workers $(nproc) \
+        --merge-install \
+        --event-handlers console_direct+ \
+        --cmake-args \
+            "-DUAGENT_BUILD_EXECUTABLE=OFF" \
+            "-DUAGENT_P2P_PROFILE=OFF" \
+            "--no-warn-unused-cli" && \
     rm -rf build src log
 
 # ----------------------------------------------------------
