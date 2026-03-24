@@ -96,8 +96,15 @@ class ImageCollectionNode(Node):
         self.down_sub = self.create_subscription(
             Image, down_topic, self.down_callback, 10)
         
-        # self.depth_sub = self.create_subscription(
-        #     Image, depth_topic, self.depth_callback, 10)
+        # TODO I feel like this is somewhat unstable (something like a compressed parameter like what is done in vision pipeline would be better), but for now this is good enough
+        depth_format = CompressedImage if "compressed" in depth_topic else Image
+        
+        self.depth_sub = self.create_subscription(
+            CompressedImage, 
+            depth_topic, 
+            partial(self.depth_callback, depth_format=depth_format), # fill in depth_format argument for callback
+            10
+        )
         
         # Automatic capture state
         self.auto_capture_active = False
@@ -163,10 +170,13 @@ class ImageCollectionNode(Node):
         except CvBridgeError as e:
             self.get_logger().error(f'Down camera conversion error: {e}')
     
-    def depth_callback(self, msg):
+    def depth_callback(self, msg, depth_format: type[Image] | type[CompressedImage]):
         """Callback for depth map images (32FC1)"""
         try:
-            depth_image = self.bridge.imgmsg_to_cv2(msg, 'passthrough')
+            if depth_format == CompressedImage:
+                depth_image = self.bridge.compressed_imgmsg_to_cv2(msg, 'passthrough')
+            else:
+                depth_image = self.bridge.imgmsg_to_cv2(msg, 'passthrough')
             with self.depth_lock:
                 self.depth_image = depth_image
         except CvBridgeError as e:
