@@ -297,7 +297,8 @@ RUN git clone https://github.com/ultralytics/ultralytics.git && \
 
 # Install dependencies for vision
 RUN pip install --no-cache-dir --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} notebook \
-    roboflow albumentations pandas && \
+    roboflow albumentations pandas \
+    rfdetr supervision pytorch_lightning pycocotools faster-coco-eval && \
     pip install --no-cache-dir --ignore-install --upgrade typing_extensions
 
 
