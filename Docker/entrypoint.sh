@@ -5,6 +5,9 @@ DUMMY_GID=9999
 # 0. Ensure fixuid is run to set up the 'douglas' user has the same UID as the host user.
 eval "$(fixuid)"
 
+echo "Starting entrypoint script with user 'douglas' (UID: $(id -u douglas), GIDs: $(id -G douglas))"
+echo "Home is now: $HOME"
+
 # 1. Dynamically detect the host's GIDs directly from the mounted hardware
 if [[ -e /dev/dri/renderD128 ]]; then
     HOST_RENDER_GID=$(stat -c "%g" /dev/dri/renderD128)

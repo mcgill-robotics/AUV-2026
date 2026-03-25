@@ -318,6 +318,7 @@ RUN pip install --no-cache-dir --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} not
 
 # Environment Setup
 ARG USERNAME=douglas
+ENV USERNAME=${USERNAME}
 ARG USER_UID=1000
 ARG USER_GID=$USER_UID
 
