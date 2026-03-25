@@ -3,7 +3,7 @@
 DUMMY_GID=9999
 
 # 0. Ensure fixuid is run to set up the 'douglas' user has the same UID as the host user.
-fixuid -q
+eval "$(fixuid -q)"
 
 # 1. Dynamically detect the host's GIDs directly from the mounted hardware
 if [[ -e /dev/dri/renderD128 ]]; then
