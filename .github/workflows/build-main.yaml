@@ -45,7 +45,6 @@ jobs:
         file: Docker/dev/Dockerfile
         platforms: linux/arm64
         push: false
-        load: true
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
@@ -113,7 +112,7 @@ jobs:
             
             # Install dependencies using rosdep
             sudo apt-get update
-            rosdep update --rosdistro \$ROS_DISTRO
+            sudo rosdep update --rosdistro \$ROS_DISTRO
             sudo rosdep install --from-paths src --ignore-src --rosdistro \$ROS_DISTRO -y || true
             
             # Build specified packages
