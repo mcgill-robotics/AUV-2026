@@ -239,7 +239,6 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 RUN pip3 install --no-cache-dir --force-reinstall "setuptools==65.5.1"
 
 ARG USERNAME=douglas
-ENV USERNAME=${USERNAME}
 ARG USER_UID=1000
 ARG USER_GID=$USER_UID
 

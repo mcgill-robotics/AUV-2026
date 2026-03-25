@@ -167,7 +167,6 @@ RUN pip3 install --no-cache-dir --force-reinstall "setuptools==65.5.1"
 # ---------------------------------------------------------
 # The base image already has a 'ros' user with sudo. 
 ARG USERNAME=douglas
-ENV USERNAME=${USERNAME}
 ARG USER_UID=1000
 ARG USER_GID=$USER_UID
 
