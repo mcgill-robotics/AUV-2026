@@ -76,7 +76,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Bridge & Teleop
     ros-${ROS_DISTRO}-joy \
     ros-${ROS_DISTRO}-joy-teleop \
-    ros-${ROS_DISTRO}-foxglove-bridge \
+    ros-${ROS_DISTRO}-foxglove-msgs \
     # Navigation & Localization
     ros-${ROS_DISTRO}-mavros \
     ros-${ROS_DISTRO}-mavros-msgs \
@@ -128,6 +128,21 @@ RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \
             "-DUAGENT_P2P_PROFILE=OFF" \
             "--no-warn-unused-cli" && \
     rm -rf build src log
+
+# ----------------------------------------------------------
+# Install Foxglove Bridge from source
+# ----------------------------------------------------------
+WORKDIR /opt/ros/foxglove_ws
+RUN git clone https://github.com/foxglove/foxglove-sdk.git src/foxglove-sdk && \
+    apt-get update && \
+    rm -rf /etc/ros/rosdep/sources.list.d/* && \
+    rosdep init && \
+    rosdep update --rosdistro ${ROS_DISTRO} && \
+    rosdep install -y --from-paths src --ignore-src --rosdistro ${ROS_DISTRO} && \
+    . /opt/ros/${ROS_DISTRO}/setup.sh && \
+    colcon build --packages-select foxglove_bridge \
+    --cmake-args -DCMAKE_BUILD_TYPE=Release && \
+    rm -rf build log src /var/lib/apt/lists/*
 WORKDIR /root
 
 # ---------------------------------------------------------
@@ -174,6 +189,11 @@ RUN ARCH="$(dpkg --print-architecture)" && \
     mkdir -p /etc/fixuid && \
     printf "user: $USERNAME\ngroup: $USERNAME\n" > /etc/fixuid/config.yml
 
+# Copy entrypoint
+COPY Docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Switch to the User and configure the environment
 USER $USERNAME
 
 # set colcon home after adding user
@@ -184,11 +204,11 @@ COPY .colcon ${COLCON_HOME}/
 WORKDIR /home/$USERNAME/AUV-2026
 
 # Add source commands to bashrc
-RUN echo "source /opt/ros/${ROS_DISTRO}/local_setup.bash && source /opt/ros/micro_ros_ws/install/local_setup.bash" >> ~/.bashrc && \
+RUN echo "source /opt/ros/${ROS_DISTRO}/local_setup.bash && source /opt/ros/micro_ros_ws/install/local_setup.bash && source /opt/ros/foxglove_ws/install/local_setup.bash" >> ~/.bashrc && \
     echo "if [ -f ~/AUV-2026/ros2_ws/install/setup.bash ]; then source ~/AUV-2026/ros2_ws/install/setup.bash; fi" >> ~/.bashrc
 
 # Entrypoint uses fixuid to remap UID/GID if running with --user
-ENTRYPOINT ["fixuid", "-q"]
+ENTRYPOINT ["entrypoint.sh"]
 
 # Keep container alive
 CMD ["bash"]
