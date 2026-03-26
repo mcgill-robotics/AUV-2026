@@ -43,7 +43,6 @@ def generate_launch_description():
         planner_node = Node(
                 package="planner",
                 executable="planner_node",
-                name="planner",
                 parameters=[
                         {
                                 "sim": LaunchConfiguration("sim"),
