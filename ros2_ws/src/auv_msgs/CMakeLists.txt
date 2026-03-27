@@ -29,8 +29,12 @@ set(srv_files
 )
 
 set(action_files
-	"action/Effort.action"
-	"action/StateQuaternion.action"
+	"action/AUVNavigate.action"
+)
+
+set(srv_files
+	"srv/ShootTorpedo.srv"
+	"srv/SetGripper.srv"
 )
 
 # find dependencies
@@ -45,6 +49,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 	${msg_files}
 	${srv_files}
 	${action_files}
+	${srv_files}
 	DEPENDENCIES ${MSG_DEP_SET}
 )
 

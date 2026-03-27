@@ -19,7 +19,7 @@ depth_controller:
     KI: 0.0
     I_MAX: 10.0
     net_buoyancy: 8.94 # Newtons
-    enabled: false
+    enabled: true
 
 x_controller:
   ros__parameters:
@@ -28,7 +28,7 @@ x_controller:
     KD: 50.0
     KI: 0.0
     I_MAX: 10.0
-    enabled: false
+    enabled: true
 
 y_controller:
   ros__parameters:
@@ -37,4 +37,4 @@ y_controller:
     KD: 50.0
     KI: 0.0
     I_MAX: 10.0
-    enabled: false
+    enabled: true

@@ -20,6 +20,7 @@
   <exec_depend>vision</exec_depend>
   <exec_depend>xsens_mti_ros2_driver</exec_depend>
   <exec_depend>micro_ros_agent</exec_depend>
+  <exec_depend>planner</exec_depend>
 
   <exec_depend>ament_index_python</exec_depend>
 
