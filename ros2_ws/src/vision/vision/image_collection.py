@@ -4,14 +4,32 @@
 
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, CompressedImage
+from auv_msgs.srv import AutomaticCapture
+from std_srvs.srv import SetBool, Trigger 
 from cv_bridge import CvBridge, CvBridgeError
 import cv2
+import numpy as np
 import os
 import subprocess
 from datetime import datetime
 import threading
+from functools import partial
 from pathlib import Path
+import yaml
+from ament_index_python.packages import get_package_share_directory
+
+
+def load_topics_config():
+    """Load centralized topic config from telemetry/config/topics.yaml."""
+    try:
+        config_path = os.path.join(
+            get_package_share_directory('telemetry'), 'config', 'topics.yaml'
+        )
+        with open(config_path, 'r') as f:
+            return yaml.safe_load(f)
+    except Exception:
+        return None
 
 
 class ImageCollectionNode(Node):
@@ -21,21 +39,34 @@ class ImageCollectionNode(Node):
         # Check if display is available
         self.display_available = self._check_display()
         
-        # Parameters
+        # Load centralized topic config
+        topics = load_topics_config()
+        default_front = topics['cameras']['front'] if topics else '/zed/zed_node/rgb/color/rect/image/compressed'
+        default_down = topics['cameras']['down'] if topics else '/down_cam/image_raw'
+        default_depth = topics['cameras']['depth_map'] if topics else '/zed/zed_node/depth/depth_registered/compressed'
+
+        # Parameters (defaults from topics.yaml)
         self.declare_parameter('front_cam_data_dir', 'data_front_cam')
         self.declare_parameter('down_cam_data_dir', 'data_down_cam')
-        self.declare_parameter('front_cam_topic', '/zed/zed_node/stereo/image_rect_color')
-        self.declare_parameter('down_cam_topic', '/down_cam/image_raw')
+        self.declare_parameter('depth_data_dir', 'data_depth')
+        self.declare_parameter('front_cam_topic', default_front)
+        self.declare_parameter('down_cam_topic', default_down)
+        self.declare_parameter('depth_topic', default_depth)
+        self.declare_parameter('collection_interval', 2.0)
         
         # Get parameters
         self.front_cam_dir = self.get_parameter('front_cam_data_dir').value
         self.down_cam_dir = self.get_parameter('down_cam_data_dir').value
+        self.depth_dir = self.get_parameter('depth_data_dir').value
         front_topic = self.get_parameter('front_cam_topic').value
         down_topic = self.get_parameter('down_cam_topic').value
+        depth_topic = self.get_parameter('depth_topic').value
+        self.collection_interval = self.get_parameter('collection_interval').value
         
         # Create directories
         Path(self.front_cam_dir).mkdir(parents=True, exist_ok=True)
         Path(self.down_cam_dir).mkdir(parents=True, exist_ok=True)
+        Path(self.depth_dir).mkdir(parents=True, exist_ok=True)
         
         # Bridge for image conversion
         self.bridge = CvBridge()
@@ -43,27 +74,56 @@ class ImageCollectionNode(Node):
         # Thread-safe image storage with locks
         self.front_image = None
         self.down_image = None
+        self.depth_image = None
         self.front_lock = threading.Lock()
         self.down_lock = threading.Lock()
+        self.depth_lock = threading.Lock()
         
         # Statistics
         self.front_count = 0
         self.down_count = 0
+        self.depth_count = 0
         self.stats_lock = threading.Lock()
         
         # Subscribers
-        self.front_sub = self.create_subscription(
-            Image, front_topic, self.front_callback, 10)
+        if 'compressed' in front_topic:
+            self.front_sub = self.create_subscription(
+                CompressedImage, front_topic, self.front_callback, 10)
+        else:
+            self.front_sub = self.create_subscription(
+                Image, front_topic, self.front_callback, 10)
+                
         self.down_sub = self.create_subscription(
             Image, down_topic, self.down_callback, 10)
+        
+        # TODO I feel like this is somewhat unstable (something like a compressed parameter like what is done in vision pipeline would be better), but for now this is good enough
+        depth_format = CompressedImage if "compressed" in depth_topic else Image
+        
+        self.depth_sub = self.create_subscription(
+            CompressedImage, 
+            depth_topic, 
+            partial(self.depth_callback, depth_format=depth_format), # fill in depth_format argument for callback
+            10
+        )
         
         # Automatic capture state
         self.auto_capture_active = False
         self.auto_timer = None
-        
+
+        # Service controlled capture state
+        self.service_capture_timer_front = None
+        self.service_capture_timer_down = None
+        self.service_capture_timer_depth = None
+        self.create_service(AutomaticCapture, '~/toggle_front_collection', partial(self.toggle_collection_service_callback, "front"))
+        self.create_service(AutomaticCapture, '~/toggle_down_collection', partial(self.toggle_collection_service_callback, "down"))
+        self.create_service(AutomaticCapture, '~/toggle_depth_collection', partial(self.toggle_collection_service_callback, "depth"))
+        self.create_service(Trigger, '~/toggle_manual_front_collection', partial(self.manual_save_image_service_callback, "front"))
+        self.create_service(Trigger, '~/toggle_manual_down_collection', partial(self.manual_save_image_service_callback, "down"))
+
         self.get_logger().info('Image Collection Node initialized')
         self.get_logger().info(f'Front cam dir: {self.front_cam_dir}')
         self.get_logger().info(f'Down cam dir: {self.down_cam_dir}')
+        self.get_logger().info(f'Depth dir: {self.depth_dir}')
         if not self.display_available:
             self.get_logger().warn('Display not available - view feature disabled')
         self.get_logger().info('Waiting for camera data...')
@@ -75,7 +135,6 @@ class ImageCollectionNode(Node):
         if 'DISPLAY' not in os.environ:
             return False
         
-
         # Try to actually test X connection
         try:
             result = subprocess.run(
@@ -90,7 +149,13 @@ class ImageCollectionNode(Node):
     def front_callback(self, msg):
         """Callback for front camera images"""
         try:
-            cv_image = self.bridge.imgmsg_to_cv2(msg, 'bgr8')
+            if isinstance(msg, CompressedImage):
+                # Manual decoding to avoid cv_bridge issues with numpy 2.x
+                np_arr = np.frombuffer(msg.data, np.uint8)
+                cv_image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+            else:
+                cv_image = self.bridge.imgmsg_to_cv2(msg, 'bgr8')
+                
             with self.front_lock:
                 self.front_image = cv_image
         except CvBridgeError as e:
@@ -105,8 +170,51 @@ class ImageCollectionNode(Node):
         except CvBridgeError as e:
             self.get_logger().error(f'Down camera conversion error: {e}')
     
+    def depth_callback(self, msg, depth_format: type[Image] | type[CompressedImage]):
+        """Callback for depth map images (32FC1)"""
+        try:
+            if depth_format == CompressedImage:
+                depth_image = self.bridge.compressed_imgmsg_to_cv2(msg, 'passthrough')
+            else:
+                depth_image = self.bridge.imgmsg_to_cv2(msg, 'passthrough')
+            with self.depth_lock:
+                self.depth_image = depth_image
+        except CvBridgeError as e:
+            self.get_logger().error(f'Depth map conversion error: {e}')
+    
+    def save_depth(self, timestamp=None):
+        """Save depth map as 16-bit PNG (millimeters)"""
+        with self.depth_lock:
+            if self.depth_image is None:
+                self.get_logger().warn('No depth image available')
+                return False
+            depth = self.depth_image.copy()
+        
+        if timestamp is None:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+        
+        filename = os.path.join(self.depth_dir, f'depth_{timestamp}.png')
+        
+        try:
+            # Convert 32FC1 (meters) to 16-bit unsigned (millimeters)
+            # NaN/inf values become 0 (invalid depth)
+            depth_mm = np.nan_to_num(depth, nan=0.0, posinf=0.0, neginf=0.0)
+            depth_mm = (depth_mm * 1000.0).clip(0, 65535).astype(np.uint16)
+            cv2.imwrite(filename, depth_mm)
+            with self.stats_lock:
+                self.depth_count += 1
+                count = self.depth_count
+            self.get_logger().info(f'Depth: Saved {filename} (total: {count})')
+            return True
+        except Exception as e:
+            self.get_logger().error(f'Error saving depth: {e}')
+            return False
+
     def save_image(self, camera_type):
         """Save image from specified camera"""
+        # Generate shared timestamp for synchronized saves
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+
         if camera_type == 'front':
             with self.front_lock:
                 if self.front_image is None:
@@ -122,8 +230,6 @@ class ImageCollectionNode(Node):
                 image = self.down_image.copy()
             output_dir = self.down_cam_dir
         
-        # Generate filename with timestamp
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
         filename = os.path.join(output_dir, f'image_{timestamp}.jpg')
         
         # Save image
@@ -137,10 +243,85 @@ class ImageCollectionNode(Node):
                     self.down_count += 1
                     count = self.down_count
             self.get_logger().info(f'{camera_type.capitalize()} camera: Saved {filename} (total: {count})')
-            return True
         except Exception as e:
             self.get_logger().error(f'Error saving image: {e}')
             return False
+        
+        # Auto-save depth alongside front camera captures
+        if camera_type == 'front':
+            self.save_depth(timestamp=timestamp)
+        
+        return True
+
+    def manual_save_image_service_callback(self, camera_type, request, response): # Important note for function signature of service callbacks, add your args before request, reponse
+        """Save an image manually from specified camera"""
+        if (camera_type == "front" and self.service_capture_timer_front is not None) or \
+           (camera_type == "down" and self.service_capture_timer_down is not None):
+            response.message = 'Front collection already running'
+        else:
+            capture_success = self.save_image(camera_type)
+            response.message = "Collected image!" if capture_success else "Failed to collect image."
+            response.success = False if capture_success == False else True
+        
+        self.get_logger().info(response.message)
+        return response
+
+
+    def toggle_collection_service_callback(self, camera_type, request, response):
+        """Service callback to toggle camera collection"""
+        if request.data:
+            # Verify desired interval is valid before starting
+            try:
+                interval_between_captures = float(request.time_interval)
+                if interval_between_captures <= 0.1:
+                    response.success = False
+                    response.message = "The input interval time is invalid! Make sure it is a float above 0.1"
+                    return response
+            except:
+                response.success = False
+                response.message = "The input interval time is invalid! Make sure it is a float above 0.1"
+                return response
+                
+        timer_attr = f'service_capture_timer_{camera_type}'
+        
+        if request.data:
+            timer = getattr(self, timer_attr)
+            action = self.save_depth if camera_type == 'depth' else partial(self.save_image, camera_type)
+            
+            # Start or update collection
+            if timer is not None:
+                current_interval = timer.timer_period_ns / 1e9
+                # If interval changed by more than 10ms, update it
+                if abs(current_interval - interval_between_captures) > 0.01:
+                    timer.cancel()
+                    timer.destroy()
+                    setattr(self, timer_attr, self.create_timer(interval_between_captures, action))
+                    response.success = True
+                    response.message = f'Updated {camera_type} collection interval to {interval_between_captures}s'
+                    self.get_logger().info(response.message)
+                else:
+                    response.success = True
+                    response.message = f'{camera_type.capitalize()} collection already running'
+            else:
+                setattr(self, timer_attr, self.create_timer(interval_between_captures, action))
+                response.success = True
+                response.message = f'Started {camera_type} collection (every {interval_between_captures}s)'
+                self.get_logger().info(response.message)
+        else:
+            # Stop collection
+            timer = getattr(self, timer_attr)
+            if timer is not None:
+                timer.cancel()
+                timer.destroy()
+                setattr(self, timer_attr, None)
+                response.success = True
+                response.message = f'Stopped {camera_type} collection'
+                self.get_logger().info(response.message)
+            else:
+                response.success = False
+                response.message = f'{camera_type.capitalize()} collection was not running'
+        
+        return response
     
     def show_latest_image(self, camera_type):
         """Display the latest image from specified camera"""
@@ -187,7 +368,8 @@ class ImageCollectionNode(Node):
             print(f'\n=== Statistics ===')
             print(f'Front camera: {self.front_count} images')
             print(f'Down camera: {self.down_count} images')
-            print(f'Total: {self.front_count + self.down_count} images')
+            print(f'Depth maps: {self.depth_count} images')
+            print(f'Total: {self.front_count + self.down_count + self.depth_count} images')
             print('==================\n')
     
     def stop_auto_capture(self):
@@ -295,10 +477,8 @@ def user_input_thread(node):
             rclpy.shutdown()
             break
         except EOFError:
-            # Handle EOF (Ctrl+D)
-            print('\nShutting down...')
-            node.stop_auto_capture()
-            rclpy.shutdown()
+            # Handle EOF (Ctrl+D) or non-interactive mode
+            print('\nInput stream closed. Exiting input thread.')
             break
 
 
@@ -307,8 +487,8 @@ def main(args=None):
     node = ImageCollectionNode()
     
     # Start user input thread
-    input_thread = threading.Thread(target=user_input_thread, args=(node,), daemon=True)
-    input_thread.start()
+    # input_thread = threading.Thread(target=user_input_thread, args=(node,), daemon=True)
+    # input_thread.start()
     
     # Spin the node
     try:
