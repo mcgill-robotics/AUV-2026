@@ -40,3 +40,37 @@ When you modify a layout in Foxglove:
 1. Export: Layout icon (top left) → Export to file
 2. Save to `foxglove/` folder, overwriting the existing JSON
 3. Commit changes to git
+
+## CLI Backup Commands
+
+In the event Foxglove is unavailable, you can use the following terminal commands to manually interact with the AUV.
+
+### Publishing Setpoints
+
+```bash
+# Depth setpoint (Note: Z is down in traditional ENU, so positive depth = negative Z visually)
+ros2 topic pub /controls/depth_setpoint std_msgs/msg/Float64 "{data: 1.5}" 
+
+# X, Y planar setpoints
+ros2 topic pub /controls/x_setpoint std_msgs/msg/Float64 "{data: 2.0}" 
+ros2 topic pub /controls/y_setpoint std_msgs/msg/Float64 "{data: 0.0}" 
+
+# Attitude setpoint (Quaternion)
+ros2 topic pub /controls/quaternion_setpoint geometry_msgs/msg/Quaternion "{x: 0.0, y: 0.0, z: 0.7071, w: 0.7071}"
+```
+
+### Image Collection (Vision)
+
+```bash
+# Manually trigger a single frame capture for the front camera
+ros2 service call /vision/image_collection/toggle_manual_front_collection std_srvs/srv/Trigger
+
+# Manually trigger a single frame capture for the downward camera
+ros2 service call /vision/image_collection/toggle_manual_down_collection std_srvs/srv/Trigger
+
+# Start automatic front collection (e.g., 1 image every 2.5 seconds)
+ros2 service call /vision/image_collection/toggle_front_collection auv_msgs/srv/AutomaticCapture "{data: true, time_interval: 2.5}"
+
+# Stop automatic front collection
+ros2 service call /vision/image_collection/toggle_front_collection auv_msgs/srv/AutomaticCapture "{data: false, time_interval: 0.0}"
+```
