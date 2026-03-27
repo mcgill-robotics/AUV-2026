@@ -9,3 +9,6 @@
 	path = ros2_ws/src/ros-tcp-endpoint
 	url = https://github.com/Unity-Technologies/ROS-TCP-Endpoint.git
 	branch = main-ros2
+[submodule "ros2_ws/src/dvl_a50"]
+	path = ros2_ws/src/dvl_a50
+	url = https://github.com/mcgill-robotics/dvl_a50
