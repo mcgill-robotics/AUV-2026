@@ -94,7 +94,7 @@ class MissionChoiceBehaviour(py_trees.behaviour.Behaviour):
         # Note that after a mission is completed, the respective mission will set this key back to None
         if self.blackboard.mission_choice is None:
             if not self.message_shown:
-                self.node.get_logger().info("Waiting for mission choice. Publish an integer to topic /mission_selector ...\n \
+                self.node.get_logger().info("Waiting for mission choice. Publish once an Int32 to topic /mission_selector ...\n \
                             1: Orbit Prequal\n \
                             2: Rectangle Prequal\n \
                             3: Basic Move forward (1.0m relative to Dougie)\n \

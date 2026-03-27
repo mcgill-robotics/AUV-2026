@@ -2,6 +2,16 @@ general:
   tick_rate       : 0.3
   sim             : true
   use_ground_truth: true
-  pre_qual_yaw_tolerance:
-  pre_qual_positional_tolerance:
+  pre_qual_yaw_tolerance: 0.5 # To figure out a minimum from the sensor's noise
+  pre_qual_positional_tolerance: 0.2 # To figure out a minimum from the sensor's noise
+  pre_qual_hold_time: 1.0
   pre_qual_timeout: 2.0
+
+  # These params are just for the Orbit Prequal, they represent tolerance
+  # scales on the individual circle arc movements since depending on the radius of the circle
+  # tolerances change
+  orbit_pre_qual_yaw_tolerance_scale: 0.5
+  orbit_pre_qual_positional_tolerance_scale: 0.5
+  orbit_pre_qual_hold_time_initial: 1.0
+  orbit_pre_qual_hold_time_segments: 0.2
+  orbit_pre_qual_timeout: 30.0

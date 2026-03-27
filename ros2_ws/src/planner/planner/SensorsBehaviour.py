@@ -65,9 +65,8 @@ class SensorsBehaviour(py_trees.behaviour.Behaviour):
                 use_sim = self.node.get_parameter("sim").get_parameter_value().bool_value
                 use_ground_truth = self.node.get_parameter("use_ground_truth").get_parameter_value().bool_value
 
-                # TO USE STATE ESTIMATION TOPICS WHEN THEY ARE READY
-                topic_pose = "/state_estimation/pose"
-                topic_twist = "/state_estimation/twist"
+                topic_pose = "state/pose"
+                topic_twist = "auv_frame/dvl/velocity"
 
                 # Currently can't think of a better way to not use two params 
                 #(since use_ground_truth is only valid if in sim, but in sim you might still wanna use state estimation)
