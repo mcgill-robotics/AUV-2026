@@ -146,23 +146,23 @@ RUN git clone -b ${ROS_DISTRO} https://github.com/micro-ROS/micro_ros_setup.git 
 
 RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \
         colcon build \
-        --parallel-workers $(nproc) \
-        --merge-install \
-        --event-handlers console_direct+ \
-        --base-paths src \
-        --cmake-args -DCMAKE_BUILD_TYPE=Release && \
+                --parallel-workers $(nproc) \
+                --merge-install \
+                --event-handlers console_direct+ \
+                --base-paths src \
+                --cmake-args -DCMAKE_BUILD_TYPE=Release && \
         . /opt/ros/micro_ros_ws/install/setup.sh && \
         MICROROS_PREFIX=$(ros2 pkg prefix micro_ros_setup) && \
         ros2 run micro_ros_setup create_ws.sh src "$MICROROS_PREFIX/config/agent_ros2_packages.txt" "$MICROROS_PREFIX/config/agent_uros_packages.repos" && \
         colcon build \
-        --packages-up-to micro_ros_agent $@ \
-        --parallel-workers $(nproc) \
-        --merge-install \
-        --event-handlers console_direct+ \
-        --cmake-args \
-        "-DUAGENT_BUILD_EXECUTABLE=OFF" \
-        "-DUAGENT_P2P_PROFILE=OFF" \
-        "--no-warn-unused-cli" && \
+                --packages-up-to micro_ros_agent $@ \
+                --parallel-workers $(nproc) \
+                --merge-install \
+                --event-handlers console_direct+ \
+                --cmake-args \
+                        "-DUAGENT_BUILD_EXECUTABLE=OFF" \
+                        "-DUAGENT_P2P_PROFILE=OFF" \
+                        "--no-warn-unused-cli" && \
         rm -rf build log
 
 # ----------------------------------------------------------
@@ -170,8 +170,6 @@ RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \
 # ----------------------------------------------------------
 WORKDIR /opt/ros/foxglove_ws
 RUN git clone https://github.com/foxglove/foxglove-sdk.git src/foxglove-sdk && \
-        cd src/foxglove-sdk/ros/src/foxglove_bridge && \
-        cd /opt/ros/foxglove_ws && \
         apt-get update && \
         rm -rf /etc/ros/rosdep/sources.list.d/* && \
         rosdep init && \
@@ -266,6 +264,11 @@ RUN ARCH="$(dpkg --print-architecture)" && \
         mkdir -p /etc/fixuid && \
         printf "user: $USERNAME\ngroup: $USERNAME\n" > /etc/fixuid/config.yml
 
+# Copy entrypoint
+COPY Docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Switch to the User and configure the environment
 USER $USERNAME
 
 # set colcon home after adding user
@@ -279,7 +282,7 @@ RUN echo "source /opt/ros/${ROS_DISTRO}/local_setup.bash && source /opt/ros/micr
         echo "if [ -f ~/AUV-2026/ros2_ws/install/setup.bash ]; then source ~/AUV-2026/ros2_ws/install/setup.bash; fi" >> ~/.bashrc
 
 # Entrypoint uses fixuid to remap UID/GID if running with --user
-ENTRYPOINT ["fixuid", "-q"]
+ENTRYPOINT ["entrypoint.sh"]
 
 # Keep container alive
 CMD ["bash"]

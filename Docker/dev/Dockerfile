@@ -134,8 +134,6 @@ RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \
 # ----------------------------------------------------------
 WORKDIR /opt/ros/foxglove_ws
 RUN git clone https://github.com/foxglove/foxglove-sdk.git src/foxglove-sdk && \
-    cd src/foxglove-sdk/ros/src/foxglove_bridge && \
-    cd /opt/ros/foxglove_ws && \
     apt-get update && \
     rm -rf /etc/ros/rosdep/sources.list.d/* && \
     rosdep init && \
@@ -191,6 +189,11 @@ RUN ARCH="$(dpkg --print-architecture)" && \
     mkdir -p /etc/fixuid && \
     printf "user: $USERNAME\ngroup: $USERNAME\n" > /etc/fixuid/config.yml
 
+# Copy entrypoint
+COPY Docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Switch to the User and configure the environment
 USER $USERNAME
 
 # set colcon home after adding user
@@ -205,7 +208,7 @@ RUN echo "source /opt/ros/${ROS_DISTRO}/local_setup.bash && source /opt/ros/micr
     echo "if [ -f ~/AUV-2026/ros2_ws/install/setup.bash ]; then source ~/AUV-2026/ros2_ws/install/setup.bash; fi" >> ~/.bashrc
 
 # Entrypoint uses fixuid to remap UID/GID if running with --user
-ENTRYPOINT ["fixuid", "-q"]
+ENTRYPOINT ["entrypoint.sh"]
 
 # Keep container alive
 CMD ["bash"]

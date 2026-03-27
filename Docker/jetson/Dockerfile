@@ -226,13 +226,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /opt/dependencies_ws
 
 RUN . /opt/ros/$ROS_DISTRO/install/setup.bash && \
-  colcon build --parallel-workers $(nproc) --merge-install \
-  --event-handlers console_direct+ --base-paths src \
-  --cmake-args ' -DCMAKE_BUILD_TYPE=Release' \
-  ' -DCMAKE_LIBRARY_PATH=/usr/local/cuda/lib64/stubs' \
-  ' -DCMAKE_CXX_FLAGS="-Wl,--allow-shlib-undefined"' \
-  ' --no-warn-unused-cli' && \
-  rm -rf build src log
+    colcon build --parallel-workers $(nproc) --merge-install \
+        --event-handlers console_direct+ --base-paths src \
+        --cmake-args ' -DCMAKE_BUILD_TYPE=Release' \
+        ' -DCMAKE_LIBRARY_PATH=/usr/local/cuda/lib64/stubs' \
+        ' -DCMAKE_CXX_FLAGS="-Wl,--allow-shlib-undefined"' \
+        ' --no-warn-unused-cli' && \
+    rm -rf build src log
 
 # install micro-ROS
 WORKDIR /opt/ros/micro_ros_ws
@@ -266,8 +266,6 @@ RUN . /opt/ros/$ROS_DISTRO/install/setup.bash && \
 # ----------------------------------------------------------
 WORKDIR /opt/ros/foxglove_ws
 RUN git clone https://github.com/foxglove/foxglove-sdk.git src/foxglove-sdk && \
-    cd src/foxglove-sdk/ros/src/foxglove_bridge && \
-    cd /opt/ros/foxglove_ws && \
     apt-get update && \
     rm -rf /etc/ros/rosdep/sources.list.d/* && \
     rosdep init && \
@@ -344,6 +342,11 @@ RUN ARCH="$(dpkg --print-architecture)" && \
     mkdir -p /etc/fixuid && \
     printf "user: $USERNAME\ngroup: $USERNAME\n" > /etc/fixuid/config.yml
 
+# Copy entrypoint
+COPY Docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Switch to the User and configure the environment
 USER $USERNAME
 
 # set colcon home after adding user
@@ -361,7 +364,7 @@ WORKDIR /home/$USERNAME/AUV-2026
 RUN echo "source /opt/ros/humble/setup.bash && source /opt/dependencies_ws/install/local_setup.bash && source /opt/ros/micro_ros_ws/install/local_setup.bash && source /opt/ros/foxglove_ws/install/local_setup.bash && source /home/$USERNAME/AUV-2026/ros2_ws/install/setup.bash" >> ~/.bashrc 
 RUN echo 'AMENT_PREFIX_PATH=$(echo $AMENT_PREFIX_PATH | sed -E "s|/opt/ros/humble/install:/opt/ros/humble$|/opt/ros/humble:/opt/ros/humble/install|")' >> ~/.bashrc
 
-# Entrypoint uses fixuid to remap UID/GID if running with --user
-ENTRYPOINT ["fixuid", "-q"]
+# Entrypoint to fix Group IDs to allow GPU access 
+ENTRYPOINT ["entrypoint.sh"]
 
 CMD ["bash"]
