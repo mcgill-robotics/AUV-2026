@@ -4,6 +4,7 @@ from sensor_msgs.msg import Image
 from sensor_msgs.msg import CompressedImage
 
 from cv_bridge import CvBridge
+from cv_bridge.core import CvBridgeError
 import cv2
 import numpy as np
 
@@ -49,7 +50,7 @@ class EnhanceNode(Node):
     def enhancement_callback(self, msg):
         try:
             enhanced_msg = self.apply_enhancer(msg)
-        except (cv2.error, FloatingPointError) as e:
+        except (cv2.error, FloatingPointError, CvBridgeError) as e:
             self.get_logger().error(
                 (f"Error during image enhancement: {e}."
                 f" Publishing original image to {self.output_topic}.")

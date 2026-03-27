@@ -1,5 +1,8 @@
 /**:
   ros__parameters:
+    stream_server:
+      stream_enabled: true
+      port: 30000
     general:
       camera_model: 'zed2i'
       camera_name: 'real' # overwritten by launch file
@@ -13,6 +16,7 @@
       pos_tracking_enabled: true
       pos_tracking_mode: 'GEN_1'
       publish_tf: false
+      imu_fusion: true
       publish_map_tf: false
       area_memory: false
             

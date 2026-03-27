@@ -37,6 +37,13 @@ class ObjectDetectorNode():
         self.publish_annotated_image = self.node.get_parameter('publish_annotated_image').get_parameter_value().bool_value
         self.compressed = self.node.get_parameter('compressed').get_parameter_value().bool_value
 
+        input_format = Image
+        if self.compressed:
+            input_format = CompressedImage
+            self.node.get_logger().warn(
+                (f"WARNING: {self.node.get_name()} running in compressed mode."
+                 " Input image assumed to be in compressed format.")
+            )
         # Load YOLO
         self.bridge = CvBridge()
         if not os.path.exists(model_path):
@@ -62,7 +69,7 @@ class ObjectDetectorNode():
         )
 
         self.node.create_subscription(
-            CompressedImage,
+            input_format,
             input_topic,
             self.image_callback,
             qos_profile
@@ -80,12 +87,13 @@ class ObjectDetectorNode():
 
         # Publisher for annotated debug image
         if self.publish_annotated_image:
+            publish_topic = output_topic + "/annotated" + ("/compressed" if self.compressed else "")
             self.pub_annotated_image = self.node.create_publisher(
-                CompressedImage,
-                output_topic + "_annotated/compressed", 
+                input_format,
+                publish_topic,
                 queue_size
             )
-            self.node.get_logger().info(f"Publishing annotated debug image to: {output_topic}/debug_image")
+            self.node.get_logger().info(f"Publishing annotated debug image to: {publish_topic}")
         
         self.node.get_logger().info(f"{self.node.get_name()} initialized.")
 
@@ -142,7 +150,7 @@ class ObjectDetectorNode():
                 hypothesis.hypothesis.class_id = label
                 hypothesis.hypothesis.score = conf
                 
-                detection.results.append(hypothesis)
+                detection.results = [hypothesis]
                 det_objects.append(detection)
 
         det_msg.detections = det_objects
@@ -163,4 +171,4 @@ class ObjectDetectorNode():
         stamp_time = Time.from_msg(msg.header.stamp)
         current_time = self.node.get_clock().now()
         time_diff = (current_time - stamp_time).nanoseconds / 1e9
-        self.node.get_logger().info(f"Detection latency: {time_diff:.9f} seconds")
+        self.node.get_logger().debug(f"Detection latency: {time_diff:.9f} seconds")

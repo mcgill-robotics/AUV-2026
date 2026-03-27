@@ -4,11 +4,21 @@ import yaml
 from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument
+from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument,TimerAction
 from launch.conditions import IfCondition,UnlessCondition
 from launch_ros.actions import Node
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
+
+def get_compressed_topic(base_topic: str, compressed: LaunchConfiguration) -> PythonExpression:
+    """
+    Dynamically determines if the topic name should have '/compressed' appended based on the value of the 'compressed' launch configuration parameter. This allows for seamless switching between compressed and uncompressed image topics without needing to change topic names in multiple places in the code or launch files.
+    """
+    
+    return PythonExpression([
+        "'", base_topic,
+        "' + ('/compressed' if '", compressed, "' == 'true' else '')"
+    ])
 
 def generate_launch_description():
     vision_dir = get_package_share_directory("vision")
@@ -19,23 +29,31 @@ def generate_launch_description():
     
     sim_arg = DeclareLaunchArgument(
         "sim",
-        default_value=str(default_config["general"]["sim"]),
+        default_value=str(default_config["general"]["sim"]).lower(),
         description=(
             "Whether to use simulation time. Should be true when running in simulation and false when running on the real AUV."
         )
     )
     
+    wrapper_stream_arg = DeclareLaunchArgument(
+        "wrapper_stream_enabled",
+        default_value=str(default_config["general"]["use_wrapper_stream"]).lower(),
+        description=(
+            "Whether to use the stream server for the ZED wrapper."
+        )
+    )
+    
     compressed_arg = DeclareLaunchArgument(
         "compressed",
-        default_value=str(default_config["general"]["compressed"]),
+        default_value=str(default_config["general"]["compressed"]).lower(),
         description=(
-            "Whether input image topics are compressed image message topics. Appends 'compressed' to the end of expected input topic names if true."
+            "Whether input image topics are compressed image message topics. Appends '/compressed' to the end of all image topic names if true."
         )
     )
     
     use_enhance_arg = DeclareLaunchArgument(
         "enhance_images",
-        default_value=str(default_config["general"]["enhance_images"]),
+        default_value=str(default_config["general"]["enhance_images"]).lower(),
         description=(
             "Whether to run the image enhancement nodes. If false, object detection nodes will subscribe directly to raw camera topics instead of enhanced image topics."
         )
@@ -43,35 +61,31 @@ def generate_launch_description():
     
     front_model_arg = DeclareLaunchArgument(
         "front_model_relative_path",
-        default_value=default_config["object_detection"]["front_model_relative_path"],
+        default_value=default_config["object_detection"]["front_cam"]["model_relative_path"],
         description="Path to the front camera object detection model file."
     )
+    
     down_model_arg = DeclareLaunchArgument(
         "down_model_relative_path",
-        default_value=default_config["object_detection"]["down_model_relative_path"],
+        default_value=default_config["object_detection"]["down_cam"]["model_relative_path"],
         description="Path to the down camera object detection model file."
     )
-    # topic names pulled from config directly
-    front_cam_topic = default_config["camera"]["front_cam_topic"]
-    down_cam_topic = default_config["camera"]["down_cam_topic"]
-    front_enhanced_topic = default_config["image_enhancement"]["front_enhanced_topic"]
-    down_enhanced_topic = default_config["image_enhancement"]["down_enhanced_topic"]
-    front_detections_topic = default_config["object_detection"]["front_detections_topic"]
-    down_detections_topic = default_config["object_detection"]["down_detections_topic"]
-    object_map_topic = default_config["object_map"]["map_topic"]
-    auv_pose_topic = default_config["object_map"]["pose_topic"]
-    ie_log_level = default_config["image_enhancement"]["log_level"]
-    od_log_level = default_config["object_detection"]["log_level"]
-    om_log_level = default_config["object_map"]["log_level"]
-    
+
+    zed_wrapper_log_type_arg = DeclareLaunchArgument(
+        "zed_wrapper_log_type",
+        default_value=default_config["general"]["zed_wrapper_log_type"],
+        description=(
+            "The log type for the zed wrapper node. Can be set to 'log' to enable logging to file, 'screen' to log to console, or 'both' to log to both."
+        )
+    )
+
     zed_wrapper_path = get_package_share_directory("zed_wrapper")
-    
     zed_real_wrapper_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(zed_wrapper_path, "launch", "zed_camera.launch.py")),
         launch_arguments={
             "camera_model": "zed2i",
             "ros_params_override_path": PathJoinSubstitution([vision_dir, "config", "zed_wrapper_real.yaml"]),
-            "node_log_type": "log"
+            "node_log_type": LaunchConfiguration("zed_wrapper_log_type")
         }.items(),
         condition=UnlessCondition(LaunchConfiguration("sim"))
     )
@@ -79,56 +93,112 @@ def generate_launch_description():
     zed_sim_wrapper_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(zed_wrapper_path, "launch", "zed_camera.launch.py")),
         launch_arguments={
-            "use_sim_time": "true",
-            "sim_mode": "true",
             "camera_model": "zedx",
-            "stream_address": "127.0.0.1",
-            "stream_port": "30000",
+            "sim_mode": "true",
+            "sim_address": default_config["general"]["sim_ip"],
+            "sim_port": str(default_config["general"]["sim_port"]),
             "ros_params_override_path": PathJoinSubstitution([vision_dir, "config", "zed_wrapper_unity_sim.yaml"]),
-            "node_log_type": "log"
+            "use_sim_time": LaunchConfiguration("sim"),
+            "node_log_type": LaunchConfiguration("zed_wrapper_log_type")
         }.items(),
         condition=IfCondition(LaunchConfiguration("sim"))
     )
     
-    enhancement_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(os.path.join(vision_dir, "launch", "image_enhancement.launch.py")),
-        # use dictionary unpacking to convert from dict to list of tuples for better readability
-        launch_arguments={
-            "front_cam_topic": front_cam_topic,
-            "down_cam_topic": down_cam_topic,
-            "front_enhanced_topic": front_enhanced_topic,
-            "down_enhanced_topic": down_enhanced_topic,
-            "compressed": LaunchConfiguration("compressed"),
-            "use_sim_time": LaunchConfiguration("sim"),
-            "log_level": ie_log_level
-        }.items(),
+    compressed_launch_config = LaunchConfiguration("compressed")
+    
+    front_cam_topic = get_compressed_topic(default_config["camera"]["front_cam_topic"], compressed_launch_config)
+    down_cam_topic = get_compressed_topic(default_config["camera"]["down_cam_topic"], compressed_launch_config)
+    front_enhanced_topic = get_compressed_topic(default_config["image_enhancement"]["front_cam"]["enhanced_topic"], compressed_launch_config)
+    down_enhanced_topic = get_compressed_topic(default_config["image_enhancement"]["down_cam"]["enhanced_topic"], compressed_launch_config)
+    
+    front_cam_enhancement_node = Node (
+        package="vision",
+        executable="front_image_enhancement.py",
+        name="front_image_enhancement_node",
+        output = "screen",
+        parameters=[
+            {
+                "input_topic": front_cam_topic,
+                "output_topic": front_enhanced_topic,
+                "compressed": LaunchConfiguration("compressed"),
+                "queue_size": default_config["image_enhancement"]["front_cam"]["queue_size"],
+                "use_sim_time": LaunchConfiguration("sim"),
+                "log_level": default_config["image_enhancement"]["front_cam"]["log_level"]
+            }
+        ],
+        ros_arguments=["--ros-args", "--log-level", default_config["image_enhancement"]["front_cam"]["log_level"]],
         condition=IfCondition(LaunchConfiguration("enhance_images"))
     )
     
-    # because launch configuration parameters are not evaluated in this script but rather passed in to ROS context directly, the ROS manager will evaluate these python expression to determine the actual topic names to remap to for the object detection nodes. If enhance_images is true, remap to the enhanced image topics, otherwise remap to the raw camera topics
+    down_cam_enhancement_node = Node (
+        package="vision",
+        executable="down_image_enhancement.py",
+        name="down_image_enhancement_node",
+        output = "screen",
+        parameters=[
+            {
+                "input_topic": down_cam_topic,
+                "output_topic": down_enhanced_topic,
+                "compressed": LaunchConfiguration("compressed"),
+                "queue_size": default_config["image_enhancement"]["down_cam"]["queue_size"],
+                "use_sim_time": LaunchConfiguration("sim"),
+                "log_level": default_config["image_enhancement"]["down_cam"]["log_level"]
+            }
+        ],
+        ros_arguments=["--ros-args", "--log-level", default_config["image_enhancement"]["down_cam"]["log_level"]],
+        condition=IfCondition(LaunchConfiguration("enhance_images"))
+    )
+    
+    # because launch configuration parameters are not evaluated in the launch file but rather passed in to ROS context directly, the ROS manager will evaluate these python expression to determine the actual topic names to remap to for the object detection nodes. If enhance_images is true, remap to the enhanced image topics, otherwise remap to the raw camera topics
     object_detection_front_input = PythonExpression([
         "'", front_enhanced_topic, 
-        "' if '", LaunchConfiguration("enhance_images"), "' == 'True' else '", 
-        front_cam_topic,"'"," + ('/compressed' if ",LaunchConfiguration('compressed'), " else '')"
+        "' if '", LaunchConfiguration("enhance_images"), "' == 'true' else '", 
+        front_cam_topic, "'"
     ])
     object_detection_down_input = PythonExpression([
         "'", down_enhanced_topic, 
-        "' if '", LaunchConfiguration("enhance_images"), "' == 'True' else '", down_cam_topic, "'"," + ('/compressed' if ",LaunchConfiguration('compressed'), " else '')"
+        "' if '", LaunchConfiguration("enhance_images"), "' == 'true' else '", 
+        down_cam_topic, "'"
     ])
     
-    object_detection_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(os.path.join(vision_dir, "launch", "object_detection.launch.py")),
-        launch_arguments={
-            "front_enhanced_topic": object_detection_front_input,
-            "down_enhanced_topic": object_detection_down_input,
-            "front_detections_topic": front_detections_topic,
-            "down_detections_topic": down_detections_topic,
-            "front_model": PathJoinSubstitution([vision_dir, LaunchConfiguration("front_model_relative_path")]),
-            "down_model": PathJoinSubstitution([vision_dir, LaunchConfiguration("down_model_relative_path")]),
-            "compressed": LaunchConfiguration("compressed"),
-            "use_sim_time": LaunchConfiguration("sim"),
-            "log_level": od_log_level
-        }.items()
+    front_detection_node = Node(
+        package='vision',
+        executable='front_cam_object_detection.py',
+        name='front_cam_object_detection',
+        parameters=[
+            {
+                'input_topic': object_detection_front_input,
+                'output_topic': default_config["object_detection"]["front_cam"]["detection_topic"],
+                'model_path': PathJoinSubstitution([vision_dir, LaunchConfiguration("front_model_relative_path")]),
+                'class_names': default_config["object_detection"]["front_cam"]["class_names"],
+                'queue_size': default_config["object_detection"]["front_cam"]["queue_size"],
+                'publish_annotated_image': default_config["object_detection"]["front_cam"]["publish_annotated_image"],
+                'use_sim_time': LaunchConfiguration("sim"),
+                'compressed': LaunchConfiguration("compressed"),
+                'log_level': default_config["object_detection"]["front_cam"]["log_level"]
+            }
+        ],
+        ros_arguments=["--ros-args", "--log-level", default_config["object_detection"]["front_cam"]["log_level"]]
+    )
+    
+    down_detection_node = Node(
+        package='vision',
+        executable='down_cam_object_detection.py',
+        name='down_cam_object_detection',
+        parameters=[
+            {
+                'input_topic': object_detection_down_input,
+                'output_topic': default_config["object_detection"]["down_cam"]["detection_topic"],
+                'model_path': PathJoinSubstitution([vision_dir, LaunchConfiguration("down_model_relative_path")]),
+                'class_names': default_config["object_detection"]["down_cam"]["class_names"],
+                'queue_size': default_config["object_detection"]["down_cam"]["queue_size"],
+                'publish_annotated_image': default_config["object_detection"]["down_cam"]["publish_annotated_image"],
+                'use_sim_time': LaunchConfiguration("sim"),
+                'compressed': LaunchConfiguration("compressed"),
+                'log_level': default_config["object_detection"]["down_cam"]["log_level"],
+            }
+        ],
+        ros_arguments=["--ros-args", "--log-level", default_config["object_detection"]["down_cam"]["log_level"]]
     )
     
     object_map_node = Node (
@@ -138,17 +208,20 @@ def generate_launch_description():
         parameters=[
             {
                 "frame_rate": default_config["object_map"]["frame_rate"],
+                "class_labels": default_config["object_detection"]["front_cam"]["class_names"],
+                "max_per_class_labels": list(default_config["object_map"]["max_per_class"].keys()),
+                "max_per_class_values": list(default_config["object_map"]["max_per_class"].values()),
                 "zed_sdk": True,
                 "new_object_min_distance_threshold": default_config["object_map"]["new_object_min_distance_threshold"],
-                "front_cam_detection_topic": front_detections_topic,
-                "object_map_topic": object_map_topic,
-                "vio_pose_topic": auv_pose_topic,
+                "front_cam_detection_topic": default_config["object_detection"]["front_cam"]["detection_topic"],
+                "object_map_topic": default_config["object_map"]["map_topic"],
+                "vio_pose_topic": default_config["object_map"]["pose_topic"],
                 "confidence_threshold": default_config["object_map"]["confidence_threshold"],
                 "zed_depth_confidence_threshold": default_config["object_map"]["zed_depth_confidence_threshold"],
                 "max_range": default_config["object_map"]["max_range"],
-                "use_stream": default_config["object_map"]["use_stream"],
-                "stream_ip": default_config["object_map"]["stream_ip"],
-                "stream_port": default_config["object_map"]["stream_port"],
+                "use_stream": default_config["general"]["use_wrapper_stream"],
+                "stream_address": default_config["general"]["wrapper_stream_ip"],
+                "stream_port": default_config["general"]["wrapper_stream_port"],
                 "pool_floor_z": default_config["object_map"]["pool_floor_z"],
                 "pool_surface_z": default_config["object_map"]["pool_surface_z"],
                 "unique_objects": default_config["object_map"]["unique_objects"],
@@ -167,22 +240,31 @@ def generate_launch_description():
                 "conf_to_tent_threshold": default_config["object_map"]["conf_to_tent_threshold"],
                 "tent_init_buffer": default_config["object_map"]["tent_init_buffer"],
                 "sim": LaunchConfiguration("sim"),
-                "use_sim_time": LaunchConfiguration("sim")
-            }
+                "use_sim_time": LaunchConfiguration("sim"),
+            },
         ],
-        arguments=['--ros-args', '--log-level', om_log_level]
+        ros_arguments=["--ros-args", "--log-level", default_config["object_map"]["log_level"]]
+    )
+    # wait 3 seconds before launching node to ensure zed wrapper is able to open and stream on port
+    object_map_node = TimerAction(
+        period=3.0,
+        actions=[object_map_node]
     )
     
     launch_description = LaunchDescription()
     launch_description.add_action(sim_arg)
+    launch_description.add_action(wrapper_stream_arg)
     launch_description.add_action(compressed_arg)
     launch_description.add_action(use_enhance_arg)
     launch_description.add_action(front_model_arg)
     launch_description.add_action(down_model_arg)
+    launch_description.add_action(zed_wrapper_log_type_arg)
     launch_description.add_action(zed_real_wrapper_launch)
     launch_description.add_action(zed_sim_wrapper_launch)
-    launch_description.add_action(enhancement_launch)
-    launch_description.add_action(object_detection_launch)
+    launch_description.add_action(front_cam_enhancement_node)
+    launch_description.add_action(down_cam_enhancement_node)
+    launch_description.add_action(front_detection_node)
+    launch_description.add_action(down_detection_node)
     launch_description.add_action(object_map_node)
     
     return launch_description
