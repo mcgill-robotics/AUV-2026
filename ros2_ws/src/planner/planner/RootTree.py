@@ -20,6 +20,19 @@ class RootTree(Node):
     def __init__(self):
         super().__init__("planner_root_tree")
         
+        # Get tolerance, timeout and tick rate parameters from the configs
+        self.declare_parameter("pre_qual_yaw_tolerance", 1.0)
+        self.declare_parameter("pre_qual_positional_tolerance", 1.0)
+        self.declare_parameter("pre_qual_timeout", 1.0)
+        self.declare_parameter("pre_qual_hold_time", 1.0)
+        self.declare_parameter("tick_rate", 1.0)
+
+        self.pre_qual_yaw_tolerance = self.get_parameter("pre_qual_yaw_tolerance").get_parameter_value().double_value
+        self.pre_qual_positional_tolerance = self.get_parameter("pre_qual_positional_tolerance").get_parameter_value().double_value
+        self.pre_qual_timeout = self.get_parameter("pre_qual_timeout").get_parameter_value().double_value
+        self.pre_qual_hold_time = self.get_parameter("pre_qual_hold_time").get_parameter_value().double_value
+        self.tick_rate = self.get_parameter("tick_rate").get_parameter_value().double_value
+
         # Set the root of the tree
         root = py_trees.composites.Parallel("Root", policy=py_trees.common.ParallelPolicy.SuccessOnAll()) # SUCCESS_ON_ALL means the root will only return success if all children return success
         
@@ -49,8 +62,6 @@ class RootTree(Node):
         self.behaviour_tree = py_trees.trees.BehaviourTree(root=root)
         self.behaviour_tree.setup(timeout=15)
 
-        self.declare_parameter("tick_rate", 1.0)
-        self.tick_rate = self.get_parameter("tick_rate").get_parameter_value().double_value
         self.timer = self.create_timer(self.tick_rate, self.tick_tree)  # tick every tick_rate seconds
 
         # Debug log to confirm initialization, can remove but I like my colours :D

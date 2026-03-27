@@ -4,7 +4,7 @@ import rclpy
 from controls import navigation_client
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
-from controls.goal_helpers import set_depth, set_global_yaw, move_robot_centric
+from controls.goal_helpers import set_depth, set_global_yaw, rotate_relative
 from ...SensorsBehaviour import SensorsBehaviour
 from ...utils.BasicActionBehaviour import BasicActionBehaviour
 from ...utils.MissionChoiceCheckBehaviour import MissionChoiceCheckBehaviour
@@ -19,6 +19,11 @@ class TestYawBehaviour(py_trees.composites.Sequence):
     def __init__(self, node):
         super().__init__("TestYawBehaviour", memory=True)
 
+        # Get the general parameters from the configs that were declared in root of Behaviour Tree
+        yaw_tolerance = node.pre_qual_yaw_tolerance
+        hold_time = node.pre_qual_hold_time
+        timeout = node.pre_qual_timeout
+
         # 0 Check if user input the desired mission choce
         """
         1: Orbit Prequal
@@ -30,13 +35,13 @@ class TestYawBehaviour(py_trees.composites.Sequence):
         mission_choice_check = MissionChoiceCheckBehaviour(name="Test Yaw", choice=5)
 
         # Build the full mission sequence
-        # 1. Move Forward
-        forward_move_leaf = BasicActionBehaviour(node, "Yaw Test", move_robot_centric(dyaw=math.pi, tolerance=0.5, hold_time=1.0))
+        # 1. Rotate 180 deg Yaw
+        yaw_rotate_leaf = BasicActionBehaviour(node, "Yaw Test", rotate_relative(dyaw_rad=math.pi, tolerance=yaw_tolerance, hold_time=hold_time, timeout=timeout))
 
         # 2. Reset the user mission choice to allow for new mission to be selected
         mission_choice_reset = MissionCompleteBehaviour(node, "Completed Yaw Test")
 
         self.add_children([mission_choice_check,
-            forward_move_leaf, 
+            yaw_rotate_leaf, 
             mission_choice_reset
             ])

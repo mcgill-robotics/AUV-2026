@@ -19,7 +19,26 @@ class OrbitQualificationMission(py_trees.composites.Sequence):
     """
     def __init__(self, node):
         super().__init__("OrbitPrequalification", memory=True)
+        
+        # Get the general parameters from the configs that were declared in root of Behaviour Tree
+        yaw_tolerance = node.pre_qual_yaw_tolerance
+        position_tolerance = node.pre_qual_positional_tolerance
+        hold_time = node.pre_qual_hold_time
+        timeout = node.pre_qual_timeout
 
+        # Get the specific configs for orbit prequal
+        node.declare_parameter("orbit_pre_qual_yaw_tolerance_scale", 1.0)
+        node.declare_parameter("orbit_pre_qual_positional_tolerance_scale", 1.0)
+        node.declare_parameter("orbit_pre_qual_hold_time_initial", 1.0)
+        node.declare_parameter("orbit_pre_qual_hold_time_segments", 1.0)
+
+        orbit_pre_qual_yaw_tolerance_scale = node.get_parameter("orbit_pre_qual_yaw_tolerance_scale").get_parameter_value().double_value
+        orbit_pre_qual_positional_tolerance_scale = node.get_parameter("orbit_pre_qual_positional_tolerance_scale").get_parameter_value().double_value
+        orbit_pre_qual_hold_time_initial = node.get_parameter("orbit_pre_qual_hold_time_initial").get_parameter_value().double_value
+        orbit_pre_qual_hold_time_segments = node.get_parameter("orbit_pre_qual_hold_time_segments").get_parameter_value().double_value
+
+
+        # ---------------- MISSION SETUP --------------------------------------------
         # 0 Check if user input the desired mission choce
         """
         1: Orbit Prequal
@@ -35,25 +54,29 @@ class OrbitQualificationMission(py_trees.composites.Sequence):
 
         # Build the full mission sequence
         # 2. Dive to -1.5m
-        dive_leaf = BasicActionBehaviour(node, "Dive", set_depth(z=-1.5, tolerance=0.15, hold_time=2.0))
+        dive_leaf = BasicActionBehaviour(node, "Dive", set_depth(z=-1.5, tolerance=position_tolerance, hold_time=hold_time, timeout=timeout))
         
         # 3. Go to point where orbit begins 
-        go_orbit_start_leaf = BasicActionBehaviour(node, "Move to rectangle start point", move_global(x=11.5, y=0.0, do_z=False, tolerance=0.5, hold_time=1.0))
+        go_orbit_start_leaf = BasicActionBehaviour(node, "Move to rectangle start point", move_global(x=11.5, y=0.0, do_z=False, tolerance=position_tolerance, hold_time=hold_time, timeout=timeout))
 
         # 3.5 (Add a vision check? no rotation unless object in frame)
 
         # 4. Orbit 360 degrees
         # (Add future check for target with vision  )
-        orbit_leaf = OrbitActionBehaviour(node, name="Orbit", rotations_segments=8, angle_to_rotate_deg=360, radius_to_rotate_meter=1.5, clockwise=True, target=(13,0,0))
+        orbit_leaf = OrbitActionBehaviour(node, name="Orbit", rotations_segments=8, angle_to_rotate_deg=360, radius_to_rotate_meter=1.5, 
+            clockwise=True, target=(13,0,0), hold_time_initial=orbit_pre_qual_hold_time_initial,
+            hold_time_segments=orbit_pre_qual_hold_time_segments,
+            yaw_tolerance_scale=orbit_pre_qual_yaw_tolerance_scale, position_tolerance_scale=orbit_pre_qual_positional_tolerance_scale,
+            timeout=timeout)
         
         # 5. Turn 180 degrees to look at the gate
-        turn_leaf = BasicActionBehaviour(node, "Turn 180", set_global_yaw(yaw_rad=math.pi, tolerance=0.1, hold_time=1.0))
+        turn_leaf = BasicActionBehaviour(node, "Turn 180", set_global_yaw(yaw_rad=math.pi, tolerance=yaw_tolerance, hold_time=hold_time, timeout=timeout))
         
         # 6. Return to origin (X=0, Y=0) at the current depth
-        return_leaf = BasicActionBehaviour(node, "Return to Origin", move_global(x=0.0, y=0.0, do_z=False, tolerance=0.5, hold_time=1.0))
+        return_leaf = BasicActionBehaviour(node, "Return to Origin", move_global(x=0.0, y=0.0, do_z=False, tolerance=position_tolerance, hold_time=hold_time, timeout=timeout))
         
         # 7. Ascend to surface
-        ascend_leaf = BasicActionBehaviour(node, "Ascend to Surface", set_depth(z=0.0, tolerance=0.15, hold_time=1.0))
+        ascend_leaf = BasicActionBehaviour(node, "Ascend to Surface", set_depth(z=0.0, tolerance=position_tolerance, hold_time=hold_time, timeout=timeout))
 
         # 8. Reset the user mission choice to allow for new mission to be selected
         mission_choice_reset = MissionCompleteBehaviour(node, "Completed Orbit Prequal")
@@ -87,7 +110,12 @@ class OrbitActionBehaviour(py_trees.behaviour.Behaviour):
         angle_to_rotate_deg=360, 
         radius_to_rotate_meter=20.0, 
         clockwise=False,
-        target: tuple[float, float, float] = None
+        target: tuple[float, float, float] = None,
+        hold_time_initial=1.0,
+        hold_time_segments=1.0,
+        yaw_tolerance_scale=0.2,
+        position_tolerance_scale=0.2,
+        timeout=10.0
     ) -> None:
         super().__init__(name)
         self.node = node
@@ -98,6 +126,7 @@ class OrbitActionBehaviour(py_trees.behaviour.Behaviour):
         self.blackboard = py_trees.blackboard.Client(name=self.name)
         self.target = target
         self.start_angle = None
+        self.timeout = timeout
 
         # Set the action status to be used to keep track of state of Behaviour
         self.action_status = ActionStatus.NOT_SENT
@@ -107,15 +136,15 @@ class OrbitActionBehaviour(py_trees.behaviour.Behaviour):
         
         # Estimate the straight-line distance of the arc segment to establish a reasonable tolerance
         linear_translation = math.sqrt(2 * radius_to_rotate_meter**2 * (1 - math.cos(self.rotate_per_segment)))
-        self.initial_translation_tolerance = 0.5 * linear_translation
-        self.yaw_tolerance = 0.5 * self.rotate_per_segment
+        self.initial_translation_tolerance = position_tolerance_scale * linear_translation
+        self.yaw_tolerance = yaw_tolerance_scale * self.rotate_per_segment
         
         # Add 1 to the required segments to include the initial approach vector to the perimeter
         self.remaining_segments = self.rotations_segments
 
         # Fields for hold time, tune as needed
-        self.hold_time_final_segment = 1.0
-        self.hold_time_regular_segment = 0.2
+        self.hold_time_final_segment = hold_time_initial
+        self.hold_time_regular_segment = hold_time_segments
 
     def setup(self, **kwargs) -> None:
         """Called once when the BT tree is setup."""
@@ -204,7 +233,7 @@ class OrbitActionBehaviour(py_trees.behaviour.Behaviour):
             tolerance=tolerance, 
             yaw_tolerance=self.yaw_tolerance, 
             hold_time=hold_time, 
-            timeout=30.0
+            timeout=self.timeout
         )
 
         # Send the goal if no goals are ongoing and set the mission status to pending
