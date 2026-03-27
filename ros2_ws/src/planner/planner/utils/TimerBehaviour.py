@@ -8,43 +8,45 @@ from py_trees.blackboard import Client
 from rclpy.action import ActionClient
 from auv_msgs.action import AUVNavigate
 from controls.goal_helpers import move_robot_centric
+import time
 
-class TemplateBehaviour(py_trees.behaviour.Behaviour):
+class TimerBehaviour(py_trees.behaviour.Behaviour):
         """
-        This behaviour represents a template behaviour used to create others.
+        This behaviour represents a timer to be implemented. The timer is dictated by measuring a time.time()
+        interval and checking if it is above a desired threshold upon a new tick's arrival. This not fully accurate  
+        method is acceptable since the current scope of this TimerBehaviour is to allow time to untether Douglas
 
         Fields: 
         rclpy.node.Node: node                         : the ros2 node for subscribing to topics
         py_trees.blackboard.Client: blackboard        : the blackboard client for reading/writing sensors data
         """
 
-        def __init__(self, node, name="sensorsLeaf") -> None:
+        def __init__(self, node, timer: float, name="sensorsLeaf") -> None:
                 """
                 Initializes the node and blackboard client for this behaviour.
 
                 Inputs: rclpy.node.Node    : node - the ROS2 node to use for subscribing to topics 
                         str                : name - the name of the behaviour 
+                        float              : timer - the desired duration of the timer
 
                 Outputs: None
                 """   
                 super().__init__(name)
+                self.timer = timer
+                self.start_time = 0.0
+                self.timer_started = False
                 self.node = node
-                self.blackboard = py_trees.blackboard.Client(name=self.name)
-                self.action_client = ActionClient(self.node, AUVNavigate, '/motion/navigate')
-                self.sent_goal = False
-
-
-        def setup(self) -> None:
+        
+        def initialise(self) -> None:
                 """
-                Description: Sets up keys on the blackboard that this behaviour will use.
+                Whenever the Behaviour is not in RUNNING state, reset the timer to not started
+
+                Inputs: None
+
+                Outputs: None
                 """
-                # EXAMPLE FROM SensorsBehaviour.py :Behaviour Tree bb setup in case of hardware setup or ros2 node setup
-                #self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.WRITE)
-                #self.blackboard.register_key(key="/sensors/twist", access=py_trees.common.Access.WRITE)
-                #self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.WRITE)
-                
-                self.action_client.wait_for_server(timeout_sec=5.0)
-                
+                self.timer_started = False
+
         def update(self) -> py_trees.common.Status:
                 """
                 Description: This function is called every tick. It should contain the logic of the behaviour, and return a Status based on the result of that logic.
@@ -56,14 +58,15 @@ class TemplateBehaviour(py_trees.behaviour.Behaviour):
                          py_trees.common.Status.RUNNING if it is still running.
                  
                 """
+                if not self.timer_started:
+                        # Set the initial time at start of time counting
+                        self.start_time = time.time()
+                        self.timer_started = True
+                        return py_trees.common.Status.RUNNING
                 
-                # EXAMPLE: Create a navigation goal and send it using the local action client
-                self.node.get_logger().info("Template Behaviour Tick")
-                if self.sent_goal == False:
-                        goal_msg = move_robot_centric(forward=15.0, tolerance=0.5, yaw_tolerance=0.1, hold_time=3.0, timeout=30.0)
-                        self.action_client.send_goal_async(goal_msg)
-                        self.sent_goal = True
-                        
-                        self.sent_goal = True
+                # Upon each tick, check if interval of time has been passed
+                self.node.get_logger().info(f"Time passed: {(time.time() - self.start_time)}")
+                if (time.time() - self.start_time) > float(self.timer):
+                        return py_trees.common.Status.SUCCESS
                 
                 return py_trees.common.Status.RUNNING

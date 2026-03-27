@@ -8,7 +8,7 @@ from py_trees.blackboard import Client
 from rclpy.action import ActionClient
 from auv_msgs.action import AUVNavigate
 from controls.goal_helpers import move_robot_centric
-from .utils.ActionStatus import ActionStatus
+from .ActionStatus import ActionStatus
 
 class BasicActionBehaviour(py_trees.behaviour.Behaviour):
         """
@@ -102,6 +102,7 @@ class BasicActionBehaviour(py_trees.behaviour.Behaviour):
                 return py_trees.common.Status.RUNNING
                 
             # Send the goal if no goals are ongoing and set the mission status to pending
+            self.node.get_logger().info(f"[{self.name}] Sent goal.")
             self.navigation_client.send_navigation_goal(self.goal, self.name, self.on_server_goal_response, self.on_server_goal_result)
             self.action_status = ActionStatus.PENDING
             return py_trees.common.Status.RUNNING

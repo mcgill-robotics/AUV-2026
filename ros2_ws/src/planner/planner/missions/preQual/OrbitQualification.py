@@ -6,8 +6,11 @@ from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
 from controls.goal_helpers import set_depth, set_global_yaw, move_global
 from ...SensorsBehaviour import SensorsBehaviour
-from ...BasicActionBehaviour import BasicActionBehaviour
+from ...utils.BasicActionBehaviour import BasicActionBehaviour
 from ...utils.ActionStatus import ActionStatus
+from ...utils.MissionChoiceCheckBehaviour import MissionChoiceCheckBehaviour
+from ...utils.MissionCompleteBehaviour import MissionCompleteBehaviour
+from ...utils.TimerBehaviour import TimerBehaviour
 import math
 
 class OrbitQualificationMission(py_trees.composites.Sequence):
@@ -16,34 +19,55 @@ class OrbitQualificationMission(py_trees.composites.Sequence):
     """
     def __init__(self, node):
         super().__init__("OrbitPrequalification", memory=True)
+
+        # 0 Check if user input the desired mission choce
+        """
+        1: Orbit Prequal
+        2: Rectangle Prequal
+        3: Basic Move forward
+        4: Basic Dive
+        5: Basic Yaw
+        """
+        mission_choice_check = MissionChoiceCheckBehaviour(name="OrbitPrequalUserCheck", choice=1)
+
+        # 1 Wait for 10 seconds before starting the mission
+        timer = TimerBehaviour(node=node, timer=10.0, name="Orbit Prequal Timer")
+
         # Build the full mission sequence
-        # 1. Dive to -1.5m
+        # 2. Dive to -1.5m
         dive_leaf = BasicActionBehaviour(node, "Dive", set_depth(z=-1.5, tolerance=0.15, hold_time=2.0))
         
-        # 2. Go to point where orbit begins 
+        # 3. Go to point where orbit begins 
         go_orbit_start_leaf = BasicActionBehaviour(node, "Move to rectangle start point", move_global(x=11.5, y=0.0, do_z=False, tolerance=0.5, hold_time=1.0))
 
-        # 2.5 (Add a vision check? no rotation unless object in frame)
+        # 3.5 (Add a vision check? no rotation unless object in frame)
 
-        # 3. Orbit 360 degrees
+        # 4. Orbit 360 degrees
         # (Add future check for target with vision  )
         orbit_leaf = OrbitActionBehaviour(node, name="Orbit", rotations_segments=8, angle_to_rotate_deg=360, radius_to_rotate_meter=1.5, clockwise=True, target=(13,0,0))
         
-        # 3. Turn 180 degrees to look at the gate
+        # 5. Turn 180 degrees to look at the gate
         turn_leaf = BasicActionBehaviour(node, "Turn 180", set_global_yaw(yaw_rad=math.pi, tolerance=0.1, hold_time=1.0))
         
-        # 4. Return to origin (X=0, Y=0) at the current depth
+        # 6. Return to origin (X=0, Y=0) at the current depth
         return_leaf = BasicActionBehaviour(node, "Return to Origin", move_global(x=0.0, y=0.0, do_z=False, tolerance=0.5, hold_time=1.0))
         
-        # 5. Ascend to surface
+        # 7. Ascend to surface
         ascend_leaf = BasicActionBehaviour(node, "Ascend to Surface", set_depth(z=0.0, tolerance=0.15, hold_time=1.0))
+
+        # 8. Reset the user mission choice to allow for new mission to be selected
+        mission_choice_reset = MissionCompleteBehaviour(node, "Completed Orbit Prequal")
         
-        self.add_children([dive_leaf, 
+        self.add_children([mission_choice_check,
+            timer,
+            dive_leaf, 
             go_orbit_start_leaf,
             orbit_leaf, 
             turn_leaf, 
             return_leaf, 
-            ascend_leaf])
+            ascend_leaf,
+            mission_choice_reset
+            ])
 
 
 class OrbitActionBehaviour(py_trees.behaviour.Behaviour):

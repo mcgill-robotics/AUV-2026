@@ -5,9 +5,9 @@ from controls import navigation_client
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
 from . import SensorsBehaviour
-from .TemplateBehaviour import TemplateBehaviour
 from .missions.preQual.RectangleQualification import RectangleQualificationMission
 from .missions.preQual.OrbitQualification import OrbitQualificationMission
+from .missions.MissionsSequence import MissionSequence
 
 # I like my ANSI colours :DDD
 green_text = "\033[32m"
@@ -38,11 +38,11 @@ class RootTree(Node):
         # This allows the rest of the tree to access the latest sensor data snapshot at each tick.
         sensors_reader = SensorsBehaviour.SensorsBehaviour(node=self, name="Sensors Reader")
 
-        # Add other behaviour here as mission controls node, currently implemented a dummy leaf
-        pre_qual = RectangleQualificationMission(self)
-        pre_qual_orbit = OrbitQualificationMission(self)
-        dummy = TemplateBehaviour(self, name="hi")
-        root.add_children([sensors_reader, pre_qual])
+        # Add other behaviour here as mission controls node
+        missions = MissionSequence(self)
+
+        # Add children to root
+        root.add_children([sensors_reader, missions])
 
         # Create the behaviour tree with the root and setup the tree and call the setup of the root to initialize and setup all the
         # children behaviours recursively. This will setup all blackboards and ros2 publishers/subscribers

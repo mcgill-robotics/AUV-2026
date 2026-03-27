@@ -2,3 +2,6 @@ general:
   tick_rate       : 0.3
   sim             : true
   use_ground_truth: true
+  pre_qual_yaw_tolerance:
+  pre_qual_positional_tolerance:
+  pre_qual_timeout: 2.0
