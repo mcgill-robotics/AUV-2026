@@ -23,3 +23,6 @@
 
 #xsens ros2 driver lib 
 ros2_ws/src/xsens_mti_ros2_driver/lib/**
+
+#VSCode settings
+.vscode/
