@@ -68,9 +68,12 @@ ros2 service call /vision/image_collection/toggle_manual_front_collection std_sr
 # Manually trigger a single frame capture for the downward camera
 ros2 service call /vision/image_collection/toggle_manual_down_collection std_srvs/srv/Trigger
 
-# Start automatic front collection (e.g., 1 image every 2.5 seconds)
-ros2 service call /vision/image_collection/toggle_front_collection auv_msgs/srv/AutomaticCapture "{data: true, time_interval: 2.5}"
+# Start automatic front collection (1 image every 2.5 seconds)
+ros2 service call /image_collection/toggle_front_collection auv_msgs/srv/AutomaticCapture "{data: true, time_interval: 2.5}"
 
 # Stop automatic front collection
-ros2 service call /vision/image_collection/toggle_front_collection auv_msgs/srv/AutomaticCapture "{data: false, time_interval: 0.0}"
+ros2 service call /image_collection/toggle_front_collection auv_msgs/srv/AutomaticCapture "{data: false, time_interval: 0.0}"
+
+scp jetson@ubuntu.local:~/AUV-2026/data_front_cam/* .
 ```
+
