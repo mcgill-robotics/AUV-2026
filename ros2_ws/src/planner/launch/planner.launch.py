@@ -73,9 +73,9 @@ def generate_launch_description():
                 )
         )
 
-        orbit_pre_qual_yaw_scale_arg = DeclareLaunchArgument(
-                "orbit_pre_qual_yaw_scale",
-                default_value=str(default_config["general"]["orbit_pre_qual_yaw_scale"]),
+        orbit_pre_qual_yaw_tolerance_scale_arg = DeclareLaunchArgument(
+                "orbit_pre_qual_yaw_tolerance_scale",
+                default_value=str(default_config["general"]["orbit_pre_qual_yaw_tolerance_scale"]),
                 description=(
                         "The yaw tolerance scale for the orbit prequal planner missions" \
                         "This is a scale since the orbit radius may change. As such the tolerances change with" \
@@ -83,9 +83,9 @@ def generate_launch_description():
                 )
         )
 
-        orbit_pre_qual_positional_scale_arg = DeclareLaunchArgument(
-                "orbit_pre_qual_positional_scale",
-                default_value=str(default_config["general"]["orbit_pre_qual_positional_scale"]),
+        orbit_pre_qual_positional_tolerance_scale_arg = DeclareLaunchArgument(
+                "orbit_pre_qual_positional_tolerance_scale",
+                default_value=str(default_config["general"]["orbit_pre_qual_positional_tolerance_scale"]),
                 description=(
                         "The positional tolerance scale for the orbit prequal planner missions" \
                         "This is a scale since the orbit radius may change. As such the tolerances change with" \
@@ -126,8 +126,8 @@ def generate_launch_description():
                                 "pre_qual_positional_tolerance": LaunchConfiguration("pre_qual_positional_tolerance"),
                                 "pre_qual_hold_time": LaunchConfiguration("pre_qual_hold_time"),
                                 "pre_qual_timeout": LaunchConfiguration("pre_qual_timeout"),
-                                "orbit_pre_qual_yaw_scale": LaunchConfiguration("orbit_pre_qual_yaw_scale"),
-                                "orbit_pre_qual_positional_scale": LaunchConfiguration("orbit_pre_qual_positional_scale"),
+                                "orbit_pre_qual_yaw_tolerance_scale": LaunchConfiguration("orbit_pre_qual_yaw_tolerance_scale"),
+                                "orbit_pre_qual_positional_tolerance_scale": LaunchConfiguration("orbit_pre_qual_positional_tolerance_scale"),
                                 "orbit_pre_qual_hold_time_initial": LaunchConfiguration("orbit_pre_qual_hold_time_initial"),
                                 "orbit_pre_qual_hold_time_segments": LaunchConfiguration("orbit_pre_qual_hold_time_segments"),
 
@@ -143,8 +143,8 @@ def generate_launch_description():
         launch_description.add_action(pre_qual_positional_tolerance_arg)
         launch_description.add_action(pre_qual_hold_time_arg)
         launch_description.add_action(pre_qual_timeout_arg)
-        launch_description.add_action(orbit_pre_qual_yaw_scale_arg)
-        launch_description.add_action(orbit_pre_qual_positional_scale_arg)
+        launch_description.add_action(orbit_pre_qual_yaw_tolerance_scale_arg)
+        launch_description.add_action(orbit_pre_qual_positional_tolerance_scale_arg)
         launch_description.add_action(orbit_pre_qual_hold_time_initial_arg)
         launch_description.add_action(orbit_pre_qual_hold_time_segments_arg)
         launch_description.add_action(planner_node)
