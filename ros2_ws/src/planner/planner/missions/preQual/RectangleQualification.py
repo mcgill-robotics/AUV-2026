@@ -41,7 +41,13 @@ class RectangleQualificationMission(py_trees.composites.Sequence):
         # Build the full mission sequence
         # 2. Dive to -1.5m
         dive_leaf = BasicActionBehaviour(node, "Dive", set_depth(z=-1.5, tolerance=position_tolerance, hold_time=hold_time, timeout=timeout))
-        
+
+        # Go beyond gate        
+        go_beyond_gate_leaf = BasicActionBehaviour(node, "Go beyond gate", move_global(x=5.0, y=0.0, do_z=False, tolerance=position_tolerance, hold_time=hold_time, timeout=timeout))
+
+        # Go up a bit
+        go_up_a_bit = BasicActionBehaviour(node, "Go up a bit", set_depth(z=-0.5, tolerance=position_tolerance, hold_time=hold_time, timeout=timeout))
+
         # 3. Go to point where square begins (split this into three segments to accomodate for mcgill pool slant) 
         go_square_start_leaf = BasicActionBehaviour(node, "Move to rectangle start point", move_global(x=11.5, y=0.0, do_z=False, tolerance=position_tolerance, hold_time=hold_time, timeout=timeout))
 
@@ -68,6 +74,11 @@ class RectangleQualificationMission(py_trees.composites.Sequence):
         # 9. Turn 180 degrees to look at the gate
         turn_leaf = BasicActionBehaviour(node, "Turn 180", set_global_yaw(yaw_rad=math.pi, tolerance=yaw_tolerance, hold_time=hold_time, timeout=timeout))
         
+        # Go to front of gate
+        return_front_gate_leaf = BasicActionBehaviour(node, "Go to front of gate", move_global(x=5.0, y=0.0, do_z=False, tolerance=position_tolerance,hold_time=hold_time, timeout=timeout))
+
+        dive_down_gate_leaf = BasicActionBehaviour(node, "Dive down a bit", set_depth(z=-1.5, tolerance=position_tolerance, hold_time=hold_time, timeout=timeout))
+
         # 10. Return to origin (X=0, Y=0) at the current depth
         return_leaf = BasicActionBehaviour(node, "Return to Origin", move_global(x=0.0, y=0.0, do_z=False, tolerance=position_tolerance,hold_time=hold_time, timeout=timeout))
         
@@ -80,6 +91,8 @@ class RectangleQualificationMission(py_trees.composites.Sequence):
         self.add_children([mission_choice_check,
             timer,
             dive_leaf, 
+            go_beyond_gate_leaf,
+            go_up_a_bit,
             go_square_start_leaf, 
             square_bottom_left_leaf,
             square_top_left_leaf, 
@@ -87,6 +100,8 @@ class RectangleQualificationMission(py_trees.composites.Sequence):
             square_bottom_right_leaf,
             go_square_start_leaf_2,
             turn_leaf,
+            return_front_gate_leaf,
+            dive_down_gate_leaf,
             return_leaf,
             ascend_leaf,
             mission_choice_reset
