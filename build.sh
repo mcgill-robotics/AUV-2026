@@ -207,6 +207,7 @@ if [ "$DEBUG_BUILD" = true ]; then
     colcon build \
         --event-handlers console_direct+ \
         --executor sequential \
+        --parallel-workers 1 \
         --cmake-args \
             -DCMAKE_BUILD_TYPE=RelWithDebInfo  \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
