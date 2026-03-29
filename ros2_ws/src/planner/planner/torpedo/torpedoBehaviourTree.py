@@ -2,6 +2,8 @@ import py_trees
 import py_trees_ros
 from time import sleep
 
+TORPEDO_COUNT = 2
+
 class Action(pytrees.behaviour.Behaviour):
     def __init__(self, name):
         super(Action, self).__init__(name)
@@ -43,7 +45,7 @@ class TorpedoNodeFactory:
     Handles reusable subtrees for Torpedo Behaviour Tree 
     """
     
-    def make_node_alignment_sequence(self, suffix="")->py_trees.composites.Sequence:
+    def make_node_align_board(self, suffix="")->py_trees.composites.Sequence:
         """
         Node to orient to board, match z point, and move to xy point. 
         Sequence: ensure all actions are done in a specific order.
@@ -111,6 +113,8 @@ class TorpedoBehaviourTree:
             ]
         )
 
+    def tick_tree()
+
     # This is the first node in the torpedo BT
     def node_highest_pts(self)->py_trees.composites.Sequence: # rename this to something better
         """
@@ -141,7 +145,7 @@ class TorpedoBehaviourTree:
     def node_partial_points(self)->py_trees.composites.Sequence: # TODO: rename this to something less ambiguous
         """
         Subtree to get partial points if we can't get the highest points (Ex. failure during highest points subtree)
-        This backup plan plan does not try to align with board but still tries to go to the a
+        This backup plan plan does not try to align with board but still tries to go to the animal
         
         returns pytree.composites.Sequence
         """
