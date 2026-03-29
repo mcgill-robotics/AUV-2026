@@ -1,9 +1,12 @@
 import py_trees
 import py_trees_ros
 import rclpy
+from controls import navigation_client
 from rclpy.node import Node
+from rclpy.executors import MultiThreadedExecutor
 from . import SensorsBehaviour
 from . import TemplateBehaviour
+from . import CustomCallbackBehaviour
 
 
 # I like my ANSI colours :DDD
@@ -16,15 +19,26 @@ class RootTree(Node):
     """
     def __init__(self):
         super().__init__("RootTreeNode")
-        root = py_trees.composites.Parallel("Root", policy=py_trees.common.ParallelPolicy.SuccessOnAll()) # SUCCESS_ON_ALL means the root will only return success if all children return success
         
+        # Set the root of the tree and navigation client instance 
+        root = py_trees.composites.Parallel("Root", policy=py_trees.common.ParallelPolicy.SuccessOnAll()) # SUCCESS_ON_ALL means the root will only return success if all children return success
+        self.navigation_client = navigation_client.NavigationClient(name="NavigationClientNode")
+        self.navigation_client_ongoing_goal = self.navigation_client.current_goal_handle # Store the goal handle of the currently active goal, if any, to allow for cancellation when a new goal is sent.
+        
+        self.blackboard = py_trees.blackboard.Client(name="RootTreeBlackboard")
+        self.blackboard.register_key(key="/navigation_client/client", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key="/navigation_client/ongoing_goal", access=py_trees.common.Access.WRITE)
+        self.blackboard.navigation_client.client = self.navigation_client
+        self.blackboard.navigation_client.ongoing_goal = self.navigation_client_ongoing_goal
+                
         # Add the sensors behaviour as a child running in parallel to the rest of the tree.
         # This allows the rest of the tree to access the latest sensor data snapshot at each tick.
         sensors_reader = SensorsBehaviour.SensorsBehaviour(node=self, name="Sensors Reader")
 
         # Add other behaviour here as mission controls node, currently implemented a dummy leaf
         dummy_leaf = TemplateBehaviour.TemplateBehaviour(node=self, name="Dummy Leaf")
-        root.add_children([sensors_reader, dummy_leaf])
+        callback_leaf = CustomCallbackBehaviour.CustomCallback(node=self, name="Custom Callback Leaf", rotations_segments=8, angle_to_rotate_deg=360, radius_to_rotate_meter=3.0, clockwise=True)
+        root.add_children([sensors_reader, callback_leaf])
 
         # Create the behaviour tree with the root and setup the tree and call the setup of the root to initialize and setup all the
         # children behaviours recursively. This will setup all blackboards and ros2 publishers/subscribers
@@ -41,19 +55,25 @@ class RootTree(Node):
 
     def tick_tree(self):
         self.behaviour_tree.tick()
-        # For debug:
-        self.get_logger().info("Yaw Behaviour Tree Tickeddd")  
+    
 
 def main():
     rclpy.init()
-    node = RootTree()
+    planner_node = RootTree()
+    action_client_node = planner_node.navigation_client # Get the navigation client node from the planner to spin it in parallel since it 
+                                                        #has its own executor and needs to be spun to process action results and feedback
+    
+    executor = MultiThreadedExecutor(num_threads=4)
+    executor.add_node(planner_node)
+    executor.add_node(action_client_node)
     while rclpy.ok():
         try:
-            rclpy.spin(node)
-        
+            executor.spin()
         except KeyboardInterrupt:
-            node.get_logger().info("Shutting down yaw BT node")
-            node.destroy_node()
+            planner_node.get_logger().info("Shutting down yaw BT node")
+            executor.shutdown()
+            action_client_node.destroy_node()
+            planner_node.destroy_node()
             rclpy.shutdown()
 
 

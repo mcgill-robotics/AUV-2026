@@ -17,6 +17,7 @@
   <depend>rclpy</depend>
   <depend>geometry_msgs</depend>
   <depend>auv_msgs</depend>
+  <depend>controls</depend>
   
   <exec_depend>ros2launch</exec_depend>
   <export>

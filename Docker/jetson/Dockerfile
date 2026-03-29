@@ -6,7 +6,7 @@ FROM ${IMAGE_NAME}
 
 ARG ZED_SDK_MAJOR=5
 ARG ZED_SDK_MINOR=1
-ARG ZED_SDK_PATCH=0
+ARG ZED_SDK_PATCH=1
 ARG L4T_MAJOR=36
 ARG L4T_MINOR=4
 # Optional: Override ZED SDK URL
@@ -217,13 +217,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-$ROS_DISTRO-joy-teleop \
     ros-$ROS_DISTRO-rosidl-default-generators \
     ros-$ROS_DISTRO-vision-msgs \
-    ros-$ROS_DISTRO-rosidl-default-generators \
-    ros-$ROS_DISTRO-vision-msgs \
-    ros-$ROS_DISTRO-py-trees \
-    ros-$ROS_DISTRO-py-trees-ros-interfaces \
-    ros-$ROS_DISTRO-py-trees-ros \
-    ros-$ROS_DISTRO-py-trees-ros-tutorials \
-    ros-$ROS_DISTRO-py-trees-ros-viewer \
+    # Planner packages
+    ros-${ROS_DISTRO}-py-trees \
+    ros-${ROS_DISTRO}-py-trees-ros-interfaces \
+    ros-${ROS_DISTRO}-py-trees-ros \
+    ros-${ROS_DISTRO}-py-trees-ros-tutorials \
+    ros-${ROS_DISTRO}-py-trees-ros-viewer \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -232,15 +231,41 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # do not clutter our ros2_ws
 WORKDIR /opt/dependencies_ws
 
-RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/install/setup.bash && \
-    colcon build --parallel-workers $(nproc) \
-    --event-handlers console_direct+ --base-paths src \
-    --cmake-args ' -DCMAKE_BUILD_TYPE=Release' \
-    ' -DCMAKE_LIBRARY_PATH=/usr/local/cuda/lib64/stubs' \
-    ' -DCMAKE_CXX_FLAGS=\"-Wl,--allow-shlib-undefined\"' \
-    ' --no-warn-unused-cli' " && \
-    rm -rf build log
+RUN . /opt/ros/$ROS_DISTRO/install/setup.bash && \
+  colcon build --parallel-workers $(nproc) --merge-install \
+  --event-handlers console_direct+ --base-paths src \
+  --cmake-args ' -DCMAKE_BUILD_TYPE=Release' \
+  ' -DCMAKE_LIBRARY_PATH=/usr/local/cuda/lib64/stubs' \
+  ' -DCMAKE_CXX_FLAGS="-Wl,--allow-shlib-undefined"' \
+  ' --no-warn-unused-cli' && \
+  rm -rf build src log
 
+# install micro-ROS
+WORKDIR /opt/ros/micro_ros_ws
+# add repository and 
+RUN git clone -b $ROS_DISTRO https://github.com/micro-ROS/micro_ros_setup.git src/micro_ros_setup
+# build micro-ROS package and agent
+RUN . /opt/ros/$ROS_DISTRO/install/setup.bash && \
+    . /opt/dependencies_ws/install/setup.bash && \
+    colcon build \
+        --parallel-workers $(nproc) \
+        --merge-install \
+        --event-handlers console_direct+ \
+        --base-paths src \
+        --cmake-args -DCMAKE_BUILD_TYPE=Release && \
+    . /opt/ros/micro_ros_ws/install/setup.sh && \
+    MICROROS_PREFIX=$(ros2 pkg prefix micro_ros_setup) && \
+    ros2 run micro_ros_setup create_ws.sh src "$MICROROS_PREFIX/config/agent_ros2_packages.txt" "$MICROROS_PREFIX/config/agent_uros_packages.repos" && \
+    colcon build \
+        --packages-up-to micro_ros_agent $@ \
+        --parallel-workers $(nproc) \
+        --merge-install \
+        --event-handlers console_direct+ \
+        --cmake-args \
+            "-DUAGENT_BUILD_EXECUTABLE=OFF" \
+            "-DUAGENT_P2P_PROFILE=OFF" \
+            "--no-warn-unused-cli" && \
+    rm -rf build src log
 
 # Get CUDA dependencies to install torch and torchvision
 WORKDIR /root
@@ -272,7 +297,7 @@ RUN pip install --no-cache-dir torch torchvision
 RUN git clone https://github.com/ultralytics/ultralytics.git && \
     cd ultralytics && \
     sed -i '/"numpy>=1.23.0"/d; /"opencv-python>=4.6.0"/d; /"numpy<2.0.0"/d' pyproject.toml && \
-    pip install --no-cache-dir --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} -e . && \
+    pip install --no-cache-dir --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} . && \
     cd .. && \
     rm -rf ultralytics
 
@@ -315,12 +340,15 @@ ENV COLCON_HOME=/home/$USERNAME/.colcon
 # move repo defaults.yaml to container, CI is run from Docker/jetson so need to go up 2 levels
 COPY .colcon ${COLCON_HOME}/
 
+# add ultralytics config dir to avoid storing settings in temp
+RUN mkdir -p /home/$USERNAME/.config/Ultralytics
+
 WORKDIR /home/$USERNAME/AUV-2026
 
 # Source env variables
 # We use /opt/dependencies_ws which is readable by all
-RUN echo "source /opt/ros/humble/setup.bash && source /opt/dependencies_ws/install/setup.bash && source /home/$USERNAME/AUV-2026/ros2_ws/install/setup.bash" >> ~/.bashrc 
-RUN echo 'AMENT_PREFIX_PATH=$(echo $AMENT_PREFIX_PATH | sed "s|\(.*:\)\([^:]*\):\([^:]*\)$|\1\3:\2|")' >> ~/.bashrc
+RUN echo "source /opt/ros/humble/setup.bash && source /opt/dependencies_ws/install/local_setup.bash && source /opt/ros/micro_ros_ws/install/local_setup.bash && source /home/$USERNAME/AUV-2026/ros2_ws/install/setup.bash" >> ~/.bashrc 
+RUN echo 'AMENT_PREFIX_PATH=$(echo $AMENT_PREFIX_PATH | sed -E "s|/opt/ros/humble/install:/opt/ros/humble$|/opt/ros/humble:/opt/ros/humble/install|")' >> ~/.bashrc
 
 # Entrypoint uses fixuid to remap UID/GID if running with --user
 ENTRYPOINT ["fixuid", "-q"]
