@@ -206,12 +206,12 @@ if [ "$DEBUG_BUILD" = true ]; then
     # Run everything sequentially to find exact failure point
     colcon build \
         --event-handlers console_direct+ \
+        --executor sequential \
         --cmake-args \
             -DCMAKE_BUILD_TYPE=RelWithDebInfo  \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
             -DIS_JETSON_CI=$IS_JETSON_CI \
             $OFFLINE_CMAKE_ARGS \
-        --executor sequential \
         $([ -n "$PACKAGE_TO_BUILD" ] && echo "--packages-up-to $PACKAGE_TO_BUILD")
 else
     echo "    -> Performing Release Build of packages: ${PKGS[*]}"
