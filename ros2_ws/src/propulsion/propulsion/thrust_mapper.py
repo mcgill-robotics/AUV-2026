@@ -112,7 +112,7 @@ class ThrusterMapper(Node):
         # --- Subscriber
         self.sub_cmd = self.create_subscription(
             Wrench,
-            'controls/effort',
+            'controls/total_effort',
             self.wrench_to_thrust,
             qos
         )
@@ -145,87 +145,108 @@ class ThrusterMapper(Node):
 
     def _allocate_priority(self, wrench_msg: Wrench) -> np.ndarray:
         """
-        Direction-preserving, attitude-priority thrust allocation.
+        Direction-preserving, three-tier priority thrust allocation.
 
-        1. Attitude (torques) are allocated first via pseudo-inverse and scaled
-           to stay within [-f_max, +f_max] per thruster (direction preserved).
-        2. Translation (forces) fill remaining thruster capacity. A sign-aware
-           alpha is computed so the combined output never exceeds f_max.
-        3. Returns the 8-element thrust force vector in Newtons.
+        Priority order (highest to lowest):
+          1. Attitude (roll, pitch, yaw torques) - for stability.
+          2. Depth (heave force Fz) - maintaining depth.
+          3. Planar (surge Fx, sway Fy) - for speed.
+
+        Each tier is allocated via pseudo-inverse, direction-preserve scaled if
+        it alone exceeds f_max, then fit into the remaining capacity left by
+        all higher tiers using sign-aware alpha computation.
+
+        Returns the 8-element thrust force vector in Newtons.
         """
         f_max = self.f_max
 
-        # --- Split wrench into high-priority attitude and low-priority translation ---
+        # --- Split wrench into three priority tiers ---
         tau_att = np.array([
             0.0, 0.0, 0.0,
             wrench_msg.torque.x, wrench_msg.torque.y, wrench_msg.torque.z
         ])
-        tau_trans = np.array([
-            wrench_msg.force.x, wrench_msg.force.y, wrench_msg.force.z,
+        tau_depth = np.array([
+            0.0, 0.0, wrench_msg.force.z,
+            0.0, 0.0, 0.0
+        ])
+        tau_planar = np.array([
+            wrench_msg.force.x, wrench_msg.force.y, 0.0,
             0.0, 0.0, 0.0
         ])
 
-        # --- Step 1: Allocate attitude (high priority) ---
+        # --- Tier 1: Attitude (highest priority) ---
         f_att = self.T_inv @ tau_att
-
-        # Direction-preserving scale: find the single most saturated thruster
         att_max = np.max(np.abs(f_att))
         att_scale = att_max / f_max if att_max > f_max else 1.0
         if att_scale > 1.0:
             f_att /= att_scale
 
-        # --- Step 2: Allocate translation (low priority) ---
-        f_trans = self.T_inv @ tau_trans
+        # --- Tier 2: Depth (mid priority) ---
+        f_depth = self.T_inv @ tau_depth
+        alpha_depth = self._compute_max_translation_alpha(f_att, f_depth, f_max)
+        f_baseline = f_att + alpha_depth * f_depth
 
-        # Sign-aware alpha: find max alpha in [0, 1] such that
-        # -f_max <= f_att[i] + alpha * f_trans[i] <= f_max  for all i
-        alpha = self._compute_max_translation_alpha(f_att, f_trans, f_max)
+        # --- Tier 3: Planar (lowest priority) ---
+        f_planar = self.T_inv @ tau_planar
+        alpha_planar = self._compute_max_translation_alpha(f_baseline, f_planar, f_max)
 
-        # --- Step 3: Combine ---
-        thrust_forces = f_att + alpha * f_trans
+        # --- Combine all tiers ---
+        thrust_forces = f_baseline + alpha_planar * f_planar
 
         # --- Periodic logging ---
         self._log_counter += 1
-        if (att_scale > 1.0 or alpha < 1.0) and self._log_counter >= self._LOG_INTERVAL:
+        if (att_scale > 1.0 or alpha_depth < 1.0 or alpha_planar < 1.0) \
+                and self._log_counter >= self._LOG_INTERVAL:
             self._log_counter = 0
             self.get_logger().info(
-                f'Allocation scaled: att_scale={att_scale:.2f}, trans_alpha={alpha:.2f}'
+                f'Allocation scaled: att={att_scale:.2f}, '
+                f'depth_alpha={alpha_depth:.2f}, planar_alpha={alpha_planar:.2f}'
             )
 
         return thrust_forces
 
     @staticmethod
     def _compute_max_translation_alpha(
-        f_att: np.ndarray, f_trans: np.ndarray, f_max: float
+        f_baseline: np.ndarray, f_new: np.ndarray, f_max: float
     ) -> float:
         """
         Compute the maximum scaling factor alpha in [0, 1] such that
-        |f_att[i] + alpha * f_trans[i]| <= f_max  for every thruster i.
+        |f_baseline[i] + alpha * f_new[i]| <= f_max for every thruster i.
 
-        This is sign-aware: if attitude and translation oppose each other on a
-        thruster, the cancellation is accounted for (unlike the naive |f_trans|/f_remaining
-        approach which is overly conservative).
+        Used to layer each priority tier on top of the accumulated baseline
+        from all higher-priority tiers (e.g. attitude, then depth, then planar).
+
+        Sign-aware: if baseline and new forces oppose each other on a thruster,
+        the cancellation is accounted for, avoiding overly conservative scaling.
+
+        Args:
+            f_baseline: Per-thruster forces already committed by higher-priority tiers.
+            f_new:      Per-thruster forces for the current tier to be scaled in.
+            f_max:      Absolute force limit per thruster (Newtons).
+
+        Returns:
+            alpha in [0, 1] - the fraction of f_new that fits without exceeding f_max.
         """
         alpha = 1.0
-        for i in range(len(f_trans)):
-            ft = f_trans[i]
+        for i in range(len(f_new)):
+            ft = f_new[i]
             if abs(ft) < 1e-9:
-                continue  # thruster has no translation contribution
+                continue
 
             # Determine the binding constraint depending on which limit
-            # f_trans pushes toward
+            # f_new pushes toward
             if ft > 0.0:
                 # Pushing toward +f_max
-                alpha_i = (f_max - f_att[i]) / ft
+                alpha_i = (f_max - f_baseline[i]) / ft
             else:
                 # Pushing toward -f_max
-                alpha_i = (-f_max - f_att[i]) / ft
+                alpha_i = (-f_max - f_baseline[i]) / ft
 
             if alpha_i < alpha:
                 alpha = alpha_i
 
-        # Clamp to [0, 1] - negative alpha means attitude alone already at the
-        # limit in the direction translation wants to push (translation gets zero).
+        # Clamp to [0, 1] - negative alpha means the baseline already uses
+        # all capacity in the direction f_new wants to push.
         return max(0.0, min(1.0, alpha))
 
     def wrench_to_thrust(self, wrench_msg: Wrench):
