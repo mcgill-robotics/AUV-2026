@@ -52,14 +52,16 @@ def dry_test(self):
                 else: 
                     self.publish_thruster(original_matrix)
         elif choice == "b":
+            increment_matrix = reset_msg.copy()
             print("Choose an integer to increment thruster PWM by")
             thruster_increment = int(input())
+            print("Choose a start value between 1100 and 1900 for thruster " + str(current_thruster))
+            increment_matrix[current_thruster - 1] = int(input())
             print("NOTE: Uses thrust mapper\n\
                     > Press i to increase thruster PWM by " + str(thruster_increment) + "\n\
                     > Press j to decrease thruster PWM by " + str(thruster_increment) + "\n\
                     > Press b or ENTER to stop\n\
 					> Press y to exit\n")
-            increment_matrix = reset_msg.copy()
             while True:
                 key = input("Press key to control, then ENTER to send command (b to stop) (y to exit)\n")
                 if key == "y":
