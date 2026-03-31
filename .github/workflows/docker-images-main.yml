@@ -135,6 +135,8 @@ jobs:
           tags: ${{ env.PRIMARY_TAG }}
           build-args: |
             CI=true
+      
+      - uses: ./.github/actions/swapfile
 
       - name: Verify Build
         run: |
@@ -159,6 +161,18 @@ jobs:
           else:
               print('CPU container, skipping CUDA check.')
           "
+      - name: Teardown swap space
+        if: always()
+        run: |
+          if swapon --show | grep -q /swapfile; then
+            echo "Disabling and removing swapfile..."
+            sudo swapoff /swapfile
+            sudo rm /swapfile
+            echo "Done. Disk reclaimed:"
+            df -h /
+          else
+            echo "No swapfile found, nothing to clean up."
+          fi
 
       - name: Push image
         if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
