@@ -3,10 +3,17 @@
 Description: Thrust mapper node subscribes to the effort topic, converts the wrench readings to thruster forces,
 and then converts the forces to PWM signals and publishes them.
 
-Subscribes:  /controls/effort (geometry_msgs/msg/Wrench)
-Publishes:   /propulsion/microseconds (auv_msgs/msg/ThrusterMicroseconds)
+Uses direction-preserving, attitude-priority thrust allocation:
+  1. Attitude (torques) are allocated first and scaled to stay within f_max per thruster.
+  2. Translation (forces) fill remaining thruster capacity without corrupting attitude.
+  3. All scaling preserves the direction of the original wrench vector.
+This eliminates the "death spin" caused by naive PWM clipping during saturation.
+
+Subscribes:  /controls/total_effort (geometry_msgs/msg/Wrench)
+Publishes:   /propulsion/microseconds (std_msgs/msg/Int16MultiArray)
              /propulsion/forces      (auv_msgs/msg/ThrusterForces)
-Parameters:  a, b, c, d, e, dx, dy (m), alpha (deg), thruster_PWM_lower_limit, thruster_PWM_upper_limit
+Parameters:  a, b, c, d, e, dx, dy (m), alpha (deg), f_max (N),
+             thruster_PWM_lower_limit, thruster_PWM_upper_limit
 """
 
 import math
@@ -42,6 +49,11 @@ class ThrusterMapper(Node):
         self.declare_parameter('thruster_PWM_lower_limit', 1228)
         self.declare_parameter('thruster_PWM_upper_limit', 1768)
 
+        # --- Force limit per thruster (Newtons)
+        # Conservative default below the ~22 N effective limit imposed by PWM window [1228, 1768].
+        # Increase via launch param if more thrust is needed; the PWM clip is a safety backstop.
+        self.declare_parameter('f_max', 20.0)
+
         # Geometric parameters of the thruster positions
         # Consult README for reference axes and dimensions used to declare variables and create allocation matrix below
         # Units are in Degrees and m
@@ -58,6 +70,7 @@ class ThrusterMapper(Node):
         try:
             self.thruster_lower_limit = self.get_parameter('thruster_PWM_lower_limit').value
             self.thruster_upper_limit = self.get_parameter('thruster_PWM_upper_limit').value
+            self.f_max = float(self.get_parameter('f_max').value)
 
             a = self._get_float('a')
             b = self._get_float('b')
@@ -70,6 +83,8 @@ class ThrusterMapper(Node):
         except Exception as ex:
             self.get_logger().fatal(f'Missing or invalid parameters: {ex}')
             raise
+
+        self.get_logger().info(f'Priority allocator: f_max = {self.f_max:.1f} N per thruster')
 
         alpha = math.radians(alpha_deg)
 
@@ -89,6 +104,10 @@ class ThrusterMapper(Node):
             [ (np.cos(alpha)*(c+dy) + np.sin(alpha)*(d+dx)), 0, 0, -(np.cos(alpha)*(c+dy) + np.sin(alpha)*(d-dx)), (np.cos(alpha)*(c-dy) + np.sin(alpha)*(d-dx)), 0, 0, -(np.cos(alpha)*(c-dy) + np.sin(alpha)*(d+dx))]
         ])
         self.T_inv = np.linalg.pinv(T)  # Pseudo-inverse (8x6)
+
+        # Throttle logging: only log scaling events every N callbacks
+        self._log_counter = 0
+        self._LOG_INTERVAL = 50  # log every 50th scaled callback (~1.7s at 30 Hz)
 
         # --- Subscriber
         self.sub_cmd = self.create_subscription(
@@ -124,27 +143,100 @@ class ThrusterMapper(Node):
         self.re_arm()
 
 
+    def _allocate_priority(self, wrench_msg: Wrench) -> np.ndarray:
+        """
+        Direction-preserving, attitude-priority thrust allocation.
+
+        1. Attitude (torques) are allocated first via pseudo-inverse and scaled
+           to stay within [-f_max, +f_max] per thruster (direction preserved).
+        2. Translation (forces) fill remaining thruster capacity. A sign-aware
+           alpha is computed so the combined output never exceeds f_max.
+        3. Returns the 8-element thrust force vector in Newtons.
+        """
+        f_max = self.f_max
+
+        # --- Split wrench into high-priority attitude and low-priority translation ---
+        tau_att = np.array([
+            0.0, 0.0, 0.0,
+            wrench_msg.torque.x, wrench_msg.torque.y, wrench_msg.torque.z
+        ])
+        tau_trans = np.array([
+            wrench_msg.force.x, wrench_msg.force.y, wrench_msg.force.z,
+            0.0, 0.0, 0.0
+        ])
+
+        # --- Step 1: Allocate attitude (high priority) ---
+        f_att = self.T_inv @ tau_att
+
+        # Direction-preserving scale: find the single most saturated thruster
+        att_max = np.max(np.abs(f_att))
+        att_scale = att_max / f_max if att_max > f_max else 1.0
+        if att_scale > 1.0:
+            f_att /= att_scale
+
+        # --- Step 2: Allocate translation (low priority) ---
+        f_trans = self.T_inv @ tau_trans
+
+        # Sign-aware alpha: find max alpha in [0, 1] such that
+        # -f_max <= f_att[i] + alpha * f_trans[i] <= f_max  for all i
+        alpha = self._compute_max_translation_alpha(f_att, f_trans, f_max)
+
+        # --- Step 3: Combine ---
+        thrust_forces = f_att + alpha * f_trans
+
+        # --- Periodic logging ---
+        self._log_counter += 1
+        if (att_scale > 1.0 or alpha < 1.0) and self._log_counter >= self._LOG_INTERVAL:
+            self._log_counter = 0
+            self.get_logger().info(
+                f'Allocation scaled: att_scale={att_scale:.2f}, trans_alpha={alpha:.2f}'
+            )
+
+        return thrust_forces
+
+    @staticmethod
+    def _compute_max_translation_alpha(
+        f_att: np.ndarray, f_trans: np.ndarray, f_max: float
+    ) -> float:
+        """
+        Compute the maximum scaling factor alpha in [0, 1] such that
+        |f_att[i] + alpha * f_trans[i]| <= f_max  for every thruster i.
+
+        This is sign-aware: if attitude and translation oppose each other on a
+        thruster, the cancellation is accounted for (unlike the naive |f_trans|/f_remaining
+        approach which is overly conservative).
+        """
+        alpha = 1.0
+        for i in range(len(f_trans)):
+            ft = f_trans[i]
+            if abs(ft) < 1e-9:
+                continue  # thruster has no translation contribution
+
+            # Determine the binding constraint depending on which limit
+            # f_trans pushes toward
+            if ft > 0.0:
+                # Pushing toward +f_max
+                alpha_i = (f_max - f_att[i]) / ft
+            else:
+                # Pushing toward -f_max
+                alpha_i = (-f_max - f_att[i]) / ft
+
+            if alpha_i < alpha:
+                alpha = alpha_i
+
+        # Clamp to [0, 1] - negative alpha means attitude alone already at the
+        # limit in the direction translation wants to push (translation gets zero).
+        return max(0.0, min(1.0, alpha))
+
     def wrench_to_thrust(self, wrench_msg: Wrench):
         """
-        Callback function that maps a received Wrench message into thruster forces by applying the
-        pseudo-inverse of the thruster mapping matrix. We assume that all messages published on /controls/effort
-        are in the "auv" frame.
-
+        Callback: maps a Wrench into per-thruster forces via priority allocation,
+        then publishes forces and PWM.
         """
-        # body wrench vector (6,)
-        wrench_vec = np.array([
-            wrench_msg.force.x,
-            wrench_msg.force.y,
-            wrench_msg.force.z,
-            wrench_msg.torque.x,
-            wrench_msg.torque.y,
-            wrench_msg.torque.z
-        ], dtype=float)
+        # Priority allocation in force space
+        thrust_forces = self._allocate_priority(wrench_msg)
 
-        # Calculate the thruster forces using the pseudo-inverse
-        thrust_forces = self.T_inv @ wrench_vec  # (8,)
-
-        # Publish forces (debug/sim)
+        # Publish forces (debug/telemetry)
         tf_msg = ThrusterForces()
         tf_msg.back_right         = float(thrust_forces[0])
         tf_msg.heave_back_right    = float(thrust_forces[1])
@@ -154,8 +246,6 @@ class ThrusterMapper(Node):
         tf_msg.heave_front_left    = float(thrust_forces[5])
         tf_msg.heave_back_left    = float(thrust_forces[6])
         tf_msg.back_left         = float(thrust_forces[7])
-
-        # Publish the computed thruster forces (useful for simulation/debugging)
         self.pub_forces.publish(tf_msg)
 
         # Convert to PWM and publish
@@ -164,15 +254,24 @@ class ThrusterMapper(Node):
     def forces_to_pwm_publisher(self, thrust_forces: np.ndarray):
         """
         Converts thruster forces into PWM signals and publishes them.
-        Applies individual limits to prevent overcurrent.
+        The PWM clip is a safety backstop only - the priority allocator should
+        keep forces within f_max so this clip never activates in normal operation.
         """
+        pwm_arr = np.array(
+            [force_to_pwm_thruster(i + 1, float(thrust_forces[i])) for i in range(8)],
+            dtype=float
+        )
 
-        pwm_arr = [force_to_pwm_thruster(i + 1, float(thrust_forces[i])) for i in range(8)]
+        # Safety backstop clip - warn if it activates
+        clipped = np.clip(pwm_arr, self.thruster_lower_limit, self.thruster_upper_limit)
+        if not np.array_equal(pwm_arr, clipped):
+            self.get_logger().warn(
+                'PWM safety clip activated! f_max may be set too high. '
+                f'Pre-clip: {pwm_arr.astype(int).tolist()}, '
+                f'limits: [{self.thruster_lower_limit}, {self.thruster_upper_limit}]'
+            )
+        pwm_arr = clipped.astype(np.uint16, copy=False)
 
-        # Apply limit checking for each thruster
-        pwm_arr = np.clip(pwm_arr, self.thruster_lower_limit, self.thruster_upper_limit)
-        pwm_arr = pwm_arr.astype(np.uint16, copy=False) # Ensure uint16 for message compatibility
-        
         pwm_msg = Int16MultiArray()
         pwm_msg.data = pwm_arr.tolist()
         self.pub_us.publish(pwm_msg)
