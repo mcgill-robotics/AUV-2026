@@ -60,6 +60,6 @@ def generate_launch_description():
             launch_sensors,
             launch_propulsion,
             launch_controls,
-            launch_planner,
+
             sim_group
         ])

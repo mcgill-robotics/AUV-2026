@@ -5,9 +5,9 @@ from controls import navigation_client
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
 from . import SensorsBehaviour
-from . import TemplateBehaviour
-from . import CustomCallbackBehaviour
-
+from .missions.preQual.RectangleQualification import RectangleQualificationMission
+from .missions.preQual.OrbitQualification import OrbitQualificationMission
+from .missions.MissionsSequence import MissionSequence
 
 # I like my ANSI colours :DDD
 green_text = "\033[32m"
@@ -18,11 +18,27 @@ class RootTree(Node):
     This node initializes the root of the behaviour tree and adds the main branches of the tree as children to the root.
     """
     def __init__(self):
-        super().__init__("RootTreeNode")
+        super().__init__("planner_root_tree")
         
-        # Set the root of the tree and navigation client instance 
+        # Get tolerance, timeout and tick rate parameters from the configs
+        self.declare_parameter("pre_qual_yaw_tolerance", 1.0)
+        self.declare_parameter("pre_qual_positional_tolerance", 1.0)
+        self.declare_parameter("pre_qual_timeout", 1.0)
+        self.declare_parameter("pre_qual_hold_time", 1.0)
+        self.declare_parameter("tick_rate", 1.0)
+
+        self.pre_qual_yaw_tolerance = self.get_parameter("pre_qual_yaw_tolerance").get_parameter_value().double_value
+        self.pre_qual_positional_tolerance = self.get_parameter("pre_qual_positional_tolerance").get_parameter_value().double_value
+        self.pre_qual_timeout = self.get_parameter("pre_qual_timeout").get_parameter_value().double_value
+        self.pre_qual_hold_time = self.get_parameter("pre_qual_hold_time").get_parameter_value().double_value
+        self.tick_rate = self.get_parameter("tick_rate").get_parameter_value().double_value
+
+        # Set the root of the tree
         root = py_trees.composites.Parallel("Root", policy=py_trees.common.ParallelPolicy.SuccessOnAll()) # SUCCESS_ON_ALL means the root will only return success if all children return success
-        self.navigation_client = navigation_client.NavigationClient(name="NavigationClientNode")
+        
+        # Create navigation client instance as a singleton
+        # This is to consolidate all information concerning actions into one node client
+        self.navigation_client = navigation_client.NavigationClient(name="planner_nav_client")
         self.navigation_client_ongoing_goal = self.navigation_client.current_goal_handle # Store the goal handle of the currently active goal, if any, to allow for cancellation when a new goal is sent.
         
         self.blackboard = py_trees.blackboard.Client(name="RootTreeBlackboard")
@@ -35,19 +51,17 @@ class RootTree(Node):
         # This allows the rest of the tree to access the latest sensor data snapshot at each tick.
         sensors_reader = SensorsBehaviour.SensorsBehaviour(node=self, name="Sensors Reader")
 
-        # Add other behaviour here as mission controls node, currently implemented a dummy leaf
-        dummy_leaf = TemplateBehaviour.TemplateBehaviour(node=self, name="Dummy Leaf")
-        callback_leaf = CustomCallbackBehaviour.CustomCallback(node=self, name="Custom Callback Leaf", rotations_segments=8, angle_to_rotate_deg=360, radius_to_rotate_meter=3.0, clockwise=True)
-        root.add_children([sensors_reader, callback_leaf])
+        # Add other behaviour here as mission controls node
+        missions = MissionSequence(self)
+
+        # Add children to root
+        root.add_children([sensors_reader, missions])
 
         # Create the behaviour tree with the root and setup the tree and call the setup of the root to initialize and setup all the
         # children behaviours recursively. This will setup all blackboards and ros2 publishers/subscribers
         self.behaviour_tree = py_trees.trees.BehaviourTree(root=root)
-        print(py_trees.display.unicode_tree(root=root))
         self.behaviour_tree.setup(timeout=15)
 
-        self.declare_parameter("tick_rate", 1.0)
-        self.tick_rate = self.get_parameter("tick_rate").get_parameter_value().double_value
         self.timer = self.create_timer(self.tick_rate, self.tick_tree)  # tick every tick_rate seconds
 
         # Debug log to confirm initialization, can remove but I like my colours :D

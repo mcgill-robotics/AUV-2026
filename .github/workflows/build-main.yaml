@@ -112,7 +112,7 @@ jobs:
             
             # Install dependencies using rosdep
             sudo apt-get update
-            rosdep update --rosdistro \$ROS_DISTRO
+            sudo rosdep update --rosdistro \$ROS_DISTRO
             sudo rosdep install --from-paths src --ignore-src --rosdistro \$ROS_DISTRO -y || true
             
             # Build specified packages
