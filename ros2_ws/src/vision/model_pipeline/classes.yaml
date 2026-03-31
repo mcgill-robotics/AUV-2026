@@ -1,0 +1,9 @@
+# Class names for the AUV vision model pipeline.
+# This is the single source of truth — update here and all scripts pick it up.
+names:
+  - "board_image"
+  - "gate_prequal"
+  - "shark"
+  - "sawfish"
+  - "marker_prequal"
+  - "white_pipe_medn"
