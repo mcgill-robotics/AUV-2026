@@ -18,7 +18,9 @@ object_detection:
   front_cam:
     enhanced_topic: /vision/front_cam/image_enhanced # input topic if enhance_images is true, otherwise will subscribe to raw image topic
     detection_topic: /vision/front_cam/detections # output topic for detections
-    model_relative_path: models/frontcam.pt # relative to src/vision directory
+    model_type: "rfdetr" # [yolo, rfdetr]
+    confidence_threshold: 0.10
+    model_relative_path: models/best_rf_detr_small_model.pth #models/frontcam.pt # relative to src/vision directory
     class_names:
       - "board_image"
       - "gate_prequal"
@@ -28,10 +30,12 @@ object_detection:
       - "white_pipe_medn"
     queue_size: 10
     publish_annotated_image: true # whether to publish an annotated image with bounding boxes drawn (for visualization/debugging). will publish to detection_topic + /annotated
-    log_level: warn
+    log_level: info
   down_cam:
     enhanced_topic: /vision/down_cam/image_enhanced
     detection_topic: /vision/down_cam/detections
+    model_type: "yolo" # [yolo, rfdetr]
+    confidence_threshold: 0.40
     # relative to src directory
     model_relative_path: models/downcam.pt
     class_names:
@@ -49,7 +53,7 @@ object_map:
   map_topic: /vision/object_map # final output of vision pipeline
   pose_topic: /vision/vio_pose # output VIO pose topic used to determine 3D position, eventually will subscribe to state estimation instead
   confidence_threshold: 0.5 # minimum confidence for detections to be considered for tracking (0.0 to 1.0)
-  zed_depth_confidence_threshold: 90 # minimum confidence for ZED depth measurements to be used in tracking (0 to 100)
+  zed_depth_confidence_threshold: 0 # minimum confidence for ZED depth measurements to be used in tracking (0 to 100)
   max_range: 9.0 # maximum range in meters for detections to be considered for tracking
   frame_rate: 30 # maximum frame rate for the object map (tracks will be updated at this rate, may be lower than camera frame rate if processing is too slow)
   new_object_min_distance_threshold: 0.5 # distance in meters between a new detection and existing tracks to be considered a new object and start a new track
@@ -76,13 +80,30 @@ object_map:
     white_pipe_medn: 2
 
   # Tracker Parameters
-  gating_threshold: 3.5 # Mahalanobis distance threshold (~3 sigma) for associating detections to tracks
-  min_hits: 20 # Consecutive frames a detection must be matched to confirm a new track
-  max_age: 8 # Number of frames to keep a lost track alive before deleting it
-  max_position_jump: 2.0 # Maximum allowed distance (meters) between predictions and measurements
-  conf_to_tent_threshold: 5 # Number of consecutive missed frames before a CONFIRMED track degrades to TENTATIVE
-  tent_init_buffer: 5 # Extra frames allowed for a new TENTATIVE track to initialize before being deleted if unmatched
+  # relatively strict
+  # gating_threshold: 3.5 # Mahalanobis distance threshold (~3 sigma) for associating detections to tracks
+  # min_hits: 20 # Consecutive frames a detection must be matched to confirm a new track
+  # max_age: 8 # Number of frames to keep a lost track alive before deleting it
+  # max_position_jump: 2.0 # Maximum allowed distance (meters) between predictions and measurements
+  # conf_to_tent_threshold: 5 # Number of consecutive missed frames before a CONFIRMED track degrades to TENTATIVE
+  # tent_init_buffer: 5 # Extra frames allowed for a new TENTATIVE track to initialize before being deleted if unmatched
   
+  # loose parameters
+  # gating_threshold: 5.0
+  # min_hits: 5
+  # max_age: 15
+  # max_position_jump: 4.0
+  # conf_to_tent_threshold: 10
+  # tent_init_buffer: 10
+
+  # raw detection parameters
+  # gating_threshold: 99.0
+  # min_hits: 1
+  # max_age: 1
+  # max_position_jump: 99.0
+  # conf_to_tent_threshold: 1
+  # tent_init_buffer: 1
+
   # Debug
   log_level: warn
 
