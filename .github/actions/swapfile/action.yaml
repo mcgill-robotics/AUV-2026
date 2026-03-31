@@ -12,6 +12,17 @@ runs:
         df -h /
         echo "-- Memory & Swap --"
         free -h
+        
+        # Clean up any leftover swapfile from a previous run
+        if swapon --show | grep -q /swapfile; then
+          echo "Existing swapfile is active, disabling it..."
+          sudo swapoff /swapfile
+        fi
+        if [ -f /swapfile ]; then
+          echo "Existing swapfile found on disk, removing it..."
+          sudo rm /swapfile
+        fi
+
         # awk extracts line 2, column 4 (available space in root filesystem)
         AVAILABLE_MB=$(df -m / | awk 'NR==2 {print $4}')
         # allocate 40% of available disk space
