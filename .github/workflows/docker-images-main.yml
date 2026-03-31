@@ -66,7 +66,8 @@ jobs:
           submodules: recursive
           lfs: true
 
-      - uses: ./.github/actions/cleanup_disk
+      - name: Clean up Disk Space
+        uses: ./.github/actions/cleanup_disk
 
       - name: Set Docker Tags
         id: docker_tags
@@ -136,7 +137,8 @@ jobs:
           build-args: |
             CI=true
       
-      - uses: ./.github/actions/swapfile
+      - name: Add Swapfile
+        uses: ./.github/actions/swapfile
 
       - name: Verify Build
         run: |
