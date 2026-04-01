@@ -156,7 +156,7 @@ The tracking system operates using a multi-step data association pipeline design
 2. **Persistent Tracking (Kalman Filter + Hungarian Algorithm):**
    - **State Estimation:** Every tracked object is assigned a constant-velocity Kalman Filter (`KalmanFilter.cpp`). This allows the tracker to predict where an object *should* be in the next frame based on its previous trajectory.
    - **Cost Matrix:** When new detections arrive, the system computes the Mahalanobis Distance between the predicted positions of existing tracks and the new incoming measurements.
-   - **Data Association:** The Hungarian Matcher (`ObjectTracker::match_tracks`) solves the linear assignment problem using this cost matrix, pairing incoming detections to existing tracks while minimizing overall distance error.
+   - **Data Association:** [The Hungarian Matcher](https://github.com/mcximing/hungarian-algorithm-cpp) (`ObjectTracker::match_tracks`) solves the linear assignment problem using this cost matrix, pairing incoming detections to existing tracks while minimizing overall distance error.
    - **Track Lifecycle:** Unmatched detections spawn new `TENTATIVE` tracks. If a track is consistently matched across several frames, it becomes `CONFIRMED`. If a confirmed track loses sight of the object, the Kalman Filter continues predicting its location for a configured `max_age` duration before the track is finally purged.
 
 3. **Categorization:** 

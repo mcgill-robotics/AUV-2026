@@ -313,7 +313,7 @@ void ObjectTracker::update_matched_tracks(
         }
 
         
-        if (track.state == TrackState::TENTATIVE && track.consecutive_hits >= min_hits) {
+        if (track.state == TrackState::TENTATIVE && track.hits >= min_hits) {
             track.state = TrackState::CONFIRMED;
         }
     }
@@ -346,7 +346,7 @@ void ObjectTracker::delete_dead_tracks() {
         }
         
         // tentative for too long 
-        if (it->state == TrackState::TENTATIVE && it->total_updates > min_hits + tent_init_buffer) {
+        if (it->state == TrackState::TENTATIVE && it->total_updates - it->hits > tent_init_buffer) {
             delete_track = true;
         }
 
