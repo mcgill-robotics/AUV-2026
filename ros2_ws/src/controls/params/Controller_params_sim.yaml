@@ -7,7 +7,7 @@ attitude_controller:
     P_wx: 1.0
     P_wy: 1.0
     P_wz: 1.0
-    buoyancy: 264.0 # [N]
+    buoyancy: 264.09 # [N]
     r_bv_v: [0.0, 0.0, 0.0] # [m] From CAD Model    
     enabled: false
 
@@ -18,8 +18,8 @@ depth_controller:
     KD: 50.0
     KI: 0.0
     I_MAX: 10.0
-    net_buoyancy: 8.94 # Newtons
-    enabled: true
+    net_buoyancy: 9.03 # Newtons
+    enabled: false
 
 x_controller:
   ros__parameters:

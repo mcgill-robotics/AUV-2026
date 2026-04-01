@@ -46,13 +46,15 @@ namespace controls
        this->declare_parameter<double>("effort_bias_torque_y", 0.0);
        this->declare_parameter<double>("effort_bias_torque_z", 0.0);
        this->declare_parameter<double>("publish_hz", 30.0); // publish frequency
+       this->declare_parameter<double>("max_planar_effort", 0.0); // 0 = no limit
        effort_bias_force_x = this->get_parameter("effort_bias_force_x").as_double();
        effort_bias_force_y = this->get_parameter("effort_bias_force_y").as_double();
        effort_bias_force_z = this->get_parameter("effort_bias_force_z").as_double();
        effort_bias_torque_x = this->get_parameter("effort_bias_torque_x").as_double();
        effort_bias_torque_y = this->get_parameter("effort_bias_torque_y").as_double();
        effort_bias_torque_z = this->get_parameter("effort_bias_torque_z").as_double();
-         publish_hz_ = this->get_parameter("publish_hz").as_double();
+       publish_hz_ = this->get_parameter("publish_hz").as_double();
+       max_planar_effort_ = this->get_parameter("max_planar_effort").as_double();
 
         publish_timer_ = this->create_wall_timer(
             std::chrono::milliseconds(static_cast<int64_t>(1000 / publish_hz_)),   // Control loop frequency
@@ -117,11 +119,21 @@ namespace controls
        wrench_msg combined_effort;
 
        // Transform depth effort from pool frame to body frame. 
-         Vec3 depth_force_pool(depth_effort_.force.x, depth_effort_.force.y, depth_effort_.force.z);
-         Vec3 x_force_pool(x_effort_.force.x, x_effort_.force.y, x_effort_.force.z);
-         Vec3 y_force_pool(y_effort_.force.x, y_effort_.force.y, y_effort_.force.z);
-         Vec3 total_force_pool = depth_force_pool + x_force_pool + y_force_pool; // No torque from axial controller.
-         Vec3 total_force_body = q_iv_.inverse() * total_force_pool; // Rotate to body frame
+       Vec3 depth_force_pool(depth_effort_.force.x, depth_effort_.force.y, depth_effort_.force.z);
+       Vec3 x_force_pool(x_effort_.force.x, x_effort_.force.y, x_effort_.force.z);
+       Vec3 y_force_pool(y_effort_.force.x, y_effort_.force.y, y_effort_.force.z);
+       Vec3 planar_force_pool = x_force_pool + y_force_pool;
+
+       // Clamp planar (x,y) effort vector magnitude if limit is set
+       if (max_planar_effort_ > 0.0) {
+           double planar_mag = planar_force_pool.norm();
+           if (planar_mag > max_planar_effort_) {
+               planar_force_pool *= (max_planar_effort_ / planar_mag);
+           }
+       }
+
+       Vec3 total_force_pool = depth_force_pool + planar_force_pool;
+       Vec3 total_force_body = q_iv_.inverse() * total_force_pool; // Rotate to body frame
 
 
        // Combine efforts (simple summation)
