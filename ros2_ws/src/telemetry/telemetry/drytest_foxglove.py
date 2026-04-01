@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import math
+import time
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Int16MultiArray
@@ -11,11 +13,9 @@ from ament_index_python.packages import get_package_share_directory
 import yaml
 import os
 
-MAX_FWD_FORCE =  1 * 9.81 # Numbers from drytest in AUV-2025
-MAX_BWD_FORCE = -1 * 9.81 # Numbers from drytest in AUV-2025
-
-
-force_amt = 0.1
+SWEEP_DURATION = 10.0   # seconds for one full sine cycle
+SWEEP_RATE_HZ  = 40    # PWM update rate during sweep
+PEAK_FORCE_N   = 3.0   # peak force in Newtons for all dry tests
 
 reset_msg = [1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500]
 
@@ -63,13 +63,36 @@ class DryTestNode(Node):
         self.get_logger().info("Safely shutting down thrusters")
 
     def simultaneous_forwards_test(self, request, response):
-        forward_test_msg = [force_to_pwm_thruster(i + 1, force_amt * MAX_FWD_FORCE) for i in range(8)]
-        self.publish_thruster(forward_test_msg)
-        self.get_clock().sleep_for(rclpy.duration.Duration(seconds=1.0))
+        """
+        Sweep all thrusters simultaneously through a full sine cycle:
+          0 -> +peak -> 0 -> -peak -> 0
+        over SWEEP_DURATION seconds at SWEEP_RATE_HZ update rate.
+        """
+        peak_force = PEAK_FORCE_N
+        dt = 1.0 / SWEEP_RATE_HZ
+        steps = int(SWEEP_DURATION * SWEEP_RATE_HZ)
+        t0 = time.monotonic()
+
+        for i in range(steps):
+            t = (i + 1) * dt
+            force = peak_force * math.sin(2.0 * math.pi * t / SWEEP_DURATION)
+
+            test_msg = [force_to_pwm_thruster(j + 1, force) for j in range(8)]
+            self.publish_thruster(test_msg)
+
+            # Sleep until next step (wall-clock aligned)
+            target = t0 + (i + 1) * dt
+            sleep_remaining = target - time.monotonic()
+            if sleep_remaining > 0:
+                self.get_clock().sleep_for(
+                    rclpy.duration.Duration(nanoseconds=int(sleep_remaining * 1e9))
+                )
+
+        # Ensure clean stop
         self.publish_thruster(reset_msg)
 
         response.success = True
-        response.message = "all thrusters spinning at " + str(100 * force_amt) + "% max forwards force for 1s"
+        response.message = f"All thrusters sine sweep ±{peak_force:.2f} N over {SWEEP_DURATION}s"
 
         return response
 
@@ -81,46 +104,58 @@ class DryTestNode(Node):
             return response
 
         optimized_dry_test_msg = reset_msg.copy()
-        optimized_dry_test_msg[thruster - 1] = force_to_pwm_thruster(thruster, force_amt * MAX_FWD_FORCE)
+        optimized_dry_test_msg[thruster - 1] = force_to_pwm_thruster(thruster, PEAK_FORCE_N)
         self.publish_thruster(optimized_dry_test_msg)
         self.get_clock().sleep_for(rclpy.duration.Duration(seconds=1.0))
         self.publish_thruster(reset_msg)
 
         response.success = True
-        response.message = "Thruster " + str(request.data) + " spinning at " + str(100 * force_amt) + "% max forwards force for 1s"
+        response.message = f"Thruster {request.data} spinning at {PEAK_FORCE_N} N for 1s"
 
         return response
 
     def test_thruster(self, request, response):
         """
-        Rotates a single thruster forward for 1s, then backward for 1s, then stops.
+        Sweep a single thruster through a full sine cycle:
+          0 -> +peak -> 0 -> -peak -> 0
+        over SWEEP_DURATION seconds at SWEEP_RATE_HZ update rate.
         """
         thruster: int = request.data
         if not 1 <= thruster <= 8:
             response.success = False
             response.message = "Thruster index must be 1–8"
             return response
-            
-        # Forward
-        test_msg = reset_msg.copy()
-        test_msg[thruster - 1] = force_to_pwm_thruster(thruster, force_amt * MAX_FWD_FORCE)
-        self.publish_thruster(test_msg)
-        self.get_clock().sleep_for(rclpy.duration.Duration(seconds=1.0))
-        
-        # Stop
+
+        peak_force = PEAK_FORCE_N
+        dt = 1.0 / SWEEP_RATE_HZ
+        steps = int(SWEEP_DURATION * SWEEP_RATE_HZ)
+        t0 = time.monotonic()
+
+        for i in range(steps):
+            t = (i + 1) * dt
+            # sin(2*pi*t/T) gives exactly one full cycle over SWEEP_DURATION
+            force = peak_force * math.sin(2.0 * math.pi * t / SWEEP_DURATION)
+
+            test_msg = reset_msg.copy()
+            test_msg[thruster - 1] = force_to_pwm_thruster(thruster, force)
+            self.publish_thruster(test_msg)
+
+            # Sleep until next step (wall-clock aligned)
+            target = t0 + (i + 1) * dt
+            sleep_remaining = target - time.monotonic()
+            if sleep_remaining > 0:
+                self.get_clock().sleep_for(
+                    rclpy.duration.Duration(nanoseconds=int(sleep_remaining * 1e9))
+                )
+
+        # Ensure clean stop
         self.publish_thruster(reset_msg)
-        
-        self.get_clock().sleep_for(rclpy.duration.Duration(seconds=0.5))
-        # Backward
-        test_msg[thruster - 1] = force_to_pwm_thruster(thruster, force_amt * MAX_BWD_FORCE)
-        self.publish_thruster(test_msg)
-        self.get_clock().sleep_for(rclpy.duration.Duration(seconds=1.0))
-        
-        # Stop
-        self.publish_thruster(reset_msg)
-        
+
         response.success = True
-        response.message = f"Thruster {thruster} forward 1s, backward 1s, then stopped"
+        response.message = (
+            f"Thruster {thruster} sine sweep ±{peak_force:.2f} N "
+            f"over {SWEEP_DURATION}s"
+        )
         return response
 
     def re_arm(self, request, response):
