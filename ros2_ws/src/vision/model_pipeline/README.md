@@ -4,7 +4,7 @@
 For training on synthetic data generated from Unity, follow this pipeline to ensure robust performance (sim-to-real gap bridge).
 
 > [!IMPORTANT]
-> Always **split first**, then **augment only the training set**. Augmenting before splitting causes data leakage — augmented copies of the same source image may end up in both train and validation, inflating metrics.
+> Always **split first**, then **augment only the training set**. Augmenting before splitting causes data leakage - augmented copies of the same source image may end up in both train and validation, inflating metrics.
 
 ### YOLO Workflow
 
@@ -95,6 +95,21 @@ To pass any of these arguments, simply add them to the end of the `training.sh` 
 ./training.sh yolov11s_augmented_synthetic_best_model.pt --training-args "--size m --epochs 1" --organize-args "--input ./data"
 ```
 To train a model from scratch (no fine tuning), specify one of the base models (for example yolov8n.pt) instead of yolov11s\_augmented\_synthetic\_best\_model.pt
+
+## Visualize Predictions
+
+You can view inference results on random images from your dataset using `visualize_label.py` to verify the model predictions before deployment:
+
+**For YOLO:**
+```bash
+python3 visualize_label.py --folder data/processed/test/images --model-type yolo --model runs/detect/yolov11s/weights/best.pt
+```
+
+**For RF-DETR:**
+```bash
+python3 visualize_label.py --folder data/processed_coco/test/images --model-type rfdetr --model best_rf_detr_small_model.pth
+```
+
 ## Optimize the model
 Run this **ON THE JETSON**: 
 
