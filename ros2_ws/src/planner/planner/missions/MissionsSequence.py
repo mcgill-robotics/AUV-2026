@@ -16,6 +16,7 @@ from .preQual.TestMoveForwardBehaviour import TestMoveForwardBehaviour
 from .preQual.TestYawBehaviour import TestYawBehaviour
 from .preQual.TestDiveBehaviour import TestDiveBehaviour
 from .preQual.TranslationRectangle import TranslationRectangleMission
+from .preQual.TestServiceCallBehaviour import TestServiceCallBehaviour
 import math
 
 class MissionSequence(py_trees.composites.Sequence):
@@ -35,12 +36,14 @@ class MissionSequence(py_trees.composites.Sequence):
         test_dive = TestDiveBehaviour(node)
         test_yaw = TestYawBehaviour(node)
         translation_rectangle = TranslationRectangleMission(node)
+        test_service_call = TestServiceCallBehaviour(node)
         all_missions.add_children([pre_qual_orbit, 
             pre_qual_rectangle, 
             test_move_forward,
             test_dive, 
             test_yaw,
-            translation_rectangle])
+            translation_rectangle,
+            test_service_call])
 
         self.add_children([mission_choice, 
             all_missions])
@@ -103,7 +106,8 @@ class MissionChoiceBehaviour(py_trees.behaviour.Behaviour):
                             3: Basic Move forward (1.0m relative to Dougie)\n \
                             4: Basic Dive (Down 1.5m)\n \
                             5: Basic Yaw (180 deg)\n \
-                            6: Translation Rectangle (no yaw)")
+                            6: Translation Rectangle (no yaw)\n \
+                            7: Test Service Call (reset dead reckoning)")
                 self.message_shown = True
             return py_trees.common.Status.RUNNING
            
@@ -119,8 +123,8 @@ class MissionChoiceBehaviour(py_trees.behaviour.Behaviour):
         
         Outputs: None
         """
-        if not (0 < msg.data < 7):
-                self.node.get_logger().warn("Input must be an integer between 1 and 6 inclusively!")
+        if not (0 < msg.data < 8):
+                self.node.get_logger().warn("Input must be an integer between 1 and 7 inclusively!")
                 return
         
         self.blackboard.mission_choice = msg.data

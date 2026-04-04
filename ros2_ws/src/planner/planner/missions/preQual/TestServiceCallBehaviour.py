@@ -12,7 +12,7 @@ from ...utils.MissionCompleteBehaviour import MissionCompleteBehaviour
 from ...utils.TimerBehaviour import TimerBehaviour
 from ...utils.BasicTriggerServiceBehaviour import BasicTriggerServiceBehaviour
 
-class TranslationRectangleMission(py_trees.composites.Sequence):
+class TestServiceCallBehaviour(py_trees.composites.Sequence):
     """
     Attempt a service call to reset the dead reckoning.
     """

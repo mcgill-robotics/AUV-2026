@@ -7,7 +7,7 @@ from py_trees.common import Status, Access
 from py_trees.blackboard import Client
 from rclpy.action import ActionClient
 from auv_msgs.action import AUVNavigate
-from std_msgs.srv import Trigger
+from std_srvs.srv import Trigger
 from controls.goal_helpers import move_robot_centric
 from .ActionStatus import ActionStatus
 
@@ -90,7 +90,7 @@ class BasicTriggerServiceBehaviour(py_trees.behaviour.Behaviour):
                 return py_trees.common.Status.RUNNING
             
             # Verify if service is successful or not
-            try
+            try:
                 response = self.future.result()
                 if response.success:
                     self.node.get_logger().info(f"[{self.name}] Service succeeded.")
