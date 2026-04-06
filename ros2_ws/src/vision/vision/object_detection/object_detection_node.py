@@ -36,6 +36,8 @@ class ObjectDetectorNode():
         self.node.declare_parameter('sim', Parameter.Type.BOOL)
         self.node.declare_parameter('stream_ip', Parameter.Type.STRING)
         self.node.declare_parameter('stream_port', Parameter.Type.INTEGER)
+
+        self.timer = self.node.create_timer(1.0/30.0, self.run_object_detection)
  
         self.class_names = list(self.node.get_parameter('class_names').get_parameter_value().string_array_value)
         self.node.get_logger().info(f"Class names: {self.class_names}")
@@ -164,7 +166,7 @@ class ObjectDetectorNode():
         
         self.node.get_logger().info(f"{self.node.get_name()} initialized.")
 
-    def run_yolo(self):
+    def run_object_detection(self):
         # try:
         #     if self.compressed:
         #         img = self.bridge.compressed_imgmsg_to_cv2(msg, "bgr8")
@@ -186,11 +188,11 @@ class ObjectDetectorNode():
         # fully handle depth map first (better caching)
         if self.camera_type == "front_cam":
             self.zed.retrieve_measure(self.depth_buffer, sl.MEASURE.DEPTH)
-            depth = cv2.cvtColor(self.depth_buffer.get_data())
+            depth = cv2.cvtColor(self.depth_buffer.get_data(), cv2.COLOR_RGBA2BGR)
             depth_map = self.bridge.cv2_to_compressed_imgmsg(depth)
             self.pub_depth_map.publish(depth_map)
 
-        img = cv2.cvtColor(self.image_buffer.get_data())
+        img = cv2.cvtColor(self.image_buffer.get_data(), cv2.COLOR_RGBA2BGR)
 
         det_msg = Detection2DArray()
         det_objects = []

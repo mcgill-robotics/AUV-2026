@@ -23,29 +23,37 @@ object_detection:
     confidence_threshold: 0.40
     model_relative_path: models/robosub2025-synthetic-rfdetr_s.pth #models/frontcam.pt # relative to src/vision directory
     class_names:
-      - "board_image"
-      - "gate_prequal"
+      - "gate"
+      - "lane_marker"
+      - "red_pipe"
+      - "white_pipe"
+      - "octagon"
+      - "table"
+      - "bin"
+      - "board"
       - "shark"
       - "sawfish"
-      - "marker_prequal"
-      - "white_pipe_medn"
     queue_size: 10
     publish_annotated_image: true # whether to publish an annotated image with bounding boxes drawn (for visualization/debugging). will publish to detection_topic + /annotated
     log_level: info
   down_cam:
     enhanced_topic: /vision/down_cam/image_enhanced
-    detection_topic: /vision/front_cam/detections
+    detection_topic: /vision/down_cam/detections
     model_type: "yolo" # [yolo, rfdetr]
     confidence_threshold: 0.40
     # relative to src directory
     model_relative_path: models/downcam.pt
     class_names:
       - "gate"
-      - "octagon_table"
-      - "octagon_top"
-      - "path_marker"
-      - "sawfish"
+      - "lane_marker"
+      - "red_pipe"
+      - "white_pipe"
+      - "octagon"
+      - "table"
+      - "bin"
+      - "board"
       - "shark"
+      - "sawfish"
     queue_size: 10
     publish_annotated_image: true
     log_level: warn
@@ -111,7 +119,7 @@ object_map:
 general:
   # sim is what the wrapper listens to (the Unity sim stream), stream is what the wrapper republishes as a ROS topic for the rest of the vision pipeline to use
   # whether to use the ZED wrapper in simulation mode (true) or with a real camera (false)
-  sim: true
+  sim: false
   sim_ip: "127.0.0.1"
   sim_port: 30000
   # whether to use the wrapper as a streaming server that multiple nodes can subscribe to
