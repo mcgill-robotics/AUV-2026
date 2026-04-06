@@ -1,12 +1,21 @@
-# Steps to train a model
-## Unity Synthetic Data Pipeline (Recommended for Sim Training)
+# Vision Model Pipeline
+
+## 1. Complete End-to-End Workflow (Sim to Real)
+This is the recommended comprehensive workflow for bridging the gap from our Unity synthetic environments to real-world deployment:
+
+1. **Train on Synthetic Data (Sim):** Generate a dataset directly from Unity and train a baseline model purely on synthetic data. *(See [2. Unity Synthetic Data Pipeline](#2-unity-synthetic-data-pipeline-recommended-for-sim-training))*
+2. **Pre-label Real Data (Synth Model):** Use the synthetically-trained baseline model to automatically draw preliminary bounding boxes on all your raw real-world images. *(See [3. Pre-labeling for Roboflow](#3-pre-labeling-for-roboflow))*
+3. **Upload to Roboflow & Manual Verification:** Bulk upload the newly generated `[folder]_prelabeled` directory directly into Roboflow. Open Roboflow Annotate and effortlessly fix the minor mistakes made by the synthetic model instead of drawing completely from scratch.
+4. **Export & Final Training:** Export the perfectly verified dataset back from Roboflow dynamically. Run `organize_dataset.py` to split it, then run `training.py` on this refined dataset to confidently deploy! *(See [4. Fine-tuning Pipeline (Local)](#4-fine-tuning-pipeline-local))*
+   > **Note on Augmentation:** Unlike the synthetic pipeline, which strictly relies on our manual `augment_dataset.py` script to forcefully overcome rigid simulation artifacts, for real-world images it is usually better to **skip** `augment_dataset.py`! Native YOLO and RF-DETR PyTorch data-loaders already apply dynamic augmentations behind-the-scenes (like mosaic, scaling, or color jitter) during training, which is more than enough for real-world images without risking aggressive corruption.
+## 2. Unity Synthetic Data Pipeline (Recommended for Sim Training)
 
 For training on synthetic data generated from Unity, follow this pipeline to ensure robust performance (sim-to-real gap bridge).
 
 > [!IMPORTANT]
 > Always **split first**, then **augment only the training set**. Augmenting before splitting causes data leakage - augmented copies of the same source image may end up in both train and validation, inflating metrics.
 
-### YOLO Workflow
+### 2.1 YOLO Workflow
 
 1. **Collect Raw Data**: Put your Unity exports in `data/raw_import`. It should have `yolo_images/` and `yolo_labels/` folders.
 2. **Organize Dataset**: Split the data into train/val/test and generate `data.yaml`.
@@ -22,7 +31,7 @@ For training on synthetic data generated from Unity, follow this pipeline to ens
    python3 training.py --model v11 --size s --data data/processed_aug/data.yaml --unity
    ```
 
-### RF-DETR Workflow
+### 2.2 RF-DETR Workflow
 
 1. **Collect Raw Data**: Same as above.
 2. **Organize Dataset** in COCO format:
@@ -35,30 +44,55 @@ For training on synthetic data generated from Unity, follow this pipeline to ens
    ```
 4. **Train Model**:
    ```bash
-   python3 training.py --model rfdetr --dataset-dir data/processed_coco_aug --epochs 25
+   python3 training.py --model rfdetr --dataset-dir data/processed_coco_aug --epochs 50
    ```
    ```bash
    python3 -m tensorboard.main --logdir /home/douglas/AUV-2026/ros2_ws/src/vision/model_pipeline/runs/rfdetr
    ```
-## Fine-tuning Pipeline (Local)
-1. Collect real data
-    1. Ideally, you should collect at least ~50 raw images for each class. 
-2. Upload and Label Data
-    1. Use [this slideshow](https://docs.google.com/presentation/d/12WbaJi48y1edtK-ood4Iyu_NI00ZPQlZVDVObNEsrkc/edit?slide=id.p#slide=id.p) to sign in to roboflow
-    2. Follow the guide in the slideshow on how to label images
-3. Generate a New Version of the Dataset
-    1. Do **NOT** add any pre-processing/augmentation; this is handled in the training notebook.
-    2. The name of the dataset version does not matter.
-4. On the new dataset version, click download dataset
-    1. Select export format YOLOv11
-    2. Choose download zip to computer
-5. Move the data into `AUV-2026/ros2_ws/src/vision/model_pipeline/data/raw_import/{images, labels, data.yaml}` (create directories if necessary)
-6. Download the yolo model trained on simulation data from the [Drive](https://drive.google.com/drive/folders/1gnvU_EYM1NlcfZJZPfqre9U-cagVTcNy), the file is called `yolov11s_augmented_synthetic_best_model.pt`
-7. Move the synthetic model into `AUV-2026/ros2_ws/src/vision/model_pipeline`
-8. Run `./training.sh yolov11s_augmented_synthetic_best_model.pt` inside the docker container (synthetic model is the one you downloaded in the previous step).
-9. The pytorch model will be at `runs/detect/yolo11s/weights/best.pt`.
 
-### Fine-tuning Advanced Usage
+
+
+## 3. Pre-labeling for Roboflow
+
+You can use the `export_labels.py` script to run inference on a folder of raw images and automatically export `.txt` YOLO-format bounding box annotations perfectly matched to your dataset. This allows you to bulk upload pre-annotated data directly into Roboflow for manual refinement!
+
+By default, the script creates a duplicate folder named `[folder]_prelabeled` ensuring your original raw image dataset remains untouched! It places all generated `.txt` files and an intelligently synced `classes.txt` within this newly generated folder.
+
+**For RF-DETR:**
+```bash
+python3 export_labels.py --folder data/my_raw_images --model-type rfdetr --model best_rf_detr_small_model.pth
+```
+
+**For YOLO:**
+```bash
+python3 export_labels.py --folder data/my_raw_images --model-type yolo --model best_yolov11s_model.pt
+```
+
+After running the command, simply drag the generated `my_raw_images_prelabeled` folder securely straight into Roboflow's web interface.
+
+## 4. Fine-tuning Pipeline (Local)
+1. **Prepare Data Locally**
+    1. Run `export_labels.py` (see [3. Pre-labeling for Roboflow](#3-pre-labeling-for-roboflow)) on your newly collected raw images. This saves you from annotating hundreds of images from zero by utilizing your synthetic baseline model.
+2. **Upload and Verify on Roboflow**
+    1. Drag and drop the generated `_prelabeled` folder into your Roboflow workspace.
+    2. Using Roboflow Annotate, manually review the images and correct any inaccuracies made by the synthetic model.
+3. **Generate a New Dataset Version**
+    1. Do **NOT** add any pre-processing or augmentation steps in Roboflow; native PyTorch dataloaders heavily handle mosaic, jitter, and scaling dynamically during actual training.
+4. **Download Dataset to Machine**
+    1. Select export format **YOLOv11** (even if using RF-DETR, because our script organizes everything automatically!).
+    2. Download the zip and extract its contents (`images/`, `labels/`, `data.yaml`) into `AUV-2026/ros2_ws/src/vision/model_pipeline/data/raw_import/`.
+5. **Run the Pre-processing Script**
+    1. For **YOLO**: `python3 organize_dataset.py --input data/raw_import --output data/processed`
+    2. For **RF-DETR**: `python3 organize_dataset.py --input data/raw_import --output data/processed_coco --format coco`
+6. **Execute Fine-tuning Process**
+    1. Download or locate your previously trained synthetic baseline model (`.pt` or `.pth`) and place it inside `model_pipeline`.
+    2. For **YOLO**: Run `./training.sh <your_synthetic_model>.pt` inside the Docker container.
+    3. For **RF-DETR**: Run `python3 training.py --model rfdetr --custom-model <your_synthetic_model>.pth --dataset-dir data/processed_coco --epochs 50`
+7. **Locate Your Fine-Tuned Weights**
+    1. YOLO outputs generally save to: `runs/detect/yolo11s/weights/best.pt`
+    2. RF-DETR outputs generally save to: `runs/rfdetr/best_rf_detr_small_model.pth`
+
+### 4.1 Fine-tuning Advanced Usage
 
 The default parameters for the training script are set to values that we found to work well for training on underwater annotated images, but these can be changed by passing arguments to the `training.sh`. More specifically, changes can be made at:
 
@@ -96,7 +130,7 @@ To pass any of these arguments, simply add them to the end of the `training.sh` 
 ```
 To train a model from scratch (no fine tuning), specify one of the base models (for example yolov8n.pt) instead of yolov11s\_augmented\_synthetic\_best\_model.pt
 
-## Visualize Predictions
+## 5. Visualize Predictions
 
 You can view inference results on random images from your dataset using `visualize_label.py` to verify the model predictions before deployment:
 
@@ -110,25 +144,7 @@ python3 visualize_label.py --folder data/processed/test/images --model-type yolo
 python3 visualize_label.py --folder data/processed_coco/test/images --model-type rfdetr --model best_rf_detr_small_model.pth
 ```
 
-## Pre-labeling for Roboflow
-
-You can use the `export_labels.py` script to run inference on a folder of raw images and automatically export `.txt` YOLO-format bounding box annotations perfectly matched to your dataset. This allows you to bulk upload pre-annotated data directly into Roboflow for manual refinement!
-
-By default, the script creates a duplicate folder named `[folder]_prelabeled` ensuring your original raw image dataset remains untouched! It places all generated `.txt` files and an intelligently synced `classes.txt` within this newly generated folder.
-
-**For RF-DETR:**
-```bash
-python3 export_labels.py --folder data/my_raw_images --model-type rfdetr --model best_rf_detr_small_model.pth
-```
-
-**For YOLO:**
-```bash
-python3 export_labels.py --folder data/my_raw_images --model-type yolo --model best_yolov11s_model.pt
-```
-
-After running the command, simply drag the generated `my_raw_images_prelabeled` folder securely straight into Roboflow's web interface.
-
-## Optimize the model
+## 6. Optimize the model
 Run this **ON THE JETSON**: 
 
 ```bash
