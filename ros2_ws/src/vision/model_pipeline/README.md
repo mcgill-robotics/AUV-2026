@@ -110,6 +110,24 @@ python3 visualize_label.py --folder data/processed/test/images --model-type yolo
 python3 visualize_label.py --folder data/processed_coco/test/images --model-type rfdetr --model best_rf_detr_small_model.pth
 ```
 
+## Pre-labeling for Roboflow
+
+You can use the `export_labels.py` script to run inference on a folder of raw images and automatically export `.txt` YOLO-format bounding box annotations perfectly matched to your dataset. This allows you to bulk upload pre-annotated data directly into Roboflow for manual refinement!
+
+By default, the script creates a duplicate folder named `[folder]_prelabeled` ensuring your original raw image dataset remains untouched! It places all generated `.txt` files and an intelligently synced `classes.txt` within this newly generated folder.
+
+**For RF-DETR:**
+```bash
+python3 export_labels.py --folder data/my_raw_images --model-type rfdetr --model best_rf_detr_small_model.pth
+```
+
+**For YOLO:**
+```bash
+python3 export_labels.py --folder data/my_raw_images --model-type yolo --model best_yolov11s_model.pt
+```
+
+After running the command, simply drag the generated `my_raw_images_prelabeled` folder securely straight into Roboflow's web interface.
+
 ## Optimize the model
 Run this **ON THE JETSON**: 
 
