@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-import rclpy
+import pyzed.sl as sl
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rclpy.time import Time
-from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 
 import os
+import cv2
+from time import sleep
 import supervision as sv
 from rfdetr import RFDETRSmall
 
 import torch
 from cv_bridge import CvBridge
 from ultralytics import YOLO
-import cv2
 
 from sensor_msgs.msg import CompressedImage, Image
 from vision_msgs.msg import Detection2DArray, Detection2D, ObjectHypothesisWithPose
@@ -23,8 +23,10 @@ class ObjectDetectorNode():
         self.node = node
         self.node.declare_parameter('class_names', Parameter.Type.STRING_ARRAY)
         self.node.declare_parameter('model_path', Parameter.Type.STRING)
-        self.node.declare_parameter('input_topic', Parameter.Type.STRING)
-        self.node.declare_parameter('output_topic', Parameter.Type.STRING)
+        self.node.declare_parameter('detection_topic', Parameter.Type.STRING)
+        self.node.declare_parameter('camera_type', Parameter.Type.STRING)
+        camera_type = self.node.get_parameter('camera_type').get_parameter_value().string_value
+        if camera_type == "front_cam": self.node.declare_parameter('depth_map_topic', Parameter.Type.STRING)        
         self.node.declare_parameter('queue_size', Parameter.Type.INTEGER)
         self.node.declare_parameter('publish_annotated_image', False)
         self.node.declare_parameter("compressed", Parameter.Type.BOOL)
@@ -34,8 +36,8 @@ class ObjectDetectorNode():
         self.class_names = list(self.node.get_parameter('class_names').get_parameter_value().string_array_value)
         self.node.get_logger().info(f"Class names: {self.class_names}")
         model_path = self.node.get_parameter('model_path').get_parameter_value().string_value
-        input_topic = self.node.get_parameter('input_topic').get_parameter_value().string_value
-        output_topic = self.node.get_parameter('output_topic').get_parameter_value().string_value
+        detection_topic = self.node.get_parameter('detection_topic').get_parameter_value().string_value
+        if camera_type == "front_cam": depth_map_topic = self.node.get_parameter('depth_map_topic').get_parameter_value().string_value
         queue_size = self.node.get_parameter('queue_size').get_parameter_value().integer_value
         self.publish_annotated_image = self.node.get_parameter('publish_annotated_image').get_parameter_value().bool_value
         self.compressed = self.node.get_parameter('compressed').get_parameter_value().bool_value
@@ -55,6 +57,25 @@ class ObjectDetectorNode():
             self.node.get_logger().error(f"Model path does not exist: {model_path}")
             self.node.get_logger().fatal("Exiting due to missing model.")
             raise FileNotFoundError(f"Model path does not exist: {model_path}")
+        
+        self.zed = sl.Camera()
+        init_params = sl.InitParameters()
+        init_params.camera_resolution = sl.RESOLUTION.VGA
+        init_params.camera_fps = 30
+
+        self.image_buffer = sl.Mat()
+        self.depth_buffer = sl.Mat()
+
+        for i in range(5):
+            result = self.zed.open(init_params)
+            if result == sl.ERROR_CODE.SUCCESS: break
+            else:
+                self.node.get_logger().error(f"Failed to open zed camera, retrying {5-i} more times")
+                sleep(2)
+        
+        if result != sl.ERROR_CODE.SUCCESS:
+            self.node.get_logger().fatal("Failed to open zed camera after 5 attempts, exiting")
+            exit(1)
 
         # Avoiding CPU Oversubscription
         torch.set_num_threads(1)
@@ -86,32 +107,38 @@ class ObjectDetectorNode():
         
         self.node.get_logger().info(f"Setting QOL queue size to: {queue_size}")
         
-        qos_profile = QoSProfile(
-            reliability=ReliabilityPolicy.BEST_EFFORT, # Often better for high-bandwidth images
-            history=HistoryPolicy.KEEP_LAST,
-            depth=1
-        )
+        # qos_profile = QoSProfile(
+        #     reliability=ReliabilityPolicy.BEST_EFFORT, # Often better for high-bandwidth images
+        #     history=HistoryPolicy.KEEP_LAST,
+        #     depth=1
+        # )
 
-        self.node.create_subscription(
-            input_format,
-            input_topic,
-            self.image_callback,
-            qos_profile
-        )
+        # self.node.create_subscription(
+        #     input_format,
+        #     input_topic,
+        #     self.image_callback,
+        #     qos_profile
+        # )
         
-        self.node.get_logger().info(f"Subscribed to input topic: {input_topic}")
+        # self.node.get_logger().info(f"Subscribed to input topic: {input_topic}")
 
         self.pub_detections = self.node.create_publisher(
             Detection2DArray,
-            output_topic,
+            detection_topic,
             queue_size
         )
 
-        self.node.get_logger().info(f"Publishing to output topic: {output_topic}")
+        self.pub_depth_map = self.node.create_publisher(
+            CompressedImage if self.compressed else Image,
+            depth_map_topic,
+            queue_size
+        )
+
+        self.node.get_logger().info(f"Publishing to output topic: {detections_topic}")
 
         # Publisher for annotated debug image
         if self.publish_annotated_image:
-            publish_topic = output_topic + "/annotated" + ("/compressed" if self.compressed else "")
+            publish_topic = detections_topic + "/annotated" + ("/compressed" if self.compressed else "")
             self.pub_annotated_image = self.node.create_publisher(
                 input_format,
                 publish_topic,
@@ -121,19 +148,37 @@ class ObjectDetectorNode():
         
         self.node.get_logger().info(f"{self.node.get_name()} initialized.")
 
-    def image_callback(self, msg: Image | CompressedImage):
-        try:
-            if self.compressed:
-                img = self.bridge.compressed_imgmsg_to_cv2(msg, "bgr8")
-            else:
-                img = self.bridge.imgmsg_to_cv2(msg, "bgr8") 
-        except Exception as e:
-            self.node.get_logger().error(f"cv_bridge failed: {e}")
+    def run_yolo(self):
+        # try:
+        #     if self.compressed:
+        #         img = self.bridge.compressed_imgmsg_to_cv2(msg, "bgr8")
+        #     else:
+        #         img = self.bridge.imgmsg_to_cv2(msg, "bgr8") 
+        # except Exception as e:
+        #     self.node.get_logger().error(f"cv_bridge failed: {e}")
+        #     return
+
+        result = self.zed.grab()
+        if result != sl.ERROR_CODE.SUCCESS:
+            self.node.get_logger().warn("Zed.grab() failed, continuing")
             return
+        
+        stamp_time = self.node.get_clock().now()
+        
+        self.zed.retrieve_image(self.image_buffer, sl.VIEW.LEFT)
+        self.zed.retrieve_measure(self.depth_buffer, sl.MEASURE.DEPTH)
+
+        # fully handle depth map first (better caching)
+        depth = cv2.cvtColor(self.depth_buffer.get_data())
+        depth_map = self.bridge.cv2_to_compressed_imgmsg(depth)
+        self.pub_depth_map.publish(depth_map)
+
+        img = cv2.cvtColor(self.image_buffer.get_data())
 
         det_msg = Detection2DArray()
-        det_msg.header = msg.header
         det_objects = []
+
+        depth_msg = CompressedImage() if self.compressed else Image()
 
         if self.model_type == 'rfdetr':
             try:
@@ -166,7 +211,6 @@ class ObjectDetectorNode():
             label = self.class_names[cls_id]
 
             detection = Detection2D()
-            detection.header = msg.header
             detection.bbox.center.position.x = cx
             detection.bbox.center.position.y = cy
             detection.bbox.size_x = w
@@ -199,12 +243,10 @@ class ObjectDetectorNode():
                     ann_msg = self.bridge.cv2_to_compressed_imgmsg(annotated)
                 else:
                     ann_msg = self.bridge.cv2_to_imgmsg(annotated, "bgr8")
-                ann_msg.header = msg.header
                 self.pub_annotated_image.publish(ann_msg)
             except Exception as e:
                 self.node.get_logger().error(f"Failed to publish annotated image: {e}")
 
-        stamp_time = Time.from_msg(msg.header.stamp)
         current_time = self.node.get_clock().now()
         time_diff = (current_time - stamp_time).nanoseconds / 1e9
         

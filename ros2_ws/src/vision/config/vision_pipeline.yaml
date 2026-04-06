@@ -18,9 +18,10 @@ object_detection:
   front_cam:
     enhanced_topic: /vision/front_cam/image_enhanced # input topic if enhance_images is true, otherwise will subscribe to raw image topic
     detection_topic: /vision/front_cam/detections # output topic for detections
+    depth_map_topic: /vision/depth_map
     model_type: "rfdetr" # [yolo, rfdetr]
-    confidence_threshold: 0.10
-    model_relative_path: models/best_rf_detr_small_model.pth #models/frontcam.pt # relative to src/vision directory
+    confidence_threshold: 0.40
+    model_relative_path: models/robosub2025-synthetic-rfdetr_s.pth #models/frontcam.pt # relative to src/vision directory
     class_names:
       - "board_image"
       - "gate_prequal"
@@ -33,7 +34,7 @@ object_detection:
     log_level: info
   down_cam:
     enhanced_topic: /vision/down_cam/image_enhanced
-    detection_topic: /vision/down_cam/detections
+    detection_topic: /vision/front_cam/detections
     model_type: "yolo" # [yolo, rfdetr]
     confidence_threshold: 0.40
     # relative to src directory
@@ -81,12 +82,12 @@ object_map:
 
   # Tracker Parameters
   # relatively strict
-  # gating_threshold: 3.5 # Mahalanobis distance threshold (~3 sigma) for associating detections to tracks
-  # min_hits: 20 # Consecutive frames a detection must be matched to confirm a new track
-  # max_age: 8 # Number of frames to keep a lost track alive before deleting it
-  # max_position_jump: 2.0 # Maximum allowed distance (meters) between predictions and measurements
-  # conf_to_tent_threshold: 5 # Number of consecutive missed frames before a CONFIRMED track degrades to TENTATIVE
-  # tent_init_buffer: 5 # Extra frames allowed for a new TENTATIVE track to initialize before being deleted if unmatched
+  gating_threshold: 3.5 # Mahalanobis distance threshold (~3 sigma) for associating detections to tracks
+  min_hits: 20 # Consecutive frames a detection must be matched to confirm a new track
+  max_age: 8 # Number of frames to keep a lost track alive before deleting it
+  max_position_jump: 2.0 # Maximum allowed distance (meters) between predictions and measurements
+  conf_to_tent_threshold: 5 # Number of consecutive missed frames before a CONFIRMED track degrades to TENTATIVE
+  tent_init_buffer: 5 # Extra frames allowed for a new TENTATIVE track to initialize before being deleted if unmatched
   
   # loose parameters
   # gating_threshold: 5.0

@@ -79,30 +79,30 @@ def generate_launch_description():
         )
     )
 
-    zed_wrapper_path = get_package_share_directory("zed_wrapper")
-    zed_real_wrapper_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(os.path.join(zed_wrapper_path, "launch", "zed_camera.launch.py")),
-        launch_arguments={
-            "camera_model": "zed2i",
-            "ros_params_override_path": PathJoinSubstitution([vision_dir, "config", "zed_wrapper_real.yaml"]),
-            "node_log_type": LaunchConfiguration("zed_wrapper_log_type")
-        }.items(),
-        condition=UnlessCondition(LaunchConfiguration("sim"))
-    )
+    # zed_wrapper_path = get_package_share_directory("zed_wrapper")
+    # zed_real_wrapper_launch = IncludeLaunchDescription(
+    #     PythonLaunchDescriptionSource(os.path.join(zed_wrapper_path, "launch", "zed_camera.launch.py")),
+    #     launch_arguments={
+    #         "camera_model": "zed2i",
+    #         "ros_params_override_path": PathJoinSubstitution([vision_dir, "config", "zed_wrapper_real.yaml"]),
+    #         "node_log_type": LaunchConfiguration("zed_wrapper_log_type")
+    #     }.items(),
+    #     condition=UnlessCondition(LaunchConfiguration("sim"))
+    # )
 
-    zed_sim_wrapper_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(os.path.join(zed_wrapper_path, "launch", "zed_camera.launch.py")),
-        launch_arguments={
-            "camera_model": "zedx",
-            "sim_mode": "true",
-            "sim_address": default_config["general"]["sim_ip"],
-            "sim_port": str(default_config["general"]["sim_port"]),
-            "ros_params_override_path": PathJoinSubstitution([vision_dir, "config", "zed_wrapper_unity_sim.yaml"]),
-            "use_sim_time": LaunchConfiguration("sim"),
-            "node_log_type": LaunchConfiguration("zed_wrapper_log_type")
-        }.items(),
-        condition=IfCondition(LaunchConfiguration("sim"))
-    )
+    # zed_sim_wrapper_launch = IncludeLaunchDescription(
+    #     PythonLaunchDescriptionSource(os.path.join(zed_wrapper_path, "launch", "zed_camera.launch.py")),
+    #     launch_arguments={
+    #         "camera_model": "zedx",
+    #         "sim_mode": "true",
+    #         "sim_address": default_config["general"]["sim_ip"],
+    #         "sim_port": str(default_config["general"]["sim_port"]),
+    #         "ros_params_override_path": PathJoinSubstitution([vision_dir, "config", "zed_wrapper_unity_sim.yaml"]),
+    #         "use_sim_time": LaunchConfiguration("sim"),
+    #         "node_log_type": LaunchConfiguration("zed_wrapper_log_type")
+    #     }.items(),
+    #     condition=IfCondition(LaunchConfiguration("sim"))
+    # )
     
     compressed_launch_config = LaunchConfiguration("compressed")
     
@@ -167,8 +167,9 @@ def generate_launch_description():
         name='front_cam_object_detection',
         parameters=[
             {
-                'input_topic': object_detection_front_input,
-                'output_topic': default_config["object_detection"]["front_cam"]["detection_topic"],
+                'camera_type': "front_cam",
+                'detection_topic': default_config["object_detection"]["front_cam"]["detection_topic"],
+                'depth_map_topic': default_config["object_detection"]["front_cam"]["depth_map_topic"],
                 'model_path': PathJoinSubstitution([vision_dir, LaunchConfiguration("front_model_relative_path")]),
                 'class_names': default_config["object_detection"]["front_cam"]["class_names"],
                 'queue_size': default_config["object_detection"]["front_cam"]["queue_size"],
@@ -189,8 +190,9 @@ def generate_launch_description():
         name='down_cam_object_detection',
         parameters=[
             {
+                'camera_type': "down_cam",
                 'input_topic': object_detection_down_input,
-                'output_topic': default_config["object_detection"]["down_cam"]["detection_topic"],
+                'detection_topic': default_config["object_detection"]["down_cam"]["detection_topic"],
                 'model_path': PathJoinSubstitution([vision_dir, LaunchConfiguration("down_model_relative_path")]),
                 'class_names': default_config["object_detection"]["down_cam"]["class_names"],
                 'queue_size': default_config["object_detection"]["down_cam"]["queue_size"],
@@ -262,9 +264,9 @@ def generate_launch_description():
     launch_description.add_action(use_enhance_arg)
     launch_description.add_action(front_model_arg)
     launch_description.add_action(down_model_arg)
-    launch_description.add_action(zed_wrapper_log_type_arg)
-    launch_description.add_action(zed_real_wrapper_launch)
-    launch_description.add_action(zed_sim_wrapper_launch)
+    # launch_description.add_action(zed_wrapper_log_type_arg)
+    # launch_description.add_action(zed_real_wrapper_launch)
+    # launch_description.add_action(zed_sim_wrapper_launch)
     launch_description.add_action(front_cam_enhancement_node)
     launch_description.add_action(down_cam_enhancement_node)
     launch_description.add_action(front_detection_node)
