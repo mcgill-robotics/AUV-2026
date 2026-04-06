@@ -178,7 +178,10 @@ def generate_launch_description():
                 'confidence_threshold': default_config["object_detection"]["front_cam"]["confidence_threshold"],
                 'use_sim_time': LaunchConfiguration("sim"),
                 'compressed': LaunchConfiguration("compressed"),
-                'log_level': default_config["object_detection"]["front_cam"]["log_level"]
+                'log_level': default_config["object_detection"]["front_cam"]["log_level"],
+                "sim": LaunchConfiguration("sim"),
+                "stream_ip": default_config["general"]["wrapper_stream_ip"],
+                "stream_port": default_config["general"]["wrapper_stream_port"],
             }
         ],
         ros_arguments=["--ros-args", "--log-level", default_config["object_detection"]["front_cam"]["log_level"]]
@@ -202,6 +205,9 @@ def generate_launch_description():
                 'use_sim_time': LaunchConfiguration("sim"),
                 'compressed': LaunchConfiguration("compressed"),
                 'log_level': default_config["object_detection"]["down_cam"]["log_level"],
+                "sim": LaunchConfiguration("sim"),
+                "stream_ip": default_config["general"]["wrapper_stream_ip"],
+                "stream_port": default_config["general"]["wrapper_stream_port"],
             }
         ],
         ros_arguments=["--ros-args", "--log-level", default_config["object_detection"]["down_cam"]["log_level"]]

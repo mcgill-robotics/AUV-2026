@@ -25,24 +25,29 @@ class ObjectDetectorNode():
         self.node.declare_parameter('model_path', Parameter.Type.STRING)
         self.node.declare_parameter('detection_topic', Parameter.Type.STRING)
         self.node.declare_parameter('camera_type', Parameter.Type.STRING)
-        camera_type = self.node.get_parameter('camera_type').get_parameter_value().string_value
-        if camera_type == "front_cam": self.node.declare_parameter('depth_map_topic', Parameter.Type.STRING)        
+        self.camera_type = self.node.get_parameter('camera_type').get_parameter_value().string_value
+        if self.camera_type == "front_cam": self.node.declare_parameter('depth_map_topic', Parameter.Type.STRING)        
         self.node.declare_parameter('queue_size', Parameter.Type.INTEGER)
         self.node.declare_parameter('publish_annotated_image', False)
         self.node.declare_parameter("compressed", Parameter.Type.BOOL)
         self.node.declare_parameter("model_type", "yolo")
         self.node.declare_parameter("confidence_threshold", 0.40)
+
+        self.node.declare_parameter('sim', Parameter.Type.BOOL)
+        self.node.declare_parameter('stream_ip', Parameter.Type.STRING)
+        self.node.declare_parameter('stream_port', Parameter.Type.INTEGER)
  
         self.class_names = list(self.node.get_parameter('class_names').get_parameter_value().string_array_value)
         self.node.get_logger().info(f"Class names: {self.class_names}")
         model_path = self.node.get_parameter('model_path').get_parameter_value().string_value
         detection_topic = self.node.get_parameter('detection_topic').get_parameter_value().string_value
-        if camera_type == "front_cam": depth_map_topic = self.node.get_parameter('depth_map_topic').get_parameter_value().string_value
+        if self.camera_type == "front_cam": depth_map_topic = self.node.get_parameter('depth_map_topic').get_parameter_value().string_value
         queue_size = self.node.get_parameter('queue_size').get_parameter_value().integer_value
         self.publish_annotated_image = self.node.get_parameter('publish_annotated_image').get_parameter_value().bool_value
         self.compressed = self.node.get_parameter('compressed').get_parameter_value().bool_value
         self.model_type = self.node.get_parameter('model_type').get_parameter_value().string_value
         self.conf_threshold = self.node.get_parameter('confidence_threshold').get_parameter_value().double_value
+        sim = self.node.get_parameter('sim').get_parameter_value().bool_value
 
         input_format = Image
         if self.compressed:
@@ -60,8 +65,18 @@ class ObjectDetectorNode():
         
         self.zed = sl.Camera()
         init_params = sl.InitParameters()
-        init_params.camera_resolution = sl.RESOLUTION.VGA
+        init_params.camera_resolution = sl.RESOLUTION.SVGA if sim else sl.RESOLUTION.VGA
         init_params.camera_fps = 30
+        init_params.coordinate_units = sl.UNIT.METER
+        init_params.coordinate_system = sl.COORDINATE_SYSTEM.RIGHT_HANDED_Z_UP_X_FWD
+        init_params.depth_mode = sl.DEPTH_MODE.NEURAL
+        init_params.enable_image_validity_check = True
+        init_params.input = sl.InputType()
+
+        if sim:
+            stream_ip = self.node.get_parameter('stream_ip').get_parameter_value().string_value
+            stream_port = self.node.get_parameter('stream_port').get_parameter_value().integer_value
+            init_params.set_from_stream(stream_ip, stream_port)
 
         self.image_buffer = sl.Mat()
         self.depth_buffer = sl.Mat()
@@ -128,17 +143,18 @@ class ObjectDetectorNode():
             queue_size
         )
 
-        self.pub_depth_map = self.node.create_publisher(
-            CompressedImage if self.compressed else Image,
-            depth_map_topic,
-            queue_size
-        )
+        if self.camera_type == "front_cam":
+            self.pub_depth_map = self.node.create_publisher(
+                CompressedImage if self.compressed else Image,
+                depth_map_topic,
+                queue_size
+            )
 
-        self.node.get_logger().info(f"Publishing to output topic: {detections_topic}")
+        self.node.get_logger().info(f"Publishing to output topic: {detection_topic}")
 
         # Publisher for annotated debug image
         if self.publish_annotated_image:
-            publish_topic = detections_topic + "/annotated" + ("/compressed" if self.compressed else "")
+            publish_topic = detection_topic + "/annotated" + ("/compressed" if self.compressed else "")
             self.pub_annotated_image = self.node.create_publisher(
                 input_format,
                 publish_topic,
@@ -166,12 +182,13 @@ class ObjectDetectorNode():
         stamp_time = self.node.get_clock().now()
         
         self.zed.retrieve_image(self.image_buffer, sl.VIEW.LEFT)
-        self.zed.retrieve_measure(self.depth_buffer, sl.MEASURE.DEPTH)
 
         # fully handle depth map first (better caching)
-        depth = cv2.cvtColor(self.depth_buffer.get_data())
-        depth_map = self.bridge.cv2_to_compressed_imgmsg(depth)
-        self.pub_depth_map.publish(depth_map)
+        if self.camera_type == "front_cam":
+            self.zed.retrieve_measure(self.depth_buffer, sl.MEASURE.DEPTH)
+            depth = cv2.cvtColor(self.depth_buffer.get_data())
+            depth_map = self.bridge.cv2_to_compressed_imgmsg(depth)
+            self.pub_depth_map.publish(depth_map)
 
         img = cv2.cvtColor(self.image_buffer.get_data())
 

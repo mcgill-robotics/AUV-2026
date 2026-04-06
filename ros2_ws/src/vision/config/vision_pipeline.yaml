@@ -111,7 +111,7 @@ object_map:
 general:
   # sim is what the wrapper listens to (the Unity sim stream), stream is what the wrapper republishes as a ROS topic for the rest of the vision pipeline to use
   # whether to use the ZED wrapper in simulation mode (true) or with a real camera (false)
-  sim: false
+  sim: true
   sim_ip: "127.0.0.1"
   sim_port: 30000
   # whether to use the wrapper as a streaming server that multiple nodes can subscribe to
