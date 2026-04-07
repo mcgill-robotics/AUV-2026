@@ -316,6 +316,13 @@ RUN pip install --no-cache-dir --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} not
     pip install --no-cache-dir --ignore-install --upgrade typing_extensions
 
 
+RUN wget -O /tmp/adept.deb https://files.digilent.com/Software/Adept2%20Runtime/2.30.1/digilent.adept.runtime_2.30.1_arm64.deb && \
+    wget -O /tmp/waveforms.deb https://files.digilent.com/Software/Waveforms/3.24.4/digilent.waveforms_3.24.4_arm64.deb && \
+    sudo apt update && sudo apt install -y /tmp/adept.dev \
+    sudo apt update && sudo apt install -y /tmp/waveforms.dev \
+    rm -rf /var/lib/apt/lists/* && \
+    apt-get clean
+
 # Environment Setup
 ARG USERNAME=douglas
 ARG USER_UID=1000
