@@ -186,13 +186,13 @@ class ObjectDetectorNode():
         self.zed.retrieve_image(self.image_buffer, sl.VIEW.LEFT)
 
         # fully handle depth map first (better caching)
-        if self.camera_type == "front_cam":
+        if self.camera_type == "front_cam" and False:
             self.zed.retrieve_measure(self.depth_buffer, sl.MEASURE.DEPTH)
-            depth = cv2.cvtColor(self.depth_buffer.get_data(), cv2.COLOR_RGBA2BGR)
+            depth = cv2.cvtColor(self.depth_buffer.get_data(), cv2.COLOR_RGBA2RGB)
             depth_map = self.bridge.cv2_to_compressed_imgmsg(depth)
             self.pub_depth_map.publish(depth_map)
 
-        img = cv2.cvtColor(self.image_buffer.get_data(), cv2.COLOR_RGBA2BGR)
+        img = cv2.cvtColor(self.image_buffer.get_data(), cv2.COLOR_RGBA2RGB)
 
         det_msg = Detection2DArray()
         det_objects = []

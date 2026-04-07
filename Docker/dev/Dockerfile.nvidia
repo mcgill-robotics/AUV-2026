@@ -234,9 +234,12 @@ COPY Docker/dev/requirements.txt Docker/dev/constraints.txt /tmp/
 RUN --mount=type=cache,target=/root/.cache/pip \
         pip3 install --ignore-installed -c /tmp/constraints.txt -r /tmp/requirements.txt
 
-# DOWNGRADE Setuptools for ROS 2
-# ROS 2 Humble's colcon build system breaks with Setuptools >= 70.
-RUN pip3 install --no-cache-dir --force-reinstall "setuptools==65.5.1"
+# Install ZED Python API from source
+# RUN git clone -b v${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}.${ZED_SDK_PATCH} https://github.com/stereolabs/zed-python-api.git /tmp/zed-python-api && \
+#        cd /tmp/zed-python-api/src && \
+#        python3 -m pip install --no-deps . && \
+#        cd /tmp && \
+#        rm -rf /tmp/zed-python-api
 
 ARG USERNAME=douglas
 ARG USER_UID=1000
@@ -253,7 +256,6 @@ RUN if getent group $USER_GID; then \
         && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
         && chmod 0440 /etc/sudoers.d/$USERNAME \
         && usermod -aG video,render -s /bin/bash $USERNAME
-
 
 # Install fixuid for dynamic UID/GID remapping at runtime
 ARG FIXUID_VERSION=0.6.0
