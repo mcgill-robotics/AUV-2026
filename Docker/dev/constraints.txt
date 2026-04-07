@@ -1,6 +1,6 @@
 # DOWNGRADE Setuptools for ROS 2
 # ROS 2 Humble's colcon build system breaks with Setuptools >= 70.
-setuptools==65.5.1
+setuptools<70
 # numpy version on the jetson container
 numpy==1.26.4
 # opencv-python==4.10.0
