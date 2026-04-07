@@ -10,7 +10,7 @@ from rfdetr import RFDETRSmall
 import torch
 from cv_bridge import CvBridge
 from ultralytics import YOLO
-from vision.object_detection.utils import process_image
+from vision.object_detection.utils import get_detections, build_detection2d_msg, publish_annotated_image_util
 
 from sensor_msgs.msg import CompressedImage, Image
 from vision_msgs.msg import Detection2DArray, Detection2D, ObjectHypothesisWithPose
@@ -126,4 +126,13 @@ class DownCamObjectDetectorNode():
             return
         
         stamp_time = self.node.get_clock().now()
-        process_image(self, img, stamp_time)
+        
+        tracked_detections = get_detections(self, img)
+        if tracked_detections is not None:
+            det_msg = build_detection2d_msg(self, tracked_detections)
+            self.pub_detections.publish(det_msg)
+            publish_annotated_image_util(self, img, tracked_detections)
+            
+            current_time = self.node.get_clock().now()
+            time_diff = (current_time - stamp_time).nanoseconds / 1e9
+            self.node.get_logger().debug(f"Detection latency: {time_diff:.9f} s | Active detections: {len(tracked_detections)}")

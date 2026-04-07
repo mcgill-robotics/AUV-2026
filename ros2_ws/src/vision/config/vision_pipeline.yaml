@@ -35,7 +35,7 @@ object_detection:
       - "sawfish"
     queue_size: 10
     publish_annotated_image: true # whether to publish an annotated image with bounding boxes drawn (for visualization/debugging). will publish to detection_topic + /annotated
-    log_level: info
+    log_level: debug
   down_cam:
     enhanced_topic: /vision/down_cam/image_enhanced
     detection_topic: /vision/down_cam/detections

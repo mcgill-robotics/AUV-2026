@@ -7,13 +7,10 @@
 #include "rclcpp/rclcpp.hpp"
 #include "auv_msgs/msg/vision_object.hpp"
 #include "auv_msgs/msg/vision_object_array.hpp"
-#include "geometry_msgs/msg/pose_stamped.hpp"
-#include "std_msgs/msg/float64.hpp"
-#include "vision_msgs/msg/detection2_d_array.hpp"
 
-#ifdef HAS_ZED_SDK
-	#include "zed_detection.hpp"
-#endif
+
+
+#include "vision_msgs/msg/detection3_d_array.hpp"
 #include "object_tracker.hpp"
 #include <algorithm>
 
@@ -32,24 +29,11 @@ public:
 	RCLCPP_INFO(this->get_logger(), "[INIT] ObjectMapNode constructor started");
 	// adding "this" boilerplate for methods called from rclcpp Node base class
 	// Removing ALL default parameters to ensure we explicitly set everything we need for both ZED and non-ZED modes, and to avoid accidentally relying on defaults that might not be what we expect (these were originally kept for debugging)
-	// ZED SDK usage
-	zed_sdk = this->declare_parameter<bool>("zed_sdk");	
-	RCLCPP_INFO(this->get_logger(), "[INIT] zed_sdk param: %s", zed_sdk ? "true" : "false");
-	bool sdk_available = false;
-// compile time check for ZED SDK see CMakeLists.txt
-#ifdef HAS_ZED_SDK
-		sdk_available = true;
-#endif
-	// final decision on using ZED SDK
-	zed_sdk &= sdk_available;
-
+	// ZED SDK depth extraction and pose publishing are now handled by front_cam_object_detection python node
 	// Subscriber for front cam detections (YOLO from Python node)
 	string front_cam_detection_topic = this->declare_parameter<string>("front_cam_detection_topic");
 	// Publisher for object map
 	string object_map_topic = this->declare_parameter<string>("object_map_topic");
-	// Publisher for VIO pose
-	// TODO: this should be a subscriber to the DVL pose
-	string vio_pose_topic = this->declare_parameter<string>("vio_pose_topic");
 	
 	// tracker tuning parameters used in both ZED and non-ZED fallback
 	// minimum distance from existing tracks for a new detection to be considered a new object rather than a new measurement of an existing object
@@ -91,109 +75,32 @@ public:
 		tent_init_buffer,
 		enable_gate_midpoint_refinement
 	);
+	// physical tracking constraints
+	enable_z_axis_locking = this->declare_parameter<bool>("enable_z_axis_locking");
+	enable_octagon_xy_inheritance = this->declare_parameter<bool>("enable_octagon_xy_inheritance");
+	pool_floor_z = this->declare_parameter<double>("pool_floor_z");
+	pool_surface_z = this->declare_parameter<double>("pool_surface_z");
+	unique_objects = this->declare_parameter<std::vector<std::string>>("unique_objects");
+	floor_objects = this->declare_parameter<std::vector<std::string>>("floor_objects");
+	surface_objects = this->declare_parameter<std::vector<std::string>>("surface_objects");
+	max_pipe_distance = this->declare_parameter<double>("max_pipe_distance");
+
 	// Publishers
 	object_map_publisher = this->create_publisher<auv_msgs::msg::VisionObjectArray>(object_map_topic, 10);
 
-	// Subscriber for world depth (from depth sensor)
-	depth_subscriber = this->create_subscription<std_msgs::msg::Float64 >(
-		"/sensors/depth/z", 10, std::bind(&ObjectMapNode::depth_callback, this, std::placeholders::_1)
-	);
-	// Subscribe to 2D detections
-	detection_subscriber = this->create_subscription<vision_msgs::msg::Detection2DArray>(
+	// Subscribe to 3D detections from Python node
+	detection_subscriber = this->create_subscription<vision_msgs::msg::Detection3DArray>(
 		front_cam_detection_topic, 10, std::bind(&ObjectMapNode::detection_callback, this, std::placeholders::_1)
 	);
 
-	if (!zed_sdk)
-	{	
-		RCLCPP_INFO(this->get_logger(), "ZED SDK not found, using front camera detection topic: %s", front_cam_detection_topic.c_str());
-	}
-	else
-	{
-		RCLCPP_INFO(this->get_logger(), "ZED SDK found, using ZED camera for object mapping with external detections from: %s", front_cam_detection_topic.c_str());
-		
-
-
-		// --- ZED Parameters ---
-		// frame rate for ZED camera
-		int frame_rate = this->declare_parameter<int>("frame_rate");
-		// confidence threshold for YOLO detections
-		float confidence_threshold = this->declare_parameter<float>("confidence_threshold");
-		// maximum distance to consider a detection for object mapping
-		float max_range_distance_threshold = this->declare_parameter<float>("max_range");
-		// use UDP stream for input frames
-		bool use_stream = this->declare_parameter<bool>("use_stream");
-		// UDP stream IP and port
-		string stream_ip = this->declare_parameter<string>("stream_address");
-		int stream_port = this->declare_parameter<int>("stream_port");
-		// whether run in simulation or real-world (affects ZED SDK settings)
-		bool sim = this->declare_parameter<bool>("sim");
-		// max depth from ZED camera to consider a new object
-		int zed_depth_confidence_threshold = this->declare_parameter<int>("zed_depth_confidence_threshold");
-		
-		// physical tracking constraints
-		enable_gate_top_crop = this->declare_parameter<bool>("enable_gate_top_crop");
-		gate_top_crop_ratio = this->declare_parameter<double>("gate_top_crop_ratio");
-		enable_z_axis_locking = this->declare_parameter<bool>("enable_z_axis_locking");
-		enable_octagon_xy_inheritance = this->declare_parameter<bool>("enable_octagon_xy_inheritance");
-		pool_floor_z = this->declare_parameter<double>("pool_floor_z");
-		pool_surface_z = this->declare_parameter<double>("pool_surface_z");
-		unique_objects = this->declare_parameter<std::vector<std::string>>("unique_objects");
-		floor_objects = this->declare_parameter<std::vector<std::string>>("floor_objects");
-		surface_objects = this->declare_parameter<std::vector<std::string>>("surface_objects");
-		max_pipe_distance = this->declare_parameter<double>("max_pipe_distance");
-
-		RCLCPP_INFO(this->get_logger(), "[INIT] ZED params: sim=%s, use_stream=%s, stream=%s:%d, frame_rate=%d",
-			sim ? "true" : "false", use_stream ? "true" : "false", stream_ip.c_str(), stream_port, frame_rate);
-		
-#ifdef HAS_ZED_SDK
-		ZEDCameraModel camera_model = sim ? ZEDCameraModel::ZEDX : ZEDCameraModel::ZED2i;
-		RCLCPP_INFO(this->get_logger(), "[INIT] Creating ZEDDetection with camera model: %s", sim ? "ZEDX" : "ZED2i");
-		try {
-			zed_detector = std::make_unique<ZEDDetection>(
-				frame_rate,
-				confidence_threshold,
-				max_range_distance_threshold,
-				use_stream,
-				stream_ip,
-				stream_port,
-				camera_model,
-				zed_depth_confidence_threshold,
-                class_labels,
-				// add callbacks to use rclcpp logging
-				[this] (const string& msg) { RCLCPP_DEBUG(this->get_logger(), "%s", msg.c_str()); },
-				[this](const string& msg) { RCLCPP_INFO(this->get_logger(), "%s", msg.c_str()); },
-				[this](const string& msg) { RCLCPP_WARN(this->get_logger(), "%s", msg.c_str()); },
-				[this](const string& msg, int throttle_duration_ms) { RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), throttle_duration_ms, "%s", msg.c_str()); },
-				[this](const string& msg) { RCLCPP_ERROR(this->get_logger(), "%s", msg.c_str()); },
-				[this](const string& msg) { RCLCPP_FATAL(this->get_logger(), "%s", msg.c_str()); }
-			);
-			RCLCPP_INFO(this->get_logger(), "[INIT] ZEDDetection created successfully");
-		} catch (const std::exception& e) {
-			RCLCPP_FATAL(this->get_logger(), "[INIT] ZEDDetection creation failed: %s", e.what());
-			throw;
-		}
-#endif
-	}
-	// Publisher for VIO pose from ZED SDK
-	pose_publisher = this->create_publisher<geometry_msgs::msg::PoseStamped>(vio_pose_topic, 10);
-	RCLCPP_INFO(this->get_logger(), "Object Map Node has been initialized");
-	if (zed_sdk)
-	{
-		RCLCPP_INFO(this->get_logger(), "Using ZED SDK for object mapping.");
-    }
-	else
-	{
-		RCLCPP_INFO(this->get_logger(), "Using front camera detections for object mapping.");
-	}
+	RCLCPP_INFO(this->get_logger(), "Using generic 3D camera detections for object mapping.");
 }
 private:
 	std::map<std::string, Track> persistent_objects;
-	bool enable_gate_top_crop;
 	bool enable_z_axis_locking;
 	bool enable_octagon_xy_inheritance;
 	double pool_floor_z;
 	double pool_surface_z;
-	double gate_top_crop_ratio;
 	double max_pipe_distance;
 	std::vector<std::string> unique_objects;
 	std::vector<std::string> floor_objects;
@@ -227,18 +134,9 @@ private:
 		}
 	}
 
-	void detection_callback(const vision_msgs::msg::Detection2DArray::SharedPtr msg)
+	void detection_callback(const vision_msgs::msg::Detection3DArray::SharedPtr msg)
 	{
-#ifdef HAS_ZED_SDK
-		if(!zed_detector) {
-			RCLCPP_WARN(this->get_logger(), "[CB] zed_detector is null, skipping");
-			return;
-		}
 		frame_collection_time = rclcpp::Time(msg->header.stamp, this->get_clock()->get_clock_type());
-		std::vector<sl::CustomBoxObjectData> zed_detections = extract_ZED_detections(msg);
-		// Convert ROS message to ZED SDK CustomBoxObjectData
-		zed_detector->process_detections(zed_detections);
-		const auto [measurements,covariances,classes,orientations,confidences] = zed_detector->GetDetections();
 		
 		std::vector<Eigen::Vector3d> filtered_measurements;
 		std::vector<Eigen::Matrix3d> filtered_covariances;
@@ -246,29 +144,49 @@ private:
 		std::vector<double> filtered_orientations;
 		std::vector<double> filtered_confidences;
 
-		for (size_t i = 0; i < measurements.size(); ++i) {
+		for (const auto& detection : msg->detections) {
+			if (detection.results.empty()) continue;
+
+			const auto& hypothesis = detection.results[0];
+			std::string label = hypothesis.hypothesis.class_id;
+			
+			Eigen::Vector3d pos(hypothesis.pose.pose.position.x, 
+			                    hypothesis.pose.pose.position.y, 
+			                    hypothesis.pose.pose.position.z);
+
+			// Camera translation is packed in bbox.size by the Python node
+			Eigen::Vector3d cam_trans(detection.bbox.size.x,
+			                         detection.bbox.size.y,
+			                         detection.bbox.size.z);
+
 			// Filter: Skip pipes detected further than our distance threshold
-			if (classes[i] == "red_pipe" || classes[i] == "white_pipe") {
-				// We don't have the raw camera-frame position here easily, but the world 
-				// position's distance from the camera pose is roughly the same.
-				// For exact equivalence with Python, we can just check the norm from the camera.
-				auto cam_pose = zed_detector->GetCameraPose();
-				Eigen::Vector3d cam_trans = std::get<0>(cam_pose);
-				double dist_from_robot = (measurements[i] - cam_trans).norm();
+			// Use distance from AUV (camera), not from world origin
+			if (label == "red_pipe" || label == "white_pipe") {
+				double dist_from_robot = (pos - cam_trans).norm();
 				if (dist_from_robot > max_pipe_distance) {
 					continue;
 				}
 			}
-			filtered_measurements.push_back(measurements[i]);
-			filtered_covariances.push_back(covariances[i]);
-			filtered_classes.push_back(classes[i]);
-			filtered_orientations.push_back(orientations[i]);
-			filtered_confidences.push_back(confidences[i]);
+
+			// Covariance: already rotated to world frame by the Python node
+			Eigen::Matrix3d cov = Eigen::Matrix3d::Identity() * 0.1;
+			if (hypothesis.pose.covariance.size() == 36) {
+				for (int r = 0; r < 3; ++r) {
+					for (int c = 0; c < 3; ++c) {
+						cov(r, c) = hypothesis.pose.covariance[r * 6 + c];
+					}
+				}
+				// Increased baseline measurement noise to enforce higher Kalman Filter inertia
+				cov += Eigen::Matrix3d::Identity() * 0.3;
+			}
+			
+			filtered_measurements.push_back(pos);
+			filtered_covariances.push_back(cov);
+			filtered_classes.push_back(label);
+			filtered_orientations.push_back(0.0);
+			filtered_confidences.push_back(hypothesis.hypothesis.score);
 		}
 
-		// The classes returned by `GetDetections` are strings derived from int label inside `ZEDDetection`.
-		// So passing the correct int label is crucial.
-		
 		std::vector<Track> all_tracks = object_tracker.update(
 			filtered_measurements, 
 			filtered_covariances, 
@@ -276,28 +194,10 @@ private:
 			filtered_orientations, 
 			filtered_confidences
 		);
-		publish_pose(zed_detector->GetCameraPose());
+
 		publish_object_map(all_tracks);
-#endif
 	}
 
-	void depth_callback(const std_msgs::msg::Float64::SharedPtr msg)
-	{
-#ifdef HAS_ZED_SDK
-		if(zed_detector)
-		{
-			zed_detector->UpdateSensorDepth(msg->data);
-		}
-#endif
-	}
-
-	void front_cam_callback(const auv_msgs::msg::VisionObjectArray::SharedPtr msg)
-	{
-		(void)msg;
-		// Fallback is a no-op for now
-		// we can add determining depth and publishing if we ever choose to not use ZED_SDK 
-		// this is added for compilation on both nvidia and non-nvidia machines 
-	}
 
 	void publish_object_map(const std::vector<Track>& tracks)
 	{
@@ -399,91 +299,12 @@ private:
 		RCLCPP_INFO(this->get_logger(), "Object map pipeline latency: %.9f seconds", time_diff.seconds());
 	}
 
-	void publish_pose(const std::tuple<Eigen::Vector3d,Eigen::Vector4d>& pose)
-	{
-		geometry_msgs::msg::PoseStamped pose_msg;
-		pose_msg.header.stamp = frame_collection_time;
-		pose_msg.header.frame_id = "world";
-		pose_msg.pose.position.x = std::get<0>(pose)(0);
-		pose_msg.pose.position.y = std::get<0>(pose)(1);
-		pose_msg.pose.position.z = std::get<0>(pose)(2);
-		pose_msg.pose.orientation.w = std::get<1>(pose)(0);
-		pose_msg.pose.orientation.x = std::get<1>(pose)(1);
-		pose_msg.pose.orientation.y = std::get<1>(pose)(2);
-		pose_msg.pose.orientation.z = std::get<1>(pose)(3);
-		pose_publisher->publish(pose_msg);
-	}
-#ifdef HAS_ZED_SDK
-	std::vector<sl::CustomBoxObjectData> extract_ZED_detections(const vision_msgs::msg::Detection2DArray::SharedPtr msg)
-	{
-		std::vector<sl::CustomBoxObjectData> zed_detections;
-		for(const auto& detection : msg->detections) {
-			sl::CustomBoxObjectData box;
-			box.unique_object_id = sl::generate_unique_id();
-            
-            box.label = -1; // Default to unknown
-
-			// Label & Confidence (taking top hypothesis)
-			if (!detection.results.empty()) {
-				box.probability = detection.results[0].hypothesis.score;
-                
-				std::string label = detection.results[0].hypothesis.class_id;
-                auto it = std::find(class_labels.begin(), class_labels.end(), label);
-                if (it != class_labels.end()) {
-                    box.label = std::distance(class_labels.begin(), it);
-                }
-			}
-            if (box.label != -1) {
-			    box.is_static = true;
-			    
-			    // 2D Bounding Box
-			    float cx = detection.bbox.center.position.x;
-			    float cy = detection.bbox.center.position.y;
-			    float w = detection.bbox.size_x;
-			    float h = detection.bbox.size_y;
-			    
-			    // --- Post-Processing Physical Constraints ---
-			    // If the object is a gate, only feed the ZED SDK the top portion of the bounding box.
-			    // The gate's legs extend deep into noisy acoustic territory causing bad depth estimations.
-			    if (enable_gate_top_crop && class_labels[box.label] == "gate") {
-			        float original_top = cy - h / 2.0f;
-			        h = h * gate_top_crop_ratio;
-			        cy = original_top + h / 2.0f;
-			    }
-
-			    float left = cx - w / 2.0f;
-			    float top = cy - h / 2.0f;
-			    float right = cx + w / 2.0f;
-			    float bottom = cy + h / 2.0f;
-			    
-			    std::vector<sl::uint2> bbox_2d(4);
-			    bbox_2d[0] = sl::uint2(static_cast<unsigned int>(left), static_cast<unsigned int>(top));     // Top-Left
-			    bbox_2d[1] = sl::uint2(static_cast<unsigned int>(right), static_cast<unsigned int>(top));    // Top-Right
-			    bbox_2d[2] = sl::uint2(static_cast<unsigned int>(right), static_cast<unsigned int>(bottom)); // Bottom-Right
-			    bbox_2d[3] = sl::uint2(static_cast<unsigned int>(left), static_cast<unsigned int>(bottom));  // Bottom-Left
-			    box.bounding_box_2d = bbox_2d;
-
-			    zed_detections.push_back(box);
-            }
-		}
-		return zed_detections;
-	}
-#endif
-#ifdef HAS_ZED_SDK
-	std::unique_ptr<ZEDDetection> zed_detector;
-#endif
-
 	ObjectTracker object_tracker;
     std::vector<std::string> class_labels;
 
-	bool zed_sdk;
 	rclcpp::Time frame_collection_time;
 	rclcpp::Publisher<auv_msgs::msg::VisionObjectArray>::SharedPtr object_map_publisher;
-	rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pose_publisher;
-	rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr depth_subscriber;
-	// if zed SDK not in use
-	rclcpp::Subscription<auv_msgs::msg::VisionObjectArray>::SharedPtr front_cam_subscriber;
-	rclcpp::Subscription<vision_msgs::msg::Detection2DArray>::SharedPtr detection_subscriber;
+	rclcpp::Subscription<vision_msgs::msg::Detection3DArray>::SharedPtr detection_subscriber;
 };
 
 int main(int argc, char **argv)

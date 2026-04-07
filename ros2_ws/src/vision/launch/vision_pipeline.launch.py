@@ -184,7 +184,7 @@ def generate_launch_description():
                 "stream_port": default_config["general"]["wrapper_stream_port"],
             }
         ],
-        ros_arguments=["--ros-args", "--log-level", default_config["object_detection"]["front_cam"]["log_level"]]
+        ros_arguments=["--ros-args", "--log-level", "front_cam_object_detection:=" + default_config["object_detection"]["front_cam"]["log_level"]]
     )
     
     down_detection_node = Node(
@@ -256,7 +256,7 @@ def generate_launch_description():
     )
     # wait 3 seconds before launching node to ensure zed wrapper is able to open and stream on port
     object_map_node = TimerAction(
-        period=10.0,
+        period=3.0,
         actions=[object_map_node]
     )
     
