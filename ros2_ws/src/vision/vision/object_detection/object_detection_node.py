@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
+import threading
+
 import pyzed.sl as sl
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rclpy.time import Time
+import rclpy
 
+from datetime import datetime
 import os
 import cv2
 from time import sleep
@@ -40,8 +44,8 @@ class ObjectDetectorNode():
         self.node.declare_parameter('stream_ip', Parameter.Type.STRING)
         self.node.declare_parameter('stream_port', Parameter.Type.INTEGER)
 
-        if self.camera_type == "front_cam":
-            self.timer = self.node.create_timer(1.0/30.0, self.run_object_detection_zed)
+        # if self.camera_type == "front_cam":
+        #     self.timer = self.node.create_timer(1.0/30.0, self.run_object_detection_zed)
  
         self.class_names = list(self.node.get_parameter('class_names').get_parameter_value().string_array_value)
         self.node.get_logger().info(f"Class names: {self.class_names}")
@@ -188,6 +192,10 @@ class ObjectDetectorNode():
             )
             self.node.get_logger().info(f"Publishing annotated debug image to: {publish_topic}")
         
+        if self.camera_type == "front_cam":
+            self.running = True
+            self.grab_thread = threading.Thread(target=self.run_object_detection_zed)
+            self.grab_thread.start()
         self.node.get_logger().info(f"{self.node.get_name()} initialized.")
 
     def run_object_detection_sub(self, msg):
@@ -203,25 +211,37 @@ class ObjectDetectorNode():
         stamp_time = self.node.get_clock().now()
         self.process_image(img, stamp_time)
 
+
     def run_object_detection_zed(self):
-        result = self.zed.grab()
-        if result != sl.ERROR_CODE.SUCCESS:
-            self.node.get_logger().warn("Zed.grab() failed, continuing")
-            return
-        
-        stamp_time = self.node.get_clock().now()
-        
-        self.zed.retrieve_image(self.image_buffer, sl.VIEW.LEFT)
+        # Capture start time
+        start_time = datetime.now()
+        while self.running and rclpy.ok():
+            result = self.zed.grab()
+            if result != sl.ERROR_CODE.SUCCESS:
+                self.node.get_logger().warn("Zed.grab() failed, continuing")
+                continue
+            
+            stamp_time = self.node.get_clock().now()
+            
+            self.zed.retrieve_image(self.image_buffer, sl.VIEW.LEFT)
 
-        # fully handle depth map first (better caching)
-        if self.camera_type == "front_cam" and False:
-            self.zed.retrieve_measure(self.depth_buffer, sl.MEASURE.DEPTH)
-            depth = cv2.cvtColor(self.depth_buffer.get_data(), cv2.COLOR_RGBA2RGB)
-            depth_map = self.bridge.cv2_to_compressed_imgmsg(depth)
-            self.pub_depth_map.publish(depth_map)
+            # fully handle depth map first (better caching)
+            if self.camera_type == "front_cam" and False:
+                self.zed.retrieve_measure(self.depth_buffer, sl.MEASURE.DEPTH)
+                depth = cv2.cvtColor(self.depth_buffer.get_data(), cv2.COLOR_RGBA2RGB)
+                depth_map = self.bridge.cv2_to_compressed_imgmsg(depth)
+                self.pub_depth_map.publish(depth_map)
 
-        img = cv2.cvtColor(self.image_buffer.get_data(), cv2.COLOR_RGBA2RGB)
-        self.process_image(img, stamp_time)
+            img = cv2.cvtColor(self.image_buffer.get_data(), cv2.COLOR_RGBA2RGB)
+            self.process_image(img, stamp_time)
+
+                    
+            # Capture end time
+            end_time = datetime.now()
+
+            # Calculate duration
+            duration = end_time - start_time
+            print(f"Elapsed: {duration}")
 
     def process_image(self, img, stamp_time):
         det_msg = Detection2DArray()
@@ -300,3 +320,11 @@ class ObjectDetectorNode():
         time_diff = (current_time - stamp_time).nanoseconds / 1e9
         
         self.node.get_logger().debug(f"Detection latency: {time_diff:.9f} s | Active detections: {len(tracked_detections)}")
+        
+
+    def destroy_node(self):
+        if self.camera_type == "front_cam":
+            self.running = False
+            self.grab_thread.join()
+            self.zed.close()
+        super().destroy_node()

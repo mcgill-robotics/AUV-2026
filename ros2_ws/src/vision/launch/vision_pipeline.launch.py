@@ -259,7 +259,7 @@ def generate_launch_description():
     )
     # wait 3 seconds before launching node to ensure zed wrapper is able to open and stream on port
     object_map_node = TimerAction(
-        period=3.0,
+        period=10.0,
         actions=[object_map_node]
     )
     

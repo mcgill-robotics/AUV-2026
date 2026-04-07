@@ -8,9 +8,14 @@ def main(args=None):
     rclpy.init(args=args)
     frontcam_detector_node = Node('front_cam_object_detection')
     frontcam_detector = object_detection_node.ObjectDetectorNode(frontcam_detector_node)
-    rclpy.spin(frontcam_detector_node)
-    frontcam_detector_node.destroy_node()
-    rclpy.shutdown()
+    
+    try:
+        rclpy.spin(frontcam_detector_node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        frontcam_detector_node.destroy_node()
+        rclpy.shutdown()
 
 
 if __name__ == "__main__":
