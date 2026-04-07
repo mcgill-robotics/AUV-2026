@@ -26,7 +26,10 @@ class ObjectDetectorNode():
         self.node.declare_parameter('detection_topic', Parameter.Type.STRING)
         self.node.declare_parameter('camera_type', Parameter.Type.STRING)
         self.camera_type = self.node.get_parameter('camera_type').get_parameter_value().string_value
-        if self.camera_type == "front_cam": self.node.declare_parameter('depth_map_topic', Parameter.Type.STRING)        
+        if self.camera_type == "front_cam": 
+            self.node.declare_parameter('depth_map_topic', Parameter.Type.STRING)        
+        else:
+            self.node.declare_parameter('input_topic', Parameter.Type.STRING)
         self.node.declare_parameter('queue_size', Parameter.Type.INTEGER)
         self.node.declare_parameter('publish_annotated_image', False)
         self.node.declare_parameter("compressed", Parameter.Type.BOOL)
@@ -37,13 +40,17 @@ class ObjectDetectorNode():
         self.node.declare_parameter('stream_ip', Parameter.Type.STRING)
         self.node.declare_parameter('stream_port', Parameter.Type.INTEGER)
 
-        self.timer = self.node.create_timer(1.0/30.0, self.run_object_detection)
+        if self.camera_type == "front_cam":
+            self.timer = self.node.create_timer(1.0/30.0, self.run_object_detection_zed)
  
         self.class_names = list(self.node.get_parameter('class_names').get_parameter_value().string_array_value)
         self.node.get_logger().info(f"Class names: {self.class_names}")
         model_path = self.node.get_parameter('model_path').get_parameter_value().string_value
         detection_topic = self.node.get_parameter('detection_topic').get_parameter_value().string_value
-        if self.camera_type == "front_cam": depth_map_topic = self.node.get_parameter('depth_map_topic').get_parameter_value().string_value
+        if self.camera_type == "front_cam": 
+            depth_map_topic = self.node.get_parameter('depth_map_topic').get_parameter_value().string_value
+        else:
+            input_topic = self.node.get_parameter('input_topic').get_parameter_value().string_value
         queue_size = self.node.get_parameter('queue_size').get_parameter_value().integer_value
         self.publish_annotated_image = self.node.get_parameter('publish_annotated_image').get_parameter_value().bool_value
         self.compressed = self.node.get_parameter('compressed').get_parameter_value().bool_value
@@ -65,34 +72,49 @@ class ObjectDetectorNode():
             self.node.get_logger().fatal("Exiting due to missing model.")
             raise FileNotFoundError(f"Model path does not exist: {model_path}")
         
-        self.zed = sl.Camera()
-        init_params = sl.InitParameters()
-        init_params.camera_resolution = sl.RESOLUTION.SVGA if sim else sl.RESOLUTION.VGA
-        init_params.camera_fps = 30
-        init_params.coordinate_units = sl.UNIT.METER
-        init_params.coordinate_system = sl.COORDINATE_SYSTEM.RIGHT_HANDED_Z_UP_X_FWD
-        init_params.depth_mode = sl.DEPTH_MODE.NEURAL
-        init_params.enable_image_validity_check = True
-        init_params.input = sl.InputType()
+        if self.camera_type == "front_cam":
+            self.zed = sl.Camera()
+            init_params = sl.InitParameters()
+            init_params.camera_resolution = sl.RESOLUTION.SVGA if sim else sl.RESOLUTION.VGA
+            init_params.camera_fps = 30
+            init_params.coordinate_units = sl.UNIT.METER
+            init_params.coordinate_system = sl.COORDINATE_SYSTEM.RIGHT_HANDED_Z_UP_X_FWD
+            init_params.depth_mode = sl.DEPTH_MODE.NEURAL
+            init_params.enable_image_validity_check = True
+            init_params.input = sl.InputType()
 
-        if sim:
-            stream_ip = self.node.get_parameter('stream_ip').get_parameter_value().string_value
+            if sim:
+                stream_ip = self.node.get_parameter('stream_ip').get_parameter_value().string_value
+                stream_port = self.node.get_parameter('stream_port').get_parameter_value().integer_value
+                init_params.set_from_stream(stream_ip, stream_port)
+
+            self.image_buffer = sl.Mat()
+            self.depth_buffer = sl.Mat()
+
+            for i in range(5):
+                result = self.zed.open(init_params)
+                if result == sl.ERROR_CODE.SUCCESS: break
+                else:
+                    self.node.get_logger().error(f"Failed to open zed camera, retrying {5-i} more times")
+                    sleep(2)
+            
+            if result != sl.ERROR_CODE.SUCCESS:
+                self.node.get_logger().fatal("Failed to open zed camera after 5 attempts, exiting")
+                exit(1)
+            
+            # Configure streaming
             stream_port = self.node.get_parameter('stream_port').get_parameter_value().integer_value
-            init_params.set_from_stream(stream_ip, stream_port)
+            stream_params = sl.StreamingParameters()
+            stream_params.codec = sl.STREAMING_CODEC.H264
+            stream_params.port = stream_port
+            stream_params.bitrate = 4000 # kbps
 
-        self.image_buffer = sl.Mat()
-        self.depth_buffer = sl.Mat()
-
-        for i in range(5):
-            result = self.zed.open(init_params)
-            if result == sl.ERROR_CODE.SUCCESS: break
-            else:
-                self.node.get_logger().error(f"Failed to open zed camera, retrying {5-i} more times")
-                sleep(2)
-        
-        if result != sl.ERROR_CODE.SUCCESS:
-            self.node.get_logger().fatal("Failed to open zed camera after 5 attempts, exiting")
-            exit(1)
+            # Enable streaming
+            err = self.zed.enable_streaming(stream_params)
+            if err != sl.ERROR_CODE.SUCCESS:
+                self.node.get_logger().error(f"Streaming not enabled: {err}")
+                self.zed.close()
+                exit(1)
 
         # Avoiding CPU Oversubscription
         torch.set_num_threads(1)
@@ -124,20 +146,22 @@ class ObjectDetectorNode():
         
         self.node.get_logger().info(f"Setting QOL queue size to: {queue_size}")
         
-        # qos_profile = QoSProfile(
-        #     reliability=ReliabilityPolicy.BEST_EFFORT, # Often better for high-bandwidth images
-        #     history=HistoryPolicy.KEEP_LAST,
-        #     depth=1
-        # )
+        if self.camera_type != "front_cam":
+            from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
+            qos_profile = QoSProfile(
+                reliability=ReliabilityPolicy.BEST_EFFORT, # Often better for high-bandwidth images
+                history=HistoryPolicy.KEEP_LAST,
+                depth=1
+            )
 
-        # self.node.create_subscription(
-        #     input_format,
-        #     input_topic,
-        #     self.image_callback,
-        #     qos_profile
-        # )
-        
-        # self.node.get_logger().info(f"Subscribed to input topic: {input_topic}")
+            self.node.create_subscription(
+                input_format,
+                input_topic,
+                self.run_object_detection_sub,
+                qos_profile
+            )
+            
+            self.node.get_logger().info(f"Subscribed to input topic: {input_topic}")
 
         self.pub_detections = self.node.create_publisher(
             Detection2DArray,
@@ -166,16 +190,20 @@ class ObjectDetectorNode():
         
         self.node.get_logger().info(f"{self.node.get_name()} initialized.")
 
-    def run_object_detection(self):
-        # try:
-        #     if self.compressed:
-        #         img = self.bridge.compressed_imgmsg_to_cv2(msg, "bgr8")
-        #     else:
-        #         img = self.bridge.imgmsg_to_cv2(msg, "bgr8") 
-        # except Exception as e:
-        #     self.node.get_logger().error(f"cv_bridge failed: {e}")
-        #     return
+    def run_object_detection_sub(self, msg):
+        try:
+            if self.compressed:
+                img = self.bridge.compressed_imgmsg_to_cv2(msg, "bgr8")
+            else:
+                img = self.bridge.imgmsg_to_cv2(msg, "bgr8") 
+        except Exception as e:
+            self.node.get_logger().error(f"cv_bridge failed: {e}")
+            return
+        
+        stamp_time = self.node.get_clock().now()
+        self.process_image(img, stamp_time)
 
+    def run_object_detection_zed(self):
         result = self.zed.grab()
         if result != sl.ERROR_CODE.SUCCESS:
             self.node.get_logger().warn("Zed.grab() failed, continuing")
@@ -193,7 +221,9 @@ class ObjectDetectorNode():
             self.pub_depth_map.publish(depth_map)
 
         img = cv2.cvtColor(self.image_buffer.get_data(), cv2.COLOR_RGBA2RGB)
+        self.process_image(img, stamp_time)
 
+    def process_image(self, img, stamp_time):
         det_msg = Detection2DArray()
         det_objects = []
 
