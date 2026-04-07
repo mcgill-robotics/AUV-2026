@@ -17,56 +17,56 @@
     "CallService!Thruster1": {
       "requestPayload": "{\n  \"data\": 1\n}",
       "layout": "vertical",
-      "timeoutSeconds": 3,
+      "timeoutSeconds": 11,
       "serviceName": "/drytest_foxglove/test_thruster",
       "buttonText": "Test Thruster 1"
     },
     "CallService!Thruster2": {
       "requestPayload": "{\n  \"data\": 2\n}",
       "layout": "vertical",
-      "timeoutSeconds": 3,
+      "timeoutSeconds": 11,
       "serviceName": "/drytest_foxglove/test_thruster",
       "buttonText": "Test Thruster 2"
     },
     "CallService!Thruster3": {
       "requestPayload": "{\n  \"data\": 3\n}",
       "layout": "vertical",
-      "timeoutSeconds": 3,
+      "timeoutSeconds": 11,
       "serviceName": "/drytest_foxglove/test_thruster",
       "buttonText": "Test Thruster 3"
     },
     "CallService!Thruster4": {
       "requestPayload": "{\n  \"data\": 4\n}",
       "layout": "vertical",
-      "timeoutSeconds": 3,
+      "timeoutSeconds": 11,
       "serviceName": "/drytest_foxglove/test_thruster",
       "buttonText": "Test Thruster 4"
     },
     "CallService!Thruster5": {
       "requestPayload": "{\n  \"data\": 5\n}",
       "layout": "vertical",
-      "timeoutSeconds": 3,
+      "timeoutSeconds": 11,
       "serviceName": "/drytest_foxglove/test_thruster",
       "buttonText": "Test Thruster 5"
     },
     "CallService!Thruster6": {
       "requestPayload": "{\n  \"data\": 6\n}",
       "layout": "vertical",
-      "timeoutSeconds": 3,
+      "timeoutSeconds": 11,
       "serviceName": "/drytest_foxglove/test_thruster",
       "buttonText": "Test Thruster 6"
     },
     "CallService!Thruster7": {
       "requestPayload": "{\n  \"data\": 7\n}",
       "layout": "vertical",
-      "timeoutSeconds": 3,
+      "timeoutSeconds": 11,
       "serviceName": "/drytest_foxglove/test_thruster",
       "buttonText": "Test Thruster 7"
     },
     "CallService!Thruster8": {
       "requestPayload": "{\n  \"data\": 8\n}",
       "layout": "vertical",
-      "timeoutSeconds": 3,
+      "timeoutSeconds": 11,
       "serviceName": "/drytest_foxglove/test_thruster",
       "buttonText": "Test Thruster 8"
     },

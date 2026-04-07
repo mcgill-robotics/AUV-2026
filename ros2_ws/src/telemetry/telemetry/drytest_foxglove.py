@@ -13,9 +13,9 @@ from ament_index_python.packages import get_package_share_directory
 import yaml
 import os
 
-SWEEP_DURATION = 10.0   # seconds for one full sine cycle
-SWEEP_RATE_HZ  = 40    # PWM update rate during sweep
-PEAK_FORCE_N   = 3.0   # peak force in Newtons for all dry tests
+SWEEP_DURATION = 4.0   # seconds for one full sine cycle
+SWEEP_RATE_HZ  = 20    # PWM update rate during sweep
+PEAK_FORCE_N   = 2.0   # peak force in Newtons for all dry tests
 
 reset_msg = [1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500]
 

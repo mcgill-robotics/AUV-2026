@@ -10,15 +10,21 @@
       "second": {
         "first": "Publish!attitude_sp",
         "second": {
-          "first": "Publish!xy_sp",
+          "first": {
+            "first": "Publish!xy_sp",
+            "second": "Publish!w3c60c",
+            "direction": "column",
+            "splitPercentage": 49.609931405317894
+          },
           "second": "Plot!11y8nrv",
-          "direction": "column"
+          "direction": "column",
+          "splitPercentage": 58.478024117530104
         },
         "direction": "column",
-        "splitPercentage": 33
+        "splitPercentage": 25.252283876525212
       },
       "direction": "column",
-      "splitPercentage": 25
+      "splitPercentage": 23.372803639028238
     },
     "second": {
       "first": {
@@ -34,10 +40,10 @@
         "splitPercentage": 50
       },
       "direction": "column",
-      "splitPercentage": 50
+      "splitPercentage": 49.86529193529038
     },
     "direction": "row",
-    "splitPercentage": 20.060180541624874
+    "splitPercentage": 17.341939035488068
   },
   "configById": {
     "RawMessages!imu_raw": {
@@ -70,7 +76,7 @@
         }
       ],
       "minYValue": -0.2,
-      "maxYValue": 2
+      "maxYValue": 4
     },
     "RawMessages!dvl_vel": {
       "topicPath": "/dvl/velocity"
@@ -84,13 +90,13 @@
     "3D!pose_viz": {
       "cameraState": {
         "perspective": true,
-        "distance": 2.724493010304846,
-        "phi": 60.00000000000026,
-        "thetaOffset": 45.00000000000081,
+        "distance": 5.5477914624333335,
+        "phi": 16.604439786068458,
+        "thetaOffset": 87.48303157709171,
         "targetOffset": [
-          0.03560716710358529,
-          0.015260436238115885,
-          -3.993890421977965e-19
+          -0.2783487582741777,
+          -0.8719347642231049,
+          -1.0261750482991814e-17
         ],
         "target": [
           0,
@@ -115,6 +121,9 @@
         },
         "/state/pose": {
           "visible": true
+        },
+        "/dvl/dead_reckoning": {
+          "visible": false
         }
       },
       "layers": {
@@ -146,26 +155,25 @@
     "Publish!depth_sp": {
       "topicName": "/controls/depth_setpoint",
       "datatype": "std_msgs/Float64",
-      "value": "{\n  \"data\": 0.5\n}"
+      "value": "{\n  \"data\": 0.3\n}"
     },
     "Publish!attitude_sp": {
       "topicName": "/controls/quaternion_setpoint",
       "datatype": "geometry_msgs/Quaternion",
-      "value": "{\n  \"x\": 0,\n  \"y\": 0,\n  \"z\": 0,\n  \"w\": 1\n}\n"
+      "value": "{\n  \"x\": 0.3826,\n  \"y\": 0,\n  \"z\": 0,\n  \"w\": 0.9238\n}\n"
     },
     "Publish!xy_sp": {
-      "topicName": ""
+      "topicName": "/controls/x_setpoint",
+      "datatype": "std_msgs/msg/Float64",
+      "value": "{\n  \"data\": 0.0\n}"
+    },
+    "Publish!w3c60c": {
+      "topicName": "/controls/y_setpoint",
+      "datatype": "std_msgs/msg/Float64",
+      "value": "{\n  \"data\": 0\n}"
     },
     "Plot!11y8nrv": {
       "paths": [
-        {
-          "timestampMethod": "receiveTime",
-          "value": "/power/batteries/voltage.data[0]",
-          "enabled": true,
-          "color": "#4e98e2",
-          "id": "4f37cf1a-82ce-4078-8d74-2fb1c0e81cf0",
-          "label": "Battery 0"
-        },
         {
           "timestampMethod": "receiveTime",
           "value": "/power/batteries/voltage.data[1]",
@@ -173,13 +181,21 @@
           "color": "#f5774d",
           "id": "021350d6-a7ec-4a50-95b8-3300665b26e5",
           "label": "Battery 1"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/power/batteries/voltage.data[0]",
+          "enabled": true,
+          "color": "#4e98e2",
+          "id": "70b4b666-e688-444d-96f7-502fad571450",
+          "label": "Battery 0"
         }
       ],
       "minYValue": 15,
       "showPlotValuesInLegend": true
     },
     "Tab!imu": {
-      "activeTabIdx": 0,
+      "activeTabIdx": 1,
       "tabs": [
         {
           "title": "IMU (Raw)",
@@ -192,7 +208,7 @@
       ]
     },
     "Tab!depth": {
-      "activeTabIdx": 0,
+      "activeTabIdx": 2,
       "tabs": [
         {
           "title": "Depth (Raw)",
@@ -209,7 +225,7 @@
       ]
     },
     "Tab!dvl": {
-      "activeTabIdx": 1,
+      "activeTabIdx": 2,
       "tabs": [
         {
           "title": "Velocity",
