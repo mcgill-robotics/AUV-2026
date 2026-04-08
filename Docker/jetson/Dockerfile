@@ -172,6 +172,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1-mesa-dev \
     libglew-dev \
     libjpeg-dev \
+    libnvinfer-bin \
     libpng-dev \
     libswscale-dev \
     libwayland-dev \

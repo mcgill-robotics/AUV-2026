@@ -76,6 +76,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         # GUI Support (RQT/Rviz)
         libgl1-mesa-glx \
         libgl1-mesa-dri \
+        # Tensorrt for model export
+        libnvinfer-bin \
         && rm -rf /var/lib/apt/lists/*
 
 # Add ROS 2 Humble Repository
