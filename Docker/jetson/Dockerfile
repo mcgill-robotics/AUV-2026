@@ -312,11 +312,17 @@ RUN git clone https://github.com/ultralytics/ultralytics.git && \
     rm -rf ultralytics
 
 # Install dependencies for vision
-RUN pip install --no-cache-dir --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} "numpy<2.0.0" notebook \
+RUN pip install --no-cache-dir --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} "numpy<2.0.0" "setuptools<70" notebook \
     roboflow albumentations pandas \
     rfdetr supervision pytorch_lightning pycocotools faster-coco-eval && \
     pip install --no-cache-dir --ignore-install --upgrade typing_extensions
 
+# Install ZED Python API from source
+RUN git clone -b v${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}.${ZED_SDK_PATCH} https://github.com/stereolabs/zed-python-api.git /tmp/zed-python-api && \
+    cd /tmp/zed-python-api/src && \
+    python3 -m pip install --no-deps . && \
+    cd /tmp && \
+    rm -rf /tmp/zed-python-api
 
 # Environment Setup
 ARG USERNAME=douglas

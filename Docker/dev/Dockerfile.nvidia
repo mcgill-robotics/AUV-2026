@@ -237,11 +237,11 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         pip3 install --ignore-installed -c /tmp/constraints.txt -r /tmp/requirements.txt
 
 # Install ZED Python API from source
-# RUN git clone -b v${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}.${ZED_SDK_PATCH} https://github.com/stereolabs/zed-python-api.git /tmp/zed-python-api && \
-#        cd /tmp/zed-python-api/src && \
-#        python3 -m pip install --no-deps . && \
-#        cd /tmp && \
-#        rm -rf /tmp/zed-python-api
+RUN git clone -b v${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}.${ZED_SDK_PATCH} https://github.com/stereolabs/zed-python-api.git /tmp/zed-python-api && \
+        cd /tmp/zed-python-api/src && \
+        python3 -m pip install --no-deps . && \
+        cd /tmp && \
+        rm -rf /tmp/zed-python-api
 
 ARG USERNAME=douglas
 ARG USER_UID=1000
