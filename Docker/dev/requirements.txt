@@ -12,3 +12,5 @@ supervision
 pytorch_lightning
 pycocotools
 faster-coco-eval
+onnx 
+onnxruntime-gpu
