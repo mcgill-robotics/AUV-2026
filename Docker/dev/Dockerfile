@@ -162,6 +162,29 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # Restores compatibility with 'colcon build'
 RUN pip3 install --no-cache-dir --force-reinstall "setuptools==65.5.1"
 
+# udevadm xdg-mime xdg-desktop-menu xdg-icon-resource are required by the Digilent Adept runtime for the following reasons:
+# - udevadm: Used by the Adept runtime to manage USB device permissions and trigger udev rules when Digilent devices are connected.
+# - xdg-mime, xdg-desktop-menu, xdg-icon-resource: These are part of the XDG utilities used by the Adept runtime to integrate with the desktop environment, such as creating shortcuts and associating file types.
+# however these tools cannot be run in a headless container with no USB access or GUI, so we create stubs so the post install script of the Adept runtime doesn't fail, then remove them after installation to avoid confusion.
+RUN for cmd in udevadm xdg-mime xdg-desktop-menu xdg-icon-resource; do \
+        echo '#!/bin/sh' > /usr/local/bin/$cmd && \
+        chmod +x /usr/local/bin/$cmd; \
+    done && \
+    wget -q -O /tmp/adept.deb https://files.digilent.com/Software/Adept2%20Runtime/2.30.1/digilent.adept.runtime_2.30.1_amd64.deb && \
+    wget -q -O /tmp/waveforms.deb https://files.digilent.com/Software/Waveforms/3.24.4/digilent.waveforms_3.24.4_amd64.deb && \
+    apt-get update && apt-get install -y --no-install-recommends \
+        libusb-1.0-0 \
+        xdg-utils \
+        libqt5multimedia5-plugins \
+        libqt5scripttools5 \
+        libqt5serialport5 && \
+    dpkg -i /tmp/adept.deb && \
+    dpkg -i /tmp/waveforms.deb && \
+    for cmd in udevadm xdg-mime xdg-desktop-menu xdg-icon-resource; do \
+        rm -f /usr/local/bin/$cmd; \
+    done && \
+    rm -rf /tmp/adept.deb /tmp/waveforms.deb /var/lib/apt/lists/*
+
 # ---------------------------------------------------------
 # 4. Environment Setup
 # ---------------------------------------------------------
