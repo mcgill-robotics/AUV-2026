@@ -98,12 +98,12 @@ object_map:
   tent_init_buffer: 5 # Extra frames allowed for a new TENTATIVE track to initialize before being deleted if unmatched
   
   # loose parameters
-  # gating_threshold: 5.0
-  # min_hits: 5
-  # max_age: 15
-  # max_position_jump: 4.0
-  # conf_to_tent_threshold: 10
-  # tent_init_buffer: 10
+  gating_threshold: 5.0
+  min_hits: 5
+  max_age: 15
+  max_position_jump: 4.0
+  conf_to_tent_threshold: 10
+  tent_init_buffer: 10
 
   # raw detection parameters
   # gating_threshold: 99.0
