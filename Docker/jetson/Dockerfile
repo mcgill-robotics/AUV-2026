@@ -316,28 +316,19 @@ RUN pip install --no-cache-dir --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} not
     pip install --no-cache-dir --ignore-install --upgrade typing_extensions
 
 
-# udevadm xdg-mime xdg-desktop-menu xdg-icon-resource are required by the Digilent Adept runtime for the following reasons:
-# - udevadm: Used by the Adept runtime to manage USB device permissions and trigger udev rules when Digilent devices are connected.
-# - xdg-mime, xdg-desktop-menu, xdg-icon-resource: These are part of the XDG utilities used by the Adept runtime to integrate with the desktop environment, such as creating shortcuts and associating file types.
-# however these tools cannot be run in a headless container with no USB access or GUI, so we create stubs so the post install script of the Adept runtime doesn't fail, then remove them after installation to avoid confusion.
-RUN for cmd in udevadm xdg-mime xdg-desktop-menu xdg-icon-resource; do \
-        echo '#!/bin/sh' > /usr/local/bin/$cmd && \
-        chmod +x /usr/local/bin/$cmd; \
-    done && \
-    wget -q -O /tmp/adept.deb https://files.digilent.com/Software/Adept2%20Runtime/2.30.1/digilent.adept.runtime_2.30.1_arm64.deb && \
+# we extract only the libraries we need
+RUN wget -q -O /tmp/adept.deb https://files.digilent.com/Software/Adept2%20Runtime/2.30.1/digilent.adept.runtime_2.30.1_arm64.deb && \
     wget -q -O /tmp/waveforms.deb https://files.digilent.com/Software/Waveforms/3.24.4/digilent.waveforms_3.24.4_arm64.deb && \
-    apt-get update && apt-get install -y --no-install-recommends \
-        libusb-1.0-0 \
-        xdg-utils \
-        libqt5multimedia5-plugins \
-        libqt5scripttools5 \
-        libqt5serialport5 && \
-    dpkg -i /tmp/adept.deb && \
-    dpkg -i /tmp/waveforms.deb && \
-    for cmd in udevadm xdg-mime xdg-desktop-menu xdg-icon-resource; do \
-        rm -f /usr/local/bin/$cmd; \
-    done && \
-    rm -rf /tmp/adept.deb /tmp/waveforms.deb /var/lib/apt/lists/*
+    # extract libs from .deb packages
+    dpkg-deb -x /tmp/adept.deb /tmp/adept-extracted && \
+    dpkg-deb -x /tmp/waveforms.deb /tmp/waveforms-extracted && \
+    # copy all .so libraries into the container
+    cp -r /tmp/adept-extracted/usr/lib/digilent /usr/lib/digilent && \
+    cp /tmp/waveforms-extracted/usr/lib/*.so* /usr/local/lib/ && \
+    # add digilent adept path to ldconfig
+    echo "/usr/lib/digilent/adept" > /etc/ld.so.conf.d/digilent-adept.conf && \
+    ldconfig && \
+    rm -rf /tmp/adept-extracted /tmp/waveforms-extracted
 
 # Environment Setup
 ARG USERNAME=douglas
