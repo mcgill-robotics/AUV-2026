@@ -55,10 +55,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROS_DISTRO=humble
 ROS_INSTALL=/opt/ros/$ROS_DISTRO/setup.bash
 
-SUBMODULE_ERROR_CODE=0
 # Initialize all git submodules
+# skip this step if offline since --init will git clone submodules which will stalls with no network access 
+SUBMODULE_ERROR_CODE=0
+if [ -n "$OFFLINE_BUILD" ]; then
+    echo "Offline build requested. Skipping git submodule update to avoid potential network access."
+elif [ -n "${CI:-}" ]; then
 # Skip in CI since GitHub Actions checkout already fetches submodules (avoids permission issues)
-if [ -z "${CI:-}" ]; then
+    echo "Running in CI, skipping git submodule update (already handled by checkout action)."
+else
     git config --global --add safe.directory "$(pwd)" || $SUDO git config --system --add safe.directory "$(pwd)"
     git config --global --add safe.directory $(pwd)/ros2_ws/src/Xsens_MTi_Driver || $SUDO git config --system --add safe.directory $(pwd)/ros2_ws/src/Xsens_MTi_Driver
     git config --global --add safe.directory $(pwd)/ros2_ws/src/ros-tcp-endpoint || $SUDO git config --system --add safe.directory $(pwd)/ros2_ws/src/ros-tcp-endpoint
@@ -66,10 +71,9 @@ if [ -z "${CI:-}" ]; then
     # do not exit on error
     set +e
     git submodule update --init --recursive
+    # capture error code and continue execution even on error since we still want to build other packages
     SUBMODULE_ERROR_CODE=$?
     set -e
-else
-    echo "Running in CI, skipping git submodule update (already handled by checkout action)."
 fi
 
 if [ -f "$ROS_INSTALL" ]; then
