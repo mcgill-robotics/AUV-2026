@@ -177,7 +177,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libwayland-dev \
     libxkbcommon-dev \
     ninja-build \
-    tensorrt \
     v4l-utils \
     && add-apt-repository ppa:deadsnakes/ppa -y \
     && rm -rf /var/lib/apt/lists/* \
