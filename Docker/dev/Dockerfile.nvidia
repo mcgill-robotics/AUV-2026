@@ -169,8 +169,8 @@ RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \
 # Install Foxglove Bridge from source
 # ----------------------------------------------------------
 WORKDIR /opt/ros/foxglove_ws
-RUN git clone https://github.com/foxglove/foxglove-sdk.git src/foxglove-sdk && \
-        apt-get update && \
+RUN git clone --depth 1 --branch sdk/v0.21.0 https://github.com/foxglove/foxglove-sdk.git src/foxglove-sdk && \
+        apt-gepdate && \
         rm -rf /etc/ros/rosdep/sources.list.d/* && \
         rosdep init && \
         rosdep update --rosdistro ${ROS_DISTRO} && \
