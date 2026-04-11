@@ -204,19 +204,24 @@ if [ "$OFFLINE_BUILD" = true ]; then
 fi
 
 if [ "$DEBUG_BUILD" = true ]; then
+    (
+    # wrap in parens to limit scope of env var change to just the colcon build command
+    export CMAKE_BUILD_PARALLEL_LEVEL=1
     echo "    -> Performing Debug Build of packages: ${PKGS[*]}"
     # Output to console, interleaving build output for better visibility
     # Generate compile commands for use with linters e.g. VSCode
     # Run everything sequentially to find exact failure point
     colcon build \
         --event-handlers console_direct+ \
+        --executor sequential \
+        --parallel-workers 1 \
         --cmake-args \
             -DCMAKE_BUILD_TYPE=RelWithDebInfo  \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
             -DIS_JETSON_CI=$IS_JETSON_CI \
             $OFFLINE_CMAKE_ARGS \
-        --executor sequential \
         $([ -n "$PACKAGE_TO_BUILD" ] && echo "--packages-up-to $PACKAGE_TO_BUILD")
+    )
 else
     echo "    -> Performing Release Build of packages: ${PKGS[*]}"
     # Output with cohesion, groups output by package
