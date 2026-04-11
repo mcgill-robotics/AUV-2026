@@ -1,26 +1,22 @@
 import py_trees
 import py_trees_ros
 import rclpy
-from controls import navigation_client
 from rclpy.node import Node
-from rclpy.executors import MultiThreadedExecutor
 from controls.goal_helpers import set_depth, set_global_yaw, move_robot_centric
-from ...SensorsBehaviour import SensorsBehaviour
 from ...utils.BasicActionBehaviour import BasicActionBehaviour
 from ...utils.MissionChoiceCheckBehaviour import MissionChoiceCheckBehaviour
 from ...utils.MissionCompleteBehaviour import MissionCompleteBehaviour
 from ...utils.TimerBehaviour import TimerBehaviour
-import math
 
-class TestMoveForwardBehaviour(py_trees.composites.Sequence):
+class TestYawBehaviour(py_trees.composites.Sequence):
     """
     This PyTrees Sequence is the root of the test translation mission
     """
     def __init__(self, node):
-        super().__init__("TestMoveForwardBehaviour", memory=True)
+        super().__init__("TestYawBehaviour", memory=True)
 
         # Get the general parameters from the configs that were declared in root of Behaviour Tree
-        position_tolerance = node.pre_qual_positional_tolerance
+        yaw_tolerance = node.pre_qual_yaw_tolerance
         hold_time = node.pre_qual_hold_time
         timeout = node.pre_qual_timeout
 
@@ -32,16 +28,16 @@ class TestMoveForwardBehaviour(py_trees.composites.Sequence):
         4: Basic Dive
         5: Basic Yaw
         """
-        mission_choice_check = MissionChoiceCheckBehaviour(name="Test Move Forward", choice=3)
+        mission_choice_check = MissionChoiceCheckBehaviour(name="Test Yaw", choice=5)
 
         # Build the full mission sequence
-        # 1. Move Forward
-        forward_move_leaf = BasicActionBehaviour(node, "Move to forward", move_robot_centric(forward=1.0, tolerance=position_tolerance, hold_time=hold_time, timeout=timeout))
+        # 1. Rotate 180 deg Yaw
+        yaw_rotate_leaf = BasicActionBehaviour(node, "Yaw Test", rotate_relative(dyaw_rad=math.pi, tolerance=yaw_tolerance, hold_time=hold_time, timeout=timeout))
 
         # 2. Reset the user mission choice to allow for new mission to be selected
-        mission_choice_reset = MissionCompleteBehaviour(node, "Completed Test Move Forward")
+        mission_choice_reset = MissionCompleteBehaviour(node, "Completed Yaw Test")
 
-        self.add_children([mission_choice_check, 
-            forward_move_leaf, 
+        self.add_children([mission_choice_check,
+            yaw_rotate_leaf, 
             mission_choice_reset
             ])

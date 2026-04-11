@@ -47,10 +47,12 @@ class BasicTriggerServiceBehaviour(py_trees.behaviour.Behaviour):
             """
             Description: Sets up keys on the blackboard that this behaviour will use.
             """
+            # FIND A BETTER WAY TO DO THIS
+            
             # Check if the service is available, if not log an error and raise an exception
-            if not self.node.service_client.wait_for_service(timeout_sec=2.0):
-                self.node.get_logger().error(f"[{self.name}] Service not available.")
-                raise RuntimeError(f"Service {self.node.service_client.srv_name} not available.")
+            #if not self.node.service_client.wait_for_service(timeout_sec=2.0):
+            #    self.node.get_logger().error(f"[{self.name}] Service not available.")
+            #    raise RuntimeError(f"Service {self.node.service_client.srv_name} not available.")
 
 
         def initialise(self) -> None:

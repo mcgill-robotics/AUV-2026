@@ -1,22 +1,15 @@
 import py_trees
 import py_trees_ros
 import rclpy
-from controls import navigation_client
 from std_msgs.msg import Int32
 from rclpy.node import Node
-from rclpy.executors import MultiThreadedExecutor
-from controls.goal_helpers import set_depth, set_global_yaw, move_global
-from ..SensorsBehaviour import SensorsBehaviour
-from ..utils.BasicActionBehaviour import BasicActionBehaviour
-from ..utils.TimerBehaviour import TimerBehaviour
-from ..utils.MissionCompleteBehaviour import MissionCompleteBehaviour
 from .preQual.OrbitQualification import OrbitQualificationMission
 from .preQual.RectangleQualification import RectangleQualificationMission
-from .preQual.TestMoveForwardBehaviour import TestMoveForwardBehaviour
-from .preQual.TestYawBehaviour import TestYawBehaviour
-from .preQual.TestDiveBehaviour import TestDiveBehaviour
-from .preQual.TranslationRectangle import TranslationRectangleMission
-from .preQual.TestServiceCallBehaviour import TestServiceCallBehaviour
+from .debugNavigation.TestMoveForwardBehaviour import TestMoveForwardBehaviour
+from .debugNavigation.TestYawBehaviour import TestYawBehaviour
+from .debugNavigation.TestDiveBehaviour import TestDiveBehaviour
+from .debugNavigation.TranslationRectangle import TranslationRectangleMission
+from .debugNavigation.TestServiceCallBehaviour import TestServiceCallBehaviour
 import math
 
 class MissionSequence(py_trees.composites.Sequence):
@@ -28,7 +21,7 @@ class MissionSequence(py_trees.composites.Sequence):
 
         # Build the full mission sequence
         mission_choice = MissionChoiceBehaviour(node, name="Mission_Choice")
-        all_missions = py_trees.composites.Selector("All missions", memory=True)
+        all_missions_selector = py_trees.composites.Selector("All missions", memory=True)
 
         pre_qual_rectangle = RectangleQualificationMission(node)
         pre_qual_orbit = OrbitQualificationMission(node)
@@ -37,16 +30,21 @@ class MissionSequence(py_trees.composites.Sequence):
         test_yaw = TestYawBehaviour(node)
         translation_rectangle = TranslationRectangleMission(node)
         test_service_call = TestServiceCallBehaviour(node)
-        all_missions.add_children([pre_qual_orbit, 
+        
+        mission_list = [pre_qual_orbit, 
             pre_qual_rectangle, 
-            test_move_forward,
+            test_move_forward, 
             test_dive, 
-            test_yaw,
-            translation_rectangle,
-            test_service_call])
+            test_yaw, 
+            translation_rectangle, 
+            test_service_call]
 
+        # Count the number of missions to put a boundary on user input
+        self.mission_count = len(mission_list)
+
+        all_missions_selector.add_children(mission_list)
         self.add_children([mission_choice, 
-            all_missions])
+            all_missions_selector])
 
 class MissionChoiceBehaviour(py_trees.behaviour.Behaviour):
     """ 
@@ -123,8 +121,8 @@ class MissionChoiceBehaviour(py_trees.behaviour.Behaviour):
         
         Outputs: None
         """
-        if not (0 < msg.data < 8):
-                self.node.get_logger().warn("Input must be an integer between 1 and 7 inclusively!")
+        if not (0 < msg.data <= self.mission_count):
+                self.node.get_logger().warn("Input must be an integer between 1 and {} inclusively!".format(self.mission_count))
                 return
         
         self.blackboard.mission_choice = msg.data

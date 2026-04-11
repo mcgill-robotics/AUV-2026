@@ -10,6 +10,7 @@ from ...utils.BasicActionBehaviour import BasicActionBehaviour
 from ...utils.MissionChoiceCheckBehaviour import MissionChoiceCheckBehaviour
 from ...utils.MissionCompleteBehaviour import MissionCompleteBehaviour
 from ...utils.TimerBehaviour import TimerBehaviour
+from ...utils.BasicTriggerServiceBehaviour import BasicTriggerServiceBehaviour
 
 class TranslationRectangleMission(py_trees.composites.Sequence):
     """
