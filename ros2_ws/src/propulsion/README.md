@@ -9,17 +9,18 @@ This process occurs in two stages:
 
 
 ## Table of Contents
-- [Overview](#overview)
-- [Usage](#usage)
-- [Nodes](#nodes)
-  - [Published Topics](#published-topics)
-  - [Subscribed Topics](#subscribed-topics)
-- [Installation](#installation)
-  - [Dependencies](#dependencies)
-  - [Building](#building)
-  - [Running](#running)
-- [License](#license)
-
+- [Propulsion](#propulsion)
+  - [Table of Contents](#table-of-contents)
+  - [Overview](#overview)
+  - [Usage](#usage)
+  - [Nodes](#nodes)
+    - [Published Topics](#published-topics)
+    - [Subscribed Topics](#subscribed-topics)
+  - [Installation](#installation)
+    - [Dependencies](#dependencies)
+    - [Building](#building)
+    - [Running](#running)
+    - [License](#license)
 
 ## Overview
 The [wrench](https://docs.ros.org/en/noetic/api/geometry_msgs/html/msg/Wrench.html) consists of forces AND torques on the X,Y,Z axes. These are distributed to the thrusters using the following allocation matrix:
@@ -53,7 +54,7 @@ Comparison of calibration curves across thrusters:
 ## Usage
 The propulsion package is not for direct use, it is used through publishing efforts on the 'effort' topic.
 
-Publishing a `geometry_msgs/Wrench` message onto `/controls/effort` topic:
+Publishing a `geometry_msgs/Wrench` message onto `/controls/total_effort` topic:
 
 
         ros2 topic pub /controls/effort geometry_msgs/msg/Wrench "{force: {x: 1.0, y: 0.0, z: 0.0}, torque: {x: 0.0, y: 0.0, z: 0.0}}" 
@@ -62,7 +63,7 @@ Publishing a `geometry_msgs/Wrench` message onto `/controls/effort` topic:
 ## Nodes
 The package provides a single ROS node: `thrust_mapper`.
 
-- Input: subscribes to `/controls/effort`
+- Input: subscribes to `/controls/total_effort`
 
 - Outputs: publishes thruster forces and PWM microseconds
 
@@ -80,7 +81,7 @@ The package provides a single ROS node: `thrust_mapper`.
 
 | Topic | Message | Description |
 | ------ | ------- | ---------- |
-| `/controls/effort` | `geometry_msgs/Wrench` | Forces and torques, relative to the robot's frame of reference to be applied at a given moment |
+| `/controls/total_effort` | `geometry_msgs/Wrench` | Forces and torques, relative to the robot's frame of reference to be applied at a given moment |
 
 
 ## Installation
@@ -109,8 +110,11 @@ After build is complete, make the packages visible to ROS
 
 Launch all package nodes
 
-	ros2 launch propulsion thrust_mapper.launch.py
+	ros2 launch propulsion propulsion.launch.py
 
+| Argument | Default | Description |
+| :--- | :--- | :--- | 
+| `sim` | `false` | Run in simulation mode
 
 ### License
 
