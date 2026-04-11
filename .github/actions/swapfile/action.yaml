@@ -1,0 +1,55 @@
+name: Add Swapfile
+description: Github actions runners have very limited RAM (~8GB) which causes docker builds to fail with OOM errors. This action adds a (at most) 4GB swapfile to increase available memory and prevent OOM issues during builds.
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      name: Add Swapfile
+      run: |
+        echo "=== Before ==="
+        echo "-- Disk --"
+        df -h /
+        echo "-- Memory & Swap --"
+        free -h
+        
+        # Clean up any leftover swapfile from a previous run
+        if swapon --show | grep -q /swapfile; then
+          echo "Existing swapfile is active, disabling it..."
+          sudo swapoff /swapfile
+        fi
+        if [ -f /swapfile ]; then
+          echo "Existing swapfile found on disk, removing it..."
+          sudo rm /swapfile
+        fi
+
+        # awk extracts line 2, column 4 (available space in root filesystem)
+        AVAILABLE_MB=$(df -m / | awk 'NR==2 {print $4}')
+        # allocate 40% of available disk space
+        SWAP_MB=$(( AVAILABLE_MB * 40 / 100 ))
+        # cap swap at 4GB to avoid excessive disk usage
+        SWAP_MB=$(( SWAP_MB > 4096 ? 4096 : SWAP_MB ))
+
+        echo ""
+        echo "Disk available: ${AVAILABLE_MB}MB"
+        echo "Swap to allocate: ${SWAP_MB}MB"
+        echo ""
+
+        # a swapfile smaller than 512mb is not worth creating
+        if [ "$SWAP_MB" -ge 512 ]; then
+          echo "Allocating ${SWAP_MB}MB swapfile at /swapfile..."
+          sudo fallocate -l ${SWAP_MB}M /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          echo "Swap enabled."
+        else
+          echo "Only ${SWAP_MB}MB available for swap — skipping (below 512MB threshold)."
+        fi
+
+        echo ""
+        echo "=== After ==="
+        echo "-- Disk --"
+        df -h /
+        echo "-- Memory & Swap --"
+        free -h
