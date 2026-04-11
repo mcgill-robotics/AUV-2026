@@ -1,0 +1,504 @@
+{
+  "globalVariables": {},
+  "userNodes": {
+    "41e5a84f-e88e-48b0-87b4-8981ede39527": {
+      "sourceCode": "// This example shows how to publish a Marker message from a User Script.\n//\n// Publishing Marker messages with a User Script is a good way to visualize non-visual\n// data.\n//\n// For example, if your robot calculates some projected paths and publishes them between two\n// subsystems as a message, you can make a script that visualizes the path as a line list marker and view it in the 3D\n// panel.\n\nimport { Input, Message } from \"./types.ts\";\n\n// The `./markers.ts` utility provides a helper function to build a Marker.\nimport { buildRosMarker, MarkerTypes } from \"./markers.ts\";\n\ntype GlobalVariables = { id: number };\n\nexport const inputs = [\"/input/topic\"];\nexport const output = \"/foxglove_script/my_custom_topic\";\n\n// Our script will output a Marker message.\ntype Marker = Message<\"visualization_msgs/Marker\">;\n\n// If you want to output multiple markers for a single input message, use a MarkerArray.\n// The marker array message has one field, `markers`, which is an array of Marker messages.\n// type MarkerArray = Message<\"visualization_msgs/MarkerArray\">;\n\nexport default function script(event: Input<\"/input/topic\">, globalVars: GlobalVariables): Marker {\n  return buildRosMarker({\n      // Add any fields you want to set in the marker here\n      // Any fields you omit will use default values\n      // e.g 'type: MarkerTypes.ARROW' */\n  });\n};\n",
+      "name": "41e5a84f"
+    }
+  },
+  "playbackConfig": {
+    "speed": 1
+  },
+  "layout": {
+    "first": "Tab!images",
+    "second": {
+      "first": {
+        "first": "CallService!startCollection",
+        "second": "CallService!stopCollection",
+        "direction": "column",
+        "splitPercentage": 53.09381237524949
+      },
+      "second": {
+        "first": "CallService!2eqhzsa",
+        "second": "RawMessages!3im8qvp",
+        "direction": "row",
+        "splitPercentage": 51.1038999330217
+      },
+      "direction": "column",
+      "splitPercentage": 57.92380764149796
+    },
+    "direction": "row",
+    "splitPercentage": 76.48136835675015
+  },
+  "configById": {
+    "Image!yolo": {
+      "cameraTopic": "/vision/debug_image",
+      "smooth": true,
+      "cameraState": {
+        "distance": 20,
+        "perspective": true,
+        "phi": 60,
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOffset": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "thetaOffset": 45,
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "scene": {},
+      "transforms": {},
+      "topics": {},
+      "layers": {},
+      "publish": {
+        "type": "point",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "imageMode": {
+        "imageTopic": "/vision/front_cam/detections/annotated/compressed",
+        "calibrationTopic": "/zed/zed_node/rgb/color/rect/image/camera_info"
+      }
+    },
+    "Image!depth": {
+      "cameraTopic": "/zed/depth/depth_registered",
+      "smooth": true,
+      "colorMode": "colormap",
+      "colorMap": "turbo",
+      "minValue": 0,
+      "maxValue": 10,
+      "cameraState": {
+        "distance": 20,
+        "perspective": true,
+        "phi": 60,
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOffset": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "thetaOffset": 45,
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "scene": {},
+      "transforms": {},
+      "topics": {},
+      "layers": {},
+      "publish": {
+        "type": "point",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "imageMode": {
+        "imageTopic": "/zed/zed_node/depth/depth_registered/compressed",
+        "calibrationTopic": "/zed/zed_node/depth/depth_registered/camera_info"
+      }
+    },
+    "Image!14sfi33": {
+      "cameraState": {
+        "distance": 20,
+        "perspective": true,
+        "phi": 60,
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOffset": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "thetaOffset": 45,
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "scene": {},
+      "transforms": {},
+      "topics": {},
+      "layers": {},
+      "publish": {
+        "type": "point",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "imageMode": {
+        "imageTopic": "/zed/zed_node/rgb/color/rect/image/compressed",
+        "calibrationTopic": "/zed/zed_node/rgb/color/rect/camera_info"
+      }
+    },
+    "Image!15cx18u": {
+      "cameraState": {
+        "distance": 20,
+        "perspective": true,
+        "phi": 60,
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOffset": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "thetaOffset": 60,
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "scene": {},
+      "transforms": {},
+      "topics": {},
+      "layers": {},
+      "publish": {
+        "type": "point",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "imageMode": {
+        "imageTopic": "/zed/zed_node/depth/depth_registered/compressed",
+        "calibrationTopic": "/zed/zed_node/depth/camera_info"
+      }
+    },
+    "Image!3y48a7n": {
+      "cameraState": {
+        "distance": 20,
+        "perspective": true,
+        "phi": 60,
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOffset": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "thetaOffset": 45,
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "scene": {
+        "enableStats": false
+      },
+      "transforms": {},
+      "topics": {
+        "/foxglove/scene_spheres": {
+          "visible": true
+        },
+        "/vision/vio_pose": {
+          "visible": false
+        }
+      },
+      "layers": {},
+      "publish": {
+        "type": "point",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "imageMode": {
+        "imageTopic": "/vision/front_cam/detections/annotated/compressed",
+        "calibrationTopic": "/zed/zed_node/rgb/color/rect/camera_info"
+      }
+    },
+    "3D!38qyra4": {
+      "cameraState": {
+        "distance": 8.802533372985108,
+        "perspective": true,
+        "phi": 66.57220821866714,
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOffset": [
+          -0.38438208625243386,
+          1.227393366237579,
+          1.625132970665659e-15
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "thetaOffset": 133.12570702553666,
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "followTf": "odom",
+      "scene": {
+        "syncCamera": false
+      },
+      "transforms": {
+        "frame:world": {
+          "visible": false
+        },
+        "frame:zed_right_camera_frame_optical": {
+          "visible": false
+        },
+        "frame:zed_right_camera_frame": {
+          "visible": false
+        },
+        "frame:zed_left_camera_frame_optical": {
+          "visible": false
+        },
+        "frame:zed_camera_link": {
+          "visible": false
+        },
+        "frame:zed_camera_center": {
+          "visible": true
+        },
+        "frame:zed_left_camera_frame": {
+          "visible": false
+        },
+        "frame:map": {
+          "visible": true
+        },
+        "frame:odom": {
+          "visible": true
+        },
+        "frame:pool": {
+          "visible": true
+        }
+      },
+      "topics": {
+        "/initialpose": {
+          "visible": false
+        },
+        "/move_base_simple/goal": {
+          "visible": false
+        },
+        "/zed/zed_node/depth/camera_info": {
+          "visible": false
+        },
+        "/zed/zed_node/depth/depth_registered": {
+          "visible": false,
+          "frameLocked": true,
+          "cameraInfoTopic": "/zed/zed_node/depth/camera_info",
+          "distance": 1,
+          "planarProjectionFactor": 0,
+          "renderMode": "default",
+          "projectionFrameId": "odom",
+          "color": "#ffffff",
+          "rectifyImage": true,
+          "pointSize": 1.5
+        },
+        "/zed/zed_node/point_cloud/cloud_registered": {
+          "visible": false,
+          "colorField": "rgb",
+          "colorMode": "rgb",
+          "colorMap": "turbo"
+        },
+        "/zed/zed_node/pose": {
+          "visible": false
+        },
+        "/zed/zed_node/rgb/color/rect/camera_info": {
+          "visible": false
+        },
+        "/zed/zed_node/rgb/color/rect/image": {
+          "visible": false,
+          "frameLocked": true,
+          "cameraInfoTopic": "/zed/zed_node/rgb/color/rect/camera_info",
+          "distance": 1,
+          "planarProjectionFactor": 0,
+          "renderMode": "default",
+          "projectionFrameId": "odom",
+          "color": "#ffffff",
+          "rectifyImage": true,
+          "pointSize": 1.5
+        },
+        "/vision/vio_pose": {
+          "visible": false,
+          "axisScale": 0.291,
+          "type": "axis",
+          "arrowScale": [
+            1.86,
+            5.207,
+            0.15
+          ]
+        },
+        "/zed/zed_node/rgb/color/rect/image/compressed": {
+          "visible": false
+        },
+        "/dvl/dead_reckoning": {
+          "visible": false
+        },
+        "/auv/ground_truth/pose": {
+          "visible": false
+        },
+        "/foxglove/scene_spheres": {
+          "visible": true,
+          "computeVertexNormals": true
+        },
+        "/down_cam/image_raw": {
+          "visible": false
+        },
+        "/foxglove/pose_setpoint": {
+          "visible": true
+        }
+      },
+      "layers": {
+        "grid": {
+          "visible": true,
+          "drawBehind": false,
+          "label": "Grid",
+          "instanceId": "4a4df6ae-47c6-465f-8ab5-68dc53c36c33",
+          "layerId": "foxglove.Grid",
+          "size": 50,
+          "divisions": 50,
+          "lineWidth": 2.7,
+          "color": "#248eff7a",
+          "position": [
+            0,
+            0,
+            -2.1
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      "publish": {
+        "type": "pose_estimate",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "imageMode": {}
+    },
+    "Tab!images": {
+      "activeTabIdx": 3,
+      "tabs": [
+        {
+          "title": "YOLO Debug",
+          "layout": "Image!yolo"
+        },
+        {
+          "title": "Depth Map",
+          "layout": "Image!depth"
+        },
+        {
+          "title": "Reference Cam",
+          "layout": "Image!14sfi33"
+        },
+        {
+          "title": "3D Scene w/ YOLO Debug",
+          "layout": {
+            "first": {
+              "first": "Image!15cx18u",
+              "second": "Image!3y48a7n",
+              "direction": "column"
+            },
+            "second": "3D!38qyra4",
+            "direction": "row",
+            "splitPercentage": 46.30838881637008
+          }
+        }
+      ]
+    },
+    "CallService!startCollection": {
+      "serviceName": "/image_collection/toggle_front_collection",
+      "requestPayload": "{ \"data\": true , \"time_interval\": 2}\n",
+      "buttonText": "Start Collection",
+      "layout": "vertical",
+      "timeoutSeconds": 10
+    },
+    "CallService!stopCollection": {
+      "serviceName": "/image_collection/toggle_front_collection",
+      "requestPayload": "{ \"data\": false , \"time_interval\": 1}",
+      "buttonText": "Stop Collection",
+      "layout": "vertical",
+      "timeoutSeconds": 10
+    },
+    "CallService!2eqhzsa": {
+      "requestPayload": "{}",
+      "layout": "vertical",
+      "timeoutSeconds": 10,
+      "buttonText": "Manual Image Capture",
+      "serviceName": "/image_collection/toggle_manual_front_collection"
+    },
+    "RawMessages!3im8qvp": {
+      "topicPath": "/power/batteries/voltage"
+    }
+  }
+}
