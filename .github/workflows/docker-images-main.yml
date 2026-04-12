@@ -59,12 +59,20 @@ jobs:
       packages: write
 
     steps:
+      - name: Collect Workflow Telemetry
+        uses: catchpoint/workflow-telemetry-action@v2
+        with:
+          job_summary: true
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-tags: true
           submodules: recursive
           lfs: true
+      
+      - name: Add Swapfile
+        uses: ./.github/actions/swapfile
 
       - name: Clean up Disk Space
         uses: ./.github/actions/cleanup_disk
@@ -137,9 +145,6 @@ jobs:
           build-args: |
             CI=true
       
-      - name: Add Swapfile
-        uses: ./.github/actions/swapfile
-
       - name: Verify Build
         run: |
           docker run --rm --user $(id -u):$(id -g) -v ${{ github.workspace }}:/home/douglas/AUV-2026 ${{ env.PRIMARY_TAG }} /bin/bash -c "./build.sh -d"
