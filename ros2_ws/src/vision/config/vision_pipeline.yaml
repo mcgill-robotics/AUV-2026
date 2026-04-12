@@ -19,9 +19,8 @@ object_detection:
     enhanced_topic: /vision/front_cam/image_enhanced # input topic if enhance_images is true, otherwise will subscribe to raw image topic
     detection_topic: /vision/front_cam/detections # output topic for detections
     depth_map_topic: /vision/depth_map
-    model_type: "rfdetr" # [yolo, rfdetr]
     confidence_threshold: 0.40
-    model_relative_path: models/robosub2025-synthetic-rfdetr_s.pth #models/robosub2025-synthetic-rfdetr_s.pth #models/frontcam.pt # relative to src/vision directory
+    model_relative_path: models/local_rfdetr_onnx_test # inference-models package directory
     class_names:
       - "gate"
       - "lane_marker"
@@ -39,10 +38,9 @@ object_detection:
   down_cam:
     enhanced_topic: /vision/down_cam/image_enhanced
     detection_topic: /vision/down_cam/detections
-    model_type: "yolo" # [yolo, rfdetr]
     confidence_threshold: 0.40
     # relative to src directory
-    model_relative_path: models/downcam.pt
+    model_relative_path: models/local_downcam_onnx # inference-models package directory (TODO: create this package)
     class_names:
       - "gate"
       - "lane_marker"

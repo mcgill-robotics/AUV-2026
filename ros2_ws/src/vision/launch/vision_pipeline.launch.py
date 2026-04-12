@@ -174,7 +174,7 @@ def generate_launch_description():
                 'class_names': default_config["object_detection"]["front_cam"]["class_names"],
                 'queue_size': default_config["object_detection"]["front_cam"]["queue_size"],
                 'publish_annotated_image': default_config["object_detection"]["front_cam"]["publish_annotated_image"],
-                'model_type': default_config["object_detection"]["front_cam"]["model_type"],
+
                 'confidence_threshold': default_config["object_detection"]["front_cam"]["confidence_threshold"],
                 'use_sim_time': LaunchConfiguration("sim"),
                 'compressed': LaunchConfiguration("compressed"),
@@ -200,7 +200,7 @@ def generate_launch_description():
                 'class_names': default_config["object_detection"]["down_cam"]["class_names"],
                 'queue_size': default_config["object_detection"]["down_cam"]["queue_size"],
                 'publish_annotated_image': default_config["object_detection"]["down_cam"]["publish_annotated_image"],
-                'model_type': default_config["object_detection"]["down_cam"]["model_type"],
+
                 'confidence_threshold': default_config["object_detection"]["down_cam"]["confidence_threshold"],
                 'use_sim_time': LaunchConfiguration("sim"),
                 'compressed': LaunchConfiguration("compressed"),
@@ -271,9 +271,9 @@ def generate_launch_description():
     # launch_description.add_action(zed_real_wrapper_launch)
     # launch_description.add_action(zed_sim_wrapper_launch)
     launch_description.add_action(front_cam_enhancement_node)
-    launch_description.add_action(down_cam_enhancement_node)
+    # launch_description.add_action(down_cam_enhancement_node)
     launch_description.add_action(front_detection_node)
-    launch_description.add_action(down_detection_node)
+    # launch_description.add_action(down_detection_node)
     launch_description.add_action(object_map_node)
     
     return launch_description

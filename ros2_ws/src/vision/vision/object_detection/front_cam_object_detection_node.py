@@ -9,11 +9,8 @@ import cv2
 import time
 from time import sleep
 import supervision as sv
-from rfdetr import RFDETRSmall
-import torch
 from cv_bridge import CvBridge
-from ultralytics import YOLO
-from vision.object_detection.utils import get_detections, build_detection2d_msg, publish_annotated_image_util
+from vision.object_detection.utils import load_model, get_detections, build_detection2d_msg, publish_annotated_image_util
 import numpy as np
 
 from sensor_msgs.msg import CompressedImage, Image
@@ -31,7 +28,7 @@ class FrontCamObjectDetectorNode():
         self.node.declare_parameter('queue_size', Parameter.Type.INTEGER)
         self.node.declare_parameter('publish_annotated_image', False)
         self.node.declare_parameter("compressed", Parameter.Type.BOOL)
-        self.node.declare_parameter("model_type", "yolo")
+
         self.node.declare_parameter("confidence_threshold", 0.40)
 
         # we consume stream_ip and sim properties for zed sdk configuration
@@ -61,7 +58,7 @@ class FrontCamObjectDetectorNode():
         queue_size = self.node.get_parameter('queue_size').get_parameter_value().integer_value
         self.publish_annotated_image = self.node.get_parameter('publish_annotated_image').get_parameter_value().bool_value
         self.compressed = self.node.get_parameter('compressed').get_parameter_value().bool_value
-        self.model_type = self.node.get_parameter('model_type').get_parameter_value().string_value
+
         self.conf_threshold = self.node.get_parameter('confidence_threshold').get_parameter_value().double_value
         sim = self.node.get_parameter('sim').get_parameter_value().bool_value
         stream_port = self.node.get_parameter('stream_port').get_parameter_value().integer_value
@@ -147,31 +144,8 @@ class FrontCamObjectDetectorNode():
                 self.zed.close()
                 exit(1)
 
-        # Avoiding CPU Oversubscription
-        torch.set_num_threads(1)
-        torch.set_num_interop_threads(1)
-        
-        # Load Model based on model_type
-        if self.model_type == 'rfdetr':
-            self.node.get_logger().info(f"Loading fine-tuned RF-DETRSmall from: {model_path} on GPU...")
-            
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-            self.model = RFDETRSmall(pretrain_weights=model_path, device=device)
-                
-            try:
-                self.model.optimize_for_inference()
-                self.node.get_logger().info("RF-DETRSmall optimized for inference (TensorRT/Torch Compile)")
-            except Exception as e:
-                self.node.get_logger().warn(f"Failed to optimize inference: {e}")
-        else:
-            self.model = YOLO(model_path)
-            self.node.get_logger().info(f"Loaded YOLO model from: {model_path}")
-            if torch.cuda.is_available():
-                self.device = 0
-                self.node.get_logger().info("Using CUDA")
-            else:
-                self.device = "cpu"
-                self.node.get_logger().warn("Using CPU")
+        # Load Model using inference-models with TensorRT acceleration
+        self.model = load_model(model_path, self.node.get_logger())
         
         self.node.get_logger().info(f"Setting QOL queue size to: {queue_size}")
         

@@ -1,25 +1,45 @@
 import cv2
 import supervision as sv
+from inference_models import AutoModel
 from vision_msgs.msg import Detection2DArray, Detection2D, ObjectHypothesisWithPose
 
+
+def load_model(model_path: str, logger):
+    """Load an inference-models AutoModel with TensorRT/CUDA acceleration."""
+    logger.info(f"Loading model package from: {model_path} with TensorRT...")
+    try:
+        model = AutoModel.from_pretrained(
+            model_path,
+            onnx_execution_providers=["TensorrtExecutionProvider", "CUDAExecutionProvider"],
+            default_onnx_trt_options=False
+        )
+        logger.info("Model successfully loaded and optimized for inference (TensorRT/CUDA).")
+        return model
+    except Exception as e:
+        logger.error(f"Failed to load model: {e}")
+        logger.fatal("Exiting due to model load failure.")
+        raise
+
+
 def get_detections(detector_node, img):
-    if detector_node.model_type == 'rfdetr':
-        try:
-            tracked_detections = detector_node.model.predict(img, threshold=detector_node.conf_threshold)
-            return tracked_detections
-        except Exception as e:
-            detector_node.node.get_logger().error(f"RF-DETR predict failed: {e}")
+    try:
+        # Run inference using the unified inference-models API
+        predictions = detector_node.model(img, confidence=detector_node.conf_threshold)
+
+        if not predictions:
             return None
-    else:
-        try:
-            results_list = detector_node.model.predict(img, iou=0.1, agnostic_nms=False, device=detector_node.device, verbose=False)  
-            if not results_list:
-                return None
-            tracked_detections = sv.Detections.from_ultralytics(results_list[0])
-            return tracked_detections
-        except Exception as e:
-            detector_node.node.get_logger().error(f"YOLO failed: {e}")
+
+        # Extract the first batch element and convert to supervision format
+        tracked_detections = predictions[0].to_supervision()
+
+        # Return None if no objects passed the confidence threshold
+        if len(tracked_detections) == 0:
             return None
+
+        return tracked_detections
+    except Exception as e:
+        detector_node.node.get_logger().error(f"Inference failed: {e}")
+        return None
 
 def publish_annotated_image_util(detector_node, img, tracked_detections):
     if not detector_node.publish_annotated_image or tracked_detections is None:
