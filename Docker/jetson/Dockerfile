@@ -313,7 +313,8 @@ RUN git clone https://github.com/ultralytics/ultralytics.git && \
 # Install dependencies for vision
 RUN pip install --no-cache-dir --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} "numpy<2.0.0" "setuptools<70" \
     roboflow albumentations pandas \
-    rfdetr supervision pytorch_lightning pycocotools faster-coco-eval && \
+    rfdetr supervision pytorch_lightning pycocotools faster-coco-eval onnx onnxruntime-gpu \
+    inference-models "inference-models[torch-jp6-cu126,onnx-jp6-cu126]" && \
     pip install --no-cache-dir --ignore-install --upgrade typing_extensions
 
 # Install ZED Python API from source

@@ -11,4 +11,6 @@ supervision
 pytorch_lightning
 pycocotools
 faster-coco-eval
-onnx
+onnx 
+onnxruntime
+inference-models
