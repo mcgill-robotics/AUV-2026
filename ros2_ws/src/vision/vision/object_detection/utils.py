@@ -1,22 +1,31 @@
+import os
 import cv2
+import numpy as np
 import supervision as sv
 from inference_models import AutoModel
 from vision_msgs.msg import Detection2DArray, Detection2D, ObjectHypothesisWithPose
 
+# Enable CUDA Graphs globally for TRT backends to eliminate CPU overhead
+os.environ["ENABLE_AUTO_CUDA_GRAPHS_FOR_TRT_BACKEND"] = "True"
+
 
 def load_model(model_path: str, logger):
-    """Load an inference-models AutoModel with TensorRT/CUDA acceleration."""
-    logger.info(f"Loading model package from: {model_path} with TensorRT...")
+    """Load an inference-models AutoModel with Native TensorRT and CUDA Graphs."""
+    logger.info(f"Loading native TensorRT package from: {model_path}...")
     try:
-        model = AutoModel.from_pretrained(
-            model_path,
-            onnx_execution_providers=["TensorrtExecutionProvider", "CUDAExecutionProvider"],
-            default_onnx_trt_options=False
-        )
-        logger.info("Model successfully loaded and optimized for inference (TensorRT/CUDA).")
+        # Since the model_config.json says "backend_type": "trt",
+        # AutoModel will automatically route to PyCUDA and TensorRT natively.
+        model = AutoModel.from_pretrained(model_path)
+
+        # Run a quick warmup inference to capture the CUDA Graph before the robot starts moving
+        logger.info("Warming up TensorRT engine and capturing CUDA Graph...")
+        warmup_image = np.zeros((640, 640, 3), dtype=np.uint8)
+        model(warmup_image)
+
+        logger.info("Model successfully loaded and optimized for ultra-low latency.")
         return model
     except Exception as e:
-        logger.error(f"Failed to load model: {e}")
+        logger.error(f"Failed to load TensorRT model: {e}")
         logger.fatal("Exiting due to model load failure.")
         raise
 
