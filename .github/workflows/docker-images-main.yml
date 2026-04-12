@@ -57,6 +57,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      actions: read
+      pull-requests: write
 
     steps:
       - name: Collect Workflow Telemetry
