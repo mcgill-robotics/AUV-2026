@@ -202,7 +202,8 @@ fi
 if [ "$DEBUG_BUILD" = true ]; then
     (
     # wrap in parens to limit scope of env var change to just the colcon build command
-    export CMAKE_BUILD_PARALLEL_LEVEL=1
+    export CMAKE_BUILD_PARALLEL_LEVEL=1 # Ignored by colcon, kept for raw cmake fallback
+    export MAKEFLAGS="-j1"              # Limits colcon's internal make threads to 1
     echo "    -> Performing Debug Build of packages: ${PKGS[*]}"
     # Output to console, interleaving build output for better visibility
     # Generate compile commands for use with linters e.g. VSCode
