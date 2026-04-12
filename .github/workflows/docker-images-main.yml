@@ -62,9 +62,11 @@ jobs:
 
     steps:
       - name: Collect Workflow Telemetry
-        uses: catchpoint/workflow-telemetry-action@v2
+        uses: ycfreeman/workflow-telemetry-action@v3.0.2
         with:
           job_summary: true
+          comment_on_pr: false
+          theme: light
 
       - name: Checkout
         uses: actions/checkout@v4
