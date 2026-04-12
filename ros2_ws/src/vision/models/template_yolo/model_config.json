@@ -1,0 +1,5 @@
+{
+    "model_architecture": "yolov11",
+    "task_type": "object-detection",
+    "backend_type": "onnx"
+}

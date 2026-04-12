@@ -8,9 +8,18 @@ def load_model(model_path: str, logger):
     """Load an inference-models AutoModel with TensorRT/CUDA acceleration."""
     logger.info(f"Loading model package from: {model_path} with TensorRT...")
     try:
+        # Manually configure the TensorRT Execution Provider for FP32 and Caching
+        trt_ep = (
+            "TensorrtExecutionProvider", {
+                "trt_engine_cache_enable": True,
+                "trt_engine_cache_path": model_path,
+                "trt_fp16_enable": False  # Force FP32
+            }
+        )
+
         model = AutoModel.from_pretrained(
             model_path,
-            onnx_execution_providers=["TensorrtExecutionProvider", "CUDAExecutionProvider"],
+            onnx_execution_providers=[trt_ep, "CUDAExecutionProvider"],
             default_onnx_trt_options=False
         )
         logger.info("Model successfully loaded and optimized for inference (TensorRT/CUDA).")
