@@ -214,6 +214,7 @@ if [ "$DEBUG_BUILD" = true ]; then
         --parallel-workers 1 \
         --cmake-args \
             -DCMAKE_BUILD_TYPE=RelWithDebInfo  \
+            -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-O2 -g1 -DNDEBUG -fno-var-tracking-assignments" \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
             -DIS_JETSON_CI=$IS_JETSON_CI \
             -DCMAKE_JOB_POOLS="compile=1;link=1" \
