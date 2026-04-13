@@ -216,6 +216,9 @@ if [ "$DEBUG_BUILD" = true ]; then
             -DCMAKE_BUILD_TYPE=RelWithDebInfo  \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
             -DIS_JETSON_CI=$IS_JETSON_CI \
+            -DCMAKE_JOB_POOLS="compile=1;link=1" \
+            -DCMAKE_JOB_POOL_COMPILE=compile \
+            -DCMAKE_JOB_POOL_LINK=link \
             $OFFLINE_CMAKE_ARGS \
         $([ -n "$PACKAGE_TO_BUILD" ] && echo "--packages-up-to $PACKAGE_TO_BUILD")
     )
