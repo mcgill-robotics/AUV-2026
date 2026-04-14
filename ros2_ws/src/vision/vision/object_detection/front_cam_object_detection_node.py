@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import pyzed.sl as sl
+import rclpy
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rclpy.qos import qos_profile_sensor_data
@@ -7,7 +8,10 @@ from rclpy.qos import qos_profile_sensor_data
 import os
 import cv2
 import time
+import threading
 from time import sleep
+from datetime import datetime
+from pathlib import Path
 import supervision as sv
 from cv_bridge import CvBridge
 from vision.object_detection.utils import load_model, get_detections, build_detection2d_msg, publish_annotated_image_util
@@ -15,6 +19,7 @@ import numpy as np
 
 from sensor_msgs.msg import CompressedImage, Image
 from std_msgs.msg import Float64
+from std_srvs.srv import SetBool
 from geometry_msgs.msg import PoseStamped
 from vision_msgs.msg import Detection3DArray, Detection3D, ObjectHypothesisWithPose
 
@@ -39,8 +44,13 @@ class FrontCamObjectDetectorNode():
         self.node.declare_parameter('enable_gate_top_crop', True)
         self.node.declare_parameter('gate_top_crop_ratio', 0.50)
 
+        # Image collection parameters
+        self.node.declare_parameter('collection_dir', '/tmp/front_cam_collection')
+        self.node.declare_parameter('collection_interval_seconds', 2.0)
+
         # Depth sensor state (pressure sensor overrides VIO Z)
-        self.sensor_depth = 0.0
+        self._depth_lock = threading.Lock()
+        self._sensor_depth = 0.0
         self.depth_sub = self.node.create_subscription(
             Float64,
             '/sensors/depth/z',
@@ -48,7 +58,14 @@ class FrontCamObjectDetectorNode():
             qos_profile_sensor_data
         )
 
-        self.timer = self.node.create_timer(1.0/30.0, self.run_object_detection)
+        # Image collection state
+        self._collecting = False
+        self._last_collection_time = 0.0
+        self.collection_dir = self.node.get_parameter('collection_dir').get_parameter_value().string_value
+        self.collection_interval = self.node.get_parameter('collection_interval_seconds').get_parameter_value().double_value
+
+        # Service to toggle image collection on/off
+        self.node.create_service(SetBool, '/vision/front_cam/toggle_collection', self._toggle_collection_callback)
  
         self.class_names = list(self.node.get_parameter('class_names').get_parameter_value().string_array_value)
         self.node.get_logger().info(f"Class names: {self.class_names}")
@@ -80,14 +97,18 @@ class FrontCamObjectDetectorNode():
         
         self.zed = sl.Camera()
         init_params = sl.InitParameters()
+        init_params.sdk_verbose = 1
         init_params.camera_resolution = sl.RESOLUTION.SVGA if sim else sl.RESOLUTION.VGA
-        init_params.camera_fps = 30
+        init_params.camera_fps = 60
+        init_params.grab_compute_capping_fps = 30
         init_params.coordinate_units = sl.UNIT.METER
         init_params.coordinate_system = sl.COORDINATE_SYSTEM.RIGHT_HANDED_Z_UP_X_FWD
         init_params.depth_mode = sl.DEPTH_MODE.NEURAL
+        init_params.depth_maximum_distance = 15.0
+        init_params.depth_minimum_distance = 0.3
         init_params.enable_image_validity_check = True
         init_params.input = sl.InputType()
-
+        self.zed.enable_positional_tracking
         if sim:
             stream_ip = self.node.get_parameter('stream_ip').get_parameter_value().string_value
             init_params.set_from_stream(stream_ip, stream_port)
@@ -108,8 +129,11 @@ class FrontCamObjectDetectorNode():
 
         # Enable Positional Tracking
         pos_param = sl.PositionalTrackingParameters()
+        pos_param.mode = sl.POSITIONAL_TRACKING_MODE.GEN_1
         pos_param.enable_imu_fusion = True
         pos_param.set_floor_as_origin = False
+        pos_param.enable_area_memory = False
+        pos_param.depth_min_range = 0.3
         err = self.zed.enable_positional_tracking(pos_param)
         if err != sl.ERROR_CODE.SUCCESS:
             self.node.get_logger().error(f"Failed to enable positional tracking: {err}")
@@ -183,96 +207,76 @@ class FrontCamObjectDetectorNode():
         
         self.node.get_logger().info(f"{self.node.get_name()} initialized.")
 
+        # Start the grab loop on a dedicated daemon thread
+        self._grab_thread = threading.Thread(target=self._grab_loop, daemon=True)
+        self._grab_thread.start()
+
     def _depth_callback(self, msg):
-        self.sensor_depth = msg.data
+        with self._depth_lock:
+            self._sensor_depth = msg.data
 
-    def run_object_detection(self):
-        result = self.zed.grab(self.runtime_params)
-        if result == sl.ERROR_CODE.CORRUPTED_FRAME:
-            self.node.get_logger().warn("Corrupted frame detected - skipping")
-            return
-        if result != sl.ERROR_CODE.SUCCESS:
-            self.node.get_logger().warn(f"Zed.grab() failed: {result}, continuing")
-            return
-        
-        # --- ZED Health Checks (ported from zed_detection.cpp) ---
-        health = self.zed.get_health_status()
-        if health.low_image_quality:
-            self.node.get_logger().warn("Low image quality", throttle_duration_sec=5.0)
-            return
-        if health.low_lighting:
-            self.node.get_logger().warn("Low lighting conditions", throttle_duration_sec=5.0)
-            return
+    def _toggle_collection_callback(self, request, response):
+        self._collecting = request.data
+        if self._collecting:
+            Path(self.collection_dir).mkdir(parents=True, exist_ok=True)
+            self.node.get_logger().info(f"Image collection ENABLED → {self.collection_dir}")
+        else:
+            self.node.get_logger().info("Image collection DISABLED")
+        response.success = True
+        response.message = f"Collection {'enabled' if self._collecting else 'disabled'}"
+        return response
 
-        t_start = time.perf_counter()
-        
-        self.zed.retrieve_image(self.image_buffer, sl.VIEW.LEFT)
+    def _grab_loop(self):
+        """Tight grab loop — runs on its own thread. grab() blocks at camera fps."""
+        while rclpy.ok():
+            t_start = time.perf_counter()
 
-        # fully handle depth map first (better caching)
-        if False:
-            self.zed.retrieve_measure(self.depth_buffer, sl.MEASURE.DEPTH)
-            depth = cv2.cvtColor(self.depth_buffer.get_data(), cv2.COLOR_RGBA2RGB)
-            depth_map = self.bridge.cv2_to_compressed_imgmsg(depth)
-            self.pub_depth_map.publish(depth_map)
+            result = self.zed.grab(self.runtime_params)
+            if result == sl.ERROR_CODE.CORRUPTED_FRAME:
+                self.node.get_logger().warn("Corrupted frame", throttle_duration_sec=5.0)
+                continue
+            if result != sl.ERROR_CODE.SUCCESS:
+                self.node.get_logger().warn(f"Zed.grab() failed: {result}", throttle_duration_sec=5.0)
+                continue
 
-        img = cv2.cvtColor(self.image_buffer.get_data(), cv2.COLOR_RGBA2RGB)
+            # --- ZED Health Checks ---
+            health = self.zed.get_health_status()
+            if health.low_image_quality:
+                self.node.get_logger().warn("Low image quality", throttle_duration_sec=5.0)
+                continue
+            if health.low_lighting:
+                self.node.get_logger().warn("Low lighting conditions", throttle_duration_sec=5.0)
+                continue
 
-        tracked_detections = get_detections(self, img)
-        if tracked_detections is not None:
-            # 1. Ingest into ZED SDK
-            custom_boxes = []
-            for i in range(len(tracked_detections)):
-                x1, y1, x2, y2 = tracked_detections.xyxy[i]
-                cls_id = int(tracked_detections.class_id[i])
-                if cls_id >= len(self.class_names): continue
+            self.zed.retrieve_image(self.image_buffer, sl.VIEW.LEFT)
+            img = cv2.cvtColor(self.image_buffer.get_data(), cv2.COLOR_RGBA2RGB)
 
-                box = sl.CustomBoxObjectData()
-                box.probability = float(tracked_detections.confidence[i])
-                box.label = cls_id
-                box.is_grounded = False
+            # --- Image Collection: save clean image BEFORE annotation ---
+            if self._collecting:
+                now = time.time()
+                if now - self._last_collection_time >= self.collection_interval:
+                    self._last_collection_time = now
+                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+                    filepath = os.path.join(self.collection_dir, f'front_{timestamp}.jpg')
+                    cv2.imwrite(filepath, img)
+                    self.node.get_logger().debug(f"Saved {filepath}")
 
-                # --- Gate top crop: only feed the top portion of gate bounding boxes ---
-                # The gate's legs extend into noisy stereo territory causing bad depth
-                label = self.class_names[cls_id]
-                if self.enable_gate_top_crop and label == "gate":
-                    h = y2 - y1
-                    y2 = y1 + h * self.gate_top_crop_ratio
-
-                # PyZED requires strictly unsigned int arrays, so we must clamp YOLO outputs
-                # which occasionally overshoot into negative or beyond-frame pixel space boundaries
-                img_h, img_w = img.shape[:2]
-                x1_c = min(img_w - 1, max(0, int(x1)))
-                y1_c = min(img_h - 1, max(0, int(y1)))
-                x2_c = min(img_w - 1, max(0, int(x2)))
-                y2_c = min(img_h - 1, max(0, int(y2)))
-
-                # Format ZED requires: top-left, top-right, bottom-right, bottom-left
-                box.bounding_box_2d = np.array([
-                    [x1_c, y1_c], [x2_c, y1_c], [x2_c, y2_c], [x1_c, y2_c]
-                ], dtype=np.uint32)
-                custom_boxes.append(box)
-
-            self.zed.ingest_custom_box_objects(custom_boxes)
-
-            # 2. Retrieve 3D objects
-            objects = sl.Objects()
-            self.zed.retrieve_objects(objects, self.obj_runtime_param)
-
-            # Get camera pose rotation matrix for covariance rotation
+            # --- VIO / Positional Tracking ---
             cam_pose = sl.Pose()
             tracking_state = self.zed.get_position(cam_pose, sl.REFERENCE_FRAME.WORLD)
             if tracking_state != sl.POSITIONAL_TRACKING_STATE.OK:
                 self.node.get_logger().warn(f"VIO tracking not OK: {tracking_state}", throttle_duration_sec=1.0)
 
-            # Extract 3x3 rotation matrix from camera pose
             rotation = cam_pose.get_rotation_matrix()
             R = np.array(rotation.r).reshape(3, 3)
             cam_translation = cam_pose.get_translation().get()
-            # Override VIO Z with pressure sensor depth (more accurate than VIO vertical drift)
-            cam_translation = np.array([float(cam_translation[0]), float(cam_translation[1]), -self.sensor_depth])
+            # Override VIO Z with pressure sensor depth
+            with self._depth_lock:
+                sensor_z = self._sensor_depth
+            cam_translation = np.array([float(cam_translation[0]), float(cam_translation[1]), -sensor_z])
             cam_orientation = cam_pose.get_orientation().get()
 
-            # Publish VIO pose
+            # Publish VIO pose continuously, even without active detections
             pose_msg = PoseStamped()
             pose_msg.header.stamp = self.node.get_clock().now().to_msg()
             pose_msg.header.frame_id = "odom"
@@ -285,69 +289,102 @@ class FrontCamObjectDetectorNode():
             pose_msg.pose.orientation.z = float(cam_orientation[3])
             self.pub_vio_pose.publish(pose_msg)
 
-            # 3. Build Detection3DArray
+            tracked_detections = get_detections(self, img)
+
             det_msg = Detection3DArray()
             det_msg.header.stamp = self.node.get_clock().now().to_msg()
             det_msg.header.frame_id = "zed_camera_center"
-            
             det_objects = []
-            for obj in objects.object_list:
-                pos_cam = obj.position  # position in CAMERA frame
-                if np.isnan(pos_cam).any() or np.isinf(pos_cam).any():
-                    continue
-                
-                # Skip objects behind camera (negative X in camera-local frame)
-                if pos_cam[0] < 0:
-                    continue
 
-                # Transform to world frame: world_pos = R * cam_pos + t
-                # (ported from zed_detection.cpp::transform_to_world)
-                cam_pos_vec = np.array([float(pos_cam[0]), float(pos_cam[1]), float(pos_cam[2])])
-                world_pos = R @ cam_pos_vec + cam_translation
+            if tracked_detections is not None:
+                # 1. Ingest into ZED SDK
+                custom_boxes = []
+                for i in range(len(tracked_detections)):
+                    x1, y1, x2, y2 = tracked_detections.xyxy[i]
+                    cls_id = int(tracked_detections.class_id[i])
+                    if cls_id >= len(self.class_names): continue
 
-                detection = Detection3D()
-                detection.bbox.center.position.x = float(world_pos[0])
-                detection.bbox.center.position.y = float(world_pos[1])
-                detection.bbox.center.position.z = float(world_pos[2])
-                
-                # Covariance: ZED returns 6-element upper-triangular in CAMERA frame
-                # We must rotate it to WORLD frame using R * cov_cam * R^T
-                # (ported from zed_detection.cpp::get_world_covariance)
-                cov = obj.position_covariance
-                cov_cam = np.array([
-                    [float(cov[0]), float(cov[1]), float(cov[2])],
-                    [float(cov[1]), float(cov[3]), float(cov[4])],
-                    [float(cov[2]), float(cov[4]), float(cov[5])]
-                ])
-                cov_world = R @ cov_cam @ R.T
+                    box = sl.CustomBoxObjectData()
+                    box.probability = float(tracked_detections.confidence[i])
+                    box.label = cls_id
+                    box.is_grounded = False
 
-                hypothesis = ObjectHypothesisWithPose()
-                hypothesis.hypothesis.class_id = self.class_names[obj.raw_label]
-                hypothesis.hypothesis.score = float(obj.confidence) / 100.0  # ZED returns 0-100
-                
-                # ROS geometry_msgs/PoseWithCovariance expects a 36-element float64 array (6x6)
-                # We map the 3x3 world-frame spatial covariance into the top-left of the 6x6 matrix
-                ros_cov = [0.0] * 36
-                for r in range(3):
-                    for c in range(3):
-                        ros_cov[r * 6 + c] = float(cov_world[r, c])
-                
-                hypothesis.pose.pose.position.x = float(world_pos[0])
-                hypothesis.pose.pose.position.y = float(world_pos[1])
-                hypothesis.pose.pose.position.z = float(world_pos[2])
-                hypothesis.pose.covariance = ros_cov
+                    # --- Gate top crop: only feed the top portion of gate bounding boxes ---
+                    # The gate's legs extend into noisy stereo territory causing bad depth
+                    label = self.class_names[cls_id]
+                    if self.enable_gate_top_crop and label == "gate":
+                        h = y2 - y1
+                        y2 = y1 + h * self.gate_top_crop_ratio
 
-                # Pack camera translation into the Detection3D bbox size fields
-                # so object_map can compute distance-from-AUV for pipe filtering
-                detection.bbox.size.x = float(cam_translation[0])
-                detection.bbox.size.y = float(cam_translation[1])
-                detection.bbox.size.z = float(cam_translation[2])
+                    # Clamp to image bounds (PyZED requires unsigned int arrays)
+                    img_h, img_w = img.shape[:2]
+                    x1_c = min(img_w - 1, max(0, int(x1)))
+                    y1_c = min(img_h - 1, max(0, int(y1)))
+                    x2_c = min(img_w - 1, max(0, int(x2)))
+                    y2_c = min(img_h - 1, max(0, int(y2)))
 
-                detection.results = [hypothesis]
-                det_objects.append(detection)
-                
+                    # Format ZED requires: top-left, top-right, bottom-right, bottom-left
+                    box.bounding_box_2d = np.array([
+                        [x1_c, y1_c], [x2_c, y1_c], [x2_c, y2_c], [x1_c, y2_c]
+                    ], dtype=np.uint32)
+                    custom_boxes.append(box)
+
+                self.zed.ingest_custom_box_objects(custom_boxes)
+
+                # 2. Retrieve 3D objects
+                objects = sl.Objects()
+                self.zed.retrieve_objects(objects, self.obj_runtime_param)
+
+                # 3. Build Detection3DArray
+                for obj in objects.object_list:
+                    pos_cam = obj.position
+                    if np.isnan(pos_cam).any() or np.isinf(pos_cam).any():
+                        continue
+                    if pos_cam[0] < 0:
+                        continue
+
+                    cam_pos_vec = np.array([float(pos_cam[0]), float(pos_cam[1]), float(pos_cam[2])])
+                    world_pos = R @ cam_pos_vec + cam_translation
+
+                    detection = Detection3D()
+                    detection.bbox.center.position.x = float(world_pos[0])
+                    detection.bbox.center.position.y = float(world_pos[1])
+                    detection.bbox.center.position.z = float(world_pos[2])
+
+                    cov = obj.position_covariance
+                    cov_cam = np.array([
+                        [float(cov[0]), float(cov[1]), float(cov[2])],
+                        [float(cov[1]), float(cov[3]), float(cov[4])],
+                        [float(cov[2]), float(cov[4]), float(cov[5])]
+                    ])
+                    cov_world = R @ cov_cam @ R.T
+
+                    hypothesis = ObjectHypothesisWithPose()
+                    hypothesis.hypothesis.class_id = self.class_names[obj.raw_label]
+                    hypothesis.hypothesis.score = float(obj.confidence) / 100.0
+
+                    ros_cov = [0.0] * 36
+                    for r in range(3):
+                        for c in range(3):
+                            ros_cov[r * 6 + c] = float(cov_world[r, c])
+
+                    hypothesis.pose.pose.position.x = float(world_pos[0])
+                    hypothesis.pose.pose.position.y = float(world_pos[1])
+                    hypothesis.pose.pose.position.z = float(world_pos[2])
+                    hypothesis.pose.covariance = ros_cov
+
+                    detection.bbox.size.x = float(cam_translation[0])
+                    detection.bbox.size.y = float(cam_translation[1])
+                    detection.bbox.size.z = float(cam_translation[2])
+
+                    detection.results = [hypothesis]
+                    det_objects.append(detection)
+
             det_msg.detections = det_objects
             self.pub_detections.publish(det_msg)
+
+
+            # Always publish the (possibly annotated) image, even with no detections
             publish_annotated_image_util(self, img, tracked_detections)
             
             t_end = time.perf_counter()

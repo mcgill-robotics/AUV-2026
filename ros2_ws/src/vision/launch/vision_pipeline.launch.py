@@ -182,6 +182,8 @@ def generate_launch_description():
                 "sim": LaunchConfiguration("sim"),
                 "stream_ip": default_config["general"]["wrapper_stream_ip"],
                 "stream_port": default_config["general"]["wrapper_stream_port"],
+                "collection_dir": default_config["object_detection"]["front_cam"]["collection_dir"],
+                "collection_interval_seconds": default_config["object_detection"]["front_cam"]["collection_interval_seconds"],
             }
         ],
         ros_arguments=["--ros-args", "--log-level", "front_cam_object_detection:=" + default_config["object_detection"]["front_cam"]["log_level"]]

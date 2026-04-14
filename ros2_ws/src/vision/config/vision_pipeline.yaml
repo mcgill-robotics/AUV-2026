@@ -34,6 +34,8 @@ object_detection:
       - "sawfish"
     queue_size: 10
     publish_annotated_image: true # whether to publish an annotated image with bounding boxes drawn (for visualization/debugging). will publish to detection_topic + /annotated
+    collection_dir: /tmp/front_cam_collection # directory for direct-to-disk image saving (toggled via service)
+    collection_interval_seconds: 2.0 # seconds between saved frames when collection is active
     log_level: debug
   down_cam:
     enhanced_topic: /vision/down_cam/image_enhanced

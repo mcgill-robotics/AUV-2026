@@ -1,32 +1,52 @@
+import os
 import cv2
+import numpy as np
 import supervision as sv
-from inference_models import AutoModel
+from inference_models import AutoModel, BackendType
 from vision_msgs.msg import Detection2DArray, Detection2D, ObjectHypothesisWithPose
+
+# Enable CUDA Graphs globally (Native TRT only, ignored by ONNX)
+os.environ["ENABLE_AUTO_CUDA_GRAPHS_FOR_TRT_BACKEND"] = "True"
 
 
 def load_model(model_path: str, logger):
-    """Load an inference-models AutoModel with TensorRT/CUDA acceleration."""
-    logger.info(f"Loading model package from: {model_path} with TensorRT...")
-    try:
-        # Manually configure the TensorRT Execution Provider for FP32 and Caching
-        trt_ep = (
-            "TensorrtExecutionProvider", {
-                "trt_engine_cache_enable": True,
-                "trt_engine_cache_path": model_path,
-                "trt_fp16_enable": False  # Force FP32
-            }
-        )
+    """
+    Unified loader for local model packages.
+    Automatically applies TensorRT optimizations for ONNX and 
+    CUDA Graphs for Native TRT based on model_config.json.
+    """
+    logger.info(f"Initializing model package from: {model_path}")
 
+    # 1. Define our high-performance ONNX settings
+    # These are ignored if the model_config.json specifies backend_type: "trt"
+    trt_ep = ("TensorrtExecutionProvider", {
+        "trt_engine_cache_enable": True,
+        "trt_engine_cache_path": model_path,
+        "trt_fp16_enable": True 
+    })
+
+    try:
+        # 2. Pass everything to the AutoModel loader
+        # It will use what it needs and discard the rest.
         model = AutoModel.from_pretrained(
             model_path,
             onnx_execution_providers=[trt_ep, "CUDAExecutionProvider"],
             default_onnx_trt_options=False
         )
-        logger.info("Model successfully loaded and optimized for inference (TensorRT/CUDA).")
+        
+        # 3. Dynamic Warmup Check: 
+        # Only Native TRT models benefit from a warmup to capture the CUDA Graph.
+        # Check the internal backend type of the loaded model.
+        if hasattr(model, 'backend') and model.backend == BackendType.TRT:
+            logger.info("Native TRT detected: Warming up and capturing CUDA Graph...")
+            warmup_image = np.zeros((640, 640, 3), dtype=np.uint8)
+            model(warmup_image)
+            
+        logger.info("Model load complete.")
         return model
+        
     except Exception as e:
-        logger.error(f"Failed to load model: {e}")
-        logger.fatal("Exiting due to model load failure.")
+        logger.error(f"Failed to load model package: {e}")
         raise
 
 
@@ -51,19 +71,21 @@ def get_detections(detector_node, img):
         return None
 
 def publish_annotated_image_util(detector_node, img, tracked_detections):
-    if not detector_node.publish_annotated_image or tracked_detections is None:
+    if not detector_node.publish_annotated_image:
         return
 
     annotated = img.copy()
 
-    labels = [f"{detector_node.class_names[int(tracked_detections.class_id[i])]} {tracked_detections.confidence[i]:.2f}"
-                for i in range(len(tracked_detections)) if int(tracked_detections.class_id[i]) < len(detector_node.class_names)]
+    # Draw annotations only if there are detections
+    if tracked_detections is not None and len(tracked_detections) > 0:
+        labels = [f"{detector_node.class_names[int(tracked_detections.class_id[i])]} {tracked_detections.confidence[i]:.2f}"
+                    for i in range(len(tracked_detections)) if int(tracked_detections.class_id[i]) < len(detector_node.class_names)]
 
-    box_annotator = sv.BoxAnnotator(thickness=2)
-    label_annotator = sv.LabelAnnotator(text_thickness=2, text_scale=0.8)
+        box_annotator = sv.BoxAnnotator(thickness=2)
+        label_annotator = sv.LabelAnnotator(text_thickness=2, text_scale=0.8)
 
-    annotated = box_annotator.annotate(scene=annotated, detections=tracked_detections)
-    annotated = label_annotator.annotate(scene=annotated, detections=tracked_detections, labels=labels)
+        annotated = box_annotator.annotate(scene=annotated, detections=tracked_detections)
+        annotated = label_annotator.annotate(scene=annotated, detections=tracked_detections, labels=labels)
 
     try:
         if detector_node.compressed:
