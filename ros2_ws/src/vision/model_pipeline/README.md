@@ -106,6 +106,18 @@ The default parameters for the training script are set to values that we found t
 |  | `--val` | Proportion of the entire dataset to use for validation (between 0 and 1) | `0.2` |
 | `-f` | `--format` | Output format: `yolo` or `coco` (for RF-DETR) | `yolo` |
 
+- The augmentation process (handled by `augment_dataset.py`, only used for synthetic training)
+
+| Flag | Long-form | Description | Default Value |
+| --- | --- | --- | --- |
+| `-i` | `--input` | Directory containing the organized dataset (train/val/test splits and data.yaml) | `data/processed` |
+| `-o` | `--output` | Directory to save the augmented dataset (augmented train + original val/test) | `data/processed_aug` |
+| `-m` | `--multiplier` | How many augmented copies to create for each original training image (integer >= 1) | `1` |
+|  | `--workers` | Number of parallel workers to use for augmentation | `8` |
+|  | `--visualize` | Whether to save example augmented images for visualization (in `visualizations/`) | `False` |
+|  | `--num_vis` | Number of augmented images to save for visualization (if `--visualize` is True) | `10` |
+| `-f` | `--format` | Input/output format: `yolo` or `coco` (for RF-DETR) | `yolo` |
+
 - The fine-tuning process (handled by `training.py`)
 
 | Flag | Long-form | Description | Default Value |
