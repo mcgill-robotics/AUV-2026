@@ -1,3 +1,5 @@
+#! /bin/bash
+
 # Antoines super cool old udev code that works and is amazing and lovely and we all love this code
 
 echo "Enter desired device name (i.e. /dev/____): "
