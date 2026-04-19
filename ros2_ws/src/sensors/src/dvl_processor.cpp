@@ -30,14 +30,14 @@ DvlProcessor::DvlProcessor() : Node("dvl_processor") {
 
 
     imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
-        "auv_frame/imu", 10, std::bind(&DvlProcessor::imu_callback, this, std::placeholders::_1));
+        "auv_frame/imu", rclcpp::SensorDataQoS().keep_last(1), std::bind(&DvlProcessor::imu_callback, this, std::placeholders::_1));
 
     dvl_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
-        "dvl/odometry", 10, std::bind(&DvlProcessor::dvl_callback, this, std::placeholders::_1));
+        "dvl/odometry", rclcpp::SensorDataQoS().keep_last(1), std::bind(&DvlProcessor::dvl_callback, this, std::placeholders::_1));
     
 
-    position_pub_ = this->create_publisher<geometry_msgs::msg::PointStamped>("auv_frame/dvl/position", 10); 
-    velocity_pub_ = this->create_publisher<geometry_msgs::msg::TwistStamped>("auv_frame/dvl/velocity", 10); 
+    position_pub_ = this->create_publisher<geometry_msgs::msg::PointStamped>("auv_frame/dvl/position", rclcpp::SensorDataQoS().keep_last(1)); 
+    velocity_pub_ = this->create_publisher<geometry_msgs::msg::TwistStamped>("auv_frame/dvl/velocity", rclcpp::SensorDataQoS().keep_last(1)); 
 }
 
 

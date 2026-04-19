@@ -13,11 +13,11 @@ ImuProcessor::ImuProcessor()
 
     imu_pub_ = this->create_publisher<imu_msg>(
         "auv_frame/imu",
-        10
+        rclcpp::SensorDataQoS().keep_last(1)
     );
     imu_sub_ = this->create_subscription<imu_msg>(
         "imu/data",
-        10,
+        rclcpp::SensorDataQoS().keep_last(1),
         std::bind(&ImuProcessor::imu_callback, this, std::placeholders::_1)
     );
 

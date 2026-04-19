@@ -7,36 +7,36 @@ namespace controls
        // Initialize subscriptions
        sub_imu_ = this->create_subscription<imu_msg>(
            "auv_frame/imu",
-           1,
+           rclcpp::SensorDataQoS().keep_last(1),
            std::bind(&superimposer::imu_callback, this, std::placeholders::_1)
        );
 
        sub_depth_effort_ = this->create_subscription<wrench_msg>(
            "/controls/depth_effort",
-           1,
+           rclcpp::SensorDataQoS().keep_last(1),
            std::bind(&superimposer::depth_effort_callback, this, std::placeholders::_1)
        );
 
        sub_x_effort_ = this->create_subscription<wrench_msg>(
            "/controls/x_effort",
-           1,
+           rclcpp::SensorDataQoS().keep_last(1),
            std::bind(&superimposer::x_effort_callback, this, std::placeholders::_1)
        );
 
         sub_y_effort_ = this->create_subscription<wrench_msg>(
            "/controls/y_effort",
-           1,
+           rclcpp::SensorDataQoS().keep_last(1),
            std::bind(&superimposer::y_effort_callback, this, std::placeholders::_1)
        );
 
        sub_attitude_effort_ = this->create_subscription<wrench_msg>(
            "/controls/attitude_effort",
-           1,
+           rclcpp::SensorDataQoS().keep_last(1),
            std::bind(&superimposer::attitude_effort_callback, this, std::placeholders::_1)
        );
 
        // Initialize publisher
-       pub_effort_ = this->create_publisher<wrench_msg>("/controls/total_effort", 1);
+       pub_effort_ = this->create_publisher<wrench_msg>("/controls/total_effort", rclcpp::SensorDataQoS().keep_last(1));
 
        // Initialize effort bias if needed
        this->declare_parameter<double>("effort_bias_force_x", 0.0);

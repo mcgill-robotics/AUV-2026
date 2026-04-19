@@ -40,10 +40,10 @@ namespace controls
                 0, 0, P_wz_;
 
 
-        pub_effort_ = this->create_publisher<wrench_msg>("/controls/attitude_effort", 1);
+        pub_effort_ = this->create_publisher<wrench_msg>("/controls/attitude_effort", rclcpp::SensorDataQoS().keep_last(1));
         sub_imu_ = this->create_subscription<imu_msg>(
             "auv_frame/imu",
-            1,
+            rclcpp::SensorDataQoS().keep_last(1),
             std::bind(&AttitudeController::imu_callback, this, std::placeholders::_1)
         );
         sub_target_orientation_ = this->create_subscription<geometry_msgs::msg::Quaternion>(

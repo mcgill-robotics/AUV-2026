@@ -20,30 +20,30 @@ namespace sensors
 
         imu_sub_ = this->create_subscription<imu_msg>(
             "auv_frame/imu",
-            1, // Use queue size 1 to get latest data
+            rclcpp::SensorDataQoS().keep_last(1), // Use queue size 1 to get latest data
             std::bind(&State_aggregator::imu_callback, this, std::placeholders::_1)
         );
         depth_sub_ = this->create_subscription<float64_msg>(
             "auv_frame/depth",
-            1,
+            rclcpp::SensorDataQoS().keep_last(1),
             std::bind(&State_aggregator::depth_callback, this, std::placeholders::_1)
         );
 
         dvl_position_sub_ = this->create_subscription<geometry_msgs::msg::PointStamped>(
             "auv_frame/dvl/position",
-            1,
+            rclcpp::SensorDataQoS().keep_last(1),
             std::bind(&State_aggregator::dvl_position_callback, this, std::placeholders::_1)
         );
 
         dvl_velocity_sub_ = this->create_subscription<geometry_msgs::msg::TwistStamped>(
             "auv_frame/dvl/velocity",
-            1,
+            rclcpp::SensorDataQoS().keep_last(1),
             std::bind(&State_aggregator::dvl_velocity_callback, this, std::placeholders::_1)
         );
 
         pose_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>(
             "state/pose",
-            1
+            rclcpp::SensorDataQoS().keep_last(1)
         );
 
         // Initialize state variables

@@ -3,7 +3,7 @@
 import rclpy
 from rclpy.executors import SingleThreadedExecutor
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy, qos_profile_sensor_data
 from rcl_interfaces.msg import SetParametersResult
 from controls.pid import PID
 
@@ -28,8 +28,8 @@ class AxisController(Node):
             depth=1,
         )
 
-        self.pub_effort = self.create_publisher(Wrench, f'/controls/{axis_name}_effort', qos)
-        self.sub_position = self.create_subscription(PointStamped, f'auv_frame/dvl/position', self.position_callback, qos)
+        self.pub_effort = self.create_publisher(Wrench, f'/controls/{axis_name}_effort', qos_profile_sensor_data)
+        self.sub_position = self.create_subscription(PointStamped, f'auv_frame/dvl/position', self.position_callback, qos_profile_sensor_data)
         self.setpoint_sub = self.create_subscription(Float64, f'/controls/{axis_name}_setpoint', self.setpoint_callback, qos)
 
         self.declare_parameter('control_loop_hz', 10.0)
