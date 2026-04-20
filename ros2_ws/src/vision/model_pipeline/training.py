@@ -291,7 +291,7 @@ Examples:
         "--batch", "-b",
         type=int,
         default=-1,
-        help="Batch size. YOLO: -1 for auto. RF-DETR: set explicitly (default: -1)"
+        help="Batch size (default: -1. For YOLO -1 is automatic allocation, for RF-DETR -1 defaults to 4)"
     )
     parser.add_argument(
         "--imgsz",
