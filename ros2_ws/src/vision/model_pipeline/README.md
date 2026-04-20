@@ -237,7 +237,7 @@ The default parameters for the underlying scripts are set to values that we foun
 | `-s` | `--size` | Model size: `n, s, m, l, x` (YOLO) or `n` (Base) / `l` (Large) for RF-DETR | `n` |
 | `-c` | `--custom-model` | Train from an existing model file (YOLO `.pt` or RF-DETR `.pth`) | |
 | `-e` | `--epochs` | Number of training epochs | `200` |
-| `-b` | `--batch` | Batch size. -1 for auto (YOLO only) | `-1` |
+| `-b` | `--batch` | Batch size. -1 for auto (YOLO only) | `-1` (automatically determined for YOLO, set to `4` for RF-DETR) |
 | `-lr0` | `--learning-rate` | Initial learning rate | `0.0003` (YOLO), `1e-4` (RF-DETR) |
 |  | `--data` | Path to `data.yaml` (YOLO only) | `data/processed/data.yaml` |
 |  | `--imgsz` | Image size for training (YOLO only) | `640` |
