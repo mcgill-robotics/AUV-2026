@@ -30,8 +30,17 @@ object_detection:
       - "table"
       - "bin"
       - "board"
-      - "shark"
-      - "sawfish"
+      - "survey_repair"
+      - "search_rescue"
+      - "compass"
+      - "tools"
+      - "lifebuoy"
+      - "sos"
+      - "ambulance"
+      - "firetruck"
+      - "blood"
+      - "fire"
+      - "bin_structure"
     queue_size: 10
     publish_annotated_image: true # whether to publish an annotated image with bounding boxes drawn (for visualization/debugging). will publish to detection_topic + /annotated
     collection_dir: /tmp/front_cam_collection # directory for direct-to-disk image saving (toggled via service)
@@ -76,8 +85,8 @@ object_map:
   max_pipe_distance: 7.0 # Truncates tracking of red/white pipes beyond this distance to reduce noise in map
   pool_floor_z: -2.1
   pool_surface_z: 0.0
-  unique_objects: ["gate", "bin", "table", "board", "octagon"]
-  floor_objects: ["bin", "table", "lane_marker", "board"]
+  unique_objects: ["gate", "bin_structure", "table", "board", "octagon"]
+  floor_objects: ["bin_structure", "table", "lane_marker", "board"]
   surface_objects: ["gate", "octagon"]
 
   max_per_class:

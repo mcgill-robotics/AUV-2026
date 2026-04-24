@@ -6,5 +6,14 @@ octagon
 table
 bin
 board
-shark
-sawfish
+survey_repair
+search_rescue
+compass
+tools
+lifebuoy
+sos
+ambulance
+firetruck
+blood
+fire
+bin_structure
