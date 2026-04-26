@@ -174,7 +174,8 @@ def generate_launch_description():
                 'queue_size': default_config["object_detection"]["front_cam"]["queue_size"],
                 'publish_annotated_image': default_config["object_detection"]["front_cam"]["publish_annotated_image"],
 
-                'confidence_threshold': default_config["object_detection"]["front_cam"]["confidence_threshold"],
+                'model_detection_threshold': default_config["object_detection"]["front_cam"]["model_detection_threshold"],
+                'depth_confidence_threshold': default_config["object_detection"]["front_cam"]["depth_confidence_threshold"],
                 'use_sim_time': LaunchConfiguration("sim"),
                 'compressed': LaunchConfiguration("compressed"),
                 'log_level': default_config["object_detection"]["front_cam"]["log_level"],
@@ -202,7 +203,7 @@ def generate_launch_description():
                 'queue_size': default_config["object_detection"]["down_cam"]["queue_size"],
                 'publish_annotated_image': default_config["object_detection"]["down_cam"]["publish_annotated_image"],
 
-                'confidence_threshold': default_config["object_detection"]["down_cam"]["confidence_threshold"],
+                'model_detection_threshold': default_config["object_detection"]["down_cam"]["model_detection_threshold"],
                 'use_sim_time': LaunchConfiguration("sim"),
                 'compressed': LaunchConfiguration("compressed"),
                 'log_level': default_config["object_detection"]["down_cam"]["log_level"],
@@ -219,10 +220,14 @@ def generate_launch_description():
             {
                 "frame_rate": default_config["object_map"]["frame_rate"],
                 "class_labels": default_config["object_detection"]["front_cam"]["class_names"],
+                "large_structure_labels": default_config["object_map"]["large_structure_labels"],
+                "pipe_labels": default_config["object_map"]["pipe_labels"],
                 "max_per_class_labels": list(default_config["object_map"]["max_per_class"].keys()),
                 "max_per_class_values": list(default_config["object_map"]["max_per_class"].values()),
                 "zed_sdk": True,
                 "new_object_min_distance_threshold": default_config["object_map"]["new_object_min_distance_threshold"],
+                "min_large_structure_separation_m": default_config["object_map"]["min_large_structure_separation_m"],
+                "min_large_structure_pipe_separation_m": default_config["object_map"]["min_large_structure_pipe_separation_m"],
                 "front_cam_detection_topic": default_config["object_detection"]["front_cam"]["detection_topic"],
                 "object_map_topic": default_config["object_map"]["map_topic"],
                 "vio_pose_topic": default_config["object_map"]["pose_topic"],

@@ -37,6 +37,9 @@ public:
 	// tracker tuning parameters used in both ZED and non-ZED fallback
 	// minimum distance from existing tracks for a new detection to be considered a new object rather than a new measurement of an existing object
 	float new_object_min_distance_threshold = this->declare_parameter<float>("new_object_min_distance_threshold");
+	float min_large_structure_separation = this->declare_parameter<float>("min_large_structure_separation_m");
+	float min_large_structure_pipe_separation =
+		this->declare_parameter<float>("min_large_structure_pipe_separation_m");
 	// gating threshold for associating detections to existing tracks (in Mahalanobis distance)
 	double gating_threshold  = this->declare_parameter<double>("gating_threshold");
 	// number of consecutive detections needed to confirm a new track
@@ -55,6 +58,10 @@ public:
 		
 	// Fetch dynamic labels and max limits
 	this->class_labels = this->declare_parameter<std::vector<std::string>>("class_labels");
+	std::vector<std::string> large_structure_labels =
+		this->declare_parameter<std::vector<std::string>>("large_structure_labels");
+	std::vector<std::string> pipe_labels =
+		this->declare_parameter<std::vector<std::string>>("pipe_labels");
 	std::vector<std::string> max_per_class_labels = this->declare_parameter<std::vector<std::string>>("max_per_class_labels");
 	std::vector<int64_t> max_per_class_values = this->declare_parameter<std::vector<int64_t>>("max_per_class_values");
 
@@ -66,7 +73,11 @@ public:
 	// Object Tracker, used in both ZED and non-ZED modes, so that we maintain a consistent object map output regardless of input source
 	object_tracker = ObjectTracker(
 		max_per_class_map,
+		large_structure_labels,
+		pipe_labels,
 		new_object_min_distance_threshold,
+		min_large_structure_separation,
+		min_large_structure_pipe_separation,
 		gating_threshold,
 		min_hits,
 		max_age,

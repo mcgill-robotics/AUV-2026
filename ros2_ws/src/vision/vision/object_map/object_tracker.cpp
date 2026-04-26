@@ -11,6 +11,10 @@ Eigen::Vector2d xy(const Eigen::Vector3d& position) {
     return position.head<2>();
 }
 
+double xy_distance(const Eigen::Vector3d& lhs, const Eigen::Vector3d& rhs) {
+    return (xy(lhs) - xy(rhs)).norm();
+}
+
 bool compute_facing_normal(
     const Eigen::Vector2d& axis_xy,
     const Eigen::Vector2d& object_xy,
@@ -61,7 +65,11 @@ bool compute_facing_yaw(
 
 ObjectTracker::ObjectTracker(
     const std::unordered_map<std::string, int>& max_per_class,
+    const std::vector<std::string>& large_structure_labels,
+    const std::vector<std::string>& pipe_labels,
     float min_new_track_distance,
+    float min_large_structure_separation,
+    float min_large_structure_pipe_separation,
     float gating_threshold,
     int min_hits,
     int max_age,
@@ -74,8 +82,14 @@ ObjectTracker::ObjectTracker(
     this->tracks = std::vector<Track>();
     this->matches = std::vector<std::pair<size_t, size_t>>();
     this->max_per_class = max_per_class;
+    this->large_structure_labels =
+        std::unordered_set<std::string>(large_structure_labels.begin(), large_structure_labels.end());
+    this->pipe_labels =
+        std::unordered_set<std::string>(pipe_labels.begin(), pipe_labels.end());
 
     this->min_new_track_distance = min_new_track_distance;
+    this->min_large_structure_separation = min_large_structure_separation;
+    this->min_large_structure_pipe_separation = min_large_structure_pipe_separation;
     this->gating_threshold = gating_threshold;
     this->min_hits = min_hits;
     this->max_age = max_age;
@@ -431,6 +445,7 @@ void ObjectTracker::create_new_tracks(
 ) {
     for (int det_idx : unmatched_detections) {
         std::string label = classes[det_idx];
+        const bool is_large_structure = large_structure_labels.count(label) > 0;
 
         int current_count = 0;
         for (const auto& t : tracks) {
@@ -455,6 +470,30 @@ void ObjectTracker::create_new_tracks(
             if (existing_track.label == label && dist < min_new_track_distance) {
                 too_close = true;
                 break;
+            }
+        }
+
+        if (!too_close && is_large_structure) {
+            for (const auto& existing_track : tracks) {
+                if (existing_track.state != TrackState::CONFIRMED) {
+                    continue;
+                }
+
+                const Eigen::Vector3d existing_pos = existing_track.kf.state();
+                const double dist_xy = xy_distance(new_pos, existing_pos);
+
+                if (pipe_labels.count(existing_track.label) > 0 &&
+                    dist_xy < min_large_structure_pipe_separation) {
+                    too_close = true;
+                    break;
+                }
+
+                if (large_structure_labels.count(existing_track.label) > 0 &&
+                    existing_track.label != label &&
+                    dist_xy < min_large_structure_separation) {
+                    too_close = true;
+                    break;
+                }
             }
         }
         

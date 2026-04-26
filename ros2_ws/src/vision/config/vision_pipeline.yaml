@@ -19,7 +19,8 @@ object_detection:
     enhanced_topic: /vision/front_cam/image_enhanced # input topic if enhance_images is true, otherwise will subscribe to raw image topic
     detection_topic: /vision/front_cam/detections # output topic for detections
     depth_map_topic: /vision/depth_map
-    confidence_threshold: 0.40
+    model_detection_threshold: 0.40
+    depth_confidence_threshold: 95
     model_relative_path: models/local_rfdetr_onnx_test # inference-models package directory
     class_names:
       - "gate"
@@ -49,7 +50,7 @@ object_detection:
   down_cam:
     enhanced_topic: /vision/down_cam/image_enhanced
     detection_topic: /vision/down_cam/detections
-    confidence_threshold: 0.40
+    model_detection_threshold: 0.40
     # relative to src directory
     model_relative_path: models/local_downcam_onnx # inference-models package directory (TODO: create this package)
     class_names:
@@ -75,6 +76,10 @@ object_map:
   max_range: 9.0 # maximum range in meters for detections to be considered for tracking
   frame_rate: 30 # maximum frame rate for the object map (tracks will be updated at this rate, may be lower than camera frame rate if processing is too slow)
   new_object_min_distance_threshold: 0.5 # distance in meters between a new detection and existing tracks to be considered a new object and start a new track
+  large_structure_labels: ["gate", "table", "board", "bin_structure"]
+  pipe_labels: ["red_pipe", "white_pipe"]
+  min_large_structure_separation_m: 2.0 # minimum XY spacing required before spawning gate/table/board/bin_structure near another confirmed large structure
+  min_large_structure_pipe_separation_m: 1.0 # minimum XY spacing required before spawning gate/table/board/bin_structure near a confirmed pipe
 
   # Feature Toggles (Game-Specific Constraints)
   enable_gate_top_crop: true # Removes bottom 60% of bounding box for gate to ignore legs/pool floor noise
@@ -121,12 +126,12 @@ object_map:
   tent_init_buffer: 5 # Extra frames allowed for a new TENTATIVE track to initialize before being deleted if unmatched
   
   # loose parameters
-  gating_threshold: 5.0
-  min_hits: 5
-  max_age: 15
-  max_position_jump: 4.0
-  conf_to_tent_threshold: 10
-  tent_init_buffer: 10
+  # gating_threshold: 5.0
+  # min_hits: 5
+  # max_age: 15
+  # max_position_jump: 4.0
+  # conf_to_tent_threshold: 10
+  # tent_init_buffer: 10
 
   # raw detection parameters
   # gating_threshold: 99.0

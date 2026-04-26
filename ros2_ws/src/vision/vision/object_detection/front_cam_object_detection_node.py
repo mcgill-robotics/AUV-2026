@@ -34,7 +34,8 @@ class FrontCamObjectDetectorNode():
         self.node.declare_parameter('publish_annotated_image', False)
         self.node.declare_parameter("compressed", Parameter.Type.BOOL)
 
-        self.node.declare_parameter("confidence_threshold", 0.40)
+        self.node.declare_parameter("model_detection_threshold", 0.40)
+        self.node.declare_parameter("depth_confidence_threshold", 95)
 
         # we consume stream_ip and sim properties for zed sdk configuration
         self.node.declare_parameter('sim', Parameter.Type.BOOL)
@@ -76,7 +77,10 @@ class FrontCamObjectDetectorNode():
         self.publish_annotated_image = self.node.get_parameter('publish_annotated_image').get_parameter_value().bool_value
         self.compressed = self.node.get_parameter('compressed').get_parameter_value().bool_value
 
-        self.conf_threshold = self.node.get_parameter('confidence_threshold').get_parameter_value().double_value
+        self.conf_threshold = self.node.get_parameter('model_detection_threshold').get_parameter_value().double_value
+        self.depth_confidence_threshold = (
+            self.node.get_parameter('depth_confidence_threshold').get_parameter_value().integer_value
+        )
         sim = self.node.get_parameter('sim').get_parameter_value().bool_value
         stream_port = self.node.get_parameter('stream_port').get_parameter_value().integer_value
         self.enable_gate_top_crop = self.node.get_parameter('enable_gate_top_crop').get_parameter_value().bool_value
@@ -155,7 +159,8 @@ class FrontCamObjectDetectorNode():
         
         self.runtime_params = sl.RuntimeParameters()
         self.runtime_params.measure3D_reference_frame = sl.REFERENCE_FRAME.CAMERA
-        
+        self.runtime_params.confidence_threshold = self.depth_confidence_threshold
+
         if not sim:
             # Configure streaming
             stream_params = sl.StreamingParameters()
@@ -391,4 +396,3 @@ class FrontCamObjectDetectorNode():
             
             t_end = time.perf_counter()
             self.node.get_logger().debug(f"Detection latency: {(t_end - t_start)*1000:.1f} ms | Active 3D detections: {len(det_objects)}")
-

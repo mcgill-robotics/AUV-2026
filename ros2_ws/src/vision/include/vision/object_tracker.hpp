@@ -7,6 +7,7 @@
 #include <string>
 #include <set>
 #include <unordered_map>
+#include <unordered_set>
 #include <chrono>
 
 #include <Eigen/Dense>
@@ -46,7 +47,11 @@ public:
 
     explicit ObjectTracker(
         const std::unordered_map<std::string, int>& max_per_class = {},
+        const std::vector<std::string>& large_structure_labels = {},
+        const std::vector<std::string>& pipe_labels = {},
         float min_new_track_distance = 0.5,
+        float min_large_structure_separation = 2.0,
+        float min_large_structure_pipe_separation = 1.0,
         float gating_threshold = 3.5,
         int min_hits = 20,
         int max_age = 8,
@@ -125,6 +130,8 @@ private:
 
     int track_id_counter = 1;
     float min_new_track_distance;   // set within constructor
+    float min_large_structure_separation;
+    float min_large_structure_pipe_separation;
         
     // Tuning Parameters
     float gating_threshold;         // Mahalanobis gate (~3 sigma)
@@ -145,5 +152,7 @@ private:
 
     // Known object limits (prevents creating too many tracks per class, -1 = unlimited)
     std::unordered_map<std::string, int> max_per_class;
+    std::unordered_set<std::string> large_structure_labels;
+    std::unordered_set<std::string> pipe_labels;
 
 };

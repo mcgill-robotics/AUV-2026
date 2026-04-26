@@ -23,7 +23,7 @@ class DownCamObjectDetectorNode():
         self.node.declare_parameter('publish_annotated_image', False)
         self.node.declare_parameter("compressed", Parameter.Type.BOOL)
 
-        self.node.declare_parameter("confidence_threshold", 0.40)
+        self.node.declare_parameter("model_detection_threshold", 0.40)
 
         self.class_names = list(self.node.get_parameter('class_names').get_parameter_value().string_array_value)
         self.node.get_logger().info(f"Class names: {self.class_names}")
@@ -34,7 +34,7 @@ class DownCamObjectDetectorNode():
         self.publish_annotated_image = self.node.get_parameter('publish_annotated_image').get_parameter_value().bool_value
         self.compressed = self.node.get_parameter('compressed').get_parameter_value().bool_value
 
-        self.conf_threshold = self.node.get_parameter('confidence_threshold').get_parameter_value().double_value
+        self.conf_threshold = self.node.get_parameter('model_detection_threshold').get_parameter_value().double_value
 
         input_format = CompressedImage if self.compressed else Image
         if self.compressed:
