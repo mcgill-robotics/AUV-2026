@@ -79,7 +79,8 @@ object_map:
   # Feature Toggles (Game-Specific Constraints)
   enable_gate_top_crop: true # Removes bottom 60% of bounding box for gate to ignore legs/pool floor noise
   enable_z_axis_locking: true # Forces specific unique objects to snap to pool floor/surface Z coordinates
-  enable_gate_midpoint_refinement: true # Uses surrounding shark/sawfish tracks to perfectly center the gate
+  enable_gate_midpoint_refinement: true # Uses search_rescue/survey_repair panel detections to refine the gate pose
+  enable_board_icon_refinement: true # Uses board icons to refine the board pose and make yaw face the AUV
   enable_octagon_xy_inheritance: true # Ignores true octagon detections, creates synthetic octagon directly above the table
   gate_top_crop_ratio: 0.50 # The ratio (0.0 to 1.0) of the gate bounding box to keep from the top edge
   max_pipe_distance: 7.0 # Truncates tracking of red/white pipes beyond this distance to reduce noise in map
@@ -90,12 +91,25 @@ object_map:
   surface_objects: ["gate", "octagon"]
 
   max_per_class:
-    board_image: 1
-    gate_prequal: 1
-    shark: 2
-    sawfish: 2
-    marker_prequal: 2
-    white_pipe_medn: 2
+    gate: 1
+    board: 1
+    octagon: 1
+    table: 1
+    bin_structure: 1
+    lane_marker: 2
+    white_pipe: 6
+    red_pipe: 3
+    bin: 4
+    search_rescue: 1
+    survey_repair: 1
+    compass: 1
+    tools: 1
+    lifebuoy: 1
+    sos: 1
+    ambulance: 1
+    firetruck: 1
+    blood: 1
+    fire: 1
 
   # Tracker Parameters
   # relatively strict

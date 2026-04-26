@@ -7,10 +7,8 @@
 #include "rclcpp/rclcpp.hpp"
 #include "auv_msgs/msg/vision_object.hpp"
 #include "auv_msgs/msg/vision_object_array.hpp"
-
-
-
 #include "vision_msgs/msg/detection3_d_array.hpp"
+#include "geometry_msgs/msg/pose_stamped.hpp"
 #include "object_tracker.hpp"
 #include <algorithm>
 
@@ -34,6 +32,7 @@ public:
 	string front_cam_detection_topic = this->declare_parameter<string>("front_cam_detection_topic");
 	// Publisher for object map
 	string object_map_topic = this->declare_parameter<string>("object_map_topic");
+	string vio_pose_topic = this->declare_parameter<string>("vio_pose_topic");
 	
 	// tracker tuning parameters used in both ZED and non-ZED fallback
 	// minimum distance from existing tracks for a new detection to be considered a new object rather than a new measurement of an existing object
@@ -52,6 +51,7 @@ public:
 	int tent_init_buffer = this->declare_parameter<int>("tent_init_buffer");
 
 	bool enable_gate_midpoint_refinement = this->declare_parameter<bool>("enable_gate_midpoint_refinement");
+	bool enable_board_icon_refinement = this->declare_parameter<bool>("enable_board_icon_refinement");
 		
 	// Fetch dynamic labels and max limits
 	this->class_labels = this->declare_parameter<std::vector<std::string>>("class_labels");
@@ -65,7 +65,7 @@ public:
 
 	// Object Tracker, used in both ZED and non-ZED modes, so that we maintain a consistent object map output regardless of input source
 	object_tracker = ObjectTracker(
-        max_per_class_map,
+		max_per_class_map,
 		new_object_min_distance_threshold,
 		gating_threshold,
 		min_hits,
@@ -73,7 +73,8 @@ public:
 		max_position_jump,
 		conf_to_tent_threshold,
 		tent_init_buffer,
-		enable_gate_midpoint_refinement
+		enable_gate_midpoint_refinement,
+		enable_board_icon_refinement
 	);
 	// physical tracking constraints
 	enable_z_axis_locking = this->declare_parameter<bool>("enable_z_axis_locking");
@@ -92,6 +93,9 @@ public:
 	detection_subscriber = this->create_subscription<vision_msgs::msg::Detection3DArray>(
 		front_cam_detection_topic, 10, std::bind(&ObjectMapNode::detection_callback, this, std::placeholders::_1)
 	);
+	vio_pose_subscriber = this->create_subscription<geometry_msgs::msg::PoseStamped>(
+		vio_pose_topic, 10, std::bind(&ObjectMapNode::vio_pose_callback, this, std::placeholders::_1)
+	);
 
 	RCLCPP_INFO(this->get_logger(), "Using generic 3D camera detections for object mapping.");
 }
@@ -105,6 +109,8 @@ private:
 	std::vector<std::string> unique_objects;
 	std::vector<std::string> floor_objects;
 	std::vector<std::string> surface_objects;
+	Eigen::Vector3d latest_auv_position = Eigen::Vector3d::Zero();
+	bool has_auv_position = false;
 
 	bool is_unique_object(const std::string& label) const {
 		return std::find(unique_objects.begin(), unique_objects.end(), label) != unique_objects.end();
@@ -132,6 +138,16 @@ private:
 		} else {
 			object_msg.pose.position.z = filter_position(2);
 		}
+	}
+
+	void vio_pose_callback(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
+	{
+		latest_auv_position = Eigen::Vector3d(
+			msg->pose.position.x,
+			msg->pose.position.y,
+			msg->pose.position.z
+		);
+		has_auv_position = true;
 	}
 
 	void detection_callback(const vision_msgs::msg::Detection3DArray::SharedPtr msg)
@@ -192,7 +208,9 @@ private:
 			filtered_covariances, 
 			filtered_classes, 
 			filtered_orientations, 
-			filtered_confidences
+			filtered_confidences,
+			latest_auv_position,
+			has_auv_position
 		);
 
 		publish_object_map(all_tracks);
@@ -204,7 +222,6 @@ private:
 		auv_msgs::msg::VisionObjectArray object_map_msg;
 		object_map_msg.header.stamp = frame_collection_time;
 		object_map_msg.header.frame_id = "map";
-
 		std::vector<Track> publish_tracks;
 
 		// --- Process Active Tracks ---
@@ -305,6 +322,7 @@ private:
 	rclcpp::Time frame_collection_time;
 	rclcpp::Publisher<auv_msgs::msg::VisionObjectArray>::SharedPtr object_map_publisher;
 	rclcpp::Subscription<vision_msgs::msg::Detection3DArray>::SharedPtr detection_subscriber;
+	rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr vio_pose_subscriber;
 };
 
 int main(int argc, char **argv)

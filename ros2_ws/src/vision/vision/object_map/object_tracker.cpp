@@ -1,6 +1,63 @@
 #include <object_tracker.hpp>
 #include <hungarian.hpp>
 
+#include <cmath>
+
+namespace {
+
+constexpr double kRefinementPlausibilityRadiusMeters = 5.0;
+
+Eigen::Vector2d xy(const Eigen::Vector3d& position) {
+    return position.head<2>();
+}
+
+bool compute_facing_normal(
+    const Eigen::Vector2d& axis_xy,
+    const Eigen::Vector2d& object_xy,
+    const Eigen::Vector2d& observer_xy,
+    Eigen::Vector2d& chosen_normal)
+{
+    if (axis_xy.norm() < 1e-6) {
+        return false;
+    }
+
+    Eigen::Vector2d to_observer = observer_xy - object_xy;
+    if (to_observer.norm() < 1e-6) {
+        return false;
+    }
+
+    Eigen::Vector2d axis_unit = axis_xy.normalized();
+    Eigen::Vector2d candidate_a(-axis_unit.y(), axis_unit.x());
+    Eigen::Vector2d candidate_b = -candidate_a;
+
+    chosen_normal =
+        candidate_a.dot(to_observer) >= candidate_b.dot(to_observer)
+            ? candidate_a
+            : candidate_b;
+    return true;
+}
+
+bool compute_facing_yaw(
+    const Eigen::Vector2d& axis_xy,
+    const Eigen::Vector2d& object_xy,
+    const Eigen::Vector2d& observer_xy,
+    double& yaw_out,
+    Eigen::Vector2d* normal_out = nullptr)
+{
+    Eigen::Vector2d chosen_normal;
+    if (!compute_facing_normal(axis_xy, object_xy, observer_xy, chosen_normal)) {
+        return false;
+    }
+
+    if (normal_out != nullptr) {
+        *normal_out = chosen_normal;
+    }
+
+    yaw_out = std::atan2(chosen_normal.y(), chosen_normal.x());
+    return true;
+}
+
+}  // namespace
 
 ObjectTracker::ObjectTracker(
     const std::unordered_map<std::string, int>& max_per_class,
@@ -11,7 +68,8 @@ ObjectTracker::ObjectTracker(
     float max_position_jump,
     int conf_to_tent_threshold,
     int tent_init_buffer,
-    bool enable_gate_midpoint_refinement
+    bool enable_gate_midpoint_refinement,
+    bool enable_board_icon_refinement
 ) {
     this->tracks = std::vector<Track>();
     this->matches = std::vector<std::pair<size_t, size_t>>();
@@ -25,6 +83,7 @@ ObjectTracker::ObjectTracker(
     this->conf_to_tent_threshold = conf_to_tent_threshold;
     this->tent_init_buffer = tent_init_buffer;
     this->enable_gate_midpoint_refinement = enable_gate_midpoint_refinement;
+    this->enable_board_icon_refinement = enable_board_icon_refinement;
 }
 
 // destructor implicitly defined
@@ -81,7 +140,9 @@ std::vector<Track> ObjectTracker::update(
     const std::vector<Eigen::Matrix3d>& measurement_covariances,
     const std::vector<std::string>& classes,
     const std::vector<double>& orientations, 
-    const std::vector<double>& confidences  
+    const std::vector<double>& confidences,
+    const Eigen::Vector3d& observer_position,
+    bool has_observer_position
 ) {
     // 1. Compute cost matrix
     auto cost_matrix = compute_cost_matrix(measurements, measurement_covariances, classes);
@@ -114,6 +175,9 @@ std::vector<Track> ObjectTracker::update(
 
     // 6. Create new tracks
     create_new_tracks(unmatched_dets, measurements, classes, orientations, confidences);
+
+    this->observer_position = observer_position;
+    this->has_observer_position = has_observer_position;
     
     // 7. Post-processing: Apply physical domain constraints to tracking state
     apply_physical_constraints();
@@ -388,7 +452,7 @@ void ObjectTracker::create_new_tracks(
         for (const auto& existing_track : tracks) {
             Eigen::Vector3d existing_pos = existing_track.kf.state();
             double dist = (new_pos - existing_pos).norm();
-            if (dist < min_new_track_distance) {
+            if (existing_track.label == label && dist < min_new_track_distance) {
                 too_close = true;
                 break;
             }
@@ -418,14 +482,18 @@ void ObjectTracker::create_new_tracks(
 
 void ObjectTracker::apply_physical_constraints() {
     // Apply physical realm constraints that affect the tracked position 
-    // Currently, we refine the gate position and orientation using left and right shark/sawfish positions.
     apply_gate_physical_constraints();
+    apply_board_physical_constraints();
 }
 
 void ObjectTracker::apply_gate_physical_constraints() {
+    if (!enable_gate_midpoint_refinement) {
+        return;
+    }
+
     Track* gate_track = nullptr;
-    Track* shark_track = nullptr;
-    Track* sawfish_track = nullptr;
+    Track* search_rescue_track = nullptr;
+    Track* survey_repair_track = nullptr;
 
     // Single loop to find all necessary tracks
     for (auto& t : tracks) {
@@ -433,50 +501,134 @@ void ObjectTracker::apply_gate_physical_constraints() {
         if (t.state != TrackState::CONFIRMED) continue;
 
         if (t.label == "gate") gate_track = &t;
-        else if (t.label == "shark") shark_track = &t;
-        else if (t.label == "sawfish") sawfish_track = &t;
+        else if (t.label == "search_rescue") search_rescue_track = &t;
+        else if (t.label == "survey_repair") survey_repair_track = &t;
     }
 
-    if (gate_track && shark_track && sawfish_track) {
-        Eigen::Vector3d p_shark = shark_track->kf.state();
-        Eigen::Vector3d p_sawfish = sawfish_track->kf.state();
+    if (gate_track && search_rescue_track && survey_repair_track) {
+        Eigen::Vector3d p_search_rescue = search_rescue_track->kf.state();
+        Eigen::Vector3d p_survey_repair = survey_repair_track->kf.state();
         Eigen::Vector3d p_gate = gate_track->kf.state();
         
         // 1. Position Refinement
-        if (enable_gate_midpoint_refinement) {
-            Eigen::Vector3d midpoint = (p_shark + p_sawfish) / 2.0;
+        Eigen::Vector3d midpoint = (p_search_rescue + p_survey_repair) / 2.0;
 
-            // Apply refinement if the fish midpoint is physically plausible (e.g. within 5 meters of gate)
-            if ((p_gate - midpoint).norm() < 5.0) {
-                // Apply a very high confidence measurement update to pull the gate to the fish midpoint
-                Eigen::Matrix3d tiny_R = Eigen::Matrix3d::Identity() * 0.001;
-                gate_track->kf.update(midpoint, tiny_R);
-                // Update p_gate for orientation calculation
-                p_gate = gate_track->kf.state();
+        if ((p_gate - midpoint).norm() < kRefinementPlausibilityRadiusMeters) {
+            Eigen::Matrix3d tiny_R = Eigen::Matrix3d::Identity() * 0.001;
+            gate_track->kf.update(midpoint, tiny_R);
+            p_gate = gate_track->kf.state();
+        }
+
+        if (has_observer_position) {
+            Eigen::Vector2d gate_span = xy(p_survey_repair) - xy(p_search_rescue);
+            double yaw = 0.0;
+            if (compute_facing_yaw(gate_span, xy(p_gate), xy(observer_position), yaw)) {
+                gate_track->theta_z = yaw;
+                gate_track->has_orientation = true;
             }
         }
-
-        // 2. Orientation Calculation
-        // Vector along the gate posts
-        double dx = p_sawfish.x() - p_shark.x();
-        double dy = p_sawfish.y() - p_shark.y();
-        
-        // Normal vector perpendicular to the gate plane (facing either forwards or backwards)
-        double nx = -dy;
-        double ny = dx;
-        
-        // We want the normal to consistently point towards the map origin (for easy offsetting).
-        // Check if the normal points away from the origin (dot product > 0). If so, flip it.
-        if ((nx * p_gate.x() + ny * p_gate.y()) > 0) {
-            nx = -nx;
-            ny = -ny;
-        }
-        
-        // The yaw angle represents the normal vector pointing through the gate
-        double yaw = std::atan2(ny, nx);
-        
-        gate_track->theta_z = yaw;
-        gate_track->has_orientation = true;
     }
 }
 
+void ObjectTracker::apply_board_physical_constraints() {
+    if (!enable_board_icon_refinement) {
+        return;
+    }
+
+    Track* board_track = nullptr;
+    Track* ambulance_track = nullptr;
+    Track* firetruck_track = nullptr;
+    Track* blood_track = nullptr;
+    Track* fire_track = nullptr;
+
+    for (auto& t : tracks) {
+        if (t.state != TrackState::CONFIRMED) continue;
+
+        if (t.label == "board") board_track = &t;
+        else if (t.label == "ambulance") ambulance_track = &t;
+        else if (t.label == "firetruck") firetruck_track = &t;
+        else if (t.label == "blood") blood_track = &t;
+        else if (t.label == "fire") fire_track = &t;
+    }
+
+    if (!board_track) {
+        return;
+    }
+
+    const bool has_vehicle_pair = ambulance_track && firetruck_track;
+    const bool has_hazard_pair = fire_track && blood_track;
+    if (!has_vehicle_pair && !has_hazard_pair) {
+        return;
+    }
+
+    Eigen::Vector3d refined_board_position = board_track->kf.state();
+    if (has_vehicle_pair && has_hazard_pair) {
+        Eigen::Vector3d centroid =
+            (ambulance_track->kf.state() + firetruck_track->kf.state() +
+             fire_track->kf.state() + blood_track->kf.state()) /
+            4.0;
+        if ((refined_board_position - centroid).norm() < kRefinementPlausibilityRadiusMeters) {
+            board_track->kf.update(centroid, Eigen::Matrix3d::Identity() * 0.001);
+            refined_board_position = board_track->kf.state();
+        }
+    } else if (has_vehicle_pair) {
+        Eigen::Vector3d midpoint =
+            (ambulance_track->kf.state() + firetruck_track->kf.state()) / 2.0;
+        if ((refined_board_position - midpoint).norm() < kRefinementPlausibilityRadiusMeters) {
+            board_track->kf.update(midpoint, Eigen::Matrix3d::Identity() * 0.001);
+            refined_board_position = board_track->kf.state();
+        }
+    } else {
+        Eigen::Vector3d midpoint =
+            (fire_track->kf.state() + blood_track->kf.state()) / 2.0;
+        if ((refined_board_position - midpoint).norm() < kRefinementPlausibilityRadiusMeters) {
+            board_track->kf.update(midpoint, Eigen::Matrix3d::Identity() * 0.001);
+            refined_board_position = board_track->kf.state();
+        }
+    }
+
+    if (!has_observer_position) {
+        return;
+    }
+
+    std::vector<Eigen::Vector2d> chosen_normals;
+
+    if (has_vehicle_pair) {
+        Eigen::Vector2d normal;
+        if (compute_facing_normal(
+                xy(firetruck_track->kf.state()) - xy(ambulance_track->kf.state()),
+                xy(refined_board_position),
+                xy(observer_position),
+                normal)) {
+            chosen_normals.push_back(normal);
+        }
+    }
+
+    if (has_hazard_pair) {
+        Eigen::Vector2d normal;
+        if (compute_facing_normal(
+                xy(blood_track->kf.state()) - xy(fire_track->kf.state()),
+                xy(refined_board_position),
+                xy(observer_position),
+                normal)) {
+            chosen_normals.push_back(normal);
+        }
+    }
+
+    if (chosen_normals.empty()) {
+        return;
+    }
+
+    Eigen::Vector2d fused_normal = Eigen::Vector2d::Zero();
+    for (const auto& normal : chosen_normals) {
+        fused_normal += normal;
+    }
+
+    if (fused_normal.norm() < 1e-6) {
+        return;
+    }
+
+    fused_normal.normalize();
+    board_track->theta_z = std::atan2(fused_normal.y(), fused_normal.x());
+    board_track->has_orientation = true;
+}

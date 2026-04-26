@@ -99,15 +99,17 @@ class FrontCamObjectDetectorNode():
         init_params = sl.InitParameters()
         init_params.sdk_verbose = 1
         init_params.camera_resolution = sl.RESOLUTION.SVGA if sim else sl.RESOLUTION.VGA
-        init_params.camera_fps = 60
+        init_params.camera_fps = 30
         init_params.grab_compute_capping_fps = 30
         init_params.coordinate_units = sl.UNIT.METER
         init_params.coordinate_system = sl.COORDINATE_SYSTEM.RIGHT_HANDED_Z_UP_X_FWD
         init_params.depth_mode = sl.DEPTH_MODE.NEURAL
-        init_params.depth_maximum_distance = 15.0
-        init_params.depth_minimum_distance = 0.3
+        init_params.depth_maximum_distance = 20.0
+        init_params.depth_minimum_distance = 0.01
         init_params.enable_image_validity_check = True
         init_params.input = sl.InputType()
+        # init_params.optional_opencv_calibration_file = "/home/douglas/AUV-2026/calibration.yaml"
+
         self.zed.enable_positional_tracking
         if sim:
             stream_ip = self.node.get_parameter('stream_ip').get_parameter_value().string_value

@@ -105,7 +105,6 @@ def generate_launch_description():
     # )
     
     compressed_launch_config = LaunchConfiguration("compressed")
-    
     front_cam_topic = get_compressed_topic(default_config["camera"]["front_cam_topic"], compressed_launch_config)
     down_cam_topic = get_compressed_topic(default_config["camera"]["down_cam_topic"], compressed_launch_config)
     front_enhanced_topic = get_compressed_topic(default_config["image_enhancement"]["front_cam"]["enhanced_topic"], compressed_launch_config)
@@ -241,6 +240,7 @@ def generate_launch_description():
                 "enable_gate_top_crop": default_config["object_map"]["enable_gate_top_crop"],
                 "enable_z_axis_locking": default_config["object_map"]["enable_z_axis_locking"],
                 "enable_gate_midpoint_refinement": default_config["object_map"]["enable_gate_midpoint_refinement"],
+                "enable_board_icon_refinement": default_config["object_map"]["enable_board_icon_refinement"],
                 "enable_octagon_xy_inheritance": default_config["object_map"]["enable_octagon_xy_inheritance"],
                 "gate_top_crop_ratio": default_config["object_map"]["gate_top_crop_ratio"],
                 "max_pipe_distance": default_config["object_map"]["max_pipe_distance"],

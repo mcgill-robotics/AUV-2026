@@ -41,7 +41,6 @@ struct Track {
     }
 };
 
-
 class ObjectTracker {
 public: 
 
@@ -54,7 +53,8 @@ public:
         float max_position_jump = 2.0,
         int conf_to_tent_threshold = 5,
         int tent_init_buffer = 5,
-        bool enable_gate_midpoint_refinement = true
+        bool enable_gate_midpoint_refinement = true,
+        bool enable_board_icon_refinement = true
     );
 
     ~ObjectTracker() = default;
@@ -67,7 +67,9 @@ public:
         const std::vector<Eigen::Matrix3d>& measurement_covariances,
         const std::vector<std::string>& classes,
         const std::vector<double>& orientations,
-        const std::vector<double>& confidences 
+        const std::vector<double>& confidences,
+        const Eigen::Vector3d& observer_position,
+        bool has_observer_position
     ); 
 
 private:
@@ -117,6 +119,7 @@ private:
     // Step 7: Post-processing constraints applied to tracking states
     void apply_physical_constraints();
     void apply_gate_physical_constraints();
+    void apply_board_physical_constraints();
 
     std::vector<Track> tracks;
 
@@ -134,6 +137,9 @@ private:
     int tent_init_buffer;           // Extra frames allowed for initialization before zombie cull
 
     bool enable_gate_midpoint_refinement;
+    bool enable_board_icon_refinement;
+    Eigen::Vector3d observer_position = Eigen::Vector3d::Zero();
+    bool has_observer_position = false;
     
     std::vector<std::pair<size_t,size_t>> matches;
 
