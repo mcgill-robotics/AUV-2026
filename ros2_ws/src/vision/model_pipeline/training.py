@@ -17,6 +17,7 @@ from dataclasses import dataclass
 import os
 import shutil
 from pathlib import Path
+import importlib
 
 # Script directory
 SCRIPT_DIR = Path(__file__).parent.resolve()
@@ -175,7 +176,6 @@ def train_rfdetr(args):
         return
 
     module_name, class_name, model_label = rfdetr_models[size]
-    import importlib
     rfdetr_module = importlib.import_module(module_name)
     RFDETRModel = getattr(rfdetr_module, class_name)
 
@@ -253,7 +253,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 Examples:
-  python3 training.py --model v8 --size n        # Train YOLOv8-Nano
+  python3 training.py --model v8 --size n         # Train YOLOv8-Nano
   python3 training.py --model v11 --size s        # Train YOLOv11-Small
   python3 training.py --model rfdetr              # Train RF-DETR Base
   python3 training.py --model rfdetr --size l     # Train RF-DETR Large
@@ -291,7 +291,7 @@ Examples:
         "--batch", "-b",
         type=int,
         default=-1,
-        help="Batch size. YOLO: -1 for auto. RF-DETR: set explicitly (default: -1)"
+        help="Batch size (default: -1. For YOLO -1 is automatic allocation, for RF-DETR -1 defaults to 4)"
     )
     parser.add_argument(
         "--imgsz",
