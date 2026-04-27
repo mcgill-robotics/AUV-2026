@@ -50,6 +50,9 @@ class FrontCamObjectDetectorNode():
         self.node.declare_parameter('auv_pose_topic', 'state/pose')
         self.node.declare_parameter('enable_gate_top_crop', True)
         self.node.declare_parameter('gate_top_crop_ratio', 0.50)
+        self.node.declare_parameter('enable_border_exclusion', True)
+        self.node.declare_parameter('border_exclusion_margin_px', 20)
+        self.node.declare_parameter('border_exclusion_labels', Parameter.Type.STRING_ARRAY)
         self.node.declare_parameter('global_frame_id', 'pool_link')
         self.node.declare_parameter('auv_frame_id', 'auv_link')
         self.node.declare_parameter('detection_frame_id', 'zed_left_camera_frame')
@@ -104,6 +107,9 @@ class FrontCamObjectDetectorNode():
         self.auv_pose_topic = self.node.get_parameter('auv_pose_topic').get_parameter_value().string_value
         self.enable_gate_top_crop = self.node.get_parameter('enable_gate_top_crop').get_parameter_value().bool_value
         self.gate_top_crop_ratio = self.node.get_parameter('gate_top_crop_ratio').get_parameter_value().double_value
+        self.enable_border_exclusion = self.node.get_parameter('enable_border_exclusion').get_parameter_value().bool_value
+        self.border_exclusion_margin_px = self.node.get_parameter('border_exclusion_margin_px').get_parameter_value().integer_value
+        self.border_exclusion_labels = list(self.node.get_parameter('border_exclusion_labels').get_parameter_value().string_array_value)
         self.global_frame_id = self.node.get_parameter('global_frame_id').get_parameter_value().string_value
         self.auv_frame_id = self.node.get_parameter('auv_frame_id').get_parameter_value().string_value
         self.detection_frame_id = (
@@ -474,6 +480,23 @@ class FrontCamObjectDetectorNode():
             self.pub_vio_pose.publish(auv_pose_msg)
 
             tracked_detections = get_detections(self, img)
+
+            # --- Border Exclusion Filter ---
+            if self.enable_border_exclusion and tracked_detections is not None:
+                img_h, img_w = img.shape[:2]
+                margin = self.border_exclusion_margin_px
+                mask = np.ones(len(tracked_detections), dtype=bool)
+                for i in range(len(tracked_detections)):
+                    cls_id = int(tracked_detections.class_id[i])
+                    if cls_id >= len(self.class_names): continue
+                    label = self.class_names[cls_id]
+                    
+                    if label in self.border_exclusion_labels:
+                        x1, y1, x2, y2 = tracked_detections.xyxy[i]
+                        if (x1 <= margin or x2 >= img_w - margin or
+                            y1 <= margin or y2 >= img_h - margin):
+                            mask[i] = False
+                tracked_detections = tracked_detections[mask]
 
             det_msg = VisionDetectionFrame()
             det_msg.header.stamp = frame_stamp
