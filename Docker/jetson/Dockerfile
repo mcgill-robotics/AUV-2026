@@ -217,6 +217,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-$ROS_DISTRO-joy-teleop \
     ros-$ROS_DISTRO-rosidl-default-generators \
     ros-$ROS_DISTRO-vision-msgs \
+    ros-$ROS_DISTRO-tf-transformations \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -314,7 +315,7 @@ RUN git clone https://github.com/ultralytics/ultralytics.git && \
 RUN pip install --no-cache-dir --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} "numpy<2.0.0" "setuptools<70" \
     roboflow albumentations pandas \
     rfdetr supervision pytorch_lightning pycocotools faster-coco-eval onnx onnxruntime-gpu \
-    inference-models "inference-models[torch-jp6-cu126,onnx-jp6-cu126]" && \
+    inference-models "inference-models[torch-jp6-cu126,onnx-jp6-cu126]" transforms3d && \
     pip install --no-cache-dir --ignore-install --upgrade typing_extensions
 
 # Install ZED Python API from source

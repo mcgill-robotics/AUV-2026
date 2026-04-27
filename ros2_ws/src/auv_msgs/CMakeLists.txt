@@ -19,6 +19,8 @@ set(msg_files
 	"msg/ThrusterMicroseconds.msg"
 	"msg/UnityState.msg"
 	"msg/VelocityReport.msg"
+	"msg/VisionDetection.msg"
+	"msg/VisionDetectionFrame.msg"
 	"msg/VisionObject.msg"
 	"msg/VisionObjectArray.msg"
 )

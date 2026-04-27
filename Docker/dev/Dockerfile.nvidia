@@ -124,6 +124,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ros-${ROS_DISTRO}-marine-sensor-msgs \
         ros-${ROS_DISTRO}-marine-acoustic-msgs \
         ros-${ROS_DISTRO}-vision-msgs \
+        ros-${ROS_DISTRO}-tf-transformations \
         # Visualization Tools
         ros-${ROS_DISTRO}-rqt-image-view \
         ros-${ROS_DISTRO}-rqt-graph \

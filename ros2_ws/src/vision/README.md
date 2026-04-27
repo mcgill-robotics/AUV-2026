@@ -17,12 +17,12 @@ Configurations for the launch file are pulled from [config/vision_pipeline.yaml]
 | `camera` | `down_cam_topic` | `/sensors/down_cam/image_raw` | Input topic for down camera images |
 | `image_enhancement` | `front_enhanced_topic` | `/vision/front_cam/image_enhanced` | Output topic for enhanced front camera images |
 | `image_enhancement` | `down_enhanced_topic` | `/vision/down_cam/image_enhanced` | Output topic for enhanced down camera images |
-| `object_detection` | `front_detections_topic` | `/vision/front_cam/detections` | Output topic for front camera object detections |
+| `object_detection` | `front_detection_frame_topic` | `/vision/front_cam/detection_frame` | Output topic for synchronized front camera detection frames |
 | `object_detection` | `down_detections_topic` | `/vision/down_cam/detections` | Output topic for down camera object detections |
 | `object_detection` | `front_model_relative_path` | `frontcam.pt` | Path to front camera object detection model file, relative to the `src` directory of the vision package |
 | `object_detection` | `down_model_relative_path` | `downcam.pt` | Path to down camera object detection model file, relative to the `ros2_ws/vision/models` directory |
 | `object_map` | `object_map_topic` | `/vision/object_map` | Output topic for object map |
-| `object_map` | `vio_pose_topic` | `/vision/vio_pose` | Output topic for VIO pose computed by ZED SDK|
+| `object_detection` | `vio_pose_topic` | `/vision/vio_pose` | Debug/compat output topic for the synchronized front camera AUV pose |
 | `general` | `sim` | `false` | Set to true to enable simulation mode (for Unity sim) |
 | `general` | `debug` | `false` | Set to true to enable debug logging in all nodes (there should only be debug logging in object map) |
 

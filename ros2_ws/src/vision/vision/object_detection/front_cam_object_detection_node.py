@@ -8,31 +8,35 @@ from rclpy.qos import qos_profile_sensor_data
 import os
 import cv2
 import time
+import copy
 import threading
 from time import sleep
 from datetime import datetime
 from pathlib import Path
-import supervision as sv
-from cv_bridge import CvBridge
-from vision.object_detection.utils import load_model, get_detections, build_detection2d_msg, publish_annotated_image_util
 import numpy as np
 
+from tf_transformations import concatenate_matrices, euler_matrix, inverse_matrix, quaternion_from_matrix
+from vision.object_detection.utils import load_model, get_detections, publish_annotated_image_util
+
+from cv_bridge import CvBridge
 from sensor_msgs.msg import CompressedImage, Image
 from std_msgs.msg import Float64
 from std_srvs.srv import SetBool
-from geometry_msgs.msg import PoseStamped
-from vision_msgs.msg import Detection3DArray, Detection3D, ObjectHypothesisWithPose
+from geometry_msgs.msg import PoseStamped, Quaternion
+from auv_msgs.msg import VisionDetection, VisionDetectionFrame
 
 class FrontCamObjectDetectorNode():
+    POSE_SOURCE_ZED_VIO = "zed_vio"
+    POSE_SOURCE_AUV_POSE = "auv_pose"
+
     def __init__(self, node: Node):
         self.node = node
         self.node.declare_parameter('class_names', Parameter.Type.STRING_ARRAY)
         self.node.declare_parameter('model_path', Parameter.Type.STRING)
-        self.node.declare_parameter('detection_topic', Parameter.Type.STRING)
-        self.node.declare_parameter('depth_map_topic', Parameter.Type.STRING)        
         self.node.declare_parameter('queue_size', Parameter.Type.INTEGER)
         self.node.declare_parameter('publish_annotated_image', False)
         self.node.declare_parameter("compressed", Parameter.Type.BOOL)
+        self.node.declare_parameter("detection_frame_topic", Parameter.Type.STRING)
 
         self.node.declare_parameter("model_detection_threshold", 0.40)
         self.node.declare_parameter("depth_confidence_threshold", 95)
@@ -42,8 +46,17 @@ class FrontCamObjectDetectorNode():
         self.node.declare_parameter('stream_ip', Parameter.Type.STRING)
         self.node.declare_parameter('stream_port', Parameter.Type.INTEGER)
         self.node.declare_parameter('vio_pose_topic', '/vision/vio_pose')
+        self.node.declare_parameter('pose_source', self.POSE_SOURCE_ZED_VIO)
+        self.node.declare_parameter('auv_pose_topic', 'state/pose')
         self.node.declare_parameter('enable_gate_top_crop', True)
         self.node.declare_parameter('gate_top_crop_ratio', 0.50)
+        self.node.declare_parameter('global_frame_id', 'pool_link')
+        self.node.declare_parameter('auv_frame_id', 'auv_link')
+        self.node.declare_parameter('detection_frame_id', 'zed_left_camera_frame')
+        self.node.declare_parameter('auv_to_camera_center_xyz', [0.0, 0.0, 0.0])
+        self.node.declare_parameter('auv_to_camera_center_rpy', [0.0, 0.0, 0.0])
+        self.node.declare_parameter('camera_center_to_detection_xyz', [0.0, 0.06, 0.0])
+        self.node.declare_parameter('camera_center_to_detection_rpy', [0.0, 0.0, 0.0])
 
         # Image collection parameters
         self.node.declare_parameter('collection_dir', '/tmp/front_cam_collection')
@@ -52,6 +65,9 @@ class FrontCamObjectDetectorNode():
         # Depth sensor state (pressure sensor overrides VIO Z)
         self._depth_lock = threading.Lock()
         self._sensor_depth = 0.0
+        self._auv_pose_lock = threading.Lock()
+        self._auv_pose_msg = None
+        self._has_auv_pose = False
         self.depth_sub = self.node.create_subscription(
             Float64,
             '/sensors/depth/z',
@@ -71,8 +87,9 @@ class FrontCamObjectDetectorNode():
         self.class_names = list(self.node.get_parameter('class_names').get_parameter_value().string_array_value)
         self.node.get_logger().info(f"Class names: {self.class_names}")
         model_path = self.node.get_parameter('model_path').get_parameter_value().string_value
-        detection_topic = self.node.get_parameter('detection_topic').get_parameter_value().string_value
-        depth_map_topic = self.node.get_parameter('depth_map_topic').get_parameter_value().string_value
+        self.detection_frame_topic = (
+            self.node.get_parameter('detection_frame_topic').get_parameter_value().string_value
+        )
         queue_size = self.node.get_parameter('queue_size').get_parameter_value().integer_value
         self.publish_annotated_image = self.node.get_parameter('publish_annotated_image').get_parameter_value().bool_value
         self.compressed = self.node.get_parameter('compressed').get_parameter_value().bool_value
@@ -83,8 +100,40 @@ class FrontCamObjectDetectorNode():
         )
         sim = self.node.get_parameter('sim').get_parameter_value().bool_value
         stream_port = self.node.get_parameter('stream_port').get_parameter_value().integer_value
+        self.pose_source = self.node.get_parameter('pose_source').get_parameter_value().string_value
+        self.auv_pose_topic = self.node.get_parameter('auv_pose_topic').get_parameter_value().string_value
         self.enable_gate_top_crop = self.node.get_parameter('enable_gate_top_crop').get_parameter_value().bool_value
         self.gate_top_crop_ratio = self.node.get_parameter('gate_top_crop_ratio').get_parameter_value().double_value
+        self.global_frame_id = self.node.get_parameter('global_frame_id').get_parameter_value().string_value
+        self.auv_frame_id = self.node.get_parameter('auv_frame_id').get_parameter_value().string_value
+        self.detection_frame_id = (
+            self.node.get_parameter('detection_frame_id').get_parameter_value().string_value
+        )
+
+        auv_to_camera_center_xyz = self._get_vector3_parameter('auv_to_camera_center_xyz')
+        auv_to_camera_center_rpy = self._get_vector3_parameter('auv_to_camera_center_rpy')
+        camera_center_to_detection_xyz = self._get_vector3_parameter('camera_center_to_detection_xyz')
+        camera_center_to_detection_rpy = self._get_vector3_parameter('camera_center_to_detection_rpy')
+
+        self.T_auv_camera_center = self._build_transform_matrix_from_xyz_rpy(
+            auv_to_camera_center_xyz,
+            auv_to_camera_center_rpy,
+        )
+        self.T_camera_center_detection = self._build_transform_matrix_from_xyz_rpy(
+            camera_center_to_detection_xyz,
+            camera_center_to_detection_rpy,
+        )
+        self.T_auv_detection = concatenate_matrices(
+            self.T_auv_camera_center,
+            self.T_camera_center_detection,
+        )
+        self.T_detection_auv = inverse_matrix(self.T_auv_detection)
+
+        if self.pose_source not in {self.POSE_SOURCE_ZED_VIO, self.POSE_SOURCE_AUV_POSE}:
+            raise ValueError(
+                f"Unsupported pose_source '{self.pose_source}'. "
+                f"Expected '{self.POSE_SOURCE_ZED_VIO}' or '{self.POSE_SOURCE_AUV_POSE}'."
+            )
 
         input_format = CompressedImage if self.compressed else Image
         if self.compressed:
@@ -114,13 +163,11 @@ class FrontCamObjectDetectorNode():
         init_params.input = sl.InputType()
         # init_params.optional_opencv_calibration_file = "/home/douglas/AUV-2026/calibration.yaml"
 
-        self.zed.enable_positional_tracking
         if sim:
             stream_ip = self.node.get_parameter('stream_ip').get_parameter_value().string_value
             init_params.set_from_stream(stream_ip, stream_port)
 
         self.image_buffer = sl.Mat()
-        self.depth_buffer = sl.Mat()
 
         for i in range(5):
             result = self.zed.open(init_params)
@@ -140,6 +187,7 @@ class FrontCamObjectDetectorNode():
         pos_param.set_floor_as_origin = False
         pos_param.enable_area_memory = False
         pos_param.depth_min_range = 0.3
+        
         err = self.zed.enable_positional_tracking(pos_param)
         if err != sl.ERROR_CODE.SUCCESS:
             self.node.get_logger().error(f"Failed to enable positional tracking: {err}")
@@ -150,16 +198,24 @@ class FrontCamObjectDetectorNode():
         obj_param = sl.ObjectDetectionParameters()
         obj_param.detection_model = sl.OBJECT_DETECTION_MODEL.CUSTOM_BOX_OBJECTS
         obj_param.enable_tracking = False
+        obj_param.enable_segmentation = False
+        obj_param.filtering_mode = sl.OBJECT_FILTERING_MODE.NONE
+
         err = self.zed.enable_object_detection(obj_param)
         if err != sl.ERROR_CODE.SUCCESS:
             self.node.get_logger().error(f"Failed to enable object detection: {err}")
             self.zed.close()
             exit(1)
-        self.obj_runtime_param = sl.ObjectDetectionRuntimeParameters()
         
+        self.obj_runtime_param = sl.CustomObjectDetectionRuntimeParameters()
+        self.obj_runtime_param.object_detection_properties.detection_confidence_threshold = 0
+        self.obj_runtime_param.object_detection_properties.is_grounded = False
+        self.obj_runtime_param.object_detection_properties.is_static = True
+
         self.runtime_params = sl.RuntimeParameters()
         self.runtime_params.measure3D_reference_frame = sl.REFERENCE_FRAME.CAMERA
         self.runtime_params.confidence_threshold = self.depth_confidence_threshold
+        self.runtime_params.texture_confidence_threshold  = 100
 
         if not sim:
             # Configure streaming
@@ -180,9 +236,9 @@ class FrontCamObjectDetectorNode():
         
         self.node.get_logger().info(f"Setting QOL queue size to: {queue_size}")
         
-        self.pub_detections = self.node.create_publisher(
-            Detection3DArray,
-            detection_topic,
+        self.pub_detection_frame = self.node.create_publisher(
+            VisionDetectionFrame,
+            self.detection_frame_topic,
             queue_size
         )
 
@@ -192,19 +248,16 @@ class FrontCamObjectDetectorNode():
             vio_pose_topic,
             10
         )
-        self.node.get_logger().info(f"Publishing VIO pose to: {vio_pose_topic}")
+        self.node.get_logger().info(f"Publishing world pose to: {vio_pose_topic}")
+        self._configure_pose_source()
 
-        self.pub_depth_map = self.node.create_publisher(
-            CompressedImage if self.compressed else Image,
-            depth_map_topic,
-            queue_size
+        self.node.get_logger().info(
+            f"Publishing synchronized detection frames to: {self.detection_frame_topic}"
         )
-
-        self.node.get_logger().info(f"Publishing to output topic: {detection_topic}")
 
         # Publisher for annotated debug image
         if self.publish_annotated_image:
-            publish_topic = detection_topic + "/annotated" + ("/compressed" if self.compressed else "")
+            publish_topic = self.detection_frame_topic + "/annotated" + ("/compressed" if self.compressed else "")
             self.pub_annotated_image = self.node.create_publisher(
                 input_format,
                 publish_topic,
@@ -221,6 +274,139 @@ class FrontCamObjectDetectorNode():
     def _depth_callback(self, msg):
         with self._depth_lock:
             self._sensor_depth = msg.data
+
+    def _auv_pose_callback(self, msg: PoseStamped):
+        with self._auv_pose_lock:
+            self._auv_pose_msg = copy.deepcopy(msg)
+            self._has_auv_pose = True
+
+    def _configure_pose_source(self):
+        if self.pose_source == self.POSE_SOURCE_AUV_POSE:
+            self.auv_pose_sub = self.node.create_subscription(
+                PoseStamped,
+                self.auv_pose_topic,
+                self._auv_pose_callback,
+                qos_profile_sensor_data
+            )
+            self.node.get_logger().info(
+                f"Using AUV pose from: {self.auv_pose_topic}"
+            )
+        else:
+            self.auv_pose_sub = None
+            self.node.get_logger().info("Using ZED VIO pose to derive synchronized AUV poses")
+
+    def _get_vector3_parameter(self, name: str) -> np.ndarray:
+        values = self.node.get_parameter(name).get_parameter_value().double_array_value
+        if len(values) != 3:
+            raise ValueError(f"Parameter '{name}' must contain exactly 3 values.")
+        return np.array([float(values[0]), float(values[1]), float(values[2])], dtype=float)
+
+    def _build_transform_matrix_from_xyz_rpy(
+        self,
+        translation_xyz: np.ndarray,
+        rotation_rpy: np.ndarray,
+    ) -> np.ndarray:
+        transform = euler_matrix(
+            float(rotation_rpy[0]),
+            float(rotation_rpy[1]),
+            float(rotation_rpy[2]),
+        )
+        transform[0:3, 3] = translation_xyz
+        return transform
+
+    def _build_quaternion_msg(self, orientation_xyzw: np.ndarray) -> Quaternion:
+        orientation = Quaternion()
+        orientation.x = float(orientation_xyzw[0])
+        orientation.y = float(orientation_xyzw[1])
+        orientation.z = float(orientation_xyzw[2])
+        orientation.w = float(orientation_xyzw[3])
+        return orientation
+
+    def _build_pose_message(
+        self,
+        translation: np.ndarray,
+        orientation_xyzw: np.ndarray,
+        frame_id: str,
+        stamp,
+    ) -> PoseStamped:
+        pose_msg = PoseStamped()
+        pose_msg.header.stamp = stamp
+        pose_msg.header.frame_id = frame_id
+        pose_msg.pose.position.x = float(translation[0])
+        pose_msg.pose.position.y = float(translation[1])
+        pose_msg.pose.position.z = float(translation[2])
+        pose_msg.pose.orientation = self._build_quaternion_msg(orientation_xyzw)
+        return pose_msg
+
+    def _build_pose_message_from_transform(
+        self,
+        transform: np.ndarray,
+        frame_id: str,
+        stamp,
+    ) -> PoseStamped:
+        translation = transform[0:3, 3]
+        orientation_xyzw = quaternion_from_matrix(transform)
+        return self._build_pose_message(translation, orientation_xyzw, frame_id, stamp)
+
+    def _bbox_from_xyxy(self, x1: float, y1: float, x2: float, y2: float):
+        size_x = max(0.0, float(x2) - float(x1))
+        size_y = max(0.0, float(y2) - float(y1))
+        center_x = float(x1) + size_x / 2.0
+        center_y = float(y1) + size_y / 2.0
+        return center_x, center_y, size_x, size_y
+
+    def _bbox_from_zed_corners(self, corners) -> tuple[float, float, float, float]:
+        if corners is None or len(corners) == 0:
+            return 0.0, 0.0, 0.0, 0.0
+
+        xs = [float(point[0]) for point in corners]
+        ys = [float(point[1]) for point in corners]
+        return self._bbox_from_xyxy(min(xs), min(ys), max(xs), max(ys))
+
+    def _get_auv_world_pose_snapshot(self, stamp):
+        if self.pose_source != self.POSE_SOURCE_AUV_POSE:
+            return None
+
+        with self._auv_pose_lock:
+            if not self._has_auv_pose:
+                return None
+
+            pose_msg = copy.deepcopy(self._auv_pose_msg)
+
+        pose_msg.header.stamp = stamp
+        pose_msg.header.frame_id = pose_msg.header.frame_id or self.global_frame_id
+        return pose_msg
+
+    def _get_zed_world_pose_snapshot(self, stamp):
+        cam_pose = sl.Pose()
+        tracking_state = self.zed.get_position(cam_pose, sl.REFERENCE_FRAME.WORLD)
+        if tracking_state != sl.POSITIONAL_TRACKING_STATE.OK:
+            self.node.get_logger().warn(f"VIO tracking not OK: {tracking_state}", throttle_duration_sec=1.0)
+
+        with self._depth_lock:
+            sensor_z = self._sensor_depth
+
+        translation = cam_pose.get_translation().get()
+        translation = np.array([float(translation[0]), float(translation[1]), -sensor_z])
+        rotation = np.array(cam_pose.get_rotation_matrix().r, dtype=float).reshape(3, 3)
+
+        T_world_detection = np.eye(4)
+        T_world_detection[0:3, 0:3] = rotation
+        T_world_detection[0:3, 3] = translation
+        T_world_auv = concatenate_matrices(T_world_detection, self.T_detection_auv)
+        return self._build_pose_message_from_transform(T_world_auv, self.global_frame_id, stamp)
+
+    def _capture_auv_pose_snapshot(self, stamp):
+        if self.pose_source == self.POSE_SOURCE_AUV_POSE:
+            return self._get_auv_world_pose_snapshot(stamp)
+
+        return self._get_zed_world_pose_snapshot(stamp)
+
+    def _has_required_pose_source(self):
+        if self.pose_source == self.POSE_SOURCE_AUV_POSE:
+            with self._auv_pose_lock:
+                return self._has_auv_pose
+        return True
 
     def _toggle_collection_callback(self, request, response):
         self._collecting = request.data
@@ -246,6 +432,22 @@ class FrontCamObjectDetectorNode():
                 self.node.get_logger().warn(f"Zed.grab() failed: {result}", throttle_duration_sec=5.0)
                 continue
 
+            if not self._has_required_pose_source():
+                self.node.get_logger().warn(
+                    f"Waiting for AUV pose on {self.auv_pose_topic}",
+                    throttle_duration_sec=1.0
+                )
+                continue
+
+            frame_stamp = self.node.get_clock().now().to_msg()
+            auv_pose_msg = self._capture_auv_pose_snapshot(frame_stamp)
+            if auv_pose_msg is None:
+                self.node.get_logger().warn(
+                    f"Waiting for AUV pose on {self.auv_pose_topic}",
+                    throttle_duration_sec=1.0
+                )
+                continue
+
             # --- ZED Health Checks ---
             health = self.zed.get_health_status()
             if health.low_image_quality:
@@ -268,44 +470,21 @@ class FrontCamObjectDetectorNode():
                     cv2.imwrite(filepath, img)
                     self.node.get_logger().debug(f"Saved {filepath}")
 
-            # --- VIO / Positional Tracking ---
-            cam_pose = sl.Pose()
-            tracking_state = self.zed.get_position(cam_pose, sl.REFERENCE_FRAME.WORLD)
-            if tracking_state != sl.POSITIONAL_TRACKING_STATE.OK:
-                self.node.get_logger().warn(f"VIO tracking not OK: {tracking_state}", throttle_duration_sec=1.0)
-
-            rotation = cam_pose.get_rotation_matrix()
-            R = np.array(rotation.r).reshape(3, 3)
-            cam_translation = cam_pose.get_translation().get()
-            # Override VIO Z with pressure sensor depth
-            with self._depth_lock:
-                sensor_z = self._sensor_depth
-            cam_translation = np.array([float(cam_translation[0]), float(cam_translation[1]), -sensor_z])
-            cam_orientation = cam_pose.get_orientation().get()
-
             # Publish VIO pose continuously, even without active detections
-            pose_msg = PoseStamped()
-            pose_msg.header.stamp = self.node.get_clock().now().to_msg()
-            pose_msg.header.frame_id = "odom"
-            pose_msg.pose.position.x = float(cam_translation[0])
-            pose_msg.pose.position.y = float(cam_translation[1])
-            pose_msg.pose.position.z = float(cam_translation[2])
-            pose_msg.pose.orientation.w = float(cam_orientation[0])
-            pose_msg.pose.orientation.x = float(cam_orientation[1])
-            pose_msg.pose.orientation.y = float(cam_orientation[2])
-            pose_msg.pose.orientation.z = float(cam_orientation[3])
-            self.pub_vio_pose.publish(pose_msg)
+            self.pub_vio_pose.publish(auv_pose_msg)
 
             tracked_detections = get_detections(self, img)
 
-            det_msg = Detection3DArray()
-            det_msg.header.stamp = self.node.get_clock().now().to_msg()
-            det_msg.header.frame_id = "zed_camera_center"
+            det_msg = VisionDetectionFrame()
+            det_msg.header.stamp = frame_stamp
+            det_msg.header.frame_id = self.detection_frame_id
+            det_msg.auv_pose = auv_pose_msg
             det_objects = []
 
             if tracked_detections is not None:
                 # 1. Ingest into ZED SDK
                 custom_boxes = []
+                model_bboxes_by_unique_id = {}
                 for i in range(len(tracked_detections)):
                     x1, y1, x2, y2 = tracked_detections.xyxy[i]
                     cls_id = int(tracked_detections.class_id[i])
@@ -315,6 +494,14 @@ class FrontCamObjectDetectorNode():
                     box.probability = float(tracked_detections.confidence[i])
                     box.label = cls_id
                     box.is_grounded = False
+                    unique_object_id = f"front_cam_det_{i}"
+                    box.unique_object_id = unique_object_id
+                    model_bboxes_by_unique_id[unique_object_id] = (
+                        float(x1),
+                        float(y1),
+                        float(x2),
+                        float(y2),
+                    )
 
                     # --- Gate top crop: only feed the top portion of gate bounding boxes ---
                     # The gate's legs extend into noisy stereo territory causing bad depth
@@ -340,9 +527,9 @@ class FrontCamObjectDetectorNode():
 
                 # 2. Retrieve 3D objects
                 objects = sl.Objects()
-                self.zed.retrieve_objects(objects, self.obj_runtime_param)
+                self.zed.retrieve_custom_objects(objects, self.obj_runtime_param)
 
-                # 3. Build Detection3DArray
+                # 3. Build synchronized camera-frame detections
                 for obj in objects.object_list:
                     pos_cam = obj.position
                     if np.isnan(pos_cam).any() or np.isinf(pos_cam).any():
@@ -351,12 +538,14 @@ class FrontCamObjectDetectorNode():
                         continue
 
                     cam_pos_vec = np.array([float(pos_cam[0]), float(pos_cam[1]), float(pos_cam[2])])
-                    world_pos = R @ cam_pos_vec + cam_translation
 
-                    detection = Detection3D()
-                    detection.bbox.center.position.x = float(world_pos[0])
-                    detection.bbox.center.position.y = float(world_pos[1])
-                    detection.bbox.center.position.z = float(world_pos[2])
+                    detection = VisionDetection()
+                    detection.label = self.class_names[obj.raw_label]
+                    detection.confidence = float(obj.confidence) / 100.0
+                    detection.pose_camera.pose.position.x = float(cam_pos_vec[0])
+                    detection.pose_camera.pose.position.y = float(cam_pos_vec[1])
+                    detection.pose_camera.pose.position.z = float(cam_pos_vec[2])
+                    detection.pose_camera.pose.orientation.w = 1.0
 
                     cov = obj.position_covariance
                     cov_cam = np.array([
@@ -364,31 +553,32 @@ class FrontCamObjectDetectorNode():
                         [float(cov[1]), float(cov[3]), float(cov[4])],
                         [float(cov[2]), float(cov[4]), float(cov[5])]
                     ])
-                    cov_world = R @ cov_cam @ R.T
-
-                    hypothesis = ObjectHypothesisWithPose()
-                    hypothesis.hypothesis.class_id = self.class_names[obj.raw_label]
-                    hypothesis.hypothesis.score = float(obj.confidence) / 100.0
 
                     ros_cov = [0.0] * 36
                     for r in range(3):
                         for c in range(3):
-                            ros_cov[r * 6 + c] = float(cov_world[r, c])
+                            ros_cov[r * 6 + c] = float(cov_cam[r, c])
+                    detection.pose_camera.covariance = ros_cov
 
-                    hypothesis.pose.pose.position.x = float(world_pos[0])
-                    hypothesis.pose.pose.position.y = float(world_pos[1])
-                    hypothesis.pose.pose.position.z = float(world_pos[2])
-                    hypothesis.pose.covariance = ros_cov
-
-                    detection.bbox.size.x = float(cam_translation[0])
-                    detection.bbox.size.y = float(cam_translation[1])
-                    detection.bbox.size.z = float(cam_translation[2])
-
-                    detection.results = [hypothesis]
+                    bbox_xyxy = model_bboxes_by_unique_id.get(obj.unique_object_id)
+                    if bbox_xyxy is not None:
+                        (
+                            detection.bbox_center_x,
+                            detection.bbox_center_y,
+                            detection.bbox_size_x,
+                            detection.bbox_size_y,
+                        ) = self._bbox_from_xyxy(*bbox_xyxy)
+                    else:
+                        (
+                            detection.bbox_center_x,
+                            detection.bbox_center_y,
+                            detection.bbox_size_x,
+                            detection.bbox_size_y,
+                        ) = self._bbox_from_zed_corners(obj.bounding_box_2d)
                     det_objects.append(detection)
 
             det_msg.detections = det_objects
-            self.pub_detections.publish(det_msg)
+            self.pub_detection_frame.publish(det_msg)
 
 
             # Always publish the (possibly annotated) image, even with no detections

@@ -166,9 +166,7 @@ def generate_launch_description():
         name='front_cam_object_detection',
         parameters=[
             {
-                'camera_type': "front_cam",
-                'detection_topic': default_config["object_detection"]["front_cam"]["detection_topic"],
-                'depth_map_topic': default_config["object_detection"]["front_cam"]["depth_map_topic"],
+                'detection_frame_topic': default_config["object_detection"]["front_cam"]["detection_frame_topic"],
                 'model_path': PathJoinSubstitution([vision_dir, LaunchConfiguration("front_model_relative_path")]),
                 'class_names': default_config["object_detection"]["front_cam"]["class_names"],
                 'queue_size': default_config["object_detection"]["front_cam"]["queue_size"],
@@ -176,6 +174,18 @@ def generate_launch_description():
 
                 'model_detection_threshold': default_config["object_detection"]["front_cam"]["model_detection_threshold"],
                 'depth_confidence_threshold': default_config["object_detection"]["front_cam"]["depth_confidence_threshold"],
+                'pose_source': default_config["object_detection"]["front_cam"]["pose_source"],
+                'auv_pose_topic': default_config["object_detection"]["front_cam"]["auv_pose_topic"],
+                'global_frame_id': default_config["object_detection"]["front_cam"]["global_frame_id"],
+                'auv_frame_id': default_config["object_detection"]["front_cam"]["auv_frame_id"],
+                'detection_frame_id': default_config["object_detection"]["front_cam"]["detection_frame_id"],
+                'auv_to_camera_center_xyz': default_config["object_detection"]["front_cam"]["auv_to_camera_center_xyz"],
+                'auv_to_camera_center_rpy': default_config["object_detection"]["front_cam"]["auv_to_camera_center_rpy"],
+                'camera_center_to_detection_xyz': default_config["object_detection"]["front_cam"]["camera_center_to_detection_xyz"],
+                'camera_center_to_detection_rpy': default_config["object_detection"]["front_cam"]["camera_center_to_detection_rpy"],
+                'vio_pose_topic': default_config["object_detection"]["front_cam"]["vio_pose_topic"],
+                'enable_gate_top_crop': default_config["object_detection"]["front_cam"]["enable_gate_top_crop"],
+                'gate_top_crop_ratio': default_config["object_detection"]["front_cam"]["gate_top_crop_ratio"],
                 'use_sim_time': LaunchConfiguration("sim"),
                 'compressed': LaunchConfiguration("compressed"),
                 'log_level': default_config["object_detection"]["front_cam"]["log_level"],
@@ -188,6 +198,38 @@ def generate_launch_description():
         ],
         ros_arguments=["--ros-args", "--log-level", "front_cam_object_detection:=" + default_config["object_detection"]["front_cam"]["log_level"]]
     )
+
+    auv_to_camera_center_tf = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="auv_to_zed_camera_center_tf",
+        arguments=[
+            "--x", str(default_config["object_detection"]["front_cam"]["auv_to_camera_center_xyz"][0]),
+            "--y", str(default_config["object_detection"]["front_cam"]["auv_to_camera_center_xyz"][1]),
+            "--z", str(default_config["object_detection"]["front_cam"]["auv_to_camera_center_xyz"][2]),
+            "--roll", str(default_config["object_detection"]["front_cam"]["auv_to_camera_center_rpy"][0]),
+            "--pitch", str(default_config["object_detection"]["front_cam"]["auv_to_camera_center_rpy"][1]),
+            "--yaw", str(default_config["object_detection"]["front_cam"]["auv_to_camera_center_rpy"][2]),
+            "--frame-id", default_config["object_detection"]["front_cam"]["auv_frame_id"],
+            "--child-frame-id", default_config["object_detection"]["front_cam"]["camera_center_frame_id"],
+        ],
+    )
+
+    camera_center_to_detection_tf = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="zed_camera_center_to_left_frame_tf",
+        arguments=[
+            "--x", str(default_config["object_detection"]["front_cam"]["camera_center_to_detection_xyz"][0]),
+            "--y", str(default_config["object_detection"]["front_cam"]["camera_center_to_detection_xyz"][1]),
+            "--z", str(default_config["object_detection"]["front_cam"]["camera_center_to_detection_xyz"][2]),
+            "--roll", str(default_config["object_detection"]["front_cam"]["camera_center_to_detection_rpy"][0]),
+            "--pitch", str(default_config["object_detection"]["front_cam"]["camera_center_to_detection_rpy"][1]),
+            "--yaw", str(default_config["object_detection"]["front_cam"]["camera_center_to_detection_rpy"][2]),
+            "--frame-id", default_config["object_detection"]["front_cam"]["camera_center_frame_id"],
+            "--child-frame-id", default_config["object_detection"]["front_cam"]["detection_frame_id"],
+        ],
+    )
     
     down_detection_node = Node(
         package='vision',
@@ -195,7 +237,6 @@ def generate_launch_description():
         name='down_cam_object_detection',
         parameters=[
             {
-                'camera_type': "down_cam",
                 'input_topic': object_detection_down_input,
                 'detection_topic': default_config["object_detection"]["down_cam"]["detection_topic"],
                 'model_path': PathJoinSubstitution([vision_dir, LaunchConfiguration("down_model_relative_path")]),
@@ -218,36 +259,25 @@ def generate_launch_description():
         name="object_map_node",
         parameters=[
             {
-                "frame_rate": default_config["object_map"]["frame_rate"],
-                "class_labels": default_config["object_detection"]["front_cam"]["class_names"],
                 "large_structure_labels": default_config["object_map"]["large_structure_labels"],
                 "pipe_labels": default_config["object_map"]["pipe_labels"],
                 "max_per_class_labels": list(default_config["object_map"]["max_per_class"].keys()),
                 "max_per_class_values": list(default_config["object_map"]["max_per_class"].values()),
-                "zed_sdk": True,
                 "new_object_min_distance_threshold": default_config["object_map"]["new_object_min_distance_threshold"],
                 "min_large_structure_separation_m": default_config["object_map"]["min_large_structure_separation_m"],
                 "min_large_structure_pipe_separation_m": default_config["object_map"]["min_large_structure_pipe_separation_m"],
-                "front_cam_detection_topic": default_config["object_detection"]["front_cam"]["detection_topic"],
+                "front_cam_detection_frame_topic": default_config["object_detection"]["front_cam"]["detection_frame_topic"],
                 "object_map_topic": default_config["object_map"]["map_topic"],
-                "vio_pose_topic": default_config["object_map"]["pose_topic"],
-                "confidence_threshold": default_config["object_map"]["confidence_threshold"],
-                "zed_depth_confidence_threshold": default_config["object_map"]["zed_depth_confidence_threshold"],
-                "max_range": default_config["object_map"]["max_range"],
-                "use_stream": default_config["general"]["use_wrapper_stream"],
-                "stream_address": default_config["general"]["wrapper_stream_ip"],
-                "stream_port": default_config["general"]["wrapper_stream_port"],
+                "auv_frame_id": default_config["object_detection"]["front_cam"]["auv_frame_id"],
                 "pool_floor_z": default_config["object_map"]["pool_floor_z"],
                 "pool_surface_z": default_config["object_map"]["pool_surface_z"],
                 "unique_objects": default_config["object_map"]["unique_objects"],
                 "floor_objects": default_config["object_map"]["floor_objects"],
                 "surface_objects": default_config["object_map"]["surface_objects"],
-                "enable_gate_top_crop": default_config["object_map"]["enable_gate_top_crop"],
                 "enable_z_axis_locking": default_config["object_map"]["enable_z_axis_locking"],
                 "enable_gate_midpoint_refinement": default_config["object_map"]["enable_gate_midpoint_refinement"],
                 "enable_board_icon_refinement": default_config["object_map"]["enable_board_icon_refinement"],
                 "enable_octagon_xy_inheritance": default_config["object_map"]["enable_octagon_xy_inheritance"],
-                "gate_top_crop_ratio": default_config["object_map"]["gate_top_crop_ratio"],
                 "max_pipe_distance": default_config["object_map"]["max_pipe_distance"],
                 "gating_threshold": default_config["object_map"]["gating_threshold"],
                 "min_hits": default_config["object_map"]["min_hits"],
@@ -277,6 +307,8 @@ def generate_launch_description():
     # launch_description.add_action(zed_wrapper_log_type_arg)
     # launch_description.add_action(zed_real_wrapper_launch)
     # launch_description.add_action(zed_sim_wrapper_launch)
+    launch_description.add_action(auv_to_camera_center_tf)
+    launch_description.add_action(camera_center_to_detection_tf)
     launch_description.add_action(front_cam_enhancement_node)
     # launch_description.add_action(down_cam_enhancement_node)
     launch_description.add_action(front_detection_node)

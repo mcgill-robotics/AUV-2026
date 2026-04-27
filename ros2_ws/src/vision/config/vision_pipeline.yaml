@@ -17,10 +17,20 @@ image_enhancement:
 object_detection:
   front_cam:
     enhanced_topic: /vision/front_cam/image_enhanced # input topic if enhance_images is true, otherwise will subscribe to raw image topic
-    detection_topic: /vision/front_cam/detections # output topic for detections
-    depth_map_topic: /vision/depth_map
+    detection_frame_topic: /vision/front_cam/detection_frame # synchronized camera-frame detections + AUV pose
     model_detection_threshold: 0.40
     depth_confidence_threshold: 95
+    pose_source: auv_pose # zed_vio or auv_pose
+    auv_pose_topic: state/pose
+    vio_pose_topic: /vision/vio_pose
+    global_frame_id: pool_link
+    auv_frame_id: auv_link
+    camera_center_frame_id: zed_camera_center
+    detection_frame_id: zed_left_camera_frame
+    auv_to_camera_center_xyz: [0.0, 0.0, 0.0]
+    auv_to_camera_center_rpy: [0.0, 0.0, 0.0]
+    camera_center_to_detection_xyz: [0.0, 0.06, 0.0]
+    camera_center_to_detection_rpy: [0.0, 0.0, 0.0]
     model_relative_path: models/local_rfdetr_onnx_test # inference-models package directory
     class_names:
       - "gate"
@@ -43,7 +53,9 @@ object_detection:
       - "fire"
       - "bin_structure"
     queue_size: 10
-    publish_annotated_image: true # whether to publish an annotated image with bounding boxes drawn (for visualization/debugging). will publish to detection_topic + /annotated
+    enable_gate_top_crop: true # Removes bottom X% of bounding box for gate to ignore legs/pool floor noise
+    gate_top_crop_ratio: 0.50 # The ratio (0.0 to 1.0) of the gate bounding box to keep from the top edge
+    publish_annotated_image: true # whether to publish an annotated image with bounding boxes drawn (for visualization/debugging). will publish to detection_frame_topic + /annotated
     collection_dir: /tmp/front_cam_collection # directory for direct-to-disk image saving (toggled via service)
     collection_interval_seconds: 2.0 # seconds between saved frames when collection is active
     log_level: debug
@@ -70,11 +82,6 @@ object_detection:
 
 object_map:
   map_topic: /vision/object_map # final output of vision pipeline
-  pose_topic: /vision/vio_pose # output VIO pose topic used to determine 3D position, eventually will subscribe to state estimation instead
-  confidence_threshold: 0.5 # minimum confidence for detections to be considered for tracking (0.0 to 1.0)
-  zed_depth_confidence_threshold: 0 # minimum confidence for ZED depth measurements to be used in tracking (0 to 100)
-  max_range: 9.0 # maximum range in meters for detections to be considered for tracking
-  frame_rate: 30 # maximum frame rate for the object map (tracks will be updated at this rate, may be lower than camera frame rate if processing is too slow)
   new_object_min_distance_threshold: 0.5 # distance in meters between a new detection and existing tracks to be considered a new object and start a new track
   large_structure_labels: ["gate", "table", "board", "bin_structure"]
   pipe_labels: ["red_pipe", "white_pipe"]
@@ -82,12 +89,10 @@ object_map:
   min_large_structure_pipe_separation_m: 1.0 # minimum XY spacing required before spawning gate/table/board/bin_structure near a confirmed pipe
 
   # Feature Toggles (Game-Specific Constraints)
-  enable_gate_top_crop: true # Removes bottom 60% of bounding box for gate to ignore legs/pool floor noise
   enable_z_axis_locking: true # Forces specific unique objects to snap to pool floor/surface Z coordinates
   enable_gate_midpoint_refinement: true # Uses search_rescue/survey_repair panel detections to refine the gate pose
   enable_board_icon_refinement: true # Uses board icons to refine the board pose and make yaw face the AUV
   enable_octagon_xy_inheritance: true # Ignores true octagon detections, creates synthetic octagon directly above the table
-  gate_top_crop_ratio: 0.50 # The ratio (0.0 to 1.0) of the gate bounding box to keep from the top edge
   max_pipe_distance: 7.0 # Truncates tracking of red/white pipes beyond this distance to reduce noise in map
   pool_floor_z: -2.1
   pool_surface_z: 0.0

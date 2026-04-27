@@ -20,6 +20,7 @@ set(ROS_DEPS
     geometry_msgs
     vision_msgs
     tf2
+    tf2_ros
     tf2_geometry_msgs
 )
 set(CPP_LIBS

@@ -1,346 +1,374 @@
-#include <chrono>
-#include <string>
-#include <map>
+#include <algorithm>
 #include <array>
+#include <chrono>
+#include <map>
 #include <memory>
+#include <string>
+#include <vector>
 
-#include "rclcpp/rclcpp.hpp"
+#include <Eigen/Dense>
+
+#include "auv_msgs/msg/vision_detection_frame.hpp"
 #include "auv_msgs/msg/vision_object.hpp"
 #include "auv_msgs/msg/vision_object_array.hpp"
-#include "vision_msgs/msg/detection3_d_array.hpp"
-#include "geometry_msgs/msg/pose_stamped.hpp"
+#include "geometry_msgs/msg/transform_stamped.hpp"
 #include "object_tracker.hpp"
-#include <algorithm>
-
-#include <tf2/LinearMath/Quaternion.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+#include "rclcpp/rclcpp.hpp"
+#include "tf2/LinearMath/Quaternion.h"
+#include "tf2/LinearMath/Transform.h"
+#include "tf2/LinearMath/Vector3.h"
+#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
+#include "tf2_ros/buffer.h"
+#include "tf2_ros/transform_listener.h"
 
 using namespace std;
-// alias for milliseconds with double precision
-using double_ms = std::chrono::duration<double, std::milli>;
 
 class ObjectMapNode : public rclcpp::Node
 {
 public:
     ObjectMapNode() : Node("object_map_node")
     {
-	RCLCPP_INFO(this->get_logger(), "[INIT] ObjectMapNode constructor started");
-	// adding "this" boilerplate for methods called from rclcpp Node base class
-	// Removing ALL default parameters to ensure we explicitly set everything we need for both ZED and non-ZED modes, and to avoid accidentally relying on defaults that might not be what we expect (these were originally kept for debugging)
-	// ZED SDK depth extraction and pose publishing are now handled by front_cam_object_detection python node
-	// Subscriber for front cam detections (YOLO from Python node)
-	string front_cam_detection_topic = this->declare_parameter<string>("front_cam_detection_topic");
-	// Publisher for object map
-	string object_map_topic = this->declare_parameter<string>("object_map_topic");
-	string vio_pose_topic = this->declare_parameter<string>("vio_pose_topic");
-	
-	// tracker tuning parameters used in both ZED and non-ZED fallback
-	// minimum distance from existing tracks for a new detection to be considered a new object rather than a new measurement of an existing object
-	float new_object_min_distance_threshold = this->declare_parameter<float>("new_object_min_distance_threshold");
-	float min_large_structure_separation = this->declare_parameter<float>("min_large_structure_separation_m");
-	float min_large_structure_pipe_separation =
-		this->declare_parameter<float>("min_large_structure_pipe_separation_m");
-	// gating threshold for associating detections to existing tracks (in Mahalanobis distance)
-	double gating_threshold  = this->declare_parameter<double>("gating_threshold");
-	// number of consecutive detections needed to confirm a new track
-	int min_hits = this->declare_parameter<int>("min_hits");
-	// number of consecutive missed detections before a track is deleted
-	int max_age = this->declare_parameter<int>("max_age");
-	// maximum allowed jump in position for an object between consecutive detections
-	double max_position_jump = this->declare_parameter<double>("max_position_jump");
-	// confidence threshold for associating a detection to an existing track rather than initializing a new track
-	int conf_to_tent_threshold = this->declare_parameter<int>("conf_to_tent_threshold");
-	// number of consecutive detections below confidence threshold before a track is deleted
-	int tent_init_buffer = this->declare_parameter<int>("tent_init_buffer");
+        RCLCPP_INFO(this->get_logger(), "[INIT] ObjectMapNode constructor started");
 
-	bool enable_gate_midpoint_refinement = this->declare_parameter<bool>("enable_gate_midpoint_refinement");
-	bool enable_board_icon_refinement = this->declare_parameter<bool>("enable_board_icon_refinement");
-		
-	// Fetch dynamic labels and max limits
-	this->class_labels = this->declare_parameter<std::vector<std::string>>("class_labels");
-	std::vector<std::string> large_structure_labels =
-		this->declare_parameter<std::vector<std::string>>("large_structure_labels");
-	std::vector<std::string> pipe_labels =
-		this->declare_parameter<std::vector<std::string>>("pipe_labels");
-	std::vector<std::string> max_per_class_labels = this->declare_parameter<std::vector<std::string>>("max_per_class_labels");
-	std::vector<int64_t> max_per_class_values = this->declare_parameter<std::vector<int64_t>>("max_per_class_values");
+        string front_cam_detection_frame_topic =
+            this->declare_parameter<string>("front_cam_detection_frame_topic");
+        string object_map_topic = this->declare_parameter<string>("object_map_topic");
+        auv_frame_id = this->declare_parameter<string>("auv_frame_id", "auv_link");
 
-	std::unordered_map<std::string, int> max_per_class_map;
-	for (size_t i = 0; i < max_per_class_labels.size() && i < max_per_class_values.size(); ++i) {
-		max_per_class_map[max_per_class_labels[i]] = static_cast<int>(max_per_class_values[i]);
-	}
+        float new_object_min_distance_threshold =
+            this->declare_parameter<float>("new_object_min_distance_threshold");
+        float min_large_structure_separation =
+            this->declare_parameter<float>("min_large_structure_separation_m");
+        float min_large_structure_pipe_separation =
+            this->declare_parameter<float>("min_large_structure_pipe_separation_m");
+        double gating_threshold = this->declare_parameter<double>("gating_threshold");
+        int min_hits = this->declare_parameter<int>("min_hits");
+        int max_age = this->declare_parameter<int>("max_age");
+        double max_position_jump = this->declare_parameter<double>("max_position_jump");
+        int conf_to_tent_threshold = this->declare_parameter<int>("conf_to_tent_threshold");
+        int tent_init_buffer = this->declare_parameter<int>("tent_init_buffer");
 
-	// Object Tracker, used in both ZED and non-ZED modes, so that we maintain a consistent object map output regardless of input source
-	object_tracker = ObjectTracker(
-		max_per_class_map,
-		large_structure_labels,
-		pipe_labels,
-		new_object_min_distance_threshold,
-		min_large_structure_separation,
-		min_large_structure_pipe_separation,
-		gating_threshold,
-		min_hits,
-		max_age,
-		max_position_jump,
-		conf_to_tent_threshold,
-		tent_init_buffer,
-		enable_gate_midpoint_refinement,
-		enable_board_icon_refinement
-	);
-	// physical tracking constraints
-	enable_z_axis_locking = this->declare_parameter<bool>("enable_z_axis_locking");
-	enable_octagon_xy_inheritance = this->declare_parameter<bool>("enable_octagon_xy_inheritance");
-	pool_floor_z = this->declare_parameter<double>("pool_floor_z");
-	pool_surface_z = this->declare_parameter<double>("pool_surface_z");
-	unique_objects = this->declare_parameter<std::vector<std::string>>("unique_objects");
-	floor_objects = this->declare_parameter<std::vector<std::string>>("floor_objects");
-	surface_objects = this->declare_parameter<std::vector<std::string>>("surface_objects");
-	max_pipe_distance = this->declare_parameter<double>("max_pipe_distance");
+        bool enable_gate_midpoint_refinement =
+            this->declare_parameter<bool>("enable_gate_midpoint_refinement");
+        bool enable_board_icon_refinement =
+            this->declare_parameter<bool>("enable_board_icon_refinement");
 
-	// Publishers
-	object_map_publisher = this->create_publisher<auv_msgs::msg::VisionObjectArray>(object_map_topic, 10);
+        std::vector<std::string> large_structure_labels =
+            this->declare_parameter<std::vector<std::string>>("large_structure_labels");
+        std::vector<std::string> pipe_labels =
+            this->declare_parameter<std::vector<std::string>>("pipe_labels");
+        std::vector<std::string> max_per_class_labels =
+            this->declare_parameter<std::vector<std::string>>("max_per_class_labels");
+        std::vector<int64_t> max_per_class_values =
+            this->declare_parameter<std::vector<int64_t>>("max_per_class_values");
 
-	// Subscribe to 3D detections from Python node
-	detection_subscriber = this->create_subscription<vision_msgs::msg::Detection3DArray>(
-		front_cam_detection_topic, 10, std::bind(&ObjectMapNode::detection_callback, this, std::placeholders::_1)
-	);
-	vio_pose_subscriber = this->create_subscription<geometry_msgs::msg::PoseStamped>(
-		vio_pose_topic, 10, std::bind(&ObjectMapNode::vio_pose_callback, this, std::placeholders::_1)
-	);
+        std::unordered_map<std::string, int> max_per_class_map;
+        for (size_t i = 0; i < max_per_class_labels.size() && i < max_per_class_values.size(); ++i) {
+            max_per_class_map[max_per_class_labels[i]] = static_cast<int>(max_per_class_values[i]);
+        }
 
-	RCLCPP_INFO(this->get_logger(), "Using generic 3D camera detections for object mapping.");
-}
+        object_tracker = ObjectTracker(
+            max_per_class_map,
+            large_structure_labels,
+            pipe_labels,
+            new_object_min_distance_threshold,
+            min_large_structure_separation,
+            min_large_structure_pipe_separation,
+            gating_threshold,
+            min_hits,
+            max_age,
+            max_position_jump,
+            conf_to_tent_threshold,
+            tent_init_buffer,
+            enable_gate_midpoint_refinement,
+            enable_board_icon_refinement
+        );
+
+        enable_z_axis_locking = this->declare_parameter<bool>("enable_z_axis_locking");
+        enable_octagon_xy_inheritance = this->declare_parameter<bool>("enable_octagon_xy_inheritance");
+        pool_floor_z = this->declare_parameter<double>("pool_floor_z");
+        pool_surface_z = this->declare_parameter<double>("pool_surface_z");
+        unique_objects = this->declare_parameter<std::vector<std::string>>("unique_objects");
+        floor_objects = this->declare_parameter<std::vector<std::string>>("floor_objects");
+        surface_objects = this->declare_parameter<std::vector<std::string>>("surface_objects");
+        max_pipe_distance = this->declare_parameter<double>("max_pipe_distance");
+
+        object_map_publisher =
+            this->create_publisher<auv_msgs::msg::VisionObjectArray>(object_map_topic, 10);
+
+        tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
+        tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+
+        detection_subscriber =
+            this->create_subscription<auv_msgs::msg::VisionDetectionFrame>(
+                front_cam_detection_frame_topic,
+                10,
+                std::bind(&ObjectMapNode::detection_callback, this, std::placeholders::_1));
+
+        RCLCPP_INFO(this->get_logger(), "Using synchronized front-camera detection frames for object mapping.");
+    }
+
 private:
-	std::map<std::string, Track> persistent_objects;
-	bool enable_z_axis_locking;
-	bool enable_octagon_xy_inheritance;
-	double pool_floor_z;
-	double pool_surface_z;
-	double max_pipe_distance;
-	std::vector<std::string> unique_objects;
-	std::vector<std::string> floor_objects;
-	std::vector<std::string> surface_objects;
-	Eigen::Vector3d latest_auv_position = Eigen::Vector3d::Zero();
-	bool has_auv_position = false;
+    static Eigen::Vector3d eigen_from_point(const geometry_msgs::msg::Point& point)
+    {
+        return Eigen::Vector3d(point.x, point.y, point.z);
+    }
 
-	bool is_unique_object(const std::string& label) const {
-		return std::find(unique_objects.begin(), unique_objects.end(), label) != unique_objects.end();
-	}
+    static Eigen::Matrix3d covariance_from_ros_pose(const std::array<double, 36>& covariance)
+    {
+        Eigen::Matrix3d cov = Eigen::Matrix3d::Identity() * 0.1;
+        for (int r = 0; r < 3; ++r) {
+            for (int c = 0; c < 3; ++c) {
+                cov(r, c) = covariance[r * 6 + c];
+            }
+        }
+        return cov;
+    }
 
-	bool is_floor_bound(const std::string& label) const {
-		return std::find(floor_objects.begin(), floor_objects.end(), label) != floor_objects.end();
-	}
+    bool is_unique_object(const std::string& label) const
+    {
+        return std::find(unique_objects.begin(), unique_objects.end(), label) != unique_objects.end();
+    }
 
-	bool is_surface_bound(const std::string& label) const {
-		return std::find(surface_objects.begin(), surface_objects.end(), label) != surface_objects.end();
-	}
+    bool is_floor_bound(const std::string& label) const
+    {
+        return std::find(floor_objects.begin(), floor_objects.end(), label) != floor_objects.end();
+    }
 
-	// --- Post-Processing Physical Constraints ---
-	void apply_z_axis_depth_constraints(auv_msgs::msg::VisionObject& object_msg, const Eigen::Vector3d& filter_position) const {
-		if (!enable_z_axis_locking) {
-			object_msg.pose.position.z = filter_position(2);
-			return;
-		}
+    bool is_surface_bound(const std::string& label) const
+    {
+        return std::find(surface_objects.begin(), surface_objects.end(), label) != surface_objects.end();
+    }
 
-		if (is_floor_bound(object_msg.label)) {
-			object_msg.pose.position.z = pool_floor_z;
-		} else if (is_surface_bound(object_msg.label)) {
-			object_msg.pose.position.z = pool_surface_z;
-		} else {
-			object_msg.pose.position.z = filter_position(2);
-		}
-	}
+    void apply_z_axis_depth_constraints(
+        auv_msgs::msg::VisionObject& object_msg,
+        const Eigen::Vector3d& filter_position) const
+    {
+        if (!enable_z_axis_locking) {
+            object_msg.pose.position.z = filter_position(2);
+            return;
+        }
 
-	void vio_pose_callback(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
-	{
-		latest_auv_position = Eigen::Vector3d(
-			msg->pose.position.x,
-			msg->pose.position.y,
-			msg->pose.position.z
-		);
-		has_auv_position = true;
-	}
+        if (is_floor_bound(object_msg.label)) {
+            object_msg.pose.position.z = pool_floor_z;
+        } else if (is_surface_bound(object_msg.label)) {
+            object_msg.pose.position.z = pool_surface_z;
+        } else {
+            object_msg.pose.position.z = filter_position(2);
+        }
+    }
 
-	void detection_callback(const vision_msgs::msg::Detection3DArray::SharedPtr msg)
-	{
-		frame_collection_time = rclcpp::Time(msg->header.stamp, this->get_clock()->get_clock_type());
-		
-		std::vector<Eigen::Vector3d> filtered_measurements;
-		std::vector<Eigen::Matrix3d> filtered_covariances;
-		std::vector<std::string> filtered_classes;
-		std::vector<double> filtered_orientations;
-		std::vector<double> filtered_confidences;
+    void detection_callback(const auv_msgs::msg::VisionDetectionFrame::SharedPtr msg)
+    {
+        frame_collection_time = rclcpp::Time(msg->header.stamp, this->get_clock()->get_clock_type());
+        world_frame_id = msg->auv_pose.header.frame_id.empty() ? "pool_link" : msg->auv_pose.header.frame_id;
+        const std::string detection_frame_id =
+            msg->header.frame_id.empty() ? "zed_left_camera_frame" : msg->header.frame_id;
 
-		for (const auto& detection : msg->detections) {
-			if (detection.results.empty()) continue;
+        geometry_msgs::msg::TransformStamped camera_to_auv_msg;
+        try {
+            camera_to_auv_msg = tf_buffer_->lookupTransform(
+                auv_frame_id,
+                detection_frame_id,
+                tf2::TimePointZero);
+        } catch (const tf2::TransformException& ex) {
+            RCLCPP_WARN(
+                this->get_logger(),
+                "Skipping detection frame because TF %s -> %s is unavailable: %s",
+                auv_frame_id.c_str(),
+                detection_frame_id.c_str(),
+                ex.what());
+            return;
+        }
 
-			const auto& hypothesis = detection.results[0];
-			std::string label = hypothesis.hypothesis.class_id;
-			
-			Eigen::Vector3d pos(hypothesis.pose.pose.position.x, 
-			                    hypothesis.pose.pose.position.y, 
-			                    hypothesis.pose.pose.position.z);
+        tf2::Transform tf_world_auv;
+        tf2::fromMsg(msg->auv_pose.pose, tf_world_auv);
 
-			// Camera translation is packed in bbox.size by the Python node
-			Eigen::Vector3d cam_trans(detection.bbox.size.x,
-			                         detection.bbox.size.y,
-			                         detection.bbox.size.z);
+        tf2::Transform tf_auv_camera;
+        tf2::fromMsg(camera_to_auv_msg.transform, tf_auv_camera);
 
-			// Filter: Skip pipes detected further than our distance threshold
-			// Use distance from AUV (camera), not from world origin
-			if (label == "red_pipe" || label == "white_pipe") {
-				double dist_from_robot = (pos - cam_trans).norm();
-				if (dist_from_robot > max_pipe_distance) {
-					continue;
-				}
-			}
+        tf2::Transform tf_world_camera = tf_world_auv * tf_auv_camera;
+        tf2::Matrix3x3 world_camera_basis = tf_world_camera.getBasis();
 
-			// Covariance: already rotated to world frame by the Python node
-			Eigen::Matrix3d cov = Eigen::Matrix3d::Identity() * 0.1;
-			if (hypothesis.pose.covariance.size() == 36) {
-				for (int r = 0; r < 3; ++r) {
-					for (int c = 0; c < 3; ++c) {
-						cov(r, c) = hypothesis.pose.covariance[r * 6 + c];
-					}
-				}
-				// Increased baseline measurement noise to enforce higher Kalman Filter inertia
-				cov += Eigen::Matrix3d::Identity() * 0.3;
-			}
-			
-			filtered_measurements.push_back(pos);
-			filtered_covariances.push_back(cov);
-			filtered_classes.push_back(label);
-			filtered_orientations.push_back(0.0);
-			filtered_confidences.push_back(hypothesis.hypothesis.score);
-		}
+        Eigen::Matrix3d camera_to_world_rotation;
+        for (int r = 0; r < 3; ++r) {
+            for (int c = 0; c < 3; ++c) {
+                camera_to_world_rotation(r, c) = world_camera_basis[r][c];
+            }
+        }
 
-		std::vector<Track> all_tracks = object_tracker.update(
-			filtered_measurements, 
-			filtered_covariances, 
-			filtered_classes, 
-			filtered_orientations, 
-			filtered_confidences,
-			latest_auv_position,
-			has_auv_position
-		);
+        Eigen::Vector3d observer_position = eigen_from_point(msg->auv_pose.pose.position);
+        bool has_observer_position = true;
 
-		publish_object_map(all_tracks);
-	}
+        std::vector<Eigen::Vector3d> filtered_measurements;
+        std::vector<Eigen::Matrix3d> filtered_covariances;
+        std::vector<std::string> filtered_classes;
+        std::vector<double> filtered_orientations;
+        std::vector<double> filtered_confidences;
 
+        filtered_measurements.reserve(msg->detections.size());
+        filtered_covariances.reserve(msg->detections.size());
+        filtered_classes.reserve(msg->detections.size());
+        filtered_orientations.reserve(msg->detections.size());
+        filtered_confidences.reserve(msg->detections.size());
 
-	void publish_object_map(const std::vector<Track>& tracks)
-	{
-		auv_msgs::msg::VisionObjectArray object_map_msg;
-		object_map_msg.header.stamp = frame_collection_time;
-		object_map_msg.header.frame_id = "map";
-		std::vector<Track> publish_tracks;
+        for (const auto& detection : msg->detections) {
+            const std::string& label = detection.label;
 
-		// --- Process Active Tracks ---
-		for (const auto& track : tracks) {
-			if (track.state == TrackState::CONFIRMED) {
-				if (is_unique_object(track.label)) {
-					// Update global memory for unique items
-					bool has_saved_orientation = persistent_objects[track.label].has_orientation;
-					double saved_theta_z = persistent_objects[track.label].theta_z;
+            Eigen::Vector3d pos_camera = eigen_from_point(detection.pose_camera.pose.position);
+            if (label == "red_pipe" || label == "white_pipe") {
+                if (pos_camera.norm() > max_pipe_distance) {
+                    continue;
+                }
+            }
 
-					persistent_objects[track.label] = track;
+            tf2::Vector3 pos_world_tf = tf_world_camera * tf2::Vector3(
+                pos_camera.x(),
+                pos_camera.y(),
+                pos_camera.z());
+            Eigen::Vector3d pos_world(
+                pos_world_tf.x(),
+                pos_world_tf.y(),
+                pos_world_tf.z());
 
-					// Preserve the saved orientation if the new track doesn't have one
-					if (!track.has_orientation && has_saved_orientation) {
-						persistent_objects[track.label].has_orientation = true;
-						persistent_objects[track.label].theta_z = saved_theta_z;
-					}
-				} else {
-					// Add regular confirmed tracks to the publish list
-					publish_tracks.push_back(track);
-				}
-			}
-		}
+            Eigen::Matrix3d cov_camera = covariance_from_ros_pose(detection.pose_camera.covariance);
+            Eigen::Matrix3d cov_world =
+                camera_to_world_rotation * cov_camera * camera_to_world_rotation.transpose();
+            cov_world += Eigen::Matrix3d::Identity() * 0.3;
 
-		// Add all persistent unique tracks
-		for (auto& [label, perm_track] : persistent_objects) {
-			if (enable_octagon_xy_inheritance && label == "octagon") {
-				continue; // Completely ignore real octagon tracks
-			}
-			publish_tracks.push_back(perm_track);
-		}
+            filtered_measurements.push_back(pos_world);
+            filtered_covariances.push_back(cov_world);
+            filtered_classes.push_back(label);
+            filtered_orientations.push_back(0.0);
+            filtered_confidences.push_back(detection.confidence);
+        }
 
-		// for each track, publish as VisionObject
-		for (const auto& track : publish_tracks)
-		{
-			if (enable_octagon_xy_inheritance && track.label == "octagon") {
-				continue; // Ignore any real active non-unique octagon tracks (if any)
-			}
+        std::vector<Track> all_tracks = object_tracker.update(
+            filtered_measurements,
+            filtered_covariances,
+            filtered_classes,
+            filtered_orientations,
+            filtered_confidences,
+            observer_position,
+            has_observer_position);
 
-			auv_msgs::msg::VisionObject object_msg;
-			object_msg.header.stamp = frame_collection_time;
-			object_msg.header.frame_id = "map";
-			
-			object_msg.label = track.label;
-			object_msg.id = track.id;
-			Eigen::Vector3d position = track.get_position();
-			
-			// Position
-			object_msg.pose.position.x = position(0);
-			object_msg.pose.position.y = position(1);
+        publish_object_map(all_tracks);
+    }
 
-			// --- Post-Processing Physical Constraints ---
-			apply_z_axis_depth_constraints(object_msg, position);
+    void publish_object_map(const std::vector<Track>& tracks)
+    {
+        auv_msgs::msg::VisionObjectArray object_map_msg;
+        object_map_msg.header.stamp = frame_collection_time;
+        object_map_msg.header.frame_id = world_frame_id;
+        std::vector<Track> publish_tracks;
 
-			// Orientation
-			tf2::Quaternion q;
-			q.setRPY(0.0, 0.0, track.theta_z);
-			object_msg.pose.orientation = tf2::toMsg(q);
-			object_msg.has_orientation = track.has_orientation;
+        for (const auto& track : tracks) {
+            if (track.state == TrackState::CONFIRMED) {
+                if (is_unique_object(track.label)) {
+                    bool has_saved_orientation = persistent_objects[track.label].has_orientation;
+                    double saved_theta_z = persistent_objects[track.label].theta_z;
 
-			object_msg.confidence = track.confidence;
-			object_map_msg.array.push_back(object_msg);
+                    persistent_objects[track.label] = track;
 
-			// --- Post-Processing Physical Constraints ---
-			// The octagon always sits directly beneath the table.
-			// Vision on the octagon is unreliable due to water surface distortion/reflections.
-			// Thus, we inherit the reliable 2D position of the table by generating a synthetic octagon.
-			if (enable_octagon_xy_inheritance && track.label == "table") {
-				auv_msgs::msg::VisionObject octagon_msg;
-				octagon_msg.header.stamp = frame_collection_time;
-				octagon_msg.header.frame_id = "map";
-				
-				octagon_msg.label = "octagon";
-				octagon_msg.id = track.id + 1000; // Create unique synthetic ID
-				
-				octagon_msg.pose.position.x = position(0);
-				octagon_msg.pose.position.y = position(1);
-				octagon_msg.pose.position.z = pool_surface_z;
+                    if (!track.has_orientation && has_saved_orientation) {
+                        persistent_objects[track.label].has_orientation = true;
+                        persistent_objects[track.label].theta_z = saved_theta_z;
+                    }
+                } else {
+                    publish_tracks.push_back(track);
+                }
+            }
+        }
 
-				tf2::Quaternion q_oct;
-				q_oct.setRPY(0.0, 0.0, 0.0);
-				octagon_msg.pose.orientation = tf2::toMsg(q_oct);
-				octagon_msg.has_orientation = false;
-				
-				octagon_msg.confidence = track.confidence;
-				object_map_msg.array.push_back(octagon_msg);
-			}
-		}
-		object_map_publisher->publish(object_map_msg);
-		rclcpp::Time pipeline_end_time = this->now();
-		rclcpp::Duration time_diff = pipeline_end_time - frame_collection_time;
-		RCLCPP_INFO(this->get_logger(), "Object map pipeline latency: %.9f seconds", time_diff.seconds());
-	}
+        for (auto& [label, perm_track] : persistent_objects) {
+            if (enable_octagon_xy_inheritance && label == "octagon") {
+                continue;
+            }
+            publish_tracks.push_back(perm_track);
+        }
 
-	ObjectTracker object_tracker;
-    std::vector<std::string> class_labels;
+        for (const auto& track : publish_tracks) {
+            if (enable_octagon_xy_inheritance && track.label == "octagon") {
+                continue;
+            }
 
-	rclcpp::Time frame_collection_time;
-	rclcpp::Publisher<auv_msgs::msg::VisionObjectArray>::SharedPtr object_map_publisher;
-	rclcpp::Subscription<vision_msgs::msg::Detection3DArray>::SharedPtr detection_subscriber;
-	rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr vio_pose_subscriber;
+            auv_msgs::msg::VisionObject object_msg;
+            object_msg.header.stamp = frame_collection_time;
+            object_msg.header.frame_id = world_frame_id;
+
+            object_msg.label = track.label;
+            object_msg.id = track.id;
+            Eigen::Vector3d position = track.get_position();
+
+            object_msg.pose.position.x = position(0);
+            object_msg.pose.position.y = position(1);
+
+            apply_z_axis_depth_constraints(object_msg, position);
+
+            tf2::Quaternion q;
+            q.setRPY(0.0, 0.0, track.theta_z);
+            object_msg.pose.orientation = tf2::toMsg(q);
+            object_msg.has_orientation = track.has_orientation;
+
+            object_msg.confidence = track.confidence;
+            object_map_msg.array.push_back(object_msg);
+
+            if (enable_octagon_xy_inheritance && track.label == "table") {
+                auv_msgs::msg::VisionObject octagon_msg;
+                octagon_msg.header.stamp = frame_collection_time;
+                octagon_msg.header.frame_id = world_frame_id;
+
+                octagon_msg.label = "octagon";
+                octagon_msg.id = track.id + 1000;
+
+                octagon_msg.pose.position.x = position(0);
+                octagon_msg.pose.position.y = position(1);
+                octagon_msg.pose.position.z = pool_surface_z;
+
+                tf2::Quaternion q_oct;
+                q_oct.setRPY(0.0, 0.0, 0.0);
+                octagon_msg.pose.orientation = tf2::toMsg(q_oct);
+                octagon_msg.has_orientation = false;
+
+                octagon_msg.confidence = track.confidence;
+                object_map_msg.array.push_back(octagon_msg);
+            }
+        }
+
+        object_map_publisher->publish(object_map_msg);
+        rclcpp::Time pipeline_end_time = this->now();
+        rclcpp::Duration time_diff = pipeline_end_time - frame_collection_time;
+        RCLCPP_INFO(
+            this->get_logger(),
+            "Object map pipeline latency: %.9f seconds",
+            time_diff.seconds());
+    }
+
+    std::map<std::string, Track> persistent_objects;
+    bool enable_z_axis_locking;
+    bool enable_octagon_xy_inheritance;
+    double pool_floor_z;
+    double pool_surface_z;
+    double max_pipe_distance;
+    std::vector<std::string> unique_objects;
+    std::vector<std::string> floor_objects;
+    std::vector<std::string> surface_objects;
+    std::string auv_frame_id;
+    std::string world_frame_id = "pool_link";
+
+    ObjectTracker object_tracker;
+    rclcpp::Time frame_collection_time;
+    rclcpp::Publisher<auv_msgs::msg::VisionObjectArray>::SharedPtr object_map_publisher;
+    rclcpp::Subscription<auv_msgs::msg::VisionDetectionFrame>::SharedPtr detection_subscriber;
+    std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+    std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 };
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
-	rclcpp::init(argc, argv);
-	auto node = std::make_shared<ObjectMapNode>();
-	rclcpp::spin(node);
-	rclcpp::shutdown();
-	return 0;
+    rclcpp::init(argc, argv);
+    auto node = std::make_shared<ObjectMapNode>();
+    rclcpp::spin(node);
+    rclcpp::shutdown();
+    return 0;
 }
