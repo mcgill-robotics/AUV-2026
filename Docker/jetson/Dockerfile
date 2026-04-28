@@ -109,7 +109,6 @@ RUN echo "# R${L4T_MAJOR} (release), REVISION: ${L4T_MINOR}" > /etc/nv_tegra_rel
     libdraco-dev \
     libgeographic-dev \
     libusb-1.0-0-dev \
-    nlohmann-json3-dev \
     python3 \
     python3-dev \
     python3-pip \
@@ -210,7 +209,6 @@ RUN wget https://github.com/ros/xacro/archive/refs/tags/${XACRO_VERSION}.tar.gz 
     # clean up unneeded source folders
     rm -rf geographic-info && \
     rm -rf mavros && \
-    rm -rf geographic-info && \
     rm -rf /opt/dependencies_ws/src/.cache
 
 # ROS packages that do not depend on OpenCV/that ZED wrapper doesn't depend on can be installed here
