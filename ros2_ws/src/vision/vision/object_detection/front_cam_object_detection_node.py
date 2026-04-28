@@ -15,9 +15,15 @@ from datetime import datetime
 from pathlib import Path
 import numpy as np
 
-from tf_transformations import concatenate_matrices, euler_matrix, inverse_matrix, quaternion_from_matrix
-from vision.object_detection.utils import load_model, get_detections, publish_annotated_image_util
-
+from tf_transformations import concatenate_matrices, inverse_matrix
+from vision.object_detection.utils import (
+    load_model, get_detections, publish_annotated_image_util,
+    toggle_collection_callback_util, get_vector3_parameter,
+    build_transform_matrix_from_xyz_rpy, build_pose_message_from_transform,
+    bbox_from_xyxy, bbox_from_zed_corners
+)
+from std_srvs.srv import SetBool
+from functools import partial
 from cv_bridge import CvBridge
 from sensor_msgs.msg import CompressedImage, Image
 from std_msgs.msg import Float64
@@ -35,6 +41,12 @@ class FrontCamObjectDetectorNode():
         self.node.declare_parameter('model_path', Parameter.Type.STRING)
         self.node.declare_parameter('queue_size', Parameter.Type.INTEGER)
         self.node.declare_parameter('publish_annotated_image', False)
+        self.node.declare_parameter('publish_annotated_every_n_frames', 1)
+        self.node.declare_parameter('publish_depth_image', False)
+        self.node.declare_parameter('publish_depth_compressed', False)
+        self.node.declare_parameter('publish_depth_every_n_frames', 5)
+        self.node.declare_parameter('depth_collection_dir', '/tmp/depth_collection')
+        self.node.declare_parameter('collect_depth_image', True)
         self.node.declare_parameter("compressed", Parameter.Type.BOOL)
         self.node.declare_parameter("detection_frame_topic", Parameter.Type.STRING)
 
@@ -82,10 +94,13 @@ class FrontCamObjectDetectorNode():
         self._collecting = False
         self._last_collection_time = 0.0
         self.collection_dir = self.node.get_parameter('collection_dir').get_parameter_value().string_value
+        self.depth_collection_dir = self.node.get_parameter('depth_collection_dir').get_parameter_value().string_value
         self.collection_interval = self.node.get_parameter('collection_interval_seconds').get_parameter_value().double_value
+        self._frame_counter = 0
 
         # Service to toggle image collection on/off
-        self.node.create_service(SetBool, '/vision/front_cam/toggle_collection', self._toggle_collection_callback)
+
+        self.node.create_service(SetBool, '/vision/front_cam/toggle_collection', partial(toggle_collection_callback_util, self))
  
         self.class_names = list(self.node.get_parameter('class_names').get_parameter_value().string_array_value)
         self.node.get_logger().info(f"Class names: {self.class_names}")
@@ -95,6 +110,11 @@ class FrontCamObjectDetectorNode():
         )
         queue_size = self.node.get_parameter('queue_size').get_parameter_value().integer_value
         self.publish_annotated_image = self.node.get_parameter('publish_annotated_image').get_parameter_value().bool_value
+        self.publish_annotated_every_n_frames = self.node.get_parameter('publish_annotated_every_n_frames').get_parameter_value().integer_value
+        self.publish_depth_image = self.node.get_parameter('publish_depth_image').get_parameter_value().bool_value
+        self.publish_depth_compressed = self.node.get_parameter('publish_depth_compressed').get_parameter_value().bool_value
+        self.publish_depth_every_n_frames = self.node.get_parameter('publish_depth_every_n_frames').get_parameter_value().integer_value
+        self.collect_depth_image = self.node.get_parameter('collect_depth_image').get_parameter_value().bool_value
         self.compressed = self.node.get_parameter('compressed').get_parameter_value().bool_value
 
         self.conf_threshold = self.node.get_parameter('model_detection_threshold').get_parameter_value().double_value
@@ -116,16 +136,16 @@ class FrontCamObjectDetectorNode():
             self.node.get_parameter('detection_frame_id').get_parameter_value().string_value
         )
 
-        auv_to_camera_center_xyz = self._get_vector3_parameter('auv_to_camera_center_xyz')
-        auv_to_camera_center_rpy = self._get_vector3_parameter('auv_to_camera_center_rpy')
-        camera_center_to_detection_xyz = self._get_vector3_parameter('camera_center_to_detection_xyz')
-        camera_center_to_detection_rpy = self._get_vector3_parameter('camera_center_to_detection_rpy')
+        auv_to_camera_center_xyz = get_vector3_parameter(self.node, 'auv_to_camera_center_xyz')
+        auv_to_camera_center_rpy = get_vector3_parameter(self.node, 'auv_to_camera_center_rpy')
+        camera_center_to_detection_xyz = get_vector3_parameter(self.node, 'camera_center_to_detection_xyz')
+        camera_center_to_detection_rpy = get_vector3_parameter(self.node, 'camera_center_to_detection_rpy')
 
-        self.T_auv_camera_center = self._build_transform_matrix_from_xyz_rpy(
+        self.T_auv_camera_center = build_transform_matrix_from_xyz_rpy(
             auv_to_camera_center_xyz,
             auv_to_camera_center_rpy,
         )
-        self.T_camera_center_detection = self._build_transform_matrix_from_xyz_rpy(
+        self.T_camera_center_detection = build_transform_matrix_from_xyz_rpy(
             camera_center_to_detection_xyz,
             camera_center_to_detection_rpy,
         )
@@ -270,6 +290,22 @@ class FrontCamObjectDetectorNode():
                 queue_size
             )
             self.node.get_logger().info(f"Publishing annotated debug image to: {publish_topic}")
+            
+        if self.publish_depth_image:
+            depth_topic = self.detection_frame_topic + "/depth"
+            if self.publish_depth_compressed:
+                from sensor_msgs.msg import CompressedImage as ROSDepthImage
+                depth_topic += "/compressed"
+            else:
+                from sensor_msgs.msg import Image as ROSDepthImage
+                
+            self.pub_depth_image = self.node.create_publisher(
+                ROSDepthImage,
+                depth_topic,
+                queue_size
+            )
+            self.bridge = CvBridge()
+            self.node.get_logger().info(f"Publishing depth image to: {depth_topic}")
         
         self.node.get_logger().info(f"{self.node.get_name()} initialized.")
 
@@ -301,74 +337,6 @@ class FrontCamObjectDetectorNode():
             self.auv_pose_sub = None
             self.node.get_logger().info("Using ZED VIO pose to derive synchronized AUV poses")
 
-    def _get_vector3_parameter(self, name: str) -> np.ndarray:
-        values = self.node.get_parameter(name).get_parameter_value().double_array_value
-        if len(values) != 3:
-            raise ValueError(f"Parameter '{name}' must contain exactly 3 values.")
-        return np.array([float(values[0]), float(values[1]), float(values[2])], dtype=float)
-
-    def _build_transform_matrix_from_xyz_rpy(
-        self,
-        translation_xyz: np.ndarray,
-        rotation_rpy: np.ndarray,
-    ) -> np.ndarray:
-        transform = euler_matrix(
-            float(rotation_rpy[0]),
-            float(rotation_rpy[1]),
-            float(rotation_rpy[2]),
-        )
-        transform[0:3, 3] = translation_xyz
-        return transform
-
-    def _build_quaternion_msg(self, orientation_xyzw: np.ndarray) -> Quaternion:
-        orientation = Quaternion()
-        orientation.x = float(orientation_xyzw[0])
-        orientation.y = float(orientation_xyzw[1])
-        orientation.z = float(orientation_xyzw[2])
-        orientation.w = float(orientation_xyzw[3])
-        return orientation
-
-    def _build_pose_message(
-        self,
-        translation: np.ndarray,
-        orientation_xyzw: np.ndarray,
-        frame_id: str,
-        stamp,
-    ) -> PoseStamped:
-        pose_msg = PoseStamped()
-        pose_msg.header.stamp = stamp
-        pose_msg.header.frame_id = frame_id
-        pose_msg.pose.position.x = float(translation[0])
-        pose_msg.pose.position.y = float(translation[1])
-        pose_msg.pose.position.z = float(translation[2])
-        pose_msg.pose.orientation = self._build_quaternion_msg(orientation_xyzw)
-        return pose_msg
-
-    def _build_pose_message_from_transform(
-        self,
-        transform: np.ndarray,
-        frame_id: str,
-        stamp,
-    ) -> PoseStamped:
-        translation = transform[0:3, 3]
-        orientation_xyzw = quaternion_from_matrix(transform)
-        return self._build_pose_message(translation, orientation_xyzw, frame_id, stamp)
-
-    def _bbox_from_xyxy(self, x1: float, y1: float, x2: float, y2: float):
-        size_x = max(0.0, float(x2) - float(x1))
-        size_y = max(0.0, float(y2) - float(y1))
-        center_x = float(x1) + size_x / 2.0
-        center_y = float(y1) + size_y / 2.0
-        return center_x, center_y, size_x, size_y
-
-    def _bbox_from_zed_corners(self, corners) -> tuple[float, float, float, float]:
-        if corners is None or len(corners) == 0:
-            return 0.0, 0.0, 0.0, 0.0
-
-        xs = [float(point[0]) for point in corners]
-        ys = [float(point[1]) for point in corners]
-        return self._bbox_from_xyxy(min(xs), min(ys), max(xs), max(ys))
-
     def _get_auv_world_pose_snapshot(self, stamp):
         if self.pose_source != self.POSE_SOURCE_AUV_POSE:
             return None
@@ -384,6 +352,7 @@ class FrontCamObjectDetectorNode():
         return pose_msg
 
     def _get_zed_world_pose_snapshot(self, stamp):
+        import pyzed.sl as sl
         cam_pose = sl.Pose()
         tracking_state = self.zed.get_position(cam_pose, sl.REFERENCE_FRAME.WORLD)
         if tracking_state != sl.POSITIONAL_TRACKING_STATE.OK:
@@ -400,7 +369,7 @@ class FrontCamObjectDetectorNode():
         T_world_detection[0:3, 0:3] = rotation
         T_world_detection[0:3, 3] = translation
         T_world_auv = concatenate_matrices(T_world_detection, self.T_detection_auv)
-        return self._build_pose_message_from_transform(T_world_auv, self.global_frame_id, stamp)
+        return build_pose_message_from_transform(T_world_auv, self.global_frame_id, stamp)
 
     def _capture_auv_pose_snapshot(self, stamp):
         if self.pose_source == self.POSE_SOURCE_AUV_POSE:
@@ -414,16 +383,6 @@ class FrontCamObjectDetectorNode():
                 return self._has_auv_pose
         return True
 
-    def _toggle_collection_callback(self, request, response):
-        self._collecting = request.data
-        if self._collecting:
-            Path(self.collection_dir).mkdir(parents=True, exist_ok=True)
-            self.node.get_logger().info(f"Image collection ENABLED → {self.collection_dir}")
-        else:
-            self.node.get_logger().info("Image collection DISABLED")
-        response.success = True
-        response.message = f"Collection {'enabled' if self._collecting else 'disabled'}"
-        return response
 
     def _grab_loop(self):
         """Tight grab loop — runs on its own thread. grab() blocks at camera fps."""
@@ -465,16 +424,48 @@ class FrontCamObjectDetectorNode():
 
             self.zed.retrieve_image(self.image_buffer, sl.VIEW.LEFT)
             img = cv2.cvtColor(self.image_buffer.get_data(), cv2.COLOR_RGBA2RGB)
+            self._frame_counter += 1
 
-            # --- Image Collection: save clean image BEFORE annotation ---
-            if self._collecting:
-                now = time.time()
-                if now - self._last_collection_time >= self.collection_interval:
-                    self._last_collection_time = now
-                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
-                    filepath = os.path.join(self.collection_dir, f'front_{timestamp}.jpg')
-                    cv2.imwrite(filepath, img)
-                    self.node.get_logger().debug(f"Saved {filepath}")
+            # --- Depth & Collection ---
+            if not hasattr(self, "depth_buffer"):
+                self.depth_buffer = sl.Mat()
+            
+            is_collection_interval = (time.time() - self._last_collection_time) >= self.collection_interval
+            is_collection_frame = self._collecting and is_collection_interval
+            
+            should_get_depth = (self.publish_depth_image and self._frame_counter % self.publish_depth_every_n_frames == 0) or \
+                               (self.collect_depth_image and is_collection_frame)
+            
+            if should_get_depth:
+                self.zed.retrieve_measure(self.depth_buffer, sl.MEASURE.DEPTH)
+                depth = self.depth_buffer.get_data() # sl.UNIT.METER, shape (H,W) with NaNs
+
+            if is_collection_frame:
+                self._last_collection_time = time.time()
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+                
+                filepath = os.path.join(self.collection_dir, f'front_{timestamp}.jpg')
+                cv2.imwrite(filepath, img)
+                
+                if self.collect_depth_image:
+                    depth_mm = np.nan_to_num(depth, nan=0.0, posinf=0.0, neginf=0.0)
+                    depth_mm = (depth_mm * 1000.0).clip(0, 65535).astype(np.uint16)
+                    depth_path = os.path.join(self.depth_collection_dir, f'depth_{timestamp}.png')
+                    cv2.imwrite(depth_path, depth_mm)
+                
+                self.node.get_logger().debug(f"Collected dataset step: {timestamp}")
+            
+            if self.publish_depth_image and self._frame_counter % self.publish_depth_every_n_frames == 0:
+                if self.publish_depth_compressed:
+                    depth_mm = np.nan_to_num(depth, nan=0.0, posinf=0.0, neginf=0.0)
+                    depth_mm = (depth_mm * 1000.0).clip(0, 65535).astype(np.uint16)
+                    depth_msg = self.bridge.cv2_to_compressed_imgmsg(depth_mm, dst_format='png')
+                else:
+                    depth_msg = self.bridge.cv2_to_imgmsg(depth, encoding="32FC1")
+                
+                depth_msg.header.stamp = frame_stamp
+                depth_msg.header.frame_id = self.detection_frame_id
+                self.pub_depth_image.publish(depth_msg)
 
             # Publish VIO pose continuously, even without active detections
             self.pub_vio_pose.publish(auv_pose_msg)
@@ -590,14 +581,14 @@ class FrontCamObjectDetectorNode():
                             detection.bbox_center_y,
                             detection.bbox_size_x,
                             detection.bbox_size_y,
-                        ) = self._bbox_from_xyxy(*bbox_xyxy)
+                        ) = bbox_from_xyxy(*bbox_xyxy)
                     else:
                         (
                             detection.bbox_center_x,
                             detection.bbox_center_y,
                             detection.bbox_size_x,
                             detection.bbox_size_y,
-                        ) = self._bbox_from_zed_corners(obj.bounding_box_2d)
+                        ) = bbox_from_zed_corners(obj.bounding_box_2d)
                     det_objects.append(detection)
 
             det_msg.detections = det_objects
@@ -605,7 +596,8 @@ class FrontCamObjectDetectorNode():
 
 
             # Always publish the (possibly annotated) image, even with no detections
-            publish_annotated_image_util(self, img, tracked_detections)
+            if self.publish_annotated_image and (self._frame_counter % self.publish_annotated_every_n_frames == 0):
+                publish_annotated_image_util(self, img, tracked_detections)
             
             t_end = time.perf_counter()
             self.node.get_logger().debug(f"Detection latency: {(t_end - t_start)*1000:.1f} ms | Active 3D detections: {len(det_objects)}")

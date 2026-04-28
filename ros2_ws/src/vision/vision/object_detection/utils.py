@@ -4,6 +4,8 @@ import numpy as np
 import supervision as sv
 from inference_models import AutoModel, BackendType
 from vision_msgs.msg import Detection2DArray, Detection2D, ObjectHypothesisWithPose
+from geometry_msgs.msg import PoseStamped, Quaternion
+from tf_transformations import euler_matrix, quaternion_from_matrix
 
 # Enable CUDA Graphs globally (Native TRT only, ignored by ONNX)
 os.environ["ENABLE_AUTO_CUDA_GRAPHS_FOR_TRT_BACKEND"] = "True"
@@ -131,3 +133,85 @@ def build_detection2d_msg(detector_node, tracked_detections):
     det_msg.detections = det_objects
     return det_msg
 
+# --- Shared Dataset Service Logic ---
+def toggle_collection_callback_util(detector_node, request, response):
+    from pathlib import Path
+    detector_node._collecting = request.data
+    if detector_node._collecting:
+        Path(detector_node.collection_dir).mkdir(parents=True, exist_ok=True)
+        if hasattr(detector_node, 'depth_collection_dir'):
+            Path(detector_node.depth_collection_dir).mkdir(parents=True, exist_ok=True)
+            detector_node.node.get_logger().info(f"Image collection ENABLED → {detector_node.collection_dir} and {detector_node.depth_collection_dir}")
+        else:
+            detector_node.node.get_logger().info(f"Image collection ENABLED → {detector_node.collection_dir}")
+    else:
+        detector_node.node.get_logger().info("Image collection DISABLED")
+    response.success = True
+    response.message = f"Collection {'enabled' if detector_node._collecting else 'disabled'}"
+    return response
+
+# --- Shared Object Spatial Math Utilities ---
+def get_vector3_parameter(node, name: str) -> np.ndarray:
+    values = node.get_parameter(name).get_parameter_value().double_array_value
+    if len(values) != 3:
+        raise ValueError(f"Parameter '{name}' must contain exactly 3 values.")
+    return np.array([float(values[0]), float(values[1]), float(values[2])], dtype=float)
+
+def build_transform_matrix_from_xyz_rpy(
+    translation_xyz: np.ndarray,
+    rotation_rpy: np.ndarray,
+) -> np.ndarray:
+    transform = euler_matrix(
+        float(rotation_rpy[0]),
+        float(rotation_rpy[1]),
+        float(rotation_rpy[2]),
+    )
+    transform[0:3, 3] = translation_xyz
+    return transform
+
+def build_quaternion_msg(orientation_xyzw: np.ndarray) -> Quaternion:
+    orientation = Quaternion()
+    orientation.x = float(orientation_xyzw[0])
+    orientation.y = float(orientation_xyzw[1])
+    orientation.z = float(orientation_xyzw[2])
+    orientation.w = float(orientation_xyzw[3])
+    return orientation
+
+def build_pose_message(
+    translation: np.ndarray,
+    orientation_xyzw: np.ndarray,
+    frame_id: str,
+    stamp,
+) -> PoseStamped:
+    pose_msg = PoseStamped()
+    pose_msg.header.stamp = stamp
+    pose_msg.header.frame_id = frame_id
+    pose_msg.pose.position.x = float(translation[0])
+    pose_msg.pose.position.y = float(translation[1])
+    pose_msg.pose.position.z = float(translation[2])
+    pose_msg.pose.orientation = build_quaternion_msg(orientation_xyzw)
+    return pose_msg
+
+def build_pose_message_from_transform(
+    transform: np.ndarray,
+    frame_id: str,
+    stamp,
+) -> PoseStamped:
+    translation = transform[0:3, 3]
+    orientation_xyzw = quaternion_from_matrix(transform)
+    return build_pose_message(translation, orientation_xyzw, frame_id, stamp)
+
+def bbox_from_xyxy(x1: float, y1: float, x2: float, y2: float):
+    size_x = max(0.0, float(x2) - float(x1))
+    size_y = max(0.0, float(y2) - float(y1))
+    center_x = float(x1) + size_x / 2.0
+    center_y = float(y1) + size_y / 2.0
+    return center_x, center_y, size_x, size_y
+
+def bbox_from_zed_corners(corners) -> tuple[float, float, float, float]:
+    if corners is None or len(corners) == 0:
+        return 0.0, 0.0, 0.0, 0.0
+
+    xs = [float(point[0]) for point in corners]
+    ys = [float(point[1]) for point in corners]
+    return bbox_from_xyxy(min(xs), min(ys), max(xs), max(ys))

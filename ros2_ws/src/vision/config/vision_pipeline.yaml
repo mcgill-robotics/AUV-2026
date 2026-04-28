@@ -59,7 +59,13 @@ object_detection:
     border_exclusion_margin_px: 20
     border_exclusion_labels: ["gate"]
     publish_annotated_image: true # whether to publish an annotated image with bounding boxes drawn (for visualization/debugging). will publish to detection_frame_topic + /annotated
-    collection_dir: /tmp/front_cam_collection # directory for direct-to-disk image saving (toggled via service)
+    publish_annotated_every_n_frames: 1 # publish annotated image every N frames (1 = every frame)
+    publish_depth_image: false # publish raw 32FC1 depth map image
+    publish_depth_compressed: true # publish depth map as compressed 16-bit PNG
+    publish_depth_every_n_frames: 5 # publish depth image every N frames 
+    collection_dir: front_cam_collection # directory for direct-to-disk RGB image saving (toggled via service)
+    depth_collection_dir: depth_collection # directory for direct-to-disk 16-bit millimeter depth saving
+    collect_depth_image: false # flag to enable/disable depth saving
     collection_interval_seconds: 2.0 # seconds between saved frames when collection is active
     log_level: debug
   down_cam:
@@ -81,6 +87,9 @@ object_detection:
       - "sawfish"
     queue_size: 10
     publish_annotated_image: true
+    publish_annotated_every_n_frames: 1
+    collection_dir: down_cam_collection
+    collection_interval_seconds: 2.0
     log_level: warn
 
 object_map:

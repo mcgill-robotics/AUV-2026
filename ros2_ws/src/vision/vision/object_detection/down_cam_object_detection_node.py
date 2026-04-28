@@ -6,11 +6,13 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 import os
 import cv2
 import supervision as sv
+from functools import partial
 from cv_bridge import CvBridge
-from vision.object_detection.utils import load_model, get_detections, build_detection2d_msg, publish_annotated_image_util
+from vision.object_detection.utils import load_model, get_detections, build_detection2d_msg, publish_annotated_image_util, toggle_collection_callback_util
 
 from sensor_msgs.msg import CompressedImage, Image
 from vision_msgs.msg import Detection2DArray, Detection2D, ObjectHypothesisWithPose
+from std_srvs.srv import SetBool
 
 class DownCamObjectDetectorNode():
     def __init__(self, node: Node):
@@ -21,7 +23,10 @@ class DownCamObjectDetectorNode():
         self.node.declare_parameter('input_topic', Parameter.Type.STRING)
         self.node.declare_parameter('queue_size', Parameter.Type.INTEGER)
         self.node.declare_parameter('publish_annotated_image', False)
+        self.node.declare_parameter('publish_annotated_every_n_frames', 1)
         self.node.declare_parameter("compressed", Parameter.Type.BOOL)
+        self.node.declare_parameter('collection_dir', '/tmp/down_cam_collection')
+        self.node.declare_parameter('collection_interval_seconds', 2.0)
 
         self.node.declare_parameter("model_detection_threshold", 0.40)
 
@@ -32,7 +37,15 @@ class DownCamObjectDetectorNode():
         input_topic = self.node.get_parameter('input_topic').get_parameter_value().string_value
         queue_size = self.node.get_parameter('queue_size').get_parameter_value().integer_value
         self.publish_annotated_image = self.node.get_parameter('publish_annotated_image').get_parameter_value().bool_value
+        self.publish_annotated_every_n_frames = self.node.get_parameter('publish_annotated_every_n_frames').get_parameter_value().integer_value
         self.compressed = self.node.get_parameter('compressed').get_parameter_value().bool_value
+        self.collection_dir = self.node.get_parameter('collection_dir').get_parameter_value().string_value
+        self.collection_interval = self.node.get_parameter('collection_interval_seconds').get_parameter_value().double_value
+        
+        self._collecting = False
+        self._last_collection_time = 0.0
+        self._frame_counter = 0
+        self.node.create_service(SetBool, '~/toggle_collection', partial(toggle_collection_callback_util, self))
 
         self.conf_threshold = self.node.get_parameter('model_detection_threshold').get_parameter_value().double_value
 
@@ -89,6 +102,7 @@ class DownCamObjectDetectorNode():
         
         self.node.get_logger().info(f"{self.node.get_name()} initialized.")
 
+
     def run_object_detection(self, msg):
         try:
             if self.compressed:
@@ -99,13 +113,27 @@ class DownCamObjectDetectorNode():
             self.node.get_logger().error(f"cv_bridge failed: {e}")
             return
         
+        self._frame_counter += 1
         stamp_time = self.node.get_clock().now()
         
+        if self._collecting:
+            import time
+            from datetime import datetime
+            now = time.time()
+            if now - self._last_collection_time >= self.collection_interval:
+                self._last_collection_time = now
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+                filepath = os.path.join(self.collection_dir, f'down_{timestamp}.jpg')
+                cv2.imwrite(filepath, img)
+                self.node.get_logger().debug(f"Saved {filepath}")
+
         tracked_detections = get_detections(self, img)
         if tracked_detections is not None:
             det_msg = build_detection2d_msg(self, tracked_detections)
             self.pub_detections.publish(det_msg)
-            publish_annotated_image_util(self, img, tracked_detections)
+            
+            if self.publish_annotated_image and (self._frame_counter % self.publish_annotated_every_n_frames == 0):
+                publish_annotated_image_util(self, img, tracked_detections)
             
             current_time = self.node.get_clock().now()
             time_diff = (current_time - stamp_time).nanoseconds / 1e9

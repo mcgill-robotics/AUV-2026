@@ -171,6 +171,10 @@ def generate_launch_description():
                 'class_names': default_config["object_detection"]["front_cam"]["class_names"],
                 'queue_size': default_config["object_detection"]["front_cam"]["queue_size"],
                 'publish_annotated_image': default_config["object_detection"]["front_cam"]["publish_annotated_image"],
+                'publish_annotated_every_n_frames': default_config["object_detection"]["front_cam"]["publish_annotated_every_n_frames"],
+                'publish_depth_image': default_config["object_detection"]["front_cam"]["publish_depth_image"],
+                'publish_depth_compressed': default_config["object_detection"]["front_cam"]["publish_depth_compressed"],
+                'publish_depth_every_n_frames': default_config["object_detection"]["front_cam"]["publish_depth_every_n_frames"],
 
                 'model_detection_threshold': default_config["object_detection"]["front_cam"]["model_detection_threshold"],
                 'depth_confidence_threshold': default_config["object_detection"]["front_cam"]["depth_confidence_threshold"],
@@ -196,6 +200,8 @@ def generate_launch_description():
                 "stream_ip": default_config["general"]["wrapper_stream_ip"],
                 "stream_port": default_config["general"]["wrapper_stream_port"],
                 "collection_dir": default_config["object_detection"]["front_cam"]["collection_dir"],
+                "depth_collection_dir": default_config["object_detection"]["front_cam"]["depth_collection_dir"],
+                "collect_depth_image": default_config["object_detection"]["front_cam"]["collect_depth_image"],
                 "collection_interval_seconds": default_config["object_detection"]["front_cam"]["collection_interval_seconds"],
             }
         ],
@@ -246,8 +252,11 @@ def generate_launch_description():
                 'class_names': default_config["object_detection"]["down_cam"]["class_names"],
                 'queue_size': default_config["object_detection"]["down_cam"]["queue_size"],
                 'publish_annotated_image': default_config["object_detection"]["down_cam"]["publish_annotated_image"],
+                'publish_annotated_every_n_frames': default_config["object_detection"]["down_cam"]["publish_annotated_every_n_frames"],
 
                 'model_detection_threshold': default_config["object_detection"]["down_cam"]["model_detection_threshold"],
+                'collection_dir': default_config["object_detection"]["down_cam"]["collection_dir"],
+                'collection_interval_seconds': default_config["object_detection"]["down_cam"]["collection_interval_seconds"],
                 'use_sim_time': LaunchConfiguration("sim"),
                 'compressed': LaunchConfiguration("compressed"),
                 'log_level': default_config["object_detection"]["down_cam"]["log_level"],
