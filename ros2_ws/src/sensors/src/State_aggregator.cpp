@@ -13,10 +13,10 @@ namespace sensors
 
         this->declare_parameter<std::string>("frame_id_auv", "auv_link");
         this->declare_parameter<std::string>("frame_id_global", "pool_link");
+        this->declare_parameter<bool>("publish_pose_tf", true);
         this->get_parameter("frame_id_auv", frame_id_auv_);
         this->get_parameter("frame_id_global", frame_id_global_);
-
-
+        this->get_parameter("publish_pose_tf", publish_pose_tf_);
 
         imu_sub_ = this->create_subscription<imu_msg>(
             "auv_frame/imu",
@@ -45,6 +45,7 @@ namespace sensors
             "state/pose",
             rclcpp::SensorDataQoS().keep_last(1)
         );
+        tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
 
         // Initialize state variables
         current_depth_ = 0.0;
@@ -108,7 +109,18 @@ namespace sensors
         pose_msg.pose.position.z = -current_depth_; // Down is negative Z
 
         pose_pub_->publish(pose_msg);
-}
+
+        if (publish_pose_tf_) {
+            geometry_msgs::msg::TransformStamped transform_msg;
+            transform_msg.header = pose_msg.header;
+            transform_msg.child_frame_id = frame_id_auv_;
+            transform_msg.transform.translation.x = pose_msg.pose.position.x;
+            transform_msg.transform.translation.y = pose_msg.pose.position.y;
+            transform_msg.transform.translation.z = pose_msg.pose.position.z;
+            transform_msg.transform.rotation = pose_msg.pose.orientation;
+            tf_broadcaster_->sendTransform(transform_msg);
+        }
+    }
 } // namespace sensors
 
 int main(int argc, char *argv[])

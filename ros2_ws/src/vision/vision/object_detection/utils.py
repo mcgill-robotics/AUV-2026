@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import os
 import cv2
 import numpy as np
@@ -72,7 +74,7 @@ def get_detections(detector_node, img):
         detector_node.node.get_logger().error(f"Inference failed: {e}")
         return None
 
-def publish_annotated_image_util(detector_node, img, tracked_detections):
+def publish_annotated_image_util(detector_node, img, tracked_detections, stamp, frame_id):
     if not detector_node.publish_annotated_image:
         return
 
@@ -94,6 +96,9 @@ def publish_annotated_image_util(detector_node, img, tracked_detections):
             ann_msg = detector_node.bridge.cv2_to_compressed_imgmsg(annotated)
         else:
             ann_msg = detector_node.bridge.cv2_to_imgmsg(annotated, "bgr8")
+        
+        ann_msg.header.stamp = stamp
+        ann_msg.header.frame_id = frame_id
         detector_node.pub_annotated_image.publish(ann_msg)
     except Exception as e:
         detector_node.node.get_logger().error(f"Failed to publish annotated image: {e}")
@@ -135,7 +140,6 @@ def build_detection2d_msg(detector_node, tracked_detections):
 
 # --- Shared Dataset Service Logic ---
 def toggle_collection_callback_util(detector_node, request, response):
-    from pathlib import Path
     detector_node._collecting = request.data
     if detector_node._collecting:
         Path(detector_node.collection_dir).mkdir(parents=True, exist_ok=True)

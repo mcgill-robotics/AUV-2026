@@ -4,6 +4,7 @@
     frame_id_auv: "auv_link"
     frame_id_global: "pool_link" # Inertial frame, located at AUV's deployment point. 
     # Orientation is that of auv_link at deployment time. 
+    publish_pose_tf: true
 
 # IMU node parameters
 imu_processor:

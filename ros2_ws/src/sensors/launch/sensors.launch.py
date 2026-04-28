@@ -13,6 +13,7 @@ def generate_launch_description():
     # Get dynamic paths to packages
     xsens_pkg_path = get_package_share_directory("xsens_mti_ros2_driver")
     sensors_pkg_path = get_package_share_directory("sensors")
+    params = os.path.join(sensors_pkg_path, "params", "sensors_frames.yaml")
 
     # Set Sim condition
     sim_condition = DeclareLaunchArgument(
@@ -48,6 +49,7 @@ def generate_launch_description():
                 package="sensors",
                 executable="state_aggregator",
                 name="state_aggregator",
+                parameters=[params],
             )
         ]
     )

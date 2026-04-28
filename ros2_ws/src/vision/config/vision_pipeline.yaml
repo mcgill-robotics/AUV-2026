@@ -20,11 +20,14 @@ object_detection:
     detection_frame_topic: /vision/front_cam/detection_frame # synchronized camera-frame detections + AUV pose
     model_detection_threshold: 0.40
     depth_confidence_threshold: 95
+    enable_vio: false
     pose_source: auv_pose # zed_vio or auv_pose
     auv_pose_topic: state/pose
     vio_pose_topic: /vision/vio_pose
+    broadcast_vio_tf: true
     global_frame_id: pool_link
     auv_frame_id: auv_link
+    vio_frame_id: auv_vio_link
     camera_center_frame_id: zed_camera_center
     detection_frame_id: zed_left_camera_frame
     auv_to_camera_center_xyz: [0.148, 0.0, 0.0]

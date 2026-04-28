@@ -1,18 +1,25 @@
 #!/usr/bin/env python3
+from datetime import datetime
+from functools import partial
+import os
+import time
+
+import cv2
+from cv_bridge import CvBridge
 from rclpy.node import Node
 from rclpy.parameter import Parameter
-from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
-
-import os
-import cv2
-import supervision as sv
-from functools import partial
-from cv_bridge import CvBridge
-from vision.object_detection.utils import load_model, get_detections, build_detection2d_msg, publish_annotated_image_util, toggle_collection_callback_util
-
+from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import CompressedImage, Image
-from vision_msgs.msg import Detection2DArray, Detection2D, ObjectHypothesisWithPose
 from std_srvs.srv import SetBool
+from vision_msgs.msg import Detection2DArray
+
+from vision.object_detection.utils import (
+    build_detection2d_msg,
+    get_detections,
+    load_model,
+    publish_annotated_image_util,
+    toggle_collection_callback_util,
+)
 
 class DownCamObjectDetectorNode():
     def __init__(self, node: Node):
@@ -117,8 +124,6 @@ class DownCamObjectDetectorNode():
         stamp_time = self.node.get_clock().now()
         
         if self._collecting:
-            import time
-            from datetime import datetime
             now = time.time()
             if now - self._last_collection_time >= self.collection_interval:
                 self._last_collection_time = now
@@ -133,7 +138,7 @@ class DownCamObjectDetectorNode():
             self.pub_detections.publish(det_msg)
             
             if self.publish_annotated_image and (self._frame_counter % self.publish_annotated_every_n_frames == 0):
-                publish_annotated_image_util(self, img, tracked_detections)
+                publish_annotated_image_util(self, img, tracked_detections, msg.header.stamp, msg.header.frame_id)
             
             current_time = self.node.get_clock().now()
             time_diff = (current_time - stamp_time).nanoseconds / 1e9
