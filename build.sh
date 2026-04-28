@@ -58,7 +58,7 @@ ROS_INSTALL=/opt/ros/$ROS_DISTRO/setup.bash
 # Initialize all git submodules
 # skip this step if offline since --init will git clone submodules which will stalls with no network access 
 SUBMODULE_ERROR_CODE=0
-if [ -n "$OFFLINE_BUILD" ]; then
+if [ "$OFFLINE_BUILD" = true ]; then
     echo "Offline build requested. Skipping git submodule update to avoid potential network access."
 elif [ -n "${CI:-}" ]; then
 # Skip in CI since GitHub Actions checkout already fetches submodules (avoids permission issues)
