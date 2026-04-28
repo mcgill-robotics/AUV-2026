@@ -30,14 +30,14 @@ DvlProcessor::DvlProcessor() : Node("dvl_processor") {
 
 
     imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
-        "auv_frame/imu", 10, std::bind(&DvlProcessor::imu_callback, this, std::placeholders::_1));
+        "auv_frame/imu", rclcpp::SensorDataQoS().keep_last(1), std::bind(&DvlProcessor::imu_callback, this, std::placeholders::_1));
 
     dvl_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
-        "dvl/odometry", 10, std::bind(&DvlProcessor::dvl_callback, this, std::placeholders::_1));
+        "dvl/odometry", rclcpp::SensorDataQoS().keep_last(1), std::bind(&DvlProcessor::dvl_callback, this, std::placeholders::_1));
     
 
-    position_pub_ = this->create_publisher<geometry_msgs::msg::PointStamped>("auv_frame/dvl/position", 10); 
-    velocity_pub_ = this->create_publisher<geometry_msgs::msg::TwistStamped>("auv_frame/dvl/velocity", 10); 
+    position_pub_ = this->create_publisher<geometry_msgs::msg::PointStamped>("auv_frame/dvl/position", rclcpp::SensorDataQoS().keep_last(1)); 
+    velocity_pub_ = this->create_publisher<geometry_msgs::msg::TwistStamped>("auv_frame/dvl/velocity", rclcpp::SensorDataQoS().keep_last(1)); 
 }
 
 
@@ -47,6 +47,10 @@ void DvlProcessor::imu_callback(const sensor_msgs::msg::Imu::SharedPtr msg) {
     q_iv_.x() = msg->orientation.x;
     q_iv_.y() = msg->orientation.y;
     q_iv_.z() = msg->orientation.z;
+
+    w_v_.x() = msg->angular_velocity.x;
+    w_v_.y() = msg->angular_velocity.y;
+    w_v_.z() = msg->angular_velocity.z;
 }
 
 
@@ -82,10 +86,11 @@ DvlData_InertialFrame DvlProcessor::process_dvl(const DvlData_DvlFrame& dvl_raw)
 
     dvl_inertial.r_vp_p = r_i2p_p + r_di2_p + r_vd_p;
     
-    // Velocity transformation not yet supported, it would involve more complex calculations using 
-    // the orientation, angular velocity, and the raw velocity data.
-    dvl_inertial.v_vp_p = Vec3(0.0, 0.0, 0.0); 
+    // Velocity transformation
+    Quatd q_id = q_iv_ * q_vd_;
+    Vec3 v_di_p = q_id * dvl_raw.v_di2_d;
     
+    dvl_inertial.v_vp_p = v_di_p - q_iv_ * (w_v_.cross(r_dv_v_));
     return dvl_inertial;
 }
 

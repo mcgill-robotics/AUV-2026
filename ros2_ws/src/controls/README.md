@@ -14,6 +14,8 @@ This process occurs in three stages:
   - [Table of Contents](#table-of-contents)
   - [Overview](#overview)
   - [Usage](#usage)
+    - [Raw Setpoint Publishing](#raw-setpoint-publishing)
+    - [Navigation Server (Action Client)](#navigation-server-action-client)
   - [Nodes](#nodes)
     - [Published Topics](#published-topics)
     - [Subscribed Topics](#subscribed-topics)
@@ -50,17 +52,22 @@ To activate the y-axis controller:
         ros2 param set y_controller enabled true
 
 ### Raw Setpoint Publishing
+
 Publishing a depth setpoint onto `/controls/depth_setpoint`:
 
         ros2 topic pub /controls/depth_setpoint std_msgs/msg/Float64 "{data: 1.5}" 
 
 Publishing a depth setpoint onto `/controls/x_setpoint`:
 
+
         ros2 topic pub /controls/x_setpoint std_msgs/msg/Float64 "{data: 2.0}" 
+
 
 Publishing a depth setpoint onto `/controls/y_setpoint`:
 
+
         ros2 topic pub /controls/y_setpoint std_msgs/msg/Float64 "{data: 2.0}" 
+
 
 Publishing an attitude setpoint onto `/controls/quaternion_setpoint`:
 

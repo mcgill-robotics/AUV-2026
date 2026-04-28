@@ -13,16 +13,16 @@ DepthProcessor::DepthProcessor()
     this->get_parameter("r_vs_v", r_vs_v_vec);
     r_vs_v_ = Vec3(r_vs_v_vec[0], r_vs_v_vec[1], r_vs_v_vec[2]);
 
-    depth_pub_ = this->create_publisher<float64_msg>("auv_frame/depth", 10);
+    depth_pub_ = this->create_publisher<float64_msg>("auv_frame/depth", rclcpp::SensorDataQoS());
     depth_sub_ = this->create_subscription<float64_msg>(
-            "/sensors/depth/z",
-            10,
+            "/sensors/depth/z", 
+            rclcpp::SensorDataQoS().keep_last(1),
             std::bind(&DepthProcessor::depth_callback, this, std::placeholders::_1)
         );
 
     imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
         "auv_frame/imu",
-        10,
+        rclcpp::SensorDataQoS().keep_last(1),
         std::bind(&DepthProcessor::imu_callback, this, std::placeholders::_1)
     );
 

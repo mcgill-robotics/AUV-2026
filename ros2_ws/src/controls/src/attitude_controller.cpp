@@ -13,7 +13,7 @@ namespace controls
         this->declare_parameter<double>("P_wz", 1.0);
         this->declare_parameter<double>("buoyancy", 278.0); // Newtons
         this->declare_parameter<std::vector<double>>("r_bv_v", {0.0, 0.0, 0.023}); // [m] From CAD Model
-        this->declare_parameter<double>("control_loop_hz", 10.0); // Control loop frequency
+        this->declare_parameter<double>("control_loop_hz", 25.0); // Control loop frequency
         this->declare_parameter<bool>("enabled", false);
 
         this->get_parameter("P_ex", P_ex_);
@@ -40,10 +40,10 @@ namespace controls
                 0, 0, P_wz_;
 
 
-        pub_effort_ = this->create_publisher<wrench_msg>("/controls/attitude_effort", 1);
+        pub_effort_ = this->create_publisher<wrench_msg>("/controls/attitude_effort", rclcpp::SensorDataQoS().keep_last(1));
         sub_imu_ = this->create_subscription<imu_msg>(
             "auv_frame/imu",
-            1,
+            rclcpp::SensorDataQoS().keep_last(1),
             std::bind(&AttitudeController::imu_callback, this, std::placeholders::_1)
         );
         sub_target_orientation_ = this->create_subscription<geometry_msgs::msg::Quaternion>(
