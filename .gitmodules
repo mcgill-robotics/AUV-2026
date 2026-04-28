@@ -15,3 +15,6 @@
 [submodule "ros2_ws/src/dvl_a50_serial"]
 	path = ros2_ws/src/dvl_a50_serial
 	url = https://github.com/mcgill-robotics/dvl_a50_serial
+[submodule "ros2_ws/src/dvl_msgs"]
+	path = ros2_ws/src/dvl_msgs
+	url = https://github.com/paagutie/dvl_msgs
