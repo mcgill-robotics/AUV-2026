@@ -25,6 +25,11 @@ set(msg_files
 	"msg/VisionObjectArray.msg"
 )
 
+set(srv_files
+	"srv/SetInt32.srv"
+	"srv/AutomaticCapture.srv"
+)
+
 set(action_files
 	"action/Effort.action"
 	"action/StateQuaternion.action"
@@ -40,6 +45,7 @@ endforeach()
 
 rosidl_generate_interfaces(${PROJECT_NAME}
 	${msg_files}
+	${srv_files}
 	${action_files}
 	DEPENDENCIES ${MSG_DEP_SET}
 )
