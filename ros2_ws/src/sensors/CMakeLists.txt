@@ -20,6 +20,10 @@ find_package(eigen3_cmake_module REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(nav_msgs REQUIRED)
 
+set(PYTHON_NODE_SOURCES
+  sensors/health_monitor.py
+)
+
 # Executables
 
 add_executable(state_aggregator src/State_aggregator.cpp)
@@ -77,5 +81,9 @@ install(DIRECTORY
         DESTINATION include/${PROJECT_NAME})
 
 ament_export_include_directories(include)
+
+# Python nodes
+ament_python_install_package(${PROJECT_NAME})
+install(PROGRAMS ${PYTHON_NODE_SOURCES} DESTINATION lib/${PROJECT_NAME})
 
 ament_package()
