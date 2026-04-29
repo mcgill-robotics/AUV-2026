@@ -1,12 +1,11 @@
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch_ros.actions import Node
-from launch.actions import IncludeLaunchDescription, GroupAction
+from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.actions import DeclareLaunchArgument
-from launch.conditions import UnlessCondition, IfCondition
-from launch.substitutions import LaunchConfiguration, PythonExpression
+from launch.conditions import UnlessCondition
+from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import Node
 
 
 def generate_launch_description():
@@ -19,6 +18,7 @@ def generate_launch_description():
     sim_condition = DeclareLaunchArgument(
         "sim", default_value="false", description="Launch sensors in simulation mode"
     )
+    sim = LaunchConfiguration("sim")
 
     # Find other launch files to launch
     xsens_launch_file = os.path.join(
@@ -49,7 +49,7 @@ def generate_launch_description():
                 package="sensors",
                 executable="state_aggregator",
                 name="state_aggregator",
-                parameters=[params],
+                parameters=[params, {"use_sim_time": sim}],
             )
         ]
     )
@@ -58,25 +58,25 @@ def generate_launch_description():
         sensors_pkg_path, "launch", "depth_processor.launch.py"
     )
     depth_processor = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(depth_processor_file)
+        PythonLaunchDescriptionSource(depth_processor_file),
+        launch_arguments={"sim": sim}.items(),
     )
 
     imu_processor_file = os.path.join(
         sensors_pkg_path, "launch", "imu_processor.launch.py"
     )
     imu_processor = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(imu_processor_file)
+        PythonLaunchDescriptionSource(imu_processor_file),
+        launch_arguments={"sim": sim}.items(),
     )
 
     dvl_processor_file = os.path.join(
         sensors_pkg_path, "launch", "dvl_processor.launch.py"
     )
     dvl_processor = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(dvl_processor_file)
+        PythonLaunchDescriptionSource(dvl_processor_file),
+        launch_arguments={"sim": sim}.items(),
     )
-
-    # Get the sim parameter value
-    sim = LaunchConfiguration("sim")
 
     # Launch :D
     return LaunchDescription(

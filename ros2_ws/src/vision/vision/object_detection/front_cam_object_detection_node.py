@@ -8,6 +8,7 @@ import threading
 import time
 
 from auv_msgs.msg import VisionDetection, VisionDetectionFrame
+from auv_msgs.srv import AutomaticCapture
 import cv2
 from cv_bridge import CvBridge
 from geometry_msgs.msg import PoseStamped, TransformStamped
@@ -17,9 +18,9 @@ import rclpy
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rclpy.qos import qos_profile_sensor_data
-from sensor_msgs.msg import CompressedImage, Image
+from sensor_msgs.msg import CameraInfo, CompressedImage, Image
 from std_msgs.msg import Float64
-from std_srvs.srv import SetBool
+from std_srvs.srv import Trigger
 from tf2_ros import TransformBroadcaster
 from tf_transformations import concatenate_matrices, inverse_matrix
 
@@ -46,6 +47,7 @@ class FrontCamObjectDetectorNode():
         self.node.declare_parameter('queue_size', Parameter.Type.INTEGER)
         self.node.declare_parameter('publish_annotated_image', False)
         self.node.declare_parameter('publish_annotated_every_n_frames', 1)
+        self.node.declare_parameter('publish_camera_info', True)
         self.node.declare_parameter('publish_depth_image', False)
         self.node.declare_parameter('publish_depth_compressed', False)
         self.node.declare_parameter('publish_depth_every_n_frames', 5)
@@ -75,6 +77,7 @@ class FrontCamObjectDetectorNode():
         self.node.declare_parameter('auv_frame_id', 'auv_link')
         self.node.declare_parameter('vio_frame_id', 'auv_vio_link')
         self.node.declare_parameter('detection_frame_id', 'zed_left_camera_frame')
+        self.node.declare_parameter('image_frame_id', 'zed_left_camera_frame_optical')
         self.node.declare_parameter('auv_to_camera_center_xyz', [0.0, 0.0, 0.0])
         self.node.declare_parameter('auv_to_camera_center_rpy', [0.0, 0.0, 0.0])
         self.node.declare_parameter('camera_center_to_detection_xyz', [0.0, 0.06, 0.0])
@@ -107,7 +110,8 @@ class FrontCamObjectDetectorNode():
 
         # Service to toggle image collection on/off
 
-        self.node.create_service(SetBool, '/vision/front_cam/toggle_collection', partial(toggle_collection_callback_util, self))
+        self.node.create_service(AutomaticCapture, '/vision/front_cam/toggle_collection', partial(toggle_collection_callback_util, self))
+        self.node.create_service(Trigger, '/vision/front_cam/toggle_annotated_image', self._toggle_annotated_image_callback)
  
         self.class_names = list(self.node.get_parameter('class_names').get_parameter_value().string_array_value)
         self.node.get_logger().info(f"Class names: {self.class_names}")
@@ -117,7 +121,9 @@ class FrontCamObjectDetectorNode():
         )
         queue_size = self.node.get_parameter('queue_size').get_parameter_value().integer_value
         self.publish_annotated_image = self.node.get_parameter('publish_annotated_image').get_parameter_value().bool_value
+        self.annotated_image_enabled = self.publish_annotated_image
         self.publish_annotated_every_n_frames = self.node.get_parameter('publish_annotated_every_n_frames').get_parameter_value().integer_value
+        self.publish_camera_info = self.node.get_parameter('publish_camera_info').get_parameter_value().bool_value
         self.publish_depth_image = self.node.get_parameter('publish_depth_image').get_parameter_value().bool_value
         self.publish_depth_compressed = self.node.get_parameter('publish_depth_compressed').get_parameter_value().bool_value
         self.broadcast_vio_tf = self.node.get_parameter('broadcast_vio_tf').get_parameter_value().bool_value
@@ -144,6 +150,9 @@ class FrontCamObjectDetectorNode():
         self.vio_frame_id = self.node.get_parameter('vio_frame_id').get_parameter_value().string_value
         self.detection_frame_id = (
             self.node.get_parameter('detection_frame_id').get_parameter_value().string_value
+        )
+        self.image_frame_id = (
+            self.node.get_parameter('image_frame_id').get_parameter_value().string_value
         )
 
         auv_to_camera_center_xyz = get_vector3_parameter(self.node, 'auv_to_camera_center_xyz')
@@ -283,12 +292,26 @@ class FrontCamObjectDetectorNode():
         self.model = load_model(model_path, self.node.get_logger())
         
         self.node.get_logger().info(f"Setting QOL queue size to: {queue_size}")
+
+        self.camera_info_template = self._build_camera_info_template()
         
         self.pub_detection_frame = self.node.create_publisher(
             VisionDetectionFrame,
             self.detection_frame_topic,
             queue_size
         )
+
+        if self.publish_camera_info:
+            self.camera_info_topic = self.detection_frame_topic + "/camera_info"
+            self.pub_camera_info = self.node.create_publisher(
+                CameraInfo,
+                self.camera_info_topic,
+                queue_size,
+            )
+            self.node.get_logger().info(f"Publishing camera info to: {self.camera_info_topic}")
+        else:
+            self.camera_info_topic = None
+            self.pub_camera_info = None
 
         vio_pose_topic = self.node.get_parameter('vio_pose_topic').get_parameter_value().string_value
         if self.enable_vio:
@@ -306,15 +329,16 @@ class FrontCamObjectDetectorNode():
             f"Publishing synchronized detection frames to: {self.detection_frame_topic}"
         )
 
-        # Publisher for annotated debug image
-        if self.publish_annotated_image:
-            publish_topic = self.detection_frame_topic + "/annotated" + ("/compressed" if self.compressed else "")
-            self.pub_annotated_image = self.node.create_publisher(
-                input_format,
-                publish_topic,
-                queue_size
-            )
-            self.node.get_logger().info(f"Publishing annotated debug image to: {publish_topic}")
+        publish_topic = self.detection_frame_topic + "/annotated" + ("/compressed" if self.compressed else "")
+        self.pub_annotated_image = self.node.create_publisher(
+            input_format,
+            publish_topic,
+            queue_size
+        )
+        self.node.get_logger().info(
+            f"Annotated debug image topic ready at: {publish_topic} "
+            f"(enabled={self.annotated_image_enabled})"
+        )
             
         self.depth_image_msg_type = None
         if self.publish_depth_image:
@@ -347,6 +371,16 @@ class FrontCamObjectDetectorNode():
         with self._auv_pose_lock:
             self._auv_pose_msg = copy.deepcopy(msg)
             self._has_auv_pose = True
+
+    def _toggle_annotated_image_callback(self, request, response):
+        del request
+        self.annotated_image_enabled = not self.annotated_image_enabled
+        response.success = True
+        response.message = (
+            f"Annotated image {'enabled' if self.annotated_image_enabled else 'disabled'}"
+        )
+        self.node.get_logger().info(response.message)
+        return response
 
     def _configure_pose_source(self):
         if self.pose_source == self.POSE_SOURCE_AUV_POSE:
@@ -404,6 +438,49 @@ class FrontCamObjectDetectorNode():
             return self._get_auv_world_pose_snapshot(stamp)
 
         return vio_pose_msg if vio_pose_msg is not None else self._get_vio_world_pose_snapshot(stamp)
+
+    def _build_camera_info_template(self) -> CameraInfo:
+        camera_info = CameraInfo()
+        camera_info.header.frame_id = self.image_frame_id
+
+        zed_info = self.zed.get_camera_information()
+        resolution = zed_info.camera_configuration.resolution
+        calibration = zed_info.camera_configuration.calibration_parameters.left_cam
+
+        fx = float(calibration.fx)
+        fy = float(calibration.fy)
+        cx = float(calibration.cx)
+        cy = float(calibration.cy)
+        distortion = list(calibration.disto)
+
+        camera_info.width = int(resolution.width)
+        camera_info.height = int(resolution.height)
+        camera_info.distortion_model = "plumb_bob"
+        camera_info.d = [float(value) for value in distortion]
+        camera_info.k = [
+            fx, 0.0, cx,
+            0.0, fy, cy,
+            0.0, 0.0, 1.0,
+        ]
+        camera_info.r = [
+            1.0, 0.0, 0.0,
+            0.0, 1.0, 0.0,
+            0.0, 0.0, 1.0,
+        ]
+        camera_info.p = [
+            fx, 0.0, cx, 0.0,
+            0.0, fy, cy, 0.0,
+            0.0, 0.0, 1.0, 0.0,
+        ]
+        return camera_info
+
+    def _publish_camera_info(self, stamp):
+        if self.pub_camera_info is None:
+            return
+
+        camera_info_msg = copy.deepcopy(self.camera_info_template)
+        camera_info_msg.header.stamp = stamp
+        self.pub_camera_info.publish(camera_info_msg)
 
     def _has_required_pose_source(self):
         if self.pose_source == self.POSE_SOURCE_AUV_POSE:
@@ -512,8 +589,10 @@ class FrontCamObjectDetectorNode():
                     depth_msg = self.bridge.cv2_to_imgmsg(depth, encoding="32FC1")
                 
                 depth_msg.header.stamp = frame_stamp
-                depth_msg.header.frame_id = self.detection_frame_id
+                depth_msg.header.frame_id = self.image_frame_id
                 self.pub_depth_image.publish(depth_msg)
+
+            self._publish_camera_info(frame_stamp)
 
             tracked_detections = get_detections(self, img)
 
@@ -642,7 +721,7 @@ class FrontCamObjectDetectorNode():
 
             # Always publish the (possibly annotated) image, even with no detections
             if self.publish_annotated_image and (self._frame_counter % self.publish_annotated_every_n_frames == 0):
-                publish_annotated_image_util(self, img, tracked_detections, frame_stamp, self.detection_frame_id)
+                publish_annotated_image_util(self, img, tracked_detections, frame_stamp, self.image_frame_id)
             
             t_end = time.perf_counter()
             self.node.get_logger().debug(f"Detection latency: {(t_end - t_start)*1000:.1f} ms | Active 3D detections: {len(det_objects)}")

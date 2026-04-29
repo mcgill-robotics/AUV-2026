@@ -78,24 +78,28 @@ def publish_annotated_image_util(detector_node, img, tracked_detections, stamp, 
     if not detector_node.publish_annotated_image:
         return
 
-    annotated = img.copy()
+    output_image = img.copy()
 
-    # Draw annotations only if there are detections
-    if tracked_detections is not None and len(tracked_detections) > 0:
+    # Draw annotations only when enabled and detections are available.
+    if (
+        getattr(detector_node, "annotated_image_enabled", True)
+        and tracked_detections is not None
+        and len(tracked_detections) > 0
+    ):
         labels = [f"{detector_node.class_names[int(tracked_detections.class_id[i])]} {tracked_detections.confidence[i]:.2f}"
                     for i in range(len(tracked_detections)) if int(tracked_detections.class_id[i]) < len(detector_node.class_names)]
 
         box_annotator = sv.BoxAnnotator(thickness=2)
         label_annotator = sv.LabelAnnotator(text_thickness=2, text_scale=0.8)
 
-        annotated = box_annotator.annotate(scene=annotated, detections=tracked_detections)
-        annotated = label_annotator.annotate(scene=annotated, detections=tracked_detections, labels=labels)
+        output_image = box_annotator.annotate(scene=output_image, detections=tracked_detections)
+        output_image = label_annotator.annotate(scene=output_image, detections=tracked_detections, labels=labels)
 
     try:
         if detector_node.compressed:
-            ann_msg = detector_node.bridge.cv2_to_compressed_imgmsg(annotated)
+            ann_msg = detector_node.bridge.cv2_to_compressed_imgmsg(output_image)
         else:
-            ann_msg = detector_node.bridge.cv2_to_imgmsg(annotated, "bgr8")
+            ann_msg = detector_node.bridge.cv2_to_imgmsg(output_image, "bgr8")
         
         ann_msg.header.stamp = stamp
         ann_msg.header.frame_id = frame_id
@@ -140,18 +144,37 @@ def build_detection2d_msg(detector_node, tracked_detections):
 
 # --- Shared Dataset Service Logic ---
 def toggle_collection_callback_util(detector_node, request, response):
+    requested_interval = getattr(request, "time_interval", detector_node.collection_interval)
+    if requested_interval <= 0.0:
+        response.success = False
+        response.message = "Collection interval must be > 0 seconds"
+        detector_node.node.get_logger().warn(response.message)
+        return response
+
     detector_node._collecting = request.data
+    detector_node.collection_interval = float(requested_interval)
     if detector_node._collecting:
         Path(detector_node.collection_dir).mkdir(parents=True, exist_ok=True)
         if hasattr(detector_node, 'depth_collection_dir'):
             Path(detector_node.depth_collection_dir).mkdir(parents=True, exist_ok=True)
-            detector_node.node.get_logger().info(f"Image collection ENABLED → {detector_node.collection_dir} and {detector_node.depth_collection_dir}")
+            detector_node.node.get_logger().info(
+                f"Image collection ENABLED every {detector_node.collection_interval:.2f}s "
+                f"→ {detector_node.collection_dir} and {detector_node.depth_collection_dir}"
+            )
         else:
-            detector_node.node.get_logger().info(f"Image collection ENABLED → {detector_node.collection_dir}")
+            detector_node.node.get_logger().info(
+                f"Image collection ENABLED every {detector_node.collection_interval:.2f}s "
+                f"→ {detector_node.collection_dir}"
+            )
     else:
-        detector_node.node.get_logger().info("Image collection DISABLED")
+        detector_node.node.get_logger().info(
+            f"Image collection DISABLED (interval preserved at {detector_node.collection_interval:.2f}s)"
+        )
     response.success = True
-    response.message = f"Collection {'enabled' if detector_node._collecting else 'disabled'}"
+    response.message = (
+        f"Collection {'enabled' if detector_node._collecting else 'disabled'} "
+        f"with interval {detector_node.collection_interval:.2f}s"
+    )
     return response
 
 # --- Shared Object Spatial Math Utilities ---

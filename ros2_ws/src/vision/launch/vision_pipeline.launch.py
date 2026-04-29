@@ -172,6 +172,7 @@ def generate_launch_description():
                 'queue_size': default_config["object_detection"]["front_cam"]["queue_size"],
                 'publish_annotated_image': default_config["object_detection"]["front_cam"]["publish_annotated_image"],
                 'publish_annotated_every_n_frames': default_config["object_detection"]["front_cam"]["publish_annotated_every_n_frames"],
+                'publish_camera_info': default_config["object_detection"]["front_cam"]["publish_camera_info"],
                 'publish_depth_image': default_config["object_detection"]["front_cam"]["publish_depth_image"],
                 'publish_depth_compressed': default_config["object_detection"]["front_cam"]["publish_depth_compressed"],
                 'publish_depth_every_n_frames': default_config["object_detection"]["front_cam"]["publish_depth_every_n_frames"],
@@ -185,6 +186,7 @@ def generate_launch_description():
                 'auv_frame_id': default_config["object_detection"]["front_cam"]["auv_frame_id"],
                 'vio_frame_id': default_config["object_detection"]["front_cam"]["vio_frame_id"],
                 'detection_frame_id': default_config["object_detection"]["front_cam"]["detection_frame_id"],
+                'image_frame_id': default_config["object_detection"]["front_cam"]["image_frame_id"],
                 'auv_to_camera_center_xyz': default_config["object_detection"]["front_cam"]["auv_to_camera_center_xyz"],
                 'auv_to_camera_center_rpy': default_config["object_detection"]["front_cam"]["auv_to_camera_center_rpy"],
                 'camera_center_to_detection_xyz': default_config["object_detection"]["front_cam"]["camera_center_to_detection_xyz"],
@@ -240,6 +242,22 @@ def generate_launch_description():
             "--yaw", str(default_config["object_detection"]["front_cam"]["camera_center_to_detection_rpy"][2]),
             "--frame-id", default_config["object_detection"]["front_cam"]["camera_center_frame_id"],
             "--child-frame-id", default_config["object_detection"]["front_cam"]["detection_frame_id"],
+        ],
+    )
+
+    detection_to_optical_tf = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="zed_left_frame_to_optical_tf",
+        arguments=[
+            "--x", "0.0",
+            "--y", "0.0",
+            "--z", "0.0",
+            "--roll", "-1.57079632679",
+            "--pitch", "0.0",
+            "--yaw", "-1.57079632679",
+            "--frame-id", default_config["object_detection"]["front_cam"]["detection_frame_id"],
+            "--child-frame-id", default_config["object_detection"]["front_cam"]["image_frame_id"],
         ],
     )
     
@@ -324,6 +342,7 @@ def generate_launch_description():
     # launch_description.add_action(zed_sim_wrapper_launch)
     launch_description.add_action(auv_to_camera_center_tf)
     launch_description.add_action(camera_center_to_detection_tf)
+    launch_description.add_action(detection_to_optical_tf)
     launch_description.add_action(front_cam_enhancement_node)
     # launch_description.add_action(down_cam_enhancement_node)
     launch_description.add_action(front_detection_node)

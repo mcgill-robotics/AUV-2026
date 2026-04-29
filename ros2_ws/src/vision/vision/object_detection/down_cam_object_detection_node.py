@@ -4,13 +4,13 @@ from functools import partial
 import os
 import time
 
+from auv_msgs.srv import AutomaticCapture
 import cv2
 from cv_bridge import CvBridge
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import CompressedImage, Image
-from std_srvs.srv import SetBool
 from vision_msgs.msg import Detection2DArray
 
 from vision.object_detection.utils import (
@@ -52,7 +52,7 @@ class DownCamObjectDetectorNode():
         self._collecting = False
         self._last_collection_time = 0.0
         self._frame_counter = 0
-        self.node.create_service(SetBool, '~/toggle_collection', partial(toggle_collection_callback_util, self))
+        self.node.create_service(AutomaticCapture, '~/toggle_collection', partial(toggle_collection_callback_util, self))
 
         self.conf_threshold = self.node.get_parameter('model_detection_threshold').get_parameter_value().double_value
 
