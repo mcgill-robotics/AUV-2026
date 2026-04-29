@@ -1,4 +1,5 @@
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 from rclpy.parameter import Parameter
 from rclpy.duration import Duration
 from rclpy.time import Time
@@ -12,6 +13,12 @@ from abc import ABC, abstractmethod
 A base class for monitoring the health of sensors in a ROS2 system. This class uses the diagnostic_updater package to create a diagnostic updater that checks the health of a sensor based on the time since the last update and additional sensor-specific conditions defined in derived classes. The class declares parameters for hardware ID and stale data threshold, and provides an abstract method for checking sensor-specific status conditions.
 """
 class HealthMonitor(ABC):
+    qos = QoSProfile (
+        reliability=ReliabilityPolicy.RELIABLE,
+        durability=DurabilityPolicy.VOLATILE,
+        history=HistoryPolicy.KEEP_LAST,
+        depth=10
+    )
     def __init__(self, node:Node):
         # Diagnostic Updater setup
         self.node = node
@@ -37,18 +44,22 @@ class HealthMonitor(ABC):
         Diagnostic callback to check sensor health. Checks if the sensor data is stale based on the last update time and the defined threshold, then checks additional sensor-specific status conditions implemented in the check_status method.
         """
         
+        if self.last_update_time is None:
+            # If we have never received an update, consider it stale
+            stat.summary(DiagnosticStatus.STALE, "No data received yet.")
+            return stat
         time_since_last_update:Duration = self.node.get_clock().now() - self.last_update_time
-        # Add message
-        stat.add("Time since last update (s)", time_since_last_update.nanoseconds / 1e9) # Convert nanoseconds to seconds for reporting
-        
         # Check if data is stale
         if time_since_last_update > self.stale_threshold:
+            # Add message
+            stat.add("Time since last update (s)", time_since_last_update.nanoseconds / 1e9) # Convert nanoseconds to seconds for reporting
+
             # If data is stale, summarize report as STALE and return immediately
             stat.summary(DiagnosticStatus.STALE, "Data stale, no message received within threshold.")
-        else:
-            # If not stale, check additional sensor-specific conditions
-            stat = self.check_status(stat)
-        return stat
+            return stat
+        # If not stale, check additional sensor-specific conditions
+        return self.check_status(stat)
+        
 
     @abstractmethod
     def check_status(self, stat:DiagnosticStatusWrapper) -> DiagnosticStatusWrapper:

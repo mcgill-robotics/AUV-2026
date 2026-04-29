@@ -23,6 +23,9 @@
   <build_depend>eigen3_cmake_module</build_depend>
   <depend>eigen</depend>
 
+  <!-- python exec dependencies -->
+  <exec_depend>dvl_msgs</exec_depend>
+
   <!-- runtime deps for down-facing USB camera -->
   <exec_depend>usb_cam</exec_depend>
   <exec_depend>image_transport</exec_depend>
