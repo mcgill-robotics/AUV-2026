@@ -19,19 +19,19 @@ object_detection:
     enhanced_topic: /vision/front_cam/image_enhanced # input topic if enhance_images is true, otherwise will subscribe to raw image topic
     detection_frame_topic: /vision/front_cam/detection_frame # synchronized camera-frame detections + AUV pose
     model_detection_threshold: 0.40
-    depth_confidence_threshold: 95
-    publish_camera_info: true
-    enable_vio: false
-    pose_source: auv_pose # zed_vio or auv_pose
-    auv_pose_topic: state/pose
-    vio_pose_topic: /vision/vio_pose
-    broadcast_vio_tf: true
-    global_frame_id: pool_link
-    auv_frame_id: auv_link
-    vio_frame_id: auv_vio_link
-    camera_center_frame_id: zed_camera_center
-    detection_frame_id: zed_left_camera_frame
-    image_frame_id: zed_left_camera_frame_optical
+    depth_confidence_threshold: 95 # ZED runtime confidence threshold used for depth/3D extraction
+    publish_camera_info: true # publish CameraInfo for the front camera feed using ZED left-camera intrinsics
+    enable_vio: false # if false, skip ZED positional tracking and do not publish vision VIO pose/TF
+    pose_source: auv_pose # auv_pose uses state/pose for synchronized detection frames; zed_vio uses the front ZED VIO estimate
+    auv_pose_topic: state/pose # official aggregated AUV pose used for synchronized detection frames when pose_source=auv_pose
+    vio_pose_topic: /vision/vio_pose # optional vision VIO measurement output for debugging or future fusion
+    broadcast_vio_tf: true # if VIO is enabled, publish pool_link -> auv_vio_link for visualization/debugging
+    global_frame_id: pool_link # world frame for synchronized AUV poses and mapped objects
+    auv_frame_id: auv_link # official body frame; sensors/state estimation should own pool_link -> auv_link
+    vio_frame_id: auv_vio_link # debug-only VIO child frame published by vision when enabled
+    camera_center_frame_id: zed_camera_center # static camera mount frame under auv_link
+    detection_frame_id: zed_left_camera_frame # 3D detection frame used inside VisionDetectionFrame
+    image_frame_id: zed_left_camera_frame_optical # optical frame for image-like topics such as CameraInfo and debug feeds
     auv_to_camera_center_xyz: [0.148, 0.0, 0.0]
     auv_to_camera_center_rpy: [0.0, 0.0, 0.0]
     camera_center_to_detection_xyz: [0.0, 0.06, 0.0]

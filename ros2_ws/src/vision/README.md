@@ -1,178 +1,285 @@
 # Vision Package
 
-## Launch File Usage
-In most cases, the [vision pipeline](#vision-pipeline) launch file will be the main entry point for running vision nodes. All other launch files are intended for testing and development of individual nodes, and are run as intermediate steps in the vision pipeline. It expects models to already be trained (see [Steps to train a model](./model_pipeline/README.md)) and placed in the `ros2_ws/vision/models` directory.
-### VIsion Pipeline
-Launches the entire vision pipeline, image enhancement -> object detection -> object mapping.
+This package contains the front-camera detection pipeline, the persistent 3D object map, optional image enhancement nodes, and the model-training/export helpers used to build the deployed detectors.
+
+The current runtime center of gravity is:
+- [vision_pipeline.launch.py](launch/vision_pipeline.launch.py)
+- [front_cam_object_detection_node.py](vision/object_detection/front_cam_object_detection_node.py)
+- [object_map.cpp](vision/object_map.cpp)
+- [object_tracker.cpp](vision/object_map/object_tracker.cpp)
+
+## Current Architecture
+
+```mermaid
+flowchart LR
+    A["Front camera / ZED<br/>RGB + depth source"] --> B["front_cam_object_detection<br/>infer + ZED 3D + frame sync"]
+    S["sensors / state_aggregator<br/>official pose + TF"] -->|"state/pose"| B
+    B -->|"VisionDetectionFrame"| C["object_map<br/>camera->world + tracking"]
+    B -->|"front camera feed + CameraInfo"| F["Foxglove / debug<br/>visualization"]
+    B -->|"optional /vision/vio_pose"| E["debug / future fusion<br/>vision pose measurement"]
+    T["Static TF<br/>auv_link -> zed_camera_center -> zed_left_camera_frame -> optical"] --> C
+    S -->|"official TF: pool_link -> auv_link"| C
+    C -->|"VisionObjectArray"| D["/vision/object_map<br/>persistent world map"]
+    D --> F
+```
+
+Node summary:
+- `Front camera / ZED`: Provides the raw RGB images and ZED depth data used to build 3D detections.
+- `sensors / state_aggregator`: Publishes the official aggregated AUV pose and the official `pool_link -> auv_link` TF.
+- `front_cam_object_detection`: Runs the detector, asks ZED for 3D object positions, and packages each frame with one synchronized AUV pose.
+- `Static TF`: Describes the fixed mounting relationship between the AUV body frame and the front camera frames.
+- `object_map`: Converts camera-frame detections into world-frame objects and tracks them over time.
+- `/vision/object_map`: Exposes the persistent world-frame map as `VisionObjectArray`.
+- `Foxglove / debug`: Visualizes the front camera feed, camera calibration, and mapped detections.
+- `debug / future fusion`: Carries the optional vision-only VIO pose output for debugging or later estimator fusion.
+
+### Front camera path
+The front camera node is responsible for:
+- running model inference
+- ingesting 2D boxes into the ZED SDK
+- recovering 3D detections in the camera frame
+- snapshotting one AUV pose per grabbed frame
+- publishing one synchronized detection-frame message
+- optionally publishing a front-camera debug feed, `CameraInfo`, depth images, and a VIO measurement/debug TF
+
+The synchronized message types live in `auv_msgs`:
+- [VisionDetection.msg](../auv_msgs/msg/VisionDetection.msg)
+- [VisionDetectionFrame.msg](../auv_msgs/msg/VisionDetectionFrame.msg)
+
+`VisionDetectionFrame` is the input to `object_map`. It carries:
+- `header.stamp`: frame timestamp
+- `header.frame_id`: 3D detection frame, currently `zed_left_camera_frame`
+- `auv_pose`: AUV pose snapshot for that frame, typically from `state/pose`
+- `detections`: camera-frame 3D detections plus the original model 2D bbox
+
+### Object map path
+The object map node:
+- subscribes to `VisionDetectionFrame`
+- resolves the TF chain from `auv_link` to `zed_left_camera_frame`
+- transforms detections from camera frame to world frame in C++
+- tracks objects over time with a Kalman + Hungarian pipeline
+- publishes the persistent map as:
+  - [VisionObject.msg](../auv_msgs/msg/VisionObject.msg)
+  - [VisionObjectArray.msg](../auv_msgs/msg/VisionObjectArray.msg)
+
+### How the front camera node works
+At a high level, the front camera node does this each frame:
+1. `grab()` one ZED frame
+2. snapshot one AUV pose for that same frame
+3. run detector inference on the RGB image
+4. optionally filter detections near image borders
+5. optionally crop the lower half of gate boxes before depth ingestion
+6. ingest the 2D boxes into the ZED SDK
+7. retrieve 3D detections in `zed_left_camera_frame`
+8. publish one `VisionDetectionFrame`
+
+This keeps the expensive 2D-to-3D step close to the ZED SDK while still leaving world-frame conversion to `object_map`.
+
+### How object_map works
+At a high level, `object_map` does this for each `VisionDetectionFrame`:
+1. read the synchronized AUV pose from the message
+2. resolve `auv_link -> zed_left_camera_frame` from TF
+3. transform all camera-frame detections into `pool_link`
+4. filter and track them with `ObjectTracker`
+5. apply game-specific constraints and refinements
+6. publish the persistent world-frame map as `VisionObjectArray`
+
+### Sensors / pose ownership
+The official vehicle pose and TF should come from the `sensors` package:
+- `state/pose`
+- `pool_link -> auv_link`
+
+Vision can still publish a VIO measurement for debugging or future fusion:
+- `/vision/vio_pose`
+- optionally `pool_link -> auv_vio_link`
+
+This is intentionally separate from the official `auv_link` TF so Foxglove and downstream nodes do not confuse vision VIO with the fused vehicle pose.
+
+## Frames And TF
+
+The front-camera pipeline currently uses:
+- `pool_link`: world / inertial frame
+- `auv_link`: official AUV frame
+- `auv_vio_link`: optional debug VIO frame from vision
+- `zed_camera_center`: static camera mount frame
+- `zed_left_camera_frame`: 3D detection frame used by the ZED SDK and `VisionDetectionFrame`
+- `zed_left_camera_frame_optical`: optical frame used for image visualization and `CameraInfo`
+
+The launch file publishes the static chain:
+- `auv_link -> zed_camera_center`
+- `zed_camera_center -> zed_left_camera_frame`
+- `zed_left_camera_frame -> zed_left_camera_frame_optical`
+
+This split matters:
+- 3D detections stay in `zed_left_camera_frame`
+- image-like topics use `zed_left_camera_frame_optical`
+
+That layout is what Foxglove expects for correct camera visualization.
+
+## Main Entry Point
+
+Launch the package with:
 
 ```bash
 ros2 launch vision vision_pipeline.launch.py
 ```
 
-Configurations for the launch file are pulled from [config/vision_pipeline.yaml](config/vision_pipeline.yaml) by default. Parameters are listed below:
+Configuration is loaded from:
+- [config/vision_pipeline.yaml](config/vision_pipeline.yaml)
 
-| Category | Parameter | Default | Description |
-|----------|-----------|---------|-------------|
-| `camera` | `front_cam_topic` | `/zed/zed_node/stereo/image_rect_color` | Input topic for front camera images |
-| `camera` | `down_cam_topic` | `/sensors/down_cam/image_raw` | Input topic for down camera images |
-| `image_enhancement` | `front_enhanced_topic` | `/vision/front_cam/image_enhanced` | Output topic for enhanced front camera images |
-| `image_enhancement` | `down_enhanced_topic` | `/vision/down_cam/image_enhanced` | Output topic for enhanced down camera images |
-| `object_detection` | `front_detection_frame_topic` | `/vision/front_cam/detection_frame` | Output topic for synchronized front camera detection frames |
-| `object_detection` | `down_detections_topic` | `/vision/down_cam/detections` | Output topic for down camera object detections |
-| `object_detection` | `front_model_relative_path` | `frontcam.pt` | Path to front camera object detection model file, relative to the `src` directory of the vision package |
-| `object_detection` | `down_model_relative_path` | `downcam.pt` | Path to down camera object detection model file, relative to the `ros2_ws/vision/models` directory |
-| `object_map` | `object_map_topic` | `/vision/object_map` | Output topic for object map |
-| `object_detection` | `vio_pose_topic` | `/vision/vio_pose` | Debug/compat output topic for the synchronized front camera AUV pose |
-| `general` | `sim` | `false` | Set to true to enable simulation mode (for Unity sim) |
-| `general` | `debug` | `false` | Set to true to enable debug logging in all nodes (there should only be debug logging in object map) |
-
-Parameters can be overriden via command line:
+Common launch overrides:
 
 ```bash
-ros2 launch vision vision_pipeline.launch.py PARAM_NAME:=VALUE
+ros2 launch vision vision_pipeline.launch.py sim:=true
+ros2 launch vision vision_pipeline.launch.py compressed:=false
+ros2 launch vision vision_pipeline.launch.py front_model_relative_path:=models/local_rfdetr_onnx_test
 ```
 
-Currently, the overridable parameters are:
-- "sim"
-- "front_model_relative_path"
-- "down_model_relative_path"
+## What The Main Launch Actually Starts
 
-All remaining parameters can be set by editing the [config/vision_pipeline.yaml](config/vision_pipeline.yaml) file directly, to avoid CLI clutter.
+The main launch currently focuses on the front-camera path:
+- optional front image enhancement
+- front camera object detection
+- static TF publishers for the front camera
+- object map
 
-When working with the [Unity Simulation](https://github.com/mcgill-robotics/auv-sim-unity/), the messages arriving to the `ros_tcp_endpoint` should be compressed images. This is what simulation mode send by default.
+The down-camera nodes still exist, but they are not part of the default runtime pipeline in `vision_pipeline.launch.py`.
 
-## Information on Individual Nodes
+## Important Topics
 
-### Image Collection
+### Front camera topics
+- `/vision/front_cam/detection_frame`
+  - synchronized `VisionDetectionFrame`
+- `/vision/front_cam/detection_frame/annotated`
+  - single published front-camera feed topic
+  - can show annotated or raw frames on the same topic
+- `/vision/front_cam/detection_frame/camera_info`
+  - `CameraInfo` built from ZED left-camera calibration
+- `/vision/front_cam/detection_frame/depth`
+  - optional depth image output
+- `/vision/vio_pose`
+  - optional VIO-based AUV pose measurement from vision
 
-Collects training images from ZED2i (front) and down-facing cameras for YOLO object detection.
+### Object map
+- `/vision/object_map`
+  - `VisionObjectArray` containing the persistent world-frame map
 
-#### Usage
+### Down camera
+- `/vision/down_cam/detections`
+  - `vision_msgs/Detection2DArray`
 
-##### Jetson Nano
+## Runtime Services
 
-```bash
-# Ensure ZED2i camera and/ror down cam node are running in seperate terminals, then:
-ros2 run vision image_collection
+### Front camera
+- `/vision/front_cam/toggle_annotated_image`
+  - `std_srvs/Trigger`
+  - toggles the front-camera feed topic between annotated and raw
+
+- `/vision/front_cam/toggle_collection`
+  - `auv_msgs/AutomaticCapture`
+  - enables/disables timed collection and sets the interval
+
+- `/image_collection/toggle_manual_front_collection`
+  - compatibility alias for the same `AutomaticCapture` behavior
+
+Example request:
+
+```json
+{ "data": true, "time_interval": 1.0 }
 ```
 
-#### Commands
+### Down camera
+- `/down_cam_object_detection/toggle_collection`
+  - `auv_msgs/AutomaticCapture`
 
-Once running, use these interactive commands:
+## Front Camera Debug Feed
 
-- `m` - Manual capture mode
-- `a` - Automatic capture mode (timed intervals)
-- `s` - Show statistics
-- `q` - Quit
+The front debug feed intentionally uses one topic:
+- `/vision/front_cam/detection_frame/annotated`
 
-##### Manual Capture Workflow
+Behavior:
+- if annotation is enabled, detections are drawn on the image
+- if annotation is disabled, the same topic publishes the raw image
 
-```
-Enter command: m
-Select camera [f]ront or [d]own: f
+This keeps Foxglove simple because you do not need to switch image topics to compare raw vs annotated output.
 
-Action: c  (capture image)
-Action: v  (view latest - Jetson only)
-Action: b  (back to main menu)
-```
+## 2026 Tracking / Mapping Logic
 
-##### Automatic Capture Workflow
+The tracker has several 2026-specific constraints:
+- gate refinement from `search_rescue` and `survey_repair`
+- board refinement from `ambulance`, `firetruck`, `fire`, and `blood`
+- observer-facing yaw chosen using the current AUV position
+- large-structure spawn filtering near pipes and other large structures
+- synthetic octagon inheritance from the table
+- floor/surface Z locking for selected classes
 
-```
-Enter command: a
-Select camera [f]ront or [d]own: d
-Interval in seconds: 2
+The main tuning and counts are configured in:
+- [config/vision_pipeline.yaml](config/vision_pipeline.yaml)
 
-(Press Enter to stop)
-```
+## Front Camera Pose Modes
 
-#### Output
+`front_cam_object_detection` still supports two pose modes:
+- `pose_source: auv_pose`
+- `pose_source: zed_vio`
 
-Images are saved with timestamps:
-- `data_front_cam/image_YYYYMMDD_HHMMSS_microseconds.jpg`
-- `data_down_cam/image_YYYYMMDD_HHMMSS_microseconds.jpg`
+Current recommended setup:
+- `enable_vio: false`
+- `pose_source: auv_pose`
+- use `state/pose` from `sensors`
 
-#### Parameters
+If VIO is enabled:
+- the node can publish `/vision/vio_pose`
+- it can optionally publish `pool_link -> auv_vio_link`
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `front_cam_data_dir` | `data_front_cam` | Directory for front camera images |
-| `down_cam_data_dir` | `data_down_cam` | Directory for down camera images |
-| `front_cam_topic` | `/zed/zed_node/rgb/color/rect/image/compressed` | Front camera topic |
-| `down_cam_topic` | `/down_cam/image_raw` | Down camera topic |
+If `enable_vio` is false, the node skips ZED positional tracking entirely.
 
-##### Custom Configuration Example
+## Configuration Notes
 
-```bash
-# Organize by date/location
-ros2 run vision image_collection --ros-args \
-  -p front_cam_data_dir:=~/datasets/pool_2024_11_02/front \
-  -p down_cam_data_dir:=~/datasets/pool_2024_11_02/down
-```
+Some especially important front-camera parameters are:
+- `model_detection_threshold`
+- `depth_confidence_threshold`
+- `enable_gate_top_crop`
+- `gate_top_crop_ratio`
+- `enable_border_exclusion`
+- `border_exclusion_margin_px`
+- `border_exclusion_labels`
+- `publish_camera_info`
+- `publish_annotated_image`
+- `publish_depth_image`
+- `collection_interval_seconds`
+- `enable_vio`
+- `pose_source`
 
-### Image Enhancement
+`enable_border_exclusion` is a simple filter applied before ZED ingestion. For configured labels such as `gate`, any 2D detection touching the image border within `border_exclusion_margin_px` is dropped. This helps reject partial detections at the left/right image edges that often produce unstable depth or incorrect clipped 3D positions.
 
-Enhances images using various interchangeable algorithms from both front and down cameras. Output encoding will match input encoding.
+Some especially important object-map parameters are:
+- `new_object_min_distance_threshold`
+- `large_structure_labels`
+- `pipe_labels`
+- `min_large_structure_separation_m`
+- `min_large_structure_pipe_separation_m`
+- `enable_gate_midpoint_refinement`
+- `enable_board_icon_refinement`
+- `enable_octagon_xy_inheritance`
+- `max_pipe_distance`
+- `unique_objects`
+- `floor_objects`
+- `surface_objects`
+- `max_per_class`
 
-#### Usage
+## Package Scope
 
-```bash
-colcon build --packages-select vision --symlink-install
-source install/setup.bash
-# Ensure ZED2i camera and/or down cam node are running in separate terminals, then:
-ros2 launch vision image_enhancement.launch.xml
-```
+This repository package is currently a mixed runtime + model-development package:
+- runtime ROS nodes live under `vision/`
+- launch/config live under `launch/` and `config/`
+- training/export helpers live under `model_pipeline/` and `models/`
 
-This will launch the image enhancement nodes for both cameras with default parameters. Arguments can be set in the launch file or via command line:
+That is convenient for development, but it also means the package is heavier than a pure runtime deployment package.
 
-```bash
-ros2 launch vision image_enhancement.launch.xml PARAM_NAME:=VALUE
-```
+## Training And Model Export
 
-Algorithms can be set in the node scripts (`front_image_enhancement.py` and `down_image_enhancement.py`). See the [wiki](https://github.com/mcgill-robotics/AUV-2026/wiki/3.1-Vision) for a list of algorithms.
+The training/export helpers are still under:
+- [model_pipeline/README.md](model_pipeline/README.md)
+- [models/export_model.py](models/export_model.py)
 
-#### Parameters
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `front_cam_topic` | `/zed/zed_node/rgb/color/rect/image/compressed` | Input front camera topic |
-| `down_cam_topic` | `/sensors/down_cam/image_raw` | Input down camera topic |
-| `front_cam_enhanced_topic` | `/vision/front_cam/image_enhanced` | Output enhanced front camera topic |
-| `down_cam_enhanced_topic` | `/vision/down_cam/image_enhanced` | Output enhanced down camera topic |
-| `sim` | `false` | Enable simulation mode |
-
-### Object Map
-
-The `object_map` node aggregates 2D object detections from the YOLO inference node (`object_detection`) and projects them into a persistent 3D world map relative to the AUV. It uses the ZED SDK neural depth sensing for 3D estimation and a custom `ObjectTracker` pipeline to maintain object permanence across complex frames.
-
-#### Tracking Architecture
-The tracking system operates using a multi-step data association pipeline designed to handle noise, occlusions, and false positives in underwater environments:
-
-1. **3D Projection (ZED SDK Integration):** 
-   - 2D Bounding Boxes published by the YOLO node are intercepted by `ObjectMapNode`.
-   - These 2D bounds are ingested into the ZED SDK (`ZEDDetection::process_detections`), which leverages neural depth sensing and stereo triangulation to extract real-world 3D coordinates relative to the left camera lens.
-   - The coordinates are then transformed into the global `world` frame using the VIO positional data published by the ZED SDK.
-
-2. **Persistent Tracking (Kalman Filter + Hungarian Algorithm):**
-   - **State Estimation:** Every tracked object is assigned a constant-velocity Kalman Filter (`KalmanFilter.cpp`). This allows the tracker to predict where an object *should* be in the next frame based on its previous trajectory.
-   - **Cost Matrix:** When new detections arrive, the system computes the Mahalanobis Distance between the predicted positions of existing tracks and the new incoming measurements.
-   - **Data Association:** The Hungarian Matcher (`ObjectTracker::match_tracks`) solves the linear assignment problem using this cost matrix, pairing incoming detections to existing tracks while minimizing overall distance error.
-   - **Track Lifecycle:** Unmatched detections spawn new `TENTATIVE` tracks. If a track is consistently matched across several frames, it becomes `CONFIRMED`. If a confirmed track loses sight of the object, the Kalman Filter continues predicting its location for a configured `max_age` duration before the track is finally purged.
-
-3. **Categorization:** 
-   - Dynamically groups objects into `unique_objects` (only one instance allowed to exist globally), `floor_objects` (locked to pool floor), and `surface_objects` (locked to pool surface).
-
-#### Physical Constraints
-Applies game-specific logic to improve tracking accuracy and patch noisy vision data:
-- **Gate Top Crop:** Ignores the bottom portion of gate bounding boxes to prevent depth errors caused by the pool floor.
-- **Z-Axis Locking:** Forces specific objects (e.g., bins, tables) to snap to the known depths of the pool floor or surface.
-- **Midpoint Refinement:** Centers the gate position between detected shark and sawfish markers.
-- **Octagon Inheritance:** Inherits the XY position of the octagon directly from the more reliably detected table.
-
-#### Usage
-
-The object map node is launched automatically as part of the `vision_pipeline.launch.py`. It subscribes to the 2D detections publised by the YOLO node and the camera images/depth.
-
-#### Parameters
-
-All configuration parameters for the `object_map` node, including Kalman/Hungarian tracker tuning thresholds and constraint feature toggles, are found in `config/vision_pipeline.yaml`.
+Those tools are not part of the runtime launch path, but they are still the source of the deployed detector packages under `models/`.
