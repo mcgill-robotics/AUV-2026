@@ -47,7 +47,7 @@ jobs:
     
     # GitHub natively handles pulling the image and mounting the workspace here
     container:
-      image: mcgillrobotics/auv_2026:dev-arm64
+      image: mcgillrobotics/auv_2026:dev-jetson
       options: --user root
       credentials:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
