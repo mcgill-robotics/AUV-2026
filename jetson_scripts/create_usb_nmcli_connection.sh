@@ -20,7 +20,7 @@ sudo nmcli connection modify $DVL_CONNECTION_NAME ipv4.never-default yes
 sudo nmcli connection modify $DVL_CONNECTION_NAME ipv4.ignore-auto-routes yes
 sudo nmcli connection modify $DVL_CONNECTION_NAME ipv4.ignore-auto-dns yes
 # do not let DVL connection block network-online.target and stall if it is not connected at boot
-sudo nmcli connection modify $DVL_CONNECTION_NAME connection.wait-device-auto-probe no 
+sudo nmcli connection modify $DVL_CONNECTION_NAME connection.wait-device-timeout 0
 sudo nmcli connection modify $DVL_CONNECTION_NAME connection.autoconnect-retries 1
 sudo nmcli connection modify $DVL_CONNECTION_NAME connection.autoconnect-priority 10
 
