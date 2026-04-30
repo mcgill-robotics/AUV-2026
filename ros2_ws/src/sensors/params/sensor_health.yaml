@@ -1,0 +1,7 @@
+sensors:
+  dvl_velocity_monitor:
+    ros__parameters:
+      hardware_id: "dvl_velocity_monitor"
+      stale_threshold_sec: 1.0
+      velocity_topic: "/dvl/velocity"
+      dvl_beam_count: 4
