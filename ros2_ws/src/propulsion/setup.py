@@ -11,7 +11,6 @@ setup(
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch', [
             'launch/propulsion.launch.py',
-            'launch/mechtest2.launch.py',
         ]),
     ],
     install_requires=['setuptools', 'numpy'],
@@ -25,7 +24,6 @@ setup(
             # ros2 run propulsion thrust_mapper
             'thrust_mapper = propulsion.thrust_mapper:main',
             'drytest = propulsion.drytest:main',  # ros2 run propulsion drytest
-            'mechtest_exec = propulsion.mechtest2:main',
         ],
     },
 )
