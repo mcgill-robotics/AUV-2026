@@ -8,24 +8,42 @@ on:
   workflow_dispatch:
 
 jobs:
-  # ROS2 build jobs
-  colcon-build-dev:
+  find-packages:
     runs-on: ubuntu-22.04-arm
-    
-    # Expand the build matrix when new packages are added
+    outputs:
+      packages: ${{ steps.list.outputs.packages }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-tags: true
+        submodules: recursive
+        lfs: true
+
+    - name: Discover ROS2 packages
+      id: list
+      run: |
+        # Run colcon list inside the dev container to get all buildable packages
+        PACKAGES=$(docker run --rm \
+          -v ${{ github.workspace }}:/workspace \
+          -w /workspace/ros2_ws \
+          mcgillrobotics/auv_2026:dev-arm64 \
+          bash -c "source /opt/ros/\$ROS_DISTRO/setup.bash && colcon list --names-only 2>/dev/null")
+
+        # Convert newline-separated names to a JSON array for the matrix
+        JSON=$(echo "$PACKAGES" | grep -v '^\s*$' | jq -R . | jq -sc .)
+        echo "packages=$JSON" >> $GITHUB_OUTPUT
+        echo "Discovered packages: $JSON"
+
+  colcon-build-dev:
+    needs: find-packages
+    runs-on: ubuntu-22.04-arm
+
     strategy:
       fail-fast: false
       matrix:
-        package_group:
-          - name: "sensors"
-            packages: "sensors"
-          - name: "ros_tcp_endpoint" 
-            packages: "ros_tcp_endpoint"
-          - name: "xsens_drivers"
-            packages: "Xsens_MTi_Driver"
-          # Note: zed build is not supported on usual ubuntu due to jetpack dependencies
-          # - name: "zed_wrapper"
-          #   packages: "zed_components zed_wrapper"
+        package: ${{ fromJSON(needs.find-packages.outputs.packages) }}
     
     steps:
     - name: Checkout repository
@@ -34,13 +52,14 @@ jobs:
         fetch-tags: true
         submodules: recursive
         lfs: true
-        
-    - name: Login to DockerHub
-      if: github.ref == 'refs/heads/main'
-      uses: docker/login-action@v3
-      with:
-        username: ${{ vars.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    # we are not pushing and mcgillrobotics/auv_2026 is a public image, so no login needed    
+    # - name: Login to DockerHub
+    #   if: github.ref == 'refs/heads/main'
+    #   uses: docker/login-action@v3
+    #   with:
+    #     username: ${{ vars.DOCKERHUB_USERNAME }}
+    #     password: ${{ secrets.DOCKERHUB_TOKEN }}
     
     - name: Determine packages to build
       id: packages
