@@ -8,52 +8,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  # Build Docker images first
-  # Note: this job exists for independence from the Docker image build process
-  build-docker-dev:
-    runs-on: ubuntu-22.04-arm
-    # If manually triggered on either dev or empty, run this job
-    # if: ${{ github.event.inputs.docker_image == 'dev' || github.event.inputs.docker_image == '' }}
-    
-    permissions:
-      contents: read
-      packages: write
-    
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        fetch-tags: true
-        submodules: recursive
-        lfs: true
-    
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-    
-    - name: Login to DockerHub
-      if: github.ref == 'refs/heads/main'
-      uses: docker/login-action@v3
-      with:
-        username: ${{ vars.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
-    
-    - name: Build and push Docker image
-      id: build
-      uses: docker/build-push-action@v6
-      with:
-        context: .
-        file: Docker/dev/Dockerfile
-        platforms: linux/arm64
-        push: false
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-
   # ROS2 build jobs
   colcon-build-dev:
-    # Dependency on the docker build process
-    needs: build-docker-dev
-    # If manually triggered on either dev or empty, run this job
-    # if: ${{ always() && (needs.build-docker-dev.result == 'success' || github.event.inputs.docker_image == '') }}
     runs-on: ubuntu-22.04-arm
     
     # Expand the build matrix when new packages are added
@@ -78,10 +34,7 @@ jobs:
         fetch-tags: true
         submodules: recursive
         lfs: true
-    
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-    
+        
     - name: Login to DockerHub
       if: github.ref == 'refs/heads/main'
       uses: docker/login-action@v3
@@ -140,7 +93,7 @@ jobs:
   # Job that summarizes the build results
   build-summary:
     if: always()
-    needs: [build-docker-dev, colcon-build-dev]
+    needs: colcon-build-dev
     runs-on: ubuntu-22.04-arm
     
     steps:
@@ -148,11 +101,6 @@ jobs:
       run: |
         echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        
-        # Docker build
-        if [ "${{ needs.build-docker-dev.result }}" != "skipped" ]; then
-          echo "- Docker Dev Build: ${{ needs.build-docker-dev.result }}" >> $GITHUB_STEP_SUMMARY
-        fi
         
         # Colcon build
         if [ "${{ needs.colcon-build-dev.result }}" != "skipped" ]; then
