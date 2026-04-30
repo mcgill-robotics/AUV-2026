@@ -22,6 +22,7 @@ jobs:
         lfs: true
 
     # we do not need the docker container for this step, so we can install native colcon to list packages
+    # avoids pulling the image for both discovering and building packages
     - name: Install native colcon
       run: |
         sudo apt-get update
@@ -47,6 +48,7 @@ jobs:
     # GitHub natively handles pulling the image and mounting the workspace here
     container:
       image: mcgillrobotics/auv_2026:dev-arm64
+      options: --user root
       
     strategy:
       fail-fast: false # Keep building other packages even if one fails
@@ -60,13 +62,14 @@ jobs:
         submodules: recursive
         lfs: true
 
-    # we are not pushing and mcgillrobotics/auv_2026 is a public image, so no login needed    
-    # - name: Login to DockerHub
-    #   if: github.ref == 'refs/heads/main'
-    #   uses: docker/login-action@v3
-    #   with:
-    #     username: ${{ vars.DOCKERHUB_USERNAME }}
-    #     password: ${{ secrets.DOCKERHUB_TOKEN }}
+    # we are not pushing so login is not strictly necessary
+    # but log in to DockerHub to avoid rate limits and ensure we have the latest image    
+    - name: Login to DockerHub
+      if: github.ref == 'refs/heads/main'
+      uses: docker/login-action@v3
+      with:
+        username: ${{ vars.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
 
     - name: Build and Test Package
       run: |
@@ -85,9 +88,9 @@ jobs:
             cd ros2_ws
             
             # Install dependencies using rosdep
-            sudo apt-get update
-            sudo rosdep update --rosdistro \$ROS_DISTRO
-            sudo rosdep install --from-paths src --ignore-src --rosdistro \$ROS_DISTRO -y || true
+            apt-get update
+            rosdep update --rosdistro \$ROS_DISTRO
+            rosdep install --from-paths src --ignore-src --rosdistro \$ROS_DISTRO -y || true
             
             # Build specified packages
             echo 'Building packages: ${{ matrix.package }}'
