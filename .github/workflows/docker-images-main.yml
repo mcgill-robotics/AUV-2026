@@ -174,19 +174,6 @@ jobs:
               print('CPU container, skipping CUDA check.')
           "
 
-      - name: Teardown swap space
-        if: always()
-        run: |
-          if swapon --show | grep -q /swapfile; then
-            echo "Disabling and removing swapfile..."
-            sudo swapoff /swapfile
-            sudo rm /swapfile
-            echo "Done. Disk reclaimed:"
-            df -h /
-          else
-            echo "No swapfile found, nothing to clean up."
-          fi
-
       # Rebuild from scratch to push — necessary because 'load: true'
       # above is incompatible with a direct push in the same step.
       # Buildx would solve this but is disabled due to cache disk constraints.
