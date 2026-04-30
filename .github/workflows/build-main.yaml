@@ -9,7 +9,7 @@ on:
 
 jobs:
   find-packages:
-    runs-on: ubuntu-22.04-arm
+    runs-on: ubuntu-22.04 # Standard runner is fine here, saves ARM minutes
     outputs:
       packages: ${{ steps.list.outputs.packages }}
 
@@ -21,17 +21,21 @@ jobs:
         submodules: recursive
         lfs: true
 
+    # we do not need the docker container for this step, so we can install native colcon to list packages
+    - name: Install native colcon
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y python3-pip jq
+        pip3 install colcon-common-extensions
+
     - name: Discover ROS2 packages
       id: list
       run: |
-        # Run colcon list inside the dev container to get all buildable packages
-        PACKAGES=$(docker run --rm \
-          -v ${{ github.workspace }}:/workspace \
-          -w /workspace/ros2_ws \
-          mcgillrobotics/auv_2026:dev-arm64 \
-          bash -c "source /opt/ros/\$ROS_DISTRO/setup.bash && colcon list --names-only 2>/dev/null")
-
-        # Convert newline-separated names to a JSON array for the matrix
+        cd ros2_ws
+        # Native colcon parses the package.xml files without needing ROS sourced
+        PACKAGES=$(colcon list --names-only 2>/dev/null)
+        
+        # Convert to JSON array
         JSON=$(echo "$PACKAGES" | grep -v '^\s*$' | jq -R . | jq -sc .)
         echo "packages=$JSON" >> $GITHUB_OUTPUT
         echo "Discovered packages: $JSON"
@@ -39,17 +43,20 @@ jobs:
   colcon-build-dev:
     needs: find-packages
     runs-on: ubuntu-22.04-arm
-
+    
+    # GitHub natively handles pulling the image and mounting the workspace here
+    container:
+      image: mcgillrobotics/auv_2026:dev-arm64
+      
     strategy:
-      fail-fast: false
+      fail-fast: false # Keep building other packages even if one fails
       matrix:
         package: ${{ fromJSON(needs.find-packages.outputs.packages) }}
-    
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
-        fetch-tags: true
         submodules: recursive
         lfs: true
 
@@ -60,13 +67,8 @@ jobs:
     #   with:
     #     username: ${{ vars.DOCKERHUB_USERNAME }}
     #     password: ${{ secrets.DOCKERHUB_TOKEN }}
-    
-    - name: Determine packages to build
-      id: packages
-      run: |
-        echo "packages=${{ matrix.package_group.packages }}" >> $GITHUB_OUTPUT
-    
-    - name: Run colcon build in container
+
+    - name: Build and Test Package
       run: |
         docker run --rm \
           --user $(id -u):$(id -g) \
@@ -88,9 +90,9 @@ jobs:
             sudo rosdep install --from-paths src --ignore-src --rosdistro \$ROS_DISTRO -y || true
             
             # Build specified packages
-            echo 'Building packages: ${{ steps.packages.outputs.packages }}'
+            echo 'Building packages: ${{ matrix.package }}'
             colcon build \
-              --packages-select ${{ steps.packages.outputs.packages }} \
+              --packages-select ${{ matrix.package }} \
               --event-handlers console_direct+ \
               --parallel-workers \$(nproc)
             
