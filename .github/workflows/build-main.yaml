@@ -92,7 +92,7 @@ jobs:
             # Build specified packages
             echo 'Building packages: ${{ matrix.package }}'
             colcon build \
-              --packages-select ${{ matrix.package }} \
+              --packages-up-to ${{ matrix.package }} \
               --event-handlers console_direct+ \
               --parallel-workers \$(nproc)
             
