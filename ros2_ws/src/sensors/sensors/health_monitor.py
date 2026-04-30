@@ -34,7 +34,7 @@ class HealthMonitor(ABC):
 
         self.stale_threshold:Duration = Duration(nanoseconds=int(stale_threshold * 1e9)) # convert seconds to nanoseconds for Duration
         self.updater.setHardwareID(hardware_id)
-        self.updater.add(self.check_sensor)
+        self.updater.add("Health Check", self.check_sensor)
         
         self.last_update_time:Time = self.node.get_clock().now()
         
@@ -52,7 +52,7 @@ class HealthMonitor(ABC):
         # Check if data is stale
         if time_since_last_update > self.stale_threshold:
             # Add message
-            stat.add("Time since last update (s)", time_since_last_update.nanoseconds / 1e9) # Convert nanoseconds to seconds for reporting
+            stat.add("Time since last update (s)", f"{time_since_last_update.nanoseconds / 1e9}") # Convert nanoseconds to seconds for reporting
 
             # If data is stale, summarize report as STALE and return immediately
             stat.summary(DiagnosticStatus.STALE, "Data stale, no message received within threshold.")

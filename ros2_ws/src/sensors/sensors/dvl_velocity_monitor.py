@@ -1,3 +1,8 @@
+#!/usr/bin/env python3
+import sys
+
+import rclpy
+from rclpy.node import Node
 from rclpy.parameter import Parameter
 from diagnostic_msgs.msg import DiagnosticStatus
 from diagnostic_updater import DiagnosticStatusWrapper
@@ -60,5 +65,14 @@ class DVLVelocityMonitor(HealthMonitor):
             return
         
         self.velocity_status = self.healthy_vel_status
-        
-            
+
+def main(args = None):
+    rclpy.init(args=args)
+    node = rclpy.create_node("dvl_velocity_monitor")
+    monitor = DVLVelocityMonitor(node)
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
+  
+if __name__ == "__main__":
+    main(args=sys.argv)
