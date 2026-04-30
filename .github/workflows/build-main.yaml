@@ -49,7 +49,11 @@ jobs:
     container:
       image: mcgillrobotics/auv_2026:dev-arm64
       options: --user root
+      credentials:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
       
+      # authenticate to DockerHub to avoid rate limits
     strategy:
       fail-fast: false # Keep building other packages even if one fails
       matrix:
@@ -62,13 +66,12 @@ jobs:
         submodules: recursive
         lfs: true
 
-    # we are not pushing so login is not strictly necessary
-    # but log in to DockerHub to avoid rate limits and ensure we have the latest image    
-    - name: Login to DockerHub
-      uses: docker/login-action@v3
-      with:
-        username: ${{ vars.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
+    # we are not pushing so login is not necessary, github automatically pulls the image for us when we specify it in the container section above
+    # - name: Login to DockerHub
+    #   uses: docker/login-action@v3
+    #   with:
+    #     username: ${{ vars.DOCKERHUB_USERNAME }}
+    #     password: ${{ secrets.DOCKERHUB_TOKEN }}
 
     - name: Build and Test Package
       run: |
