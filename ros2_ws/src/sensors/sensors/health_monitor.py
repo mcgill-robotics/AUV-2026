@@ -1,3 +1,5 @@
+from os import stat
+
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 from rclpy.parameter import Parameter
@@ -30,13 +32,14 @@ class HealthMonitor(ABC):
         
         # Parameter initialization
         hardware_id:str = self.node.get_parameter("hardware_id").get_parameter_value().string_value
-        stale_threshold = self.node.get_parameter("stale_threshold_sec").get_parameter_value().double_value
-
+        stale_threshold:float = self.node.get_parameter("stale_threshold_sec").get_parameter_value().double_value
+        
         self.stale_threshold:Duration = Duration(nanoseconds=int(stale_threshold * 1e9)) # convert seconds to nanoseconds for Duration
+        self.last_update_time:Time | None = None
+        
         self.updater.setHardwareID(hardware_id)
         self.updater.add("Health Check", self.check_sensor)
         
-        self.last_update_time:Time = self.node.get_clock().now()
         
 
     def check_sensor(self, stat:DiagnosticStatusWrapper) -> DiagnosticStatusWrapper:
@@ -51,8 +54,12 @@ class HealthMonitor(ABC):
         time_since_last_update:Duration = self.node.get_clock().now() - self.last_update_time
         # Check if data is stale
         if time_since_last_update > self.stale_threshold:
+            elapsed_sec = time_since_last_update.nanoseconds / 1e9
             # Add message
-            stat.add("Time since last update (s)", f"{time_since_last_update.nanoseconds / 1e9}") # Convert nanoseconds to seconds for reporting
+            stat.add(
+                "Time since last message",
+                f"<b>{elapsed_sec:.2f} s</b> (threshold: {self.stale_threshold.nanoseconds / 1e9:.2f} s)",
+            )
 
             # If data is stale, summarize report as STALE and return immediately
             stat.summary(DiagnosticStatus.STALE, "Data stale, no message received within threshold.")

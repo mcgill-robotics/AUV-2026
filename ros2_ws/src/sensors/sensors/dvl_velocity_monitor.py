@@ -27,49 +27,73 @@ class DVLVelocityMonitor(HealthMonitor):
         )
         
         self.healthy_vel_status = (DiagnosticStatus.OK, "DVL velocity healthy")
-        self.vel_status_msgs:dict = {}
+        self._status_details:dict = {}
         self.vel_status: tuple[bytes, str] = self.healthy_vel_status
 
     def check_status(self, stat:DiagnosticStatusWrapper) -> DiagnosticStatusWrapper:
-        if self.vel_status_msgs:
-            for key, value in self.vel_status_msgs.items():
+        if self._status_details:
+            for key, value in self._status_details.items():
                 stat.add(key, value)
         stat.summary(*self.vel_status)
         return stat
     
     def sensor_callback(self, msg:DVL) -> None:
         self.last_update_time = self.node.get_clock().now()
+        # Reset detail from previous callback — prevents stale entries persisting
+        self._status_details = {}
+
         if not msg.velocity_valid:
             self.vel_status = (DiagnosticStatus.WARN, "DVL velocity invalid")
             return
-        if msg.status > 0:
-            self.vel_status_msgs["Velocity status"] = f"{msg.status}"
-            if msg.status == 1:
-                self.vel_status = (DiagnosticStatus.ERROR, "DVL may be overheating")
-            else:
-                self.vel_status = (DiagnosticStatus.WARN, f"Invalid DVL velocity status code")
-            return
-        if msg.altitude < 0:
-            self.vel_status_msgs["Velocity altitude"] = f"{msg.altitude}"
-            self.vel_status = (DiagnosticStatus.WARN, "DVL velocity altitude negative")
-            return
-        valid_beams = 0
-        for beam in msg.beams:
-            if beam.valid:
-                valid_beams += 1
-            else:
-                self.vel_status_msgs[f"Beam {beam.id}"] = "Invalid"
-        if valid_beams < self.dvl_beam_count:
-            self.vel_status_msgs["Valid beams"] = f"{valid_beams}/{self.dvl_beam_count}"
-            self.vel_status = (DiagnosticStatus.WARN, "DVL velocity has at least one invalid beam")
+        
+        if msg.status == 1:
+            self._status_details["⚠ Thermal warning"] = (
+                "<b>DVL may be overheating.</b> Ensure DVL is "
+                "underwater during operation or disable acoustics."
+            )
+            self.current_status = (DiagnosticStatus.WARN,"⚠ DVL OVERHEATING WARNING — monitor temperature")
+        if msg.status > 1:
+            self._status_details["Status code"] = f"<b>Unknown: {msg.status}</b>"
+            self.vel_status = (DiagnosticStatus.WARN, f"Invalid DVL velocity status code")
             return
         
+        if msg.altitude < 0:
+            self._status_details["Altitude"] = (
+                f"<b>{msg.altitude:.3f} m</b> — expected &ge; 0"
+            )
+            self.vel_status = (DiagnosticStatus.WARN, "DVL velocity altitude negative")
+            return
+        
+        invalid_beams: list[str] = []
+        for beam in msg.beams:
+            if not beam.valid:
+                invalid_beams.append(str(beam.id))
+            else:
+                self._status_details[f"Beam {beam.id}"] = "Invalid"
+        valid_beam_count = self.dvl_beam_count - len(invalid_beams)
+        if invalid_beams:
+            self._status_details["Beam validity"] = (
+                f"<b>{valid_beam_count}/{self.dvl_beam_count}</b> beams valid &nbsp;|&nbsp; "
+                f"Invalid: <b>{', '.join(invalid_beams)}</b>"
+            )
+            self.current_status = (
+                DiagnosticStatus.WARN,
+                f"DVL has {len(invalid_beams)} invalid beam(s): {', '.join(invalid_beams)}",
+            )
+            return
+
+        self._status_details["Beam validity"] = (
+            f"<b>{self.dvl_beam_count}/{self.dvl_beam_count}</b> beams valid"
+        )
+        self._status_details["Altitude"] = f"{msg.altitude:.3f} m"
+        self.current_status = (DiagnosticStatus.OK, "DVL velocity healthy")
+
         self.vel_status = self.healthy_vel_status
 
 def main(args = None):
     rclpy.init(args=args)
-    node = rclpy.create_node("dvl_velocity_monitor")
-    monitor = DVLVelocityMonitor(node)
+    node:Node = rclpy.create_node("dvl_velocity_monitor")
+    DVLVelocityMonitor(node)
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
