@@ -20,6 +20,11 @@ def get_compressed_topic(base_topic: str, compressed: LaunchConfiguration) -> Py
         "' + ('/compressed' if '", compressed, "' == 'true' else '')"
     ])
 
+def normalize_flip_mode(value) -> str:
+    if isinstance(value, bool):
+        return "ON" if value else "OFF"
+    return str(value).upper()
+
 def generate_launch_description():
     vision_dir = get_package_share_directory("vision")
     
@@ -179,6 +184,37 @@ def generate_launch_description():
 
                 'model_detection_threshold': default_config["object_detection"]["front_cam"]["model_detection_threshold"],
                 'depth_confidence_threshold': default_config["object_detection"]["front_cam"]["depth_confidence_threshold"],
+                'zed_depth_maximum_distance': default_config["object_detection"]["front_cam"]["zed_depth_maximum_distance"],
+                'zed_depth_minimum_distance': default_config["object_detection"]["front_cam"]["zed_depth_minimum_distance"],
+                'zed_positional_tracking_depth_min_range': default_config["object_detection"]["front_cam"]["zed_positional_tracking_depth_min_range"],
+                'zed_depth_stabilization': default_config["object_detection"]["front_cam"]["zed_depth_stabilization"],
+                'zed_camera_resolution_sim': default_config["object_detection"]["front_cam"]["zed_camera_resolution_sim"],
+                'zed_camera_resolution_real': default_config["object_detection"]["front_cam"]["zed_camera_resolution_real"],
+                'zed_camera_fps_sim': default_config["object_detection"]["front_cam"]["zed_camera_fps_sim"],
+                'zed_camera_fps_real': default_config["object_detection"]["front_cam"]["zed_camera_fps_real"],
+                'zed_camera_flip_mode': normalize_flip_mode(default_config["object_detection"]["front_cam"]["zed_camera_flip_mode"]),
+                'zed_self_calib': default_config["object_detection"]["front_cam"]["zed_self_calib"],
+                'zed_enable_right_side_measure': default_config["object_detection"]["front_cam"]["zed_enable_right_side_measure"],
+                'zed_sdk_verbose': default_config["object_detection"]["front_cam"]["zed_sdk_verbose"],
+                'zed_sdk_gpu_id': default_config["object_detection"]["front_cam"]["zed_sdk_gpu_id"],
+                'zed_enable_image_enhancement': default_config["object_detection"]["front_cam"]["zed_enable_image_enhancement"],
+                'zed_open_timeout_sec': default_config["object_detection"]["front_cam"]["zed_open_timeout_sec"],
+                'zed_async_grab_camera_recovery': default_config["object_detection"]["front_cam"]["zed_async_grab_camera_recovery"],
+                'zed_grab_compute_capping_fps': default_config["object_detection"]["front_cam"]["zed_grab_compute_capping_fps"],
+                'zed_enable_image_validity_check': default_config["object_detection"]["front_cam"]["zed_enable_image_validity_check"],
+                'zed_optional_opencv_calibration_file': default_config["object_detection"]["front_cam"]["zed_optional_opencv_calibration_file"],
+                'zed_brightness': default_config["object_detection"]["front_cam"]["zed_brightness"],
+                'zed_contrast': default_config["object_detection"]["front_cam"]["zed_contrast"],
+                'zed_hue': default_config["object_detection"]["front_cam"]["zed_hue"],
+                'zed_saturation': default_config["object_detection"]["front_cam"]["zed_saturation"],
+                'zed_sharpness': default_config["object_detection"]["front_cam"]["zed_sharpness"],
+                'zed_gamma': default_config["object_detection"]["front_cam"]["zed_gamma"],
+                'zed_gain': default_config["object_detection"]["front_cam"]["zed_gain"],
+                'zed_exposure': default_config["object_detection"]["front_cam"]["zed_exposure"],
+                'zed_auto_exposure_gain': default_config["object_detection"]["front_cam"]["zed_auto_exposure_gain"],
+                'zed_auto_whitebalance': default_config["object_detection"]["front_cam"]["zed_auto_whitebalance"],
+                'zed_whitebalance_temperature': default_config["object_detection"]["front_cam"]["zed_whitebalance_temperature"],
+                'zed_led_status': default_config["object_detection"]["front_cam"]["zed_led_status"],
                 'enable_vio': default_config["object_detection"]["front_cam"]["enable_vio"],
                 'pose_source': default_config["object_detection"]["front_cam"]["pose_source"],
                 'auv_pose_topic': default_config["object_detection"]["front_cam"]["auv_pose_topic"],

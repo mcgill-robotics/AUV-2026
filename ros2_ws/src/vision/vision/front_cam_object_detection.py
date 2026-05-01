@@ -7,10 +7,17 @@ from vision.object_detection import front_cam_object_detection_node
 def main(args=None):
     rclpy.init(args=args)
     frontcam_detector_node = Node('front_cam_object_detection')
-    frontcam_detector = front_cam_object_detection_node.FrontCamObjectDetectorNode(frontcam_detector_node)
-    rclpy.spin(frontcam_detector_node)
-    frontcam_detector_node.destroy_node()
-    rclpy.shutdown()
+    try:
+        front_cam_object_detection_node.FrontCamObjectDetectorNode(frontcam_detector_node)
+        rclpy.spin(frontcam_detector_node)
+    except Exception as exc:
+        frontcam_detector_node.get_logger().fatal(
+            f"front_cam_object_detection failed during startup: {exc}"
+        )
+        raise
+    finally:
+        frontcam_detector_node.destroy_node()
+        rclpy.shutdown()
 
 
 if __name__ == "__main__":

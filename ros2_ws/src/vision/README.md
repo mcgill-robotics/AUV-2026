@@ -238,6 +238,37 @@ If `enable_vio` is false, the node skips ZED positional tracking entirely.
 Some especially important front-camera parameters are:
 - `model_detection_threshold`
 - `depth_confidence_threshold`
+- `zed_depth_maximum_distance`
+- `zed_depth_minimum_distance`
+- `zed_positional_tracking_depth_min_range`
+- `zed_depth_stabilization`
+- `zed_camera_resolution_sim`
+- `zed_camera_resolution_real`
+- `zed_camera_fps_sim`
+- `zed_camera_fps_real`
+- `zed_camera_flip_mode`
+- `zed_self_calib`
+- `zed_enable_right_side_measure`
+- `zed_sdk_verbose`
+- `zed_sdk_gpu_id`
+- `zed_enable_image_enhancement`
+- `zed_open_timeout_sec`
+- `zed_async_grab_camera_recovery`
+- `zed_grab_compute_capping_fps`
+- `zed_enable_image_validity_check`
+- `zed_optional_opencv_calibration_file`
+- `zed_brightness`
+- `zed_contrast`
+- `zed_hue`
+- `zed_saturation`
+- `zed_sharpness`
+- `zed_gamma`
+- `zed_gain`
+- `zed_exposure`
+- `zed_auto_exposure_gain`
+- `zed_auto_whitebalance`
+- `zed_whitebalance_temperature`
+- `zed_led_status`
 - `enable_gate_top_crop`
 - `gate_top_crop_ratio`
 - `enable_border_exclusion`
@@ -251,6 +282,20 @@ Some especially important front-camera parameters are:
 - `pose_source`
 
 `enable_border_exclusion` is a simple filter applied before ZED ingestion. For configured labels such as `gate`, any 2D detection touching the image border within `border_exclusion_margin_px` is dropped. This helps reject partial detections at the left/right image edges that often produce unstable depth or incorrect clipped 3D positions.
+
+The ZED camera-control parameters are split into two groups:
+- init-time controls such as resolution, FPS, and flip mode
+- runtime ISP controls such as brightness, exposure, gain, gamma, white balance, and LED status
+
+The current defaults intentionally start close to the ZED ROS 2 wrapper defaults for a ZED 2i:
+- real camera: `HD1080` at `15 FPS`
+- common stereo video tuning: saturation `4`, sharpness `4`, gamma `8`
+- auto exposure/gain and auto white balance enabled by default
+
+For the current front-camera pipeline, these controls are intentionally limited to settings that keep the left rectified camera model intact. The node still assumes:
+- detections come from the left camera
+- `VisionDetectionFrame` uses `zed_left_camera_frame`
+- `CameraInfo` describes the left rectified camera
 
 Some especially important object-map parameters are:
 - `new_object_min_distance_threshold`

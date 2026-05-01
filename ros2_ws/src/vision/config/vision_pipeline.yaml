@@ -16,26 +16,9 @@ image_enhancement:
 
 object_detection:
   front_cam:
+    # Topics / model
     enhanced_topic: /vision/front_cam/image_enhanced # input topic if enhance_images is true, otherwise will subscribe to raw image topic
     detection_frame_topic: /vision/front_cam/detection_frame # synchronized camera-frame detections + AUV pose
-    model_detection_threshold: 0.40
-    depth_confidence_threshold: 95 # ZED runtime confidence threshold used for depth/3D extraction
-    publish_camera_info: true # publish CameraInfo for the front camera feed using ZED left-camera intrinsics
-    enable_vio: false # if false, skip ZED positional tracking and do not publish vision VIO pose/TF
-    pose_source: auv_pose # auv_pose uses state/pose for synchronized detection frames; zed_vio uses the front ZED VIO estimate
-    auv_pose_topic: state/pose # official aggregated AUV pose used for synchronized detection frames when pose_source=auv_pose
-    vio_pose_topic: /vision/vio_pose # optional vision VIO measurement output for debugging or future fusion
-    broadcast_vio_tf: true # if VIO is enabled, publish pool_link -> auv_vio_link for visualization/debugging
-    global_frame_id: pool_link # world frame for synchronized AUV poses and mapped objects
-    auv_frame_id: auv_link # official body frame; sensors/state estimation should own pool_link -> auv_link
-    vio_frame_id: auv_vio_link # debug-only VIO child frame published by vision when enabled
-    camera_center_frame_id: zed_camera_center # static camera mount frame under auv_link
-    detection_frame_id: zed_left_camera_frame # 3D detection frame used inside VisionDetectionFrame
-    image_frame_id: zed_left_camera_frame_optical # optical frame for image-like topics such as CameraInfo and debug feeds
-    auv_to_camera_center_xyz: [0.148, 0.0, 0.0]
-    auv_to_camera_center_rpy: [0.0, 0.0, 0.0]
-    camera_center_to_detection_xyz: [0.0, 0.06, 0.0]
-    camera_center_to_detection_rpy: [0.0, 0.0, 0.0]
     model_relative_path: models/local_rfdetr_onnx_test # inference-models package directory
     class_names:
       - "gate"
@@ -58,20 +41,87 @@ object_detection:
       - "fire"
       - "bin_structure"
     queue_size: 10
+    model_detection_threshold: 0.40
+
+    # ZED init parameters
+    zed_camera_resolution_sim: SVGA # init-time resolution for Unity/stream input
+    zed_camera_resolution_real: VGA # wrapper-aligned starting point for the real ZED 2i
+    zed_camera_fps_sim: 30 # init-time FPS for Unity/stream input
+    zed_camera_fps_real: 30 # init-time FPS for the real ZED 2i
+    zed_camera_flip_mode: 'OFF' # OFF, ON, or AUTO
+    zed_self_calib: false # wrapper-aligned default
+    zed_enable_right_side_measure: false # keep left-aligned processing only
+    zed_sdk_verbose: 1 # wrapper-aligned SDK verbosity
+    zed_sdk_gpu_id: -1 # let the SDK choose the GPU
+    zed_enable_image_enhancement: true # wrapper-aligned enhanced contrast setting
+    zed_open_timeout_sec: 5.0 # wrapper-aligned open timeout
+    zed_async_grab_camera_recovery: false # keep grab() blocking until communication is restored
+    zed_grab_compute_capping_fps: 0.0 # wrapper-aligned compute cap; 0 disables capping
+    zed_enable_image_validity_check: true # wrapper-aligned frame corruption check
+    zed_optional_opencv_calibration_file: '' # optional OpenCV override for factory calibration
+    zed_depth_stabilization: 30 # init-time ZED depth stabilization; forced to 0 when enable_vio is false to avoid implicit tracking enablement
+    zed_depth_minimum_distance: 0.01 # minimum depth range in meters used by the ZED SDK
+    zed_depth_maximum_distance: 20.0 # maximum depth range in meters used by the ZED SDK
+
+    # ZED runtime depth / tracking controls
+    depth_confidence_threshold: 95 # ZED runtime confidence threshold used for depth/3D extraction
+    zed_positional_tracking_depth_min_range: 0.3 # minimum range in meters used by ZED positional tracking
+
+    # ZED runtime image / ISP controls
+    zed_brightness: 4 # wrapper-aligned ZED 2i starting point [0..8]
+    zed_contrast: 4 # wrapper-aligned ZED 2i starting point [0..8]
+    zed_hue: 0 # wrapper-aligned ZED 2i starting point [0..11]
+    zed_saturation: 4 # wrapper-aligned common stereo starting point [0..8]
+    zed_sharpness: 4 # wrapper-aligned common stereo starting point [0..8]
+    zed_gamma: 8 # wrapper-aligned common stereo starting point [1..9]
+    zed_auto_exposure_gain: true # wrapper-aligned default; when true the manual gain/exposure values are ignored
+    zed_exposure: 80 # wrapper-aligned common stereo starting point [0..100] when auto exposure/gain is disabled
+    zed_gain: 80 # wrapper-aligned common stereo starting point [0..100] when auto exposure/gain is disabled
+    zed_auto_whitebalance: true # wrapper-aligned default; when true the manual white balance temperature is ignored
+    zed_whitebalance_temperature: 4200 # wrapper-aligned 42 x100 K starting point when auto white balance is disabled
+    zed_led_status: -1 # -1 leaves the SDK/camera default unchanged; otherwise 0 off, 1 on
+
+    # Pose / frame sync
+    enable_vio: false # if false, skip ZED positional tracking and do not publish vision VIO pose/TF
+    pose_source: auv_pose # auv_pose uses state/pose for synchronized detection frames; zed_vio uses the front ZED VIO estimate
+    auv_pose_topic: state/pose # official aggregated AUV pose used for synchronized detection frames when pose_source=auv_pose
+    vio_pose_topic: /vision/vio_pose # optional vision VIO measurement output for debugging or future fusion
+    broadcast_vio_tf: true # if VIO is enabled, publish pool_link -> auv_vio_link for visualization/debugging
+    global_frame_id: pool_link # world frame for synchronized AUV poses and mapped objects
+    auv_frame_id: auv_link # official body frame; sensors/state estimation should own pool_link -> auv_link
+    vio_frame_id: auv_vio_link # debug-only VIO child frame published by vision when enabled
+
+    # Frame names / camera extrinsics
+    camera_center_frame_id: zed_camera_center # static camera mount frame under auv_link
+    detection_frame_id: zed_left_camera_frame # 3D detection frame used inside VisionDetectionFrame
+    image_frame_id: zed_left_camera_frame_optical # optical frame for image-like topics such as CameraInfo and debug feeds
+    auv_to_camera_center_xyz: [0.148, 0.0, 0.0]
+    auv_to_camera_center_rpy: [0.0, 0.0, 0.0]
+    camera_center_to_detection_xyz: [0.0, 0.06, 0.0]
+    camera_center_to_detection_rpy: [0.0, 0.0, 0.0]
+
+    # Detection-time filters / heuristics
     enable_gate_top_crop: true # Removes bottom X% of bounding box for gate to ignore legs/pool floor noise
     gate_top_crop_ratio: 0.50 # The ratio (0.0 to 1.0) of the gate bounding box to keep from the top edge
     enable_border_exclusion: true
     border_exclusion_margin_px: 20
     border_exclusion_labels: ["gate"]
+
+    # Debug publishing
+    publish_camera_info: true # publish CameraInfo for the front camera feed using ZED left-camera intrinsics
     publish_annotated_image: true # publishes the front camera feed topic at detection_frame_topic + /annotated, toggled raw/annotated at runtime via service
     publish_annotated_every_n_frames: 1 # publish the front camera feed every N frames (1 = every frame)
     publish_depth_image: false # publish raw 32FC1 depth map image
     publish_depth_compressed: true # publish depth map as compressed 16-bit PNG
-    publish_depth_every_n_frames: 5 # publish depth image every N frames 
+    publish_depth_every_n_frames: 5 # publish depth image every N frames
+
+    # Dataset collection
     collection_dir: front_cam_collection # directory for direct-to-disk RGB image saving (toggled via service)
     depth_collection_dir: depth_collection # directory for direct-to-disk 16-bit millimeter depth saving
     collect_depth_image: false # flag to enable/disable depth saving
     collection_interval_seconds: 2.0 # seconds between saved frames when collection is active
+
+    # Logging
     log_level: debug
   down_cam:
     enhanced_topic: /vision/down_cam/image_enhanced
