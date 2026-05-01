@@ -1,7 +1,5 @@
-from os import stat
-
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
+from rclpy.qos import qos_profile_sensor_data, QoSProfile
 from rclpy.parameter import Parameter
 from rclpy.duration import Duration
 from rclpy.time import Time
@@ -15,11 +13,13 @@ from abc import ABC, abstractmethod
 A base class for monitoring the health of sensors in a ROS2 system. This class uses the diagnostic_updater package to create a diagnostic updater that checks the health of a sensor based on the time since the last update and additional sensor-specific conditions defined in derived classes. The class declares parameters for hardware ID and stale data threshold, and provides an abstract method for checking sensor-specific status conditions.
 """
 class HealthMonitor(ABC):
-    qos = QoSProfile (
-        reliability=ReliabilityPolicy.RELIABLE,
-        durability=DurabilityPolicy.VOLATILE,
-        history=HistoryPolicy.KEEP_LAST,
-        depth=10
+    # copy QOS setting from qos_profile_sensor_data since we need to set depth to 1 (default 5)
+    # and there is no way to directly modify the default qos_profile_sensor_data
+    qos: QoSProfile = QoSProfile(
+        reliability=qos_profile_sensor_data.reliability,
+        durability=qos_profile_sensor_data.durability,
+        history=qos_profile_sensor_data.history,
+        depth=1
     )
     def __init__(self, node:Node):
         # Diagnostic Updater setup
