@@ -12,6 +12,12 @@ from nav_msgs.msg import Odometry
 from sensors.health_monitor import HealthMonitor
 
 class DVLMonitor(HealthMonitor):
+    BEAMIDX_TO_NAME = {
+        0: "Back Left",
+        1: "Forward Left",
+        2: "Forward Right",
+        3: "Back Right",
+    }
     def __init__(self, node):
         super().__init__(node)
         # Declare DVL-specific parameters
@@ -64,6 +70,7 @@ class DVLMonitor(HealthMonitor):
         
         self.last_update_time:Time | None = None
         self.log_init()
+        self.node.get_logger().warn("DVL Monitor assumes that DVL is mounted such that LED is pointing forward (cable backward).")
 
     def get_params_for_log(self) -> list[tuple[str, str]]:
         return [
@@ -106,9 +113,10 @@ class DVLMonitor(HealthMonitor):
         invalid_beams: list[str] = []
         for beam in msg.beams:
             if not beam.valid:
-                invalid_beams.append(str(beam.id))
+                invalid_beams.append(DVLMonitor.BEAMIDX_TO_NAME.get(beam.id, f"Unknown({beam.id})"))
+                self._vel_status_details[f"{DVLMonitor.BEAMIDX_TO_NAME.get(beam.id, f'Unknown({beam.id})')} Beam"] = "Invalid"
             else:
-                self._vel_status_details[f"Beam {beam.id}"] = "Valid"
+                self._vel_status_details[f"{DVLMonitor.BEAMIDX_TO_NAME.get(beam.id, f'Unknown({beam.id})')} Beam"] = "Valid"
         valid_beam_count = self.dvl_beam_count - len(invalid_beams)
         if invalid_beams:
             self._vel_status_details["Beam validity"] = (
