@@ -66,7 +66,7 @@ jobs:
           - name: "ros_tcp_endpoint" 
             packages: "ros_tcp_endpoint"
           - name: "xsens_drivers"
-            packages: "Xsens_MTi_Driver"
+            packages: "xsens_mti_ros2_driver"
           # Note: zed build is not supported on usual ubuntu due to jetpack dependencies
           # - name: "zed_wrapper"
           #   packages: "zed_components zed_wrapper"
