@@ -12,7 +12,12 @@ from typing import Callable
 
 """
 A base class for monitoring the health of sensors in a ROS2 system. This class uses the diagnostic_updater package to create a diagnostic updater that checks the health of a sensor based on the time since the last update and additional sensor-specific conditions defined in derived classes. The class declares parameters for hardware ID and stale data threshold, expects status checks to be added to its Updater.
-Sensor Stale Check requires derived classes to implement the get_last_update_time method, which should return the timestamp of the last received sensor data.
+Abstract Methods to implement in derived classes:
+- get_params_for_log: Return a list of key-value pairs representing the parameters of the sensor to be included in the logger when node is initialized.
+- get_last_update_time: Return the timestamp of the last received sensor data. This method must be implemented by derived classes to provide the necessary information for the stale data check in the diagnostics updater. If this method returns None, the sensor will be considered stale until a valid timestamp is provided.
+Helper Methods:
+- assign_status_to_updater: A helper function to assign a status to the diagnostics updater
+- log_init: A helper function to log the initialization parameters of the sensor when the node is initialized.
 """
 class HealthMonitor(ABC):
     # copy QOS setting from qos_profile_sensor_data since we need to set depth to 1 (default 5)
@@ -33,14 +38,28 @@ class HealthMonitor(ABC):
         self.node.declare_parameter("stale_threshold_sec", Parameter.Type.DOUBLE) # in seconds
         
         # Parameter initialization
-        hardware_id:str = self.node.get_parameter("hardware_id").get_parameter_value().string_value
+        self.hardware_id:str = self.node.get_parameter("hardware_id").get_parameter_value().string_value
         stale_threshold:float = self.node.get_parameter("stale_threshold_sec").get_parameter_value().double_value
         
         self.stale_threshold:Duration = Duration(nanoseconds=int(stale_threshold * 1e9)) # convert seconds to nanoseconds for Duration
         
-        self.updater.setHardwareID(hardware_id)
+        self.updater.setHardwareID(self.hardware_id)
         self.updater.add("Sensor Stale Check", self.check_sensor_stale)
-
+        
+    def log_init(self) -> None:
+        """
+        Helper function to log the initialization parameters of the sensor when the node is initialized. This function gathers the parameters defined in the base class and those provided by the derived class through the get_params_for_log method, and logs them in a structured format for easy debugging and verification of the sensor configuration.
+        """
+        params_str = "\n- ".join(f'{param[0]}: {param[1]}' for param in self.get_params_for_log())
+        # self.node.get_logger().info(str(params))
+        self.node.get_logger().info(
+            f"{self.node.get_name()} initialized with."
+            f"\n- Hardware ID: {self.hardware_id}"
+            f"\n- Stale threshold: {self.stale_threshold.nanoseconds / 1e9:.1f}s"
+            f"\n- {params_str}"
+        )
+        
+    
     def check_sensor_stale(self, stat:DiagnosticStatusWrapper) -> DiagnosticStatusWrapper:
         """
         Diagnostic callback to check sensor health. Checks if the sensor data is stale based on the last update time and the defined threshold.
@@ -66,6 +85,13 @@ class HealthMonitor(ABC):
             return stat
         stat.summary(DiagnosticStatus.OK, "Data received")        
         return stat
+    
+    @abstractmethod
+    def get_params_for_log(self) -> list[tuple[str, str]]:
+        """
+        Return a list of key-value pairs representing the parameters of the sensor to be included in the logger when node is initialized.
+        """
+        pass
     
     @abstractmethod
     def get_last_update_time(self) -> Time | None:

@@ -63,15 +63,18 @@ class DVLMonitor(HealthMonitor):
         )
         
         self.last_update_time:Time | None = None
-        
-        self.node.get_logger().info(
-            "DVL Monitor initialized with."
-            f"\n- Velocity topic: {velocity_topic}"
-            f"\n- Dead reckoning topic: {dead_reckoning_topic}"
-            f"\n- Odometry topic: {odometry_topic}"
-        )
+        self.log_init()
 
+    def get_params_for_log(self) -> list[tuple[str, str]]:
+        return [
+            ("DVL beam count", str(self.dvl_beam_count)),
+            ("Velocity topic", self.velocity_sub.topic),
+            ("Dead reckoning topic", self.dr_sub.topic),
+            ("Odometry topic", self.odom_sub.topic),
+        ]
+    
     def get_last_update_time(self) -> Time | None:
+        # updated in odometry_callback since that is the messag we actually care about
         return self.last_update_time
     
     def velocity_callback(self, msg:DVL) -> None:
@@ -105,7 +108,7 @@ class DVLMonitor(HealthMonitor):
             if not beam.valid:
                 invalid_beams.append(str(beam.id))
             else:
-                self._vel_status_details[f"Beam {beam.id}"] = "Invalid"
+                self._vel_status_details[f"Beam {beam.id}"] = "Valid"
         valid_beam_count = self.dvl_beam_count - len(invalid_beams)
         if invalid_beams:
             self._vel_status_details["Beam validity"] = (
