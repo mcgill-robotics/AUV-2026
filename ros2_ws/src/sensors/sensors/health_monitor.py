@@ -8,6 +8,7 @@ from diagnostic_updater import Updater, DiagnosticStatusWrapper
 from diagnostic_msgs.msg import DiagnosticStatus
 
 from abc import ABC, abstractmethod
+from typing import Callable
 
 """
 A base class for monitoring the health of sensors in a ROS2 system. This class uses the diagnostic_updater package to create a diagnostic updater that checks the health of a sensor based on the time since the last update and additional sensor-specific conditions defined in derived classes. The class declares parameters for hardware ID and stale data threshold, expects status checks to be added to its Updater.
@@ -73,17 +74,20 @@ class HealthMonitor(ABC):
         """
         pass
     
-    def assign_status_to_updater(self, function_name:str,status:tuple[bytes, str], details:dict[str,str]|None = None) -> None:
+    def assign_status_to_updater(self, function_name:str,get_status: Callable[[], tuple[int, str]],get_details: Callable[[], dict[str, str]] | None = None
+) -> None:
         """
         Helper function to assign a status to the diagnostics updater, which in turn will publish the status to the /diagnostics topic. This is used in sensor callbacks to update the status of the sensor based on conditions specific to that sensor.
         :param function_name: The name of the function to be added to the diagnostics updater, which will appear in the diagnostics message.
-        :param status: A tuple containing the diagnostic status level (e.g., DiagnosticStatus.OK, DiagnosticStatus.WARN, DiagnosticStatus.ERROR) and a message describing the status.
-        :param details: An optional dictionary containing additional key-value pairs to be included in the diagnostics message for more detailed information about the sensor status.
+        :param status: A function that returns a tuple containing the diagnostic status level (e.g., DiagnosticStatus.OK, DiagnosticStatus.WARN, DiagnosticStatus.ERROR) and a message describing the status. 
+        Must be a function so that it is updated in real time, if the status is a member variable just use lambda to return the variable (e.g. lambda: self._vel_status).
+        :param details: An optional functions that returns a dictionary containing additional key-value pairs to be included in the diagnostics message for more detailed information about the sensor status.
+        As with status must be a function
         """
         def update_function(stat:DiagnosticStatusWrapper) -> DiagnosticStatusWrapper:
-            if details:
-                for key, value in details.items():
+            if get_details:
+                for key, value in get_details().items():
                     stat.add(key, value)
-            stat.summary(*status)
+            stat.summary(*get_status())
             return stat
         self.updater.add(function_name, update_function)

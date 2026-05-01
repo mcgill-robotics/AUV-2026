@@ -17,7 +17,7 @@ def generate_launch_description():
                     package='sensors',
                     namespace='sensors',
                     executable='dvl_monitor.py',
-                    name='dvl_velocity_monitor',
+                    name='dvl_monitor',
                     parameters=[config_file],
                     )
 

@@ -37,7 +37,8 @@ class DVLMonitor(HealthMonitor):
         # additional details provided as key-value pairs in the diagnostics message
         self._vel_status_details:dict = {}
         # Add velocity status check to diagnostics updater
-        self.assign_status_to_updater("DVL Velocity Status", self._vel_status, self._vel_status_details)
+        # use lambda so updater can be updated in real time (kind of like pointer reference in C++)
+        self.assign_status_to_updater("DVL Velocity Status", lambda: self._vel_status, lambda: self._vel_status_details)
                
         self.dr_sub = self.node.create_subscription(
             DVLDR,
@@ -50,7 +51,8 @@ class DVLMonitor(HealthMonitor):
         # additional details provided as key-value pairs in the diagnostics message
         self._dr_status_details:dict = {}
         # Add dead reckoning status check to diagnostics updater
-        self.assign_status_to_updater("DVL Dead Reckoning Status", self._dr_status, self._dr_status_details)
+        # use lambda so updater can be updated in real time (kind of like pointer reference in C++)
+        self.assign_status_to_updater("DVL Dead Reckoning Status", lambda: self._dr_status, lambda:self._dr_status_details)
         
         # odometry sub simply updates the last update time for the stale check in diagnostics, no additional status checks implemented
         self.odom_sub = self.node.create_subscription(
@@ -61,6 +63,13 @@ class DVLMonitor(HealthMonitor):
         )
         
         self.last_update_time:Time | None = None
+        
+        self.node.get_logger().info(
+            "DVL Monitor initialized with."
+            f"\n- Velocity topic: {velocity_topic}"
+            f"\n- Dead reckoning topic: {dead_reckoning_topic}"
+            f"\n- Odometry topic: {odometry_topic}"
+        )
 
     def get_last_update_time(self) -> Time | None:
         return self.last_update_time
