@@ -116,7 +116,15 @@ class DVLMonitor(HealthMonitor):
         self._vel_status = (DiagnosticStatus.OK, "DVL velocity healthy")
 
     def dead_reckoning_callback(self, msg:DVLDR) -> None:
-        pass
+        # Reset detail from previous callback — prevents stale entries persisting
+        self._dr_status_details = {}
+        
+        if msg.status > 0:
+            self._dr_status_details["Status code"] = f"<b>Error: {msg.status}</b>"
+            self._dr_status = (DiagnosticStatus.WARN, f"Invalid DVL dead reckoning status code")
+            return        
+        self._dr_status = (DiagnosticStatus.OK, "DVL dead reckoning healthy")
+
     
     def odometry_callback(self, msg:Odometry) -> None:
         # Update last update time for diagnostics stale check
