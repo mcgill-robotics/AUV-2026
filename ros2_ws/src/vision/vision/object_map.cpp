@@ -3,7 +3,9 @@
 #include <chrono>
 #include <map>
 #include <memory>
+#include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <Eigen/Dense>
@@ -85,13 +87,26 @@ public:
         );
 
         enable_z_axis_locking = this->declare_parameter<bool>("enable_z_axis_locking");
-        enable_octagon_xy_inheritance = this->declare_parameter<bool>("enable_octagon_xy_inheritance");
+        enable_octagon_from_table_xy = this->declare_parameter<bool>("enable_octagon_from_table_xy");
+        enable_table_from_octagon_xy = this->declare_parameter<bool>("enable_table_from_octagon_xy");
+        enable_table_octagon_xy_midpoint = this->declare_parameter<bool>("enable_table_octagon_xy_midpoint");
         pool_floor_z = this->declare_parameter<double>("pool_floor_z");
         pool_surface_z = this->declare_parameter<double>("pool_surface_z");
         unique_objects = this->declare_parameter<std::vector<std::string>>("unique_objects");
         floor_objects = this->declare_parameter<std::vector<std::string>>("floor_objects");
         surface_objects = this->declare_parameter<std::vector<std::string>>("surface_objects");
         max_pipe_distance = this->declare_parameter<double>("max_pipe_distance");
+
+        const int enabled_table_octagon_modes =
+            static_cast<int>(enable_octagon_from_table_xy) +
+            static_cast<int>(enable_table_from_octagon_xy) +
+            static_cast<int>(enable_table_octagon_xy_midpoint);
+        if (enabled_table_octagon_modes > 1) {
+            throw std::runtime_error(
+                "Only one of enable_octagon_from_table_xy, "
+                "enable_table_from_octagon_xy, or "
+                "enable_table_octagon_xy_midpoint may be enabled at a time.");
+        }
 
         object_map_publisher =
             this->create_publisher<auv_msgs::msg::VisionObjectArray>(object_map_topic, 10);
@@ -109,9 +124,16 @@ public:
     }
 
 private:
+    static constexpr int kSyntheticPairIdOffset = 1000;
+
     static Eigen::Vector3d eigen_from_point(const geometry_msgs::msg::Point& point)
     {
         return Eigen::Vector3d(point.x, point.y, point.z);
+    }
+
+    static Eigen::Vector2d xy(const Eigen::Vector3d& position)
+    {
+        return position.head<2>();
     }
 
     static Eigen::Matrix3d covariance_from_ros_pose(const std::array<double, 36>& covariance)
@@ -140,6 +162,13 @@ private:
         return std::find(surface_objects.begin(), surface_objects.end(), label) != surface_objects.end();
     }
 
+    bool is_table_octagon_mode_enabled() const
+    {
+        return enable_octagon_from_table_xy ||
+               enable_table_from_octagon_xy ||
+               enable_table_octagon_xy_midpoint;
+    }
+
     void apply_z_axis_depth_constraints(
         auv_msgs::msg::VisionObject& object_msg,
         const Eigen::Vector3d& filter_position) const
@@ -156,6 +185,31 @@ private:
         } else {
             object_msg.pose.position.z = filter_position(2);
         }
+    }
+
+    auv_msgs::msg::VisionObject build_object_message(
+        const std::string& label,
+        int id,
+        const Eigen::Vector3d& position,
+        bool has_orientation,
+        double theta_z,
+        double confidence) const
+    {
+        auv_msgs::msg::VisionObject object_msg;
+        object_msg.header.stamp = frame_collection_time;
+        object_msg.header.frame_id = world_frame_id;
+        object_msg.label = label;
+        object_msg.id = id;
+        object_msg.pose.position.x = position(0);
+        object_msg.pose.position.y = position(1);
+        apply_z_axis_depth_constraints(object_msg, position);
+
+        tf2::Quaternion q;
+        q.setRPY(0.0, 0.0, theta_z);
+        object_msg.pose.orientation = tf2::toMsg(q);
+        object_msg.has_orientation = has_orientation;
+        object_msg.confidence = confidence;
+        return object_msg;
     }
 
     void detection_callback(const auv_msgs::msg::VisionDetectionFrame::SharedPtr msg)
@@ -281,58 +335,130 @@ private:
         }
 
         for (auto& [label, perm_track] : persistent_objects) {
-            if (enable_octagon_xy_inheritance && label == "octagon") {
+            if (enable_octagon_from_table_xy && label == "octagon") {
                 continue;
             }
             publish_tracks.push_back(perm_track);
         }
 
+        const Track* table_track = nullptr;
+        const Track* octagon_track = nullptr;
         for (const auto& track : publish_tracks) {
-            if (enable_octagon_xy_inheritance && track.label == "octagon") {
+            if (track.label == "table") {
+                table_track = &track;
+            } else if (track.label == "octagon") {
+                octagon_track = &track;
+            }
+        }
+
+        for (const auto& track : publish_tracks) {
+            if (is_table_octagon_mode_enabled() &&
+                (track.label == "table" || track.label == "octagon")) {
                 continue;
             }
+            object_map_msg.array.push_back(build_object_message(
+                track.label,
+                track.id,
+                track.get_position(),
+                track.has_orientation,
+                track.theta_z,
+                track.confidence));
+        }
 
-            auv_msgs::msg::VisionObject object_msg;
-            object_msg.header.stamp = frame_collection_time;
-            object_msg.header.frame_id = world_frame_id;
+        if (enable_octagon_from_table_xy && table_track != nullptr) {
+            object_map_msg.array.push_back(build_object_message(
+                "table",
+                table_track->id,
+                table_track->get_position(),
+                table_track->has_orientation,
+                table_track->theta_z,
+                table_track->confidence));
 
-            object_msg.label = track.label;
-            object_msg.id = track.id;
-            Eigen::Vector3d position = track.get_position();
+            Eigen::Vector3d octagon_position = table_track->get_position();
+            octagon_position.z() = pool_surface_z;
+            object_map_msg.array.push_back(build_object_message(
+                "octagon",
+                table_track->id + kSyntheticPairIdOffset,
+                octagon_position,
+                false,
+                0.0,
+                table_track->confidence));
+        }
 
-            object_msg.pose.position.x = position(0);
-            object_msg.pose.position.y = position(1);
+        if (enable_table_from_octagon_xy && octagon_track != nullptr) {
+            Eigen::Vector3d octagon_position = octagon_track->get_position();
+            octagon_position.z() = pool_surface_z;
+            object_map_msg.array.push_back(build_object_message(
+                "octagon",
+                octagon_track->id,
+                octagon_position,
+                false,
+                0.0,
+                octagon_track->confidence));
 
-            apply_z_axis_depth_constraints(object_msg, position);
+            Eigen::Vector3d table_position = octagon_track->get_position();
+            table_position.z() = pool_floor_z;
+            object_map_msg.array.push_back(build_object_message(
+                "table",
+                octagon_track->id + kSyntheticPairIdOffset,
+                table_position,
+                false,
+                0.0,
+                octagon_track->confidence));
+        }
 
-            tf2::Quaternion q;
-            q.setRPY(0.0, 0.0, track.theta_z);
-            object_msg.pose.orientation = tf2::toMsg(q);
-            object_msg.has_orientation = track.has_orientation;
-
-            object_msg.confidence = track.confidence;
-            object_map_msg.array.push_back(object_msg);
-
-            if (enable_octagon_xy_inheritance && track.label == "table") {
-                auv_msgs::msg::VisionObject octagon_msg;
-                octagon_msg.header.stamp = frame_collection_time;
-                octagon_msg.header.frame_id = world_frame_id;
-
-                octagon_msg.label = "octagon";
-                octagon_msg.id = track.id + 1000;
-
-                octagon_msg.pose.position.x = position(0);
-                octagon_msg.pose.position.y = position(1);
-                octagon_msg.pose.position.z = pool_surface_z;
-
-                tf2::Quaternion q_oct;
-                q_oct.setRPY(0.0, 0.0, 0.0);
-                octagon_msg.pose.orientation = tf2::toMsg(q_oct);
-                octagon_msg.has_orientation = false;
-
-                octagon_msg.confidence = track.confidence;
-                object_map_msg.array.push_back(octagon_msg);
+        if (enable_table_octagon_xy_midpoint && (table_track != nullptr || octagon_track != nullptr)) {
+            Eigen::Vector2d pair_xy = Eigen::Vector2d::Zero();
+            if (table_track != nullptr && octagon_track != nullptr) {
+                pair_xy = (xy(table_track->get_position()) + xy(octagon_track->get_position())) / 2.0;
+            } else if (table_track != nullptr) {
+                pair_xy = xy(table_track->get_position());
+            } else {
+                pair_xy = xy(octagon_track->get_position());
             }
+
+            Eigen::Vector3d table_position =
+                table_track != nullptr
+                    ? table_track->get_position()
+                    : Eigen::Vector3d(pair_xy.x(), pair_xy.y(), pool_floor_z);
+            table_position.x() = pair_xy.x();
+            table_position.y() = pair_xy.y();
+
+            Eigen::Vector3d octagon_position(pair_xy.x(), pair_xy.y(), pool_surface_z);
+
+            const int table_id =
+                table_track != nullptr
+                    ? table_track->id
+                    : octagon_track->id + kSyntheticPairIdOffset;
+            const int octagon_id =
+                octagon_track != nullptr
+                    ? octagon_track->id
+                    : table_track->id + kSyntheticPairIdOffset;
+
+            const bool table_has_orientation =
+                table_track != nullptr && table_track->has_orientation;
+            const double table_theta_z =
+                table_track != nullptr ? table_track->theta_z : 0.0;
+            const double table_confidence =
+                table_track != nullptr ? table_track->confidence : octagon_track->confidence;
+            const double octagon_confidence =
+                octagon_track != nullptr ? octagon_track->confidence : table_track->confidence;
+
+            object_map_msg.array.push_back(build_object_message(
+                "table",
+                table_id,
+                table_position,
+                table_has_orientation,
+                table_theta_z,
+                table_confidence));
+
+            object_map_msg.array.push_back(build_object_message(
+                "octagon",
+                octagon_id,
+                octagon_position,
+                false,
+                0.0,
+                octagon_confidence));
         }
 
         object_map_publisher->publish(object_map_msg);
@@ -346,7 +472,9 @@ private:
 
     std::map<std::string, Track> persistent_objects;
     bool enable_z_axis_locking;
-    bool enable_octagon_xy_inheritance;
+    bool enable_octagon_from_table_xy;
+    bool enable_table_from_octagon_xy;
+    bool enable_table_octagon_xy_midpoint;
     double pool_floor_z;
     double pool_surface_z;
     double max_pipe_distance;

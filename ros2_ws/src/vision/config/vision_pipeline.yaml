@@ -109,7 +109,10 @@ object_map:
   enable_z_axis_locking: true # Forces specific unique objects to snap to pool floor/surface Z coordinates
   enable_gate_midpoint_refinement: true # Uses search_rescue/survey_repair panel detections to refine the gate pose
   enable_board_icon_refinement: true # Uses board icons to refine the board pose and make yaw face the AUV
-  enable_octagon_xy_inheritance: true # Ignores true octagon detections, creates synthetic octagon directly above the table
+  enable_octagon_from_table_xy: false # publish-time only: publish the octagon at the table XY and suppress direct octagon output
+  enable_table_from_octagon_xy: false # publish-time only: publish the table at the octagon XY and suppress direct table output
+  enable_table_octagon_xy_midpoint: true # publish-time only: publish both at the shared midpoint XY; if only one is seen, use that XY for both
+  # Only one of the three table/octagon publish modes should be enabled at a time; object_map will fail fast if multiple are true.
   max_pipe_distance: 7.0 # Truncates tracking of red/white pipes beyond this distance to reduce noise in map
   pool_floor_z: -2.1
   pool_surface_z: 0.0

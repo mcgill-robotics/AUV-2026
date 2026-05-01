@@ -210,7 +210,7 @@ The tracker has several 2026-specific constraints:
 - board refinement from `ambulance`, `firetruck`, `fire`, and `blood`
 - observer-facing yaw chosen using the current AUV position
 - large-structure spawn filtering near pipes and other large structures
-- synthetic octagon inheritance from the table
+- configurable table/octagon publish-time inheritance modes
 - floor/surface Z locking for selected classes
 
 The main tuning and counts are configured in:
@@ -260,12 +260,23 @@ Some especially important object-map parameters are:
 - `min_large_structure_pipe_separation_m`
 - `enable_gate_midpoint_refinement`
 - `enable_board_icon_refinement`
-- `enable_octagon_xy_inheritance`
+- `enable_octagon_from_table_xy`
+- `enable_table_from_octagon_xy`
+- `enable_table_octagon_xy_midpoint`
 - `max_pipe_distance`
 - `unique_objects`
 - `floor_objects`
 - `surface_objects`
 - `max_per_class`
+
+The table/octagon pair has three mutually exclusive publish-time strategies:
+- `enable_octagon_from_table_xy`: suppress direct octagon output and publish the octagon at the table XY
+- `enable_table_from_octagon_xy`: suppress direct table output and publish the table at the octagon XY
+- `enable_table_octagon_xy_midpoint`: publish both at the midpoint XY when both are visible, or fall back to the seen object’s XY for both when only one is visible
+
+These modes only change the published `VisionObjectArray`. They do not modify the underlying `ObjectTracker` state for table or octagon.
+
+Only one of those three flags should be enabled at a time. If more than one is enabled, `object_map` will fail at startup with a configuration error.
 
 ## Package Scope
 
