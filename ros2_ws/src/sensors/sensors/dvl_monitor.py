@@ -5,7 +5,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from diagnostic_msgs.msg import DiagnosticStatus
-from diagnostic_updater import DiagnosticStatusWrapper
+from rclpy.time import Time
 
 from dvl_msgs.msg import DVL
 from sensors.health_monitor import HealthMonitor
@@ -19,22 +19,25 @@ class DVLMonitor(HealthMonitor):
         self.dvl_beam_count = self.node.get_parameter("dvl_beam_count").get_parameter_value().integer_value
         self.velocity_topic = self.node.get_parameter("velocity_topic").get_parameter_value().string_value
         
+        # Velocity status
         self.velocity_sub = self.node.create_subscription(
             DVL,
-            self.velocity_topic,
+            velocity_topic,
             self.velocity_callback,
             self.qos
         )
+        # overall Status for a given update loop
+        self._vel_status: tuple[bytes, str] = (DiagnosticStatus.STALE, "No velocity data received yet.")
+        # additional details provided as key-value pairs in the diagnostics message
         self._vel_status_details:dict = {}
-        self.vel_status: tuple[bytes, str] = self.healthy_vel_status
+        # Add velocity status check to diagnostics updater
+        self.assign_status_to_updater("DVL Velocity Status", self._vel_status, self._vel_status_details)
+        
+        
+        self.last_update_time:Time | None = None
 
-    def check_status(self, stat:DiagnosticStatusWrapper) -> DiagnosticStatusWrapper:\
-        # fill in details from velocity status check
-        if self._vel_status_details:
-            for key, value in self._vel_status_details.items():
-                stat.add(key, value)
-        stat.summary(*self._vel_status)
-        return stat
+    def get_last_update_time(self) -> Time | None:
+        return self.last_update_time
     
     def velocity_callback(self, msg:DVL) -> None:
         self.last_update_time = self.node.get_clock().now()
@@ -85,10 +88,10 @@ class DVLMonitor(HealthMonitor):
             f"<b>{self.dvl_beam_count}/{self.dvl_beam_count}</b> beams valid"
         )
         self._vel_status_details["Altitude"] = f"{msg.altitude:.3f} m"
-        self.current_status = (DiagnosticStatus.OK, "DVL velocity healthy")
+        self._vel_status = (DiagnosticStatus.OK, "DVL velocity healthy")
 
-        self.vel_status = self.healthy_vel_status
-
+        
+        
 def main(args = None):
     rclpy.init(args=args)
     node:Node = rclpy.create_node("dvl_monitor")

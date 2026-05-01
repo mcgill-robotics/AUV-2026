@@ -16,7 +16,7 @@ def generate_launch_description():
     dvl_velocity_monitor = Node(
                     package='sensors',
                     namespace='sensors',
-                    executable='dvl_velocity_monitor.py',
+                    executable='dvl_monitor.py',
                     name='dvl_velocity_monitor',
                     parameters=[config_file],
                     )

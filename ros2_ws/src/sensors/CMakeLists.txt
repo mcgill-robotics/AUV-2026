@@ -22,7 +22,7 @@ find_package(nav_msgs REQUIRED)
 
 set(PYTHON_NODE_SOURCES
   sensors/health_monitor.py
-  sensors/dvl_velocity_monitor.py
+  sensors/dvl_monitor.py
 )
 
 # Executables
