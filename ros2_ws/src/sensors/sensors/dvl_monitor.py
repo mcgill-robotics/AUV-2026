@@ -25,8 +25,6 @@ class DVLMonitor(HealthMonitor):
             self.velocity_callback,
             self.qos
         )
-        
-        self.healthy_vel_status = (DiagnosticStatus.OK, "DVL velocity healthy")
         self._vel_status_details:dict = {}
         self.vel_status: tuple[bytes, str] = self.healthy_vel_status
 
@@ -35,7 +33,7 @@ class DVLMonitor(HealthMonitor):
         if self._vel_status_details:
             for key, value in self._vel_status_details.items():
                 stat.add(key, value)
-        stat.summary(*self.vel_status)
+        stat.summary(*self._vel_status)
         return stat
     
     def velocity_callback(self, msg:DVL) -> None:
@@ -44,7 +42,7 @@ class DVLMonitor(HealthMonitor):
         self._vel_status_details = {}
 
         if not msg.velocity_valid:
-            self.vel_status = (DiagnosticStatus.WARN, "DVL velocity invalid")
+            self._vel_status = (DiagnosticStatus.WARN, "DVL velocity invalid")
             return
         
         if msg.status == 1:
@@ -52,17 +50,17 @@ class DVLMonitor(HealthMonitor):
                 "<b>DVL may be overheating.</b> Ensure DVL is "
                 "underwater during operation or disable acoustics."
             )
-            self.current_status = (DiagnosticStatus.WARN,"⚠ DVL OVERHEATING WARNING — monitor temperature")
+            self._vel_status = (DiagnosticStatus.WARN,"⚠ DVL OVERHEATING WARNING — monitor temperature")
         if msg.status > 1:
             self._vel_status_details["Status code"] = f"<b>Unknown: {msg.status}</b>"
-            self.vel_status = (DiagnosticStatus.WARN, f"Invalid DVL velocity status code")
+            self._vel_status = (DiagnosticStatus.WARN, f"Invalid DVL velocity status code")
             return
         
         if msg.altitude < 0:
             self._vel_status_details["Altitude"] = (
                 f"<b>{msg.altitude:.3f} m</b> — expected &ge; 0"
             )
-            self.vel_status = (DiagnosticStatus.WARN, "DVL velocity altitude negative")
+            self._vel_status = (DiagnosticStatus.WARN, "DVL velocity altitude negative")
             return
         
         invalid_beams: list[str] = []
@@ -77,7 +75,7 @@ class DVLMonitor(HealthMonitor):
                 f"<b>{valid_beam_count}/{self.dvl_beam_count}</b> beams valid &nbsp;|&nbsp; "
                 f"Invalid: <b>{', '.join(invalid_beams)}</b>"
             )
-            self.current_status = (
+            self._vel_status = (
                 DiagnosticStatus.WARN,
                 f"DVL has {len(invalid_beams)} invalid beam(s): {', '.join(invalid_beams)}",
             )
