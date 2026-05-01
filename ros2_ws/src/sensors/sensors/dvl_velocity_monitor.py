@@ -40,18 +40,18 @@ class DVLVelocityMonitor(HealthMonitor):
     def sensor_callback(self, msg:DVL) -> None:
         self.last_update_time = self.node.get_clock().now()
         if not msg.velocity_valid:
-            self.velocity_status = (DiagnosticStatus.WARN, "DVL velocity invalid")
+            self.vel_status = (DiagnosticStatus.WARN, "DVL velocity invalid")
             return
         if msg.status > 0:
             self.vel_status_msgs["Velocity status"] = f"{msg.status}"
             if msg.status == 1:
-                self.velocity_status = (DiagnosticStatus.ERROR, "DVL may be overheating")
+                self.vel_status = (DiagnosticStatus.ERROR, "DVL may be overheating")
             else:
-                self.velocity_status = (DiagnosticStatus.WARN, f"Invalid DVL velocity status code")
+                self.vel_status = (DiagnosticStatus.WARN, f"Invalid DVL velocity status code")
             return
         if msg.altitude < 0:
             self.vel_status_msgs["Velocity altitude"] = f"{msg.altitude}"
-            self.velocity_status = (DiagnosticStatus.WARN, "DVL velocity altitude negative")
+            self.vel_status = (DiagnosticStatus.WARN, "DVL velocity altitude negative")
             return
         valid_beams = 0
         for beam in msg.beams:
@@ -61,10 +61,10 @@ class DVLVelocityMonitor(HealthMonitor):
                 self.vel_status_msgs[f"Beam {beam.id}"] = "Invalid"
         if valid_beams < self.dvl_beam_count:
             self.vel_status_msgs["Valid beams"] = f"{valid_beams}/{self.dvl_beam_count}"
-            self.velocity_status = (DiagnosticStatus.WARN, "DVL velocity has at least one invalid beam")
+            self.vel_status = (DiagnosticStatus.WARN, "DVL velocity has at least one invalid beam")
             return
         
-        self.velocity_status = self.healthy_vel_status
+        self.vel_status = self.healthy_vel_status
 
 def main(args = None):
     rclpy.init(args=args)
