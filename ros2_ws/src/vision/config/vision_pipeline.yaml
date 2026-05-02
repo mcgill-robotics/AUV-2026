@@ -2,7 +2,7 @@
 camera:
   # inputs to the vision pipeline
   front_cam_topic: /zed/zed_node/rgb/color/rect/image 
-  down_cam_topic: /vision/down_cam/image_raw
+  down_cam_topic: /down_cam/image_raw
 
 image_enhancement:
   front_cam: 
@@ -128,7 +128,7 @@ object_detection:
     detection_topic: /vision/down_cam/detections
     model_detection_threshold: 0.40
     # relative to src directory
-    model_relative_path: models/local_downcam_onnx # inference-models package directory (TODO: create this package)
+    model_relative_path: models/local_rfdetr_onnx_test # inference-models package directory (TODO: create this package)
     class_names:
       - "gate"
       - "lane_marker"
@@ -138,14 +138,23 @@ object_detection:
       - "table"
       - "bin"
       - "board"
-      - "shark"
-      - "sawfish"
+      - "survey_repair"
+      - "search_rescue"
+      - "compass"
+      - "tools"
+      - "lifebuoy"
+      - "sos"
+      - "ambulance"
+      - "firetruck"
+      - "blood"
+      - "fire"
+      - "bin_structure"
     queue_size: 10
     publish_annotated_image: true
     publish_annotated_every_n_frames: 1
     collection_dir: down_cam_collection
     collection_interval_seconds: 2.0
-    log_level: warn
+    log_level: info
 
 object_map:
   map_topic: /vision/object_map # final output of vision pipeline
@@ -235,5 +244,5 @@ general:
   wrapper_stream_ip: "127.0.1.1"
   wrapper_stream_port: 30000
   zed_wrapper_log_type: "log" # log, screen, or both
-  compressed: true
+  compressed: false
   enhance_images: false

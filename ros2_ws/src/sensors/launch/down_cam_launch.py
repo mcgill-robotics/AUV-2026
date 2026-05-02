@@ -4,11 +4,11 @@ from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 
 def generate_launch_description():
-    video_device_arg = DeclareLaunchArgument('video_device', default_value='/dev/down_cam')
-    width_arg        = DeclareLaunchArgument('image_width', default_value='1280')
-    height_arg       = DeclareLaunchArgument('image_height', default_value='720')
+    video_device_arg = DeclareLaunchArgument('video_device', default_value='/dev/video0')
+    width_arg        = DeclareLaunchArgument('image_width', default_value='640')
+    height_arg       = DeclareLaunchArgument('image_height', default_value='480')
     fps_arg          = DeclareLaunchArgument('framerate', default_value='30.0')
-    pixfmt_arg       = DeclareLaunchArgument('pixel_format', default_value='yuyv') 
+    pixfmt_arg       = DeclareLaunchArgument('pixel_format', default_value='mjpeg2rgb') 
     frame_id_arg     = DeclareLaunchArgument('camera_frame_id', default_value='sensors/down_cam')
 
     cam = Node(
