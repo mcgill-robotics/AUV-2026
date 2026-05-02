@@ -160,6 +160,14 @@ jobs:
                   sys.exit('ERROR: OpenCV is NOT CUDA enabled.')
               else:
                   print('SUCCESS: OpenCV is CUDA enabled.')
+                  
+              print('--- PyTorch Build Information ---')
+              print('Torch Version:', torch.__version__)
+              print('Torch CUDA Version:', torch.version.cuda)
+              if torch.version.cuda is None:
+                  sys.exit('ERROR: PyTorch is NOT CUDA enabled (torch.version.cuda is None).')
+              else:
+                  print('SUCCESS: PyTorch is built with CUDA support (' + torch.version.cuda + ').')
           else:
               print('CPU container, skipping CUDA check.')
           "

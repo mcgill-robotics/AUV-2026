@@ -234,6 +234,9 @@ COPY Docker/dev/requirements.txt Docker/dev/constraints.txt /tmp/
 RUN --mount=type=cache,target=/root/.cache/pip \
         pip3 install --ignore-installed -c /tmp/constraints.txt -r /tmp/requirements.txt
 
+# Install GPU-accelerated onnxruntime (replaces CPU version from requirements.txt)
+RUN pip3 install --no-cache-dir onnxruntime-gpu
+
 # DOWNGRADE Setuptools for ROS 2
 # ROS 2 Humble's colcon build system breaks with Setuptools >= 70.
 RUN pip3 install --no-cache-dir --force-reinstall "setuptools==65.5.1"
