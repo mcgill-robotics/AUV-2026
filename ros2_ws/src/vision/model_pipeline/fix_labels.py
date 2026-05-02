@@ -55,12 +55,10 @@ def remap_label_file(label_path: Path):
             parts[0] = str(new_class)
             new_lines.append(" ".join(parts))
 
-    # Overwrite file (or delete if empty)
+    # Overwrite file
     if new_lines:
         with label_path.open("w") as f:
             f.write("\n".join(new_lines) + "\n")
-    else:
-        label_path.unlink()  # remove empty label files
 
 def update_data_yaml():
     if not DATA_YAML.exists():
