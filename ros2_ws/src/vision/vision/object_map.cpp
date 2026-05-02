@@ -96,6 +96,18 @@ public:
         floor_objects = this->declare_parameter<std::vector<std::string>>("floor_objects");
         surface_objects = this->declare_parameter<std::vector<std::string>>("surface_objects");
         max_pipe_distance = this->declare_parameter<double>("max_pipe_distance");
+        enable_lane_boundary = this->declare_parameter<bool>("enable_lane_boundary", false);
+        lane_x_min = this->declare_parameter<double>("lane_x_min", -100.0);
+        lane_x_max = this->declare_parameter<double>("lane_x_max", 100.0);
+        lane_y_min = this->declare_parameter<double>("lane_y_min", -100.0);
+        lane_y_max = this->declare_parameter<double>("lane_y_max", 100.0);
+
+        if (enable_lane_boundary) {
+            RCLCPP_INFO(
+                this->get_logger(),
+                "Lane boundary enabled: x=[%.1f, %.1f] y=[%.1f, %.1f]",
+                lane_x_min, lane_x_max, lane_y_min, lane_y_max);
+        }
 
         const int enabled_table_octagon_modes =
             static_cast<int>(enable_octagon_from_table_xy) +
@@ -193,7 +205,8 @@ private:
         const Eigen::Vector3d& position,
         bool has_orientation,
         double theta_z,
-        double confidence) const
+        double confidence,
+        int frames_since_last_seen) const
     {
         auv_msgs::msg::VisionObject object_msg;
         object_msg.header.stamp = frame_collection_time;
@@ -209,6 +222,7 @@ private:
         object_msg.pose.orientation = tf2::toMsg(q);
         object_msg.has_orientation = has_orientation;
         object_msg.confidence = confidence;
+        object_msg.frames_since_last_seen = frames_since_last_seen;
         return object_msg;
     }
 
@@ -284,6 +298,14 @@ private:
                 pos_world_tf.x(),
                 pos_world_tf.y(),
                 pos_world_tf.z());
+
+            // Lane boundary filter: discard detections outside the competition lane
+            if (enable_lane_boundary) {
+                if (pos_world.x() < lane_x_min || pos_world.x() > lane_x_max ||
+                    pos_world.y() < lane_y_min || pos_world.y() > lane_y_max) {
+                    continue;
+                }
+            }
 
             Eigen::Matrix3d cov_camera = covariance_from_ros_pose(detection.pose_camera.covariance);
             Eigen::Matrix3d cov_world =
@@ -362,7 +384,8 @@ private:
                 track.get_position(),
                 track.has_orientation,
                 track.theta_z,
-                track.confidence));
+                track.confidence,
+                track.age));
         }
 
         if (enable_octagon_from_table_xy && table_track != nullptr) {
@@ -372,7 +395,8 @@ private:
                 table_track->get_position(),
                 table_track->has_orientation,
                 table_track->theta_z,
-                table_track->confidence));
+                table_track->confidence,
+                table_track->age));
 
             Eigen::Vector3d octagon_position = table_track->get_position();
             octagon_position.z() = pool_surface_z;
@@ -382,7 +406,8 @@ private:
                 octagon_position,
                 false,
                 0.0,
-                table_track->confidence));
+                table_track->confidence,
+                table_track->age));
         }
 
         if (enable_table_from_octagon_xy && octagon_track != nullptr) {
@@ -394,7 +419,8 @@ private:
                 octagon_position,
                 false,
                 0.0,
-                octagon_track->confidence));
+                octagon_track->confidence,
+                octagon_track->age));
 
             Eigen::Vector3d table_position = octagon_track->get_position();
             table_position.z() = pool_floor_z;
@@ -404,7 +430,8 @@ private:
                 table_position,
                 false,
                 0.0,
-                octagon_track->confidence));
+                octagon_track->confidence,
+                octagon_track->age));
         }
 
         if (enable_table_octagon_xy_midpoint && (table_track != nullptr || octagon_track != nullptr)) {
@@ -443,6 +470,10 @@ private:
                 table_track != nullptr ? table_track->confidence : octagon_track->confidence;
             const double octagon_confidence =
                 octagon_track != nullptr ? octagon_track->confidence : table_track->confidence;
+            const int table_age =
+                table_track != nullptr ? table_track->age : octagon_track->age;
+            const int octagon_age =
+                octagon_track != nullptr ? octagon_track->age : table_track->age;
 
             object_map_msg.array.push_back(build_object_message(
                 "table",
@@ -450,7 +481,8 @@ private:
                 table_position,
                 table_has_orientation,
                 table_theta_z,
-                table_confidence));
+                table_confidence,
+                table_age));
 
             object_map_msg.array.push_back(build_object_message(
                 "octagon",
@@ -458,7 +490,8 @@ private:
                 octagon_position,
                 false,
                 0.0,
-                octagon_confidence));
+                octagon_confidence,
+                octagon_age));
         }
 
         object_map_publisher->publish(object_map_msg);
@@ -478,6 +511,11 @@ private:
     double pool_floor_z;
     double pool_surface_z;
     double max_pipe_distance;
+    bool enable_lane_boundary;
+    double lane_x_min;
+    double lane_x_max;
+    double lane_y_min;
+    double lane_y_max;
     std::vector<std::string> unique_objects;
     std::vector<std::string> floor_objects;
     std::vector<std::string> surface_objects;

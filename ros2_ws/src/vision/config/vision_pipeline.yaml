@@ -164,6 +164,11 @@ object_map:
   enable_table_octagon_xy_midpoint: true # publish-time only: publish both at the shared midpoint XY; if only one is seen, use that XY for both
   # Only one of the three table/octagon publish modes should be enabled at a time; object_map will fail fast if multiple are true.
   max_pipe_distance: 7.0 # Truncates tracking of red/white pipes beyond this distance to reduce noise in map
+  enable_lane_boundary: false # discard world-frame detections outside the competition lane AABB
+  lane_x_min: -3.0 # back boundary (meters, world frame)
+  lane_x_max: 25.0  # front boundary
+  lane_y_min: -15.0 # right boundary
+  lane_y_max: 15.0  # left boundary
   pool_floor_z: -2.1
   pool_surface_z: 0.0
   unique_objects: ["gate", "bin_structure", "table", "board", "octagon"]
