@@ -359,7 +359,8 @@ class FrontCamObjectDetectorNode():
             result = self.zed.open(init_params)
             if result == sl.ERROR_CODE.SUCCESS: break
             else:
-                self.node.get_logger().error(f"Failed to open zed camera, retrying {5-i} more times")
+                self.node.get_logger().error(f"Failed to open zed camera:, retrying {5-i} more times: {result}")
+                self.zed.close()
                 sleep(2)
         
         if result != sl.ERROR_CODE.SUCCESS:
