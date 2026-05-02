@@ -1,13 +1,8 @@
-import geometry_msgs
+# Python dependencies
 import py_trees
-import rclpy
-from rclpy.node import Node
-from std_msgs.msg import String
 from py_trees.common import Status, Access
 from py_trees.blackboard import Client
-from rclpy.action import ActionClient
-from auv_msgs.action import AUVNavigate
-from controls.goal_helpers import move_robot_centric
+
 
 class TemplateBehaviour(py_trees.behaviour.Behaviour):
         """
@@ -15,7 +10,7 @@ class TemplateBehaviour(py_trees.behaviour.Behaviour):
 
         Fields: 
         rclpy.node.Node: node                         : the ros2 node for subscribing to topics
-        py_trees.blackboard.Client: blackboard        : the blackboard client for reading/writing sensors data
+        self.attach_blackboard_client: blackboard        : the blackboard client for reading/writing sensors data
         """
 
         def __init__(self, node, name="sensorsLeaf") -> None:
@@ -29,7 +24,7 @@ class TemplateBehaviour(py_trees.behaviour.Behaviour):
                 """   
                 super().__init__(name)
                 self.node = node
-                self.blackboard = py_trees.blackboard.Client(name=self.name)
+                self.blackboard = self.attach_blackboard_client(name=self.name)
                 self.sent_goal = False
 
 

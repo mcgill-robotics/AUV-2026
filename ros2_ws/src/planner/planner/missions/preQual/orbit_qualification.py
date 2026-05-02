@@ -1,17 +1,21 @@
+# Python dependencies
+import math
+
+# ROS dependencies
 import py_trees
 import py_trees_ros
 import rclpy
-from controls import navigation_client
 from rclpy.node import Node
-from rclpy.executors import MultiThreadedExecutor
+
+# AUV dependencies
+from controls import navigation_client
 from controls.goal_helpers import set_depth, set_global_yaw, move_global
-from ...SensorsBehaviour import SensorsBehaviour
-from ...utils.BasicActionBehaviour import BasicActionBehaviour
-from ...utils.ActionStatus import ActionStatus
-from ...utils.MissionChoiceCheckBehaviour import MissionChoiceCheckBehaviour
-from ...utils.MissionCompleteBehaviour import MissionCompleteBehaviour
-from ...utils.TimerBehaviour import TimerBehaviour
-import math
+
+# Planner dependencies
+from ..mission_behaviour_components import BasicActionBehaviour, MissionChoiceCheckBehaviour, \
+       MissionCompleteBehaviour, TimerBehaviour
+from ..action_status_enum import ActionStatus
+
 
 class OrbitQualificationMission(py_trees.composites.Sequence):
     """
@@ -123,7 +127,7 @@ class OrbitActionBehaviour(py_trees.behaviour.Behaviour):
         self.clockwise = clockwise
         self.radius_to_rotate_meter = radius_to_rotate_meter
         self.angle_to_rotate_rad = math.radians(angle_to_rotate_deg) 
-        self.blackboard = py_trees.blackboard.Client(name=self.name)
+        self.blackboard = self.attach_blackboard_client(name=self.name)
         self.target = target
         self.start_angle = None
         self.timeout = timeout
@@ -152,7 +156,7 @@ class OrbitActionBehaviour(py_trees.behaviour.Behaviour):
         self.navigation_client = self.blackboard.navigation_client.client 
         self.navigation_client.client_wait_for_server(timeout_sec=5.0) # Ensure the action server is ready
         
-        self.blackboard = py_trees.blackboard.Client(name=self.name)
+        self.blackboard = self.attach_blackboard_client(name=self.name)
         self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
 
     def initialise(self) -> None:

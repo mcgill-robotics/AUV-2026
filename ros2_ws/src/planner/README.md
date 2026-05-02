@@ -20,15 +20,20 @@ Here is a description of the available parameters:
 | `tick_rate` | `float` | The tick rate of the behaviour tree in Hz. Determines how often the tree is ticked and thus how often each behaviour is updated. Higher tick rates can lead to more responsive behaviour but at a tradeoff of more compute usage. |
 | `sim` | `bool` | Determines whether to use simulation time. Should be true when running in simulation and false when running on the real AUV. |
 | `use_ground_truth` | `bool` | Determines whether to use ground truth pose and twist data from the simulator. Parameter is only relevant if sim is true. | 
-`pre_qual_yaw_tolerance` | float | 
-`pre_qual_positional_tolerance` 
-`pre_qual_hold_time`
-`pre_qual_timeout`
-`orbit_pre_qual_yaw_tolerance_scale`
-`orbit_pre_qual_positional_tolerance_scale`
-`orbit_pre_qual_hold_time_initial`
-`orbit_pre_qual_hold_time_segments`
-`orbit_pre_qual_timeout`
+
+### Pre-Qualification Parameters
+
+| Parameter | Type | Description |
+| ------ | ------- | ---------- |
+| `pre_qual_yaw_tolerance` | `float` | Allowed yaw error in radians for pre-qualification. Tune based on sensor noise floor. |
+| `pre_qual_positional_tolerance` | `float` | Allowed positional error in meters for pre-qualification. Tune based on localization accuracy. |
+| `pre_qual_hold_time` | `float` | Time in seconds the vehicle must remain within tolerances to pass pre-qualification. |
+| `pre_qual_timeout` | `float` | Maximum time in seconds to meet pre-qualification conditions before failure. |
+| `orbit_pre_qual_yaw_tolerance_scale` | `float` | Scaling factor applied to yaw tolerance during orbit pre-qualification based on trajectory curvature. |
+| `orbit_pre_qual_positional_tolerance_scale` | `float` | Scaling factor applied to positional tolerance during orbit pre-qualification based on orbit radius. |
+| `orbit_pre_qual_hold_time_initial` | `float` | Required hold time in seconds for the initial orbit segment. |
+| `orbit_pre_qual_hold_time_segments` | `float` | Required hold time in seconds for subsequent orbit segments. |
+| `orbit_pre_qual_timeout` | `float` | Maximum time in seconds to complete orbit pre-qualification before failure. |
 
 ### Steps
 (If using sim, follow step 1 and 2, otherwise move on to step 3)

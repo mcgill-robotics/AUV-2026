@@ -30,8 +30,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'planner_node = planner.RootTree:main',
-            'yaw_behaviour_tree = planner.rotationLeafs.BehaviourTreeYaw:main'
+            'planner_node = planner.root_tree:main',
         ],
     },
 )

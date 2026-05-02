@@ -1,12 +1,17 @@
+# Python dependencies
+import math
 import py_trees
+
+# ROS dependencies
 import py_trees_ros
 import rclpy
 from rclpy.node import Node
-from controls.goal_helpers import set_depth, set_global_yaw, move_robot_centric
-from ...utils.BasicActionBehaviour import BasicActionBehaviour
-from ...utils.MissionChoiceCheckBehaviour import MissionChoiceCheckBehaviour
-from ...utils.MissionCompleteBehaviour import MissionCompleteBehaviour
-from ...utils.TimerBehaviour import TimerBehaviour
+
+# AUV dependencies
+
+# Planner dependencies
+from ..mission_behaviour_components import MissionChoiceCheckBehaviour, \
+       MissionCompleteBehaviour, BasicTriggerServiceBehaviour
 
 class TestServiceCallBehaviour(py_trees.composites.Sequence):
     """

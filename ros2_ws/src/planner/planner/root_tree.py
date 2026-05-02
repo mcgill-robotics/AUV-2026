@@ -1,17 +1,23 @@
+# Python dependencies
 import py_trees
+
+# ROS dependencies
 import py_trees_ros
 import rclpy
-from controls import navigation_client
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
-from . import SensorsBehaviour
-from .missions.preQual.RectangleQualification import RectangleQualificationMission
-from .missions.preQual.OrbitQualification import OrbitQualificationMission
-from .missions.MissionsSequence import MissionSequence
+
+# AUV dependencies
+from controls import navigation_client
+
+# Planner dependencies
+from .missions.mission_sequence import MissionSequence
+from . import sensors_behaviour
 
 # I like my ANSI colours :DDD
 green_text = "\033[32m"
 default_text = "\033[0m"
+
 
 class RootTree(Node):
     """
@@ -49,7 +55,7 @@ class RootTree(Node):
                 
         # Add the sensors behaviour as a child running in parallel to the rest of the tree.
         # This allows the rest of the tree to access the latest sensor data snapshot at each tick.
-        sensors_reader = SensorsBehaviour.SensorsBehaviour(node=self, name="Sensors Reader")
+        sensors_reader = sensors_behaviour.SensorsBehaviour(node=self, name="Sensors Reader")
 
         # Add other behaviour here as mission controls node
         missions = MissionSequence(self)

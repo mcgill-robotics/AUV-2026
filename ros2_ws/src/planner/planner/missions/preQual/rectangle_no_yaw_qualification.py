@@ -1,16 +1,20 @@
+# Python dependencies
+import math
+
+# ROS dependencies
 import py_trees
 import py_trees_ros
 import rclpy
-from controls import navigation_client
 from rclpy.node import Node
-from rclpy.executors import MultiThreadedExecutor
+
+# AUV dependencies
+from controls import navigation_client
 from controls.goal_helpers import set_depth, move_global
-from ...SensorsBehaviour import SensorsBehaviour
-from ...utils.BasicActionBehaviour import BasicActionBehaviour
-from ...utils.MissionChoiceCheckBehaviour import MissionChoiceCheckBehaviour
-from ...utils.MissionCompleteBehaviour import MissionCompleteBehaviour
-from ...utils.TimerBehaviour import TimerBehaviour
-from ...utils.BasicTriggerServiceBehaviour import BasicTriggerServiceBehaviour
+
+# Planner dependencies
+from ..mission_behaviour_components import BasicActionBehaviour, MissionChoiceCheckBehaviour, \
+       MissionCompleteBehaviour, TimerBehaviour
+
 
 class TranslationRectangleMission(py_trees.composites.Sequence):
     """

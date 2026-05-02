@@ -54,6 +54,14 @@ class NavigationServer(Node):
 
         # QoS for sensor data (latest reading only)
         sensor_qos = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            durability=DurabilityPolicy.VOLATILE,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+        )
+
+        #QoS for setpoints (ensure delivery)
+        setpoint_qos = QoSProfile(
             reliability=ReliabilityPolicy.RELIABLE,
             durability=DurabilityPolicy.VOLATILE,
             history=HistoryPolicy.KEEP_LAST,
@@ -70,10 +78,10 @@ class NavigationServer(Node):
         )
 
         # ── Publishers: controller setpoints ─────────────────────────────────
-        self.pub_depth_sp = self.create_publisher(Float64, '/controls/depth_setpoint', sensor_qos)
-        self.pub_x_sp = self.create_publisher(Float64, '/controls/x_setpoint', sensor_qos)
-        self.pub_y_sp = self.create_publisher(Float64, '/controls/y_setpoint', sensor_qos)
-        self.pub_quat_sp = self.create_publisher(Quaternion, '/controls/quaternion_setpoint', sensor_qos)
+        self.pub_depth_sp = self.create_publisher(Float64, '/controls/depth_setpoint', setpoint_qos)
+        self.pub_x_sp = self.create_publisher(Float64, '/controls/x_setpoint', setpoint_qos)
+        self.pub_y_sp = self.create_publisher(Float64, '/controls/y_setpoint', setpoint_qos)
+        self.pub_quat_sp = self.create_publisher(Quaternion, '/controls/quaternion_setpoint', setpoint_qos)
 
         # ── Action server ────────────────────────────────────────────────────
         self.action_server = ActionServer(

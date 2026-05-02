@@ -51,7 +51,7 @@ class TestMoveForwardBehaviour(py_trees.composites.Sequence)
 ```
 
 
-The next section of code gets the parameters described in the *planner/config* responsible for actions. Factors such as tolerances and hold times for navigation are initialized locally to reflect the config parameters. If your own mission requires an extra set of parameters, make sure to first declare the parameters in the RootTree.py before accessing them here.
+The next section of code gets the parameters described in the *planner/config* responsible for actions. Factors such as tolerances and hold times for navigation are initialized locally to reflect the config parameters. If your own mission requires an extra set of parameters, make sure to first declare the parameters in the root_tree.py before accessing them here.
 
 ```python
 position_tolerance = node.pre_qual_positional_tolrance
@@ -86,7 +86,7 @@ self.add_children([mission_choice_check,
             ])
 ```
 
-Congrats! You've made a mission, to run it do not forget to add the mission to the **MissionsSequence.py** file. To add it, go to the sequence file and add your mission in these lines
+Congrats! You've made a mission, to run it do not forget to add the mission to the **mission_sequence.py** file. To add it, go to the sequence file and add your mission in these lines
 
 ```python
 def __init__(self, node):
@@ -122,7 +122,7 @@ def __init__(self, node):
             all_missions_selector])
 ```
 
-Finally, to make documentation consistent, update the README.MD of the package with the new available missions and MissionSequence.py self.update method 
+Finally, to make documentation consistent, update the README.MD of the package with the new available missions and mission_sequence.py self.update method 
 
 ```python
 # Note that after a mission is completed, the respective mission will set this key back to None

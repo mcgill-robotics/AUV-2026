@@ -1,16 +1,25 @@
+# Python dependencies
+import math
 import py_trees
+
+# ROS dependencies
 import py_trees_ros
 import rclpy
-from std_msgs.msg import Int32
 from rclpy.node import Node
-from .preQual.OrbitQualification import OrbitQualificationMission
-from .preQual.RectangleQualification import RectangleQualificationMission
-from .debugNavigation.TestMoveForwardBehaviour import TestMoveForwardBehaviour
-from .debugNavigation.TestYawBehaviour import TestYawBehaviour
-from .debugNavigation.TestDiveBehaviour import TestDiveBehaviour
-from .debugNavigation.TranslationRectangle import TranslationRectangleMission
-from .debugNavigation.TestServiceCallBehaviour import TestServiceCallBehaviour
-import math
+from std_msgs.msg import Int32
+
+# AUV dependencies
+
+# Planner dependencies
+from .preQual.orbit_qualification import OrbitQualificationMission
+from .preQual.rectangle_with_yaw_qualification import RectangleQualificationMission
+from .preQual.rectangle_no_yaw_qualification import TranslationRectangleMission
+
+from .debugNavigation.test_move_forward_behaviour import TestMoveForwardBehaviour
+from .debugNavigation.test_yaw_behaviour import TestYawBehaviour
+from .debugNavigation.test_dive_behaviour import TestDiveBehaviour
+from .debugNavigation.test_serivce_call_behaviour import TestServiceCallBehaviour
+
 
 class MissionSequence(py_trees.composites.Sequence):
     """
@@ -20,7 +29,6 @@ class MissionSequence(py_trees.composites.Sequence):
         super().__init__("MissionSequence", memory=False)
 
         # Build the full mission sequence
-        mission_choice = MissionChoiceBehaviour(node, name="Mission_Choice")
         all_missions_selector = py_trees.composites.Selector("All missions", memory=True)
 
         pre_qual_rectangle = RectangleQualificationMission(node)
@@ -40,7 +48,7 @@ class MissionSequence(py_trees.composites.Sequence):
             test_service_call]
 
         # Count the number of missions to put a boundary on user input
-        self.mission_count = len(mission_list)
+        mission_choice = MissionChoiceBehaviour(node, name="Mission_Choice", mission_count=len(mission_list))
 
         all_missions_selector.add_children(mission_list)
         self.add_children([mission_choice, 
@@ -53,8 +61,11 @@ class MissionChoiceBehaviour(py_trees.behaviour.Behaviour):
 
     Fields: rclpy.Node: node         : the ROS2 node for logging and debugging purposes
     py_trees.blackboard blackboard   : the blackboard client
+    mission_count                    : the number of missions to put a boundary on user input
+    message_shown                    : boolean to track if the message prompting user input has been shown 
+                                       to avoid spamming the console
     """
-    def __init__(self, node, name="MissionChoiceUser"):
+    def __init__(self, node, name="MissionChoiceUser", mission_count=0):
         """
 		Initializes the MissionChoiceUser behaviour. 
 
@@ -64,8 +75,9 @@ class MissionChoiceBehaviour(py_trees.behaviour.Behaviour):
 		"""
         super().__init__(name)
         self.node = node
-        self.blackboard = py_trees.blackboard.Client(name=self.name)
+        self.blackboard = self.attach_blackboard_client(name=self.name)
         self.message_shown = False
+        self.mission_count = mission_count
 	
     def setup(self):
         """

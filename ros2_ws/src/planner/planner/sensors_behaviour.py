@@ -1,13 +1,19 @@
+# Python dependencies
 import py_trees
+from py_trees.common import Status, Access
+from py_trees.blackboard import Client
+
+# ROS dependencies
 import rclpy
 import py_trees_ros
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
 from std_msgs.msg import String
-from py_trees.common import Status, Access
-from py_trees.blackboard import Client
-import auv_msgs.msg
 import geometry_msgs.msg
+
+# AUV dependencies
+import auv_msgs.msg
+
 
 class SensorsBehaviour(py_trees.behaviour.Behaviour):
         """
@@ -16,7 +22,7 @@ class SensorsBehaviour(py_trees.behaviour.Behaviour):
 
         Fields: 
         rclpy.node.Node: node                         : the ros2 node for subscribing to topics
-        py_trees.blackboard.Client: blackboard         : the blackboard client for reading/writing sensors data
+        self.attach_blackboard_client: blackboard         : the blackboard client for reading/writing sensors data
         geometry_msgs.msg.Pose: current_pose          : the latest pose message received from the topic
         geometry_msgs.msg.Twistcurrent_twist          : the latest twist message received from the topic
         auv_msgs.msg.ObjectMapcurrent_object_map      : the latest object map message received from the topic
@@ -33,7 +39,7 @@ class SensorsBehaviour(py_trees.behaviour.Behaviour):
                 """   
                 super().__init__(name)
                 self.node = node
-                self.blackboard = py_trees.blackboard.Client(name=self.name)
+                self.blackboard = self.attach_blackboard_client(name=self.name)
                 self.current_pose = None
                 self.current_twist = None
                 self.current_object_map = None

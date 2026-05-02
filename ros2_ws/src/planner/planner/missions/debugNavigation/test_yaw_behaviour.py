@@ -1,12 +1,19 @@
+# Python dependencies
+import math
 import py_trees
+
+# ROS dependencies
 import py_trees_ros
 import rclpy
 from rclpy.node import Node
-from controls.goal_helpers import set_depth, set_global_yaw, move_robot_centric
-from ...utils.BasicActionBehaviour import BasicActionBehaviour
-from ...utils.MissionChoiceCheckBehaviour import MissionChoiceCheckBehaviour
-from ...utils.MissionCompleteBehaviour import MissionCompleteBehaviour
-from ...utils.TimerBehaviour import TimerBehaviour
+
+# AUV dependencies
+from controls.goal_helpers import rotate_relative
+
+# Planner dependencies
+from ..mission_behaviour_components import BasicActionBehaviour, MissionChoiceCheckBehaviour, \
+       MissionCompleteBehaviour
+
 
 class TestYawBehaviour(py_trees.composites.Sequence):
     """

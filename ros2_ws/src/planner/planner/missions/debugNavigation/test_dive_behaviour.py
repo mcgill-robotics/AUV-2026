@@ -1,30 +1,31 @@
+# Python dependencies
 import py_trees
+import math
+
+# ROS dependencies
 import py_trees_ros
 import rclpy
-from controls import navigation_client
 from rclpy.node import Node
-from rclpy.executors import MultiThreadedExecutor
-from controls.goal_helpers import set_depth, set_global_yaw, move_robot_centric
-from ...SensorsBehaviour import SensorsBehaviour
-from ...utils.BasicActionBehaviour import BasicActionBehaviour
-from ...utils.MissionChoiceCheckBehaviour import MissionChoiceCheckBehaviour
-from ...utils.MissionCompleteBehaviour import MissionCompleteBehaviour
-from ...utils.TimerBehaviour import TimerBehaviour
-import math
+
+# AUV dependencies
+from controls.goal_helpers import set_depth
+
+# Planner dependencies
+from ..mission_behaviour_components import BasicActionBehaviour, MissionChoiceCheckBehaviour, \
+       MissionCompleteBehaviour
+
 
 class TestDiveBehaviour(py_trees.composites.Sequence):
     """
     This PyTrees Sequence is the root of the test translation mission
     """
     def __init__(self, node):
-        super().__init__("TestYawBehaviour", memory=True)
+        super().__init__("TestDiveBehaviour", memory=True)
 
         # Get the general parameters from the configs that were declared in root of Behaviour Tree
         position_tolerance = node.pre_qual_positional_tolerance
         hold_time = node.pre_qual_hold_time
         timeout = node.pre_qual_timeout
-
-        node.get_logger().info(f"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA{hold_time}")
 
         # 0 Check if user input the desired mission choce
         """
@@ -38,7 +39,8 @@ class TestDiveBehaviour(py_trees.composites.Sequence):
 
         # Build the full mission sequence
         # 1. Dive to -1.5m
-        dive_leaf = BasicActionBehaviour(node, "Test Dive", set_depth(z=-1.5, tolerance=position_tolerance, hold_time=hold_time))
+        dive_leaf = BasicActionBehaviour(node, "Test Dive", set_depth(z=-1.5, tolerance=position_tolerance, \
+                                                                      hold_time=hold_time, timeout=timeout))
         
         # 2. Reset the user mission choice to allow for new mission to be selected
         mission_choice_reset = MissionCompleteBehaviour(node, "Completed Test Dive")
