@@ -1,5 +1,4 @@
 #include "zed_detection.hpp"
-#include "object.hpp"
 // --- CUSTOM EXCEPTIONS (UNUSED) ---
 // const char* ZedInitException::what() const noexcept
 // {
@@ -20,6 +19,7 @@ ZEDDetection::ZEDDetection(
 		int stream_port,
 		ZEDCameraModel camera_model,
 		int zed_depth_confidence_threshold,
+		const std::vector<std::string>& class_labels,
 		function<void(const string&)> log_debug,
 		function<void(const string&)> log_info,
         function<void(const string&)> log_warn,
@@ -35,6 +35,7 @@ ZEDDetection::ZEDDetection(
 		stream_port(stream_port),
 		camera_model(camera_model),
 		zed_depth_confidence_threshold(zed_depth_confidence_threshold),
+        class_labels(class_labels),
 		log_debug(log_debug),
 		log_error(log_error),
 		log_fatal(log_fatal),
@@ -66,20 +67,36 @@ bool ZEDDetection::init_zed()
 	    init_params.input.setFromStream(stream_ip.c_str(), stream_port);
 	}
 
-	log_info("[INIT] Calling zed.open()...");
-	sl::ERROR_CODE err = zed.open(init_params);
-	if (err != sl::ERROR_CODE::SUCCESS) {
-		log_error("Failed to open ZED: " + string(sl::toString(err).c_str()));
+	log_info("[INIT] Calling zed->open()...");
+
+	int attempt = 0;
+	int max_attempts = 5;
+	sl::ERROR_CODE err = sl::ERROR_CODE::FAILURE;
+	while (attempt < max_attempts) {
+		zed = make_unique<sl::Camera>();
+		err = zed->open(init_params);
+		if (err == sl::ERROR_CODE::SUCCESS) {
+			log_info("[INIT] zed->open() succeeded on attempt " + to_string(attempt + 1));
+			break;
+		} else {
+			log_warn("Failed to open ZED (attempt " + to_string(attempt + 1) + "): " + string(sl::toString(err).c_str()));
+			zed->close(); // Ensure any partial connections are closed before retrying
+			zed.reset();
+			this_thread::sleep_for(chrono::seconds(2)); // Wait before retrying
+		}
+		attempt++;
+	}
+	if (!zed || err != sl::ERROR_CODE::SUCCESS) {
+		log_error("Failed to open ZED after " + to_string(max_attempts) + " attempts: " + string(sl::toString(err).c_str()));
 		return false;
 	}
-	log_info("[INIT] zed.open() succeeded");
 
 	// Enable positional tracking for VIO
 	log_info("[INIT] Enabling positional tracking...");
 	sl::PositionalTrackingParameters pos_param;
 	pos_param.enable_imu_fusion = true;
 	pos_param.set_floor_as_origin = false;
-	err = zed.enablePositionalTracking(pos_param);
+	err = zed->enablePositionalTracking(pos_param);
 	if (err != sl::ERROR_CODE::SUCCESS) {
 		log_error("Failed to enable positional tracking: " + string(sl::toString(err).c_str()));
 		return false;
@@ -92,7 +109,7 @@ bool ZEDDetection::init_zed()
 	obj_param.detection_model = sl::OBJECT_DETECTION_MODEL::CUSTOM_BOX_OBJECTS;
 	obj_param.enable_tracking = false;
 	obj_param.max_range = max_range;
-	err = zed.enableObjectDetection(obj_param);
+	err = zed->enableObjectDetection(obj_param);
 	if (err != sl::ERROR_CODE::SUCCESS) {
 		log_error("Failed to enable object detection: " + string(sl::toString(err).c_str()));
 		return false;
@@ -117,27 +134,25 @@ void ZEDDetection::process_detections(const std::vector<sl::CustomBoxObjectData>
 	log_info("[CB] check_zed_status OK, ingesting custom boxes...");
 	
 	// Ingest custom boxes
-	zed.ingestCustomBoxObjects(detections);
+	zed->ingestCustomBoxObjects(detections);
 	log_info("[CB] Ingested, retrieving objects...");
 
-	sl::Objects objects;
-	zed.retrieveObjects(objects, obj_runtime_param);
-	log_info("[CB] Retrieved " + to_string(objects.object_list.size()) + " objects");
+	zed->retrieveObjects(objects_, obj_runtime_param);
+	log_info("[CB] Retrieved " + to_string(objects_.object_list.size()) + " objects");
 	// if (debug_logs) {
 	//     LogDebugTable(detections, objects);
 	// }
 	// Get VIO pose
 	log_info("[CB] Getting VIO pose...");
-	sl::Pose cam_pose;
-	sl::POSITIONAL_TRACKING_STATE tracking_state = zed.getPosition(cam_pose, sl::REFERENCE_FRAME::WORLD);
+	sl::POSITIONAL_TRACKING_STATE tracking_state = zed->getPosition(cam_pose_, sl::REFERENCE_FRAME::WORLD);
 	// Check tracking state and warn every second
 	if (tracking_state != sl::POSITIONAL_TRACKING_STATE::OK) {
 	    log_warn_throttle("VIO tracking not OK - " + string(sl::toString(tracking_state).c_str()), 1000);
 	    // return;
 	}
-	log_debug("[CB] VIO pose retrieved, camera pose: [" + to_string(cam_pose.getTranslation().x) + ", " + to_string(cam_pose.getTranslation().y) + ", " + to_string(cam_pose.getTranslation().z)+ "]");
+	log_debug("[CB] VIO pose retrieved, camera pose: [" + to_string(cam_pose_.getTranslation().x) + ", " + to_string(cam_pose_.getTranslation().y) + ", " + to_string(cam_pose_.getTranslation().z)+ "]");
 	log_debug("[CB] VIO OK, determining world positions...");
-	determine_world_position_zed_2D_boxes(objects, cam_pose);
+	determine_world_position_zed_2D_boxes(objects_, cam_pose_);
 	log_info("[CB] process_detections complete");
 }
 
@@ -156,16 +171,18 @@ std::tuple<Eigen::Vector3d,Eigen::Vector4d> ZEDDetection::GetCameraPose()
 
 ZEDDetection::~ZEDDetection()
 {
-    if (zed.isOpened()) {
-        zed.close();
-    }
+	if (zed) {
+		log_info("Closing ZED camera...");
+		zed->close();
+		log_info("ZED camera closed");
+	}
 }
 
 bool ZEDDetection::check_zed_status()
 {
     // Grab frame
-	log_debug("[CB] check_zed_status: calling zed.grab()...");
-	sl::ERROR_CODE grab_status = zed.grab(runtime_params);
+	log_debug("[CB] check_zed_status: calling zed->grab()...");
+	sl::ERROR_CODE grab_status = zed->grab(runtime_params);
 	if (grab_status == sl::ERROR_CODE::CORRUPTED_FRAME) {
 	    log_warn("Corrupted frame detected - skipping");
 	    return false;
@@ -178,7 +195,7 @@ bool ZEDDetection::check_zed_status()
 	}
 	log_debug("[CB] check_zed_status: grab OK, checking health...");
 
-	sl::HealthStatus health = zed.getHealthStatus();
+	sl::HealthStatus health = zed->getHealthStatus();
 	// Check frame health, only log every 5 seconds
 	if (health.low_image_quality) {
 	    log_warn_throttle("Low image quality", 5000);
@@ -222,7 +239,7 @@ void ZEDDetection::determine_world_position_zed_2D_boxes(const sl::Objects& zed_
 
 		// Get label
 		int label_idx = obj.raw_label;
-		string label_str = (static_cast<size_t>(label_idx) < ID_TO_LABEL.size()) ? string(ID_TO_LABEL[label_idx]) : to_string(label_idx);
+		string label_str = (static_cast<size_t>(label_idx) < class_labels.size()) ? string(class_labels[label_idx]) : to_string(label_idx);
 
 		// Transform to world frame
 		Eigen::Vector3d world_pos = transform_to_world(pos, rotation, pose_translation);

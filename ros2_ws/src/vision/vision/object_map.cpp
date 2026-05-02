@@ -15,7 +15,6 @@
 	#include "zed_detection.hpp"
 #endif
 #include "object_tracker.hpp"
-#include "object.hpp"
 #include <algorithm>
 
 #include <tf2/LinearMath/Quaternion.h>
@@ -70,8 +69,19 @@ public:
 
 	bool enable_gate_midpoint_refinement = this->declare_parameter<bool>("enable_gate_midpoint_refinement");
 		
+	// Fetch dynamic labels and max limits
+	this->class_labels = this->declare_parameter<std::vector<std::string>>("class_labels");
+	std::vector<std::string> max_per_class_labels = this->declare_parameter<std::vector<std::string>>("max_per_class_labels");
+	std::vector<int64_t> max_per_class_values = this->declare_parameter<std::vector<int64_t>>("max_per_class_values");
+
+	std::unordered_map<std::string, int> max_per_class_map;
+	for (size_t i = 0; i < max_per_class_labels.size() && i < max_per_class_values.size(); ++i) {
+		max_per_class_map[max_per_class_labels[i]] = static_cast<int>(max_per_class_values[i]);
+	}
+
 	// Object Tracker, used in both ZED and non-ZED modes, so that we maintain a consistent object map output regardless of input source
 	object_tracker = ObjectTracker(
+        max_per_class_map,
 		new_object_min_distance_threshold,
 		gating_threshold,
 		min_hits,
@@ -113,7 +123,7 @@ public:
 		// use UDP stream for input frames
 		bool use_stream = this->declare_parameter<bool>("use_stream");
 		// UDP stream IP and port
-		string stream_ip = this->declare_parameter<string>("stream_ip", "127.0.0.1");
+		string stream_ip = this->declare_parameter<string>("stream_address");
 		int stream_port = this->declare_parameter<int>("stream_port");
 		// whether run in simulation or real-world (affects ZED SDK settings)
 		bool sim = this->declare_parameter<bool>("sim");
@@ -148,6 +158,7 @@ public:
 				stream_port,
 				camera_model,
 				zed_depth_confidence_threshold,
+                class_labels,
 				// add callbacks to use rclcpp logging
 				[this] (const string& msg) { RCLCPP_DEBUG(this->get_logger(), "%s", msg.c_str()); },
 				[this](const string& msg) { RCLCPP_INFO(this->get_logger(), "%s", msg.c_str()); },
@@ -223,6 +234,7 @@ private:
 			RCLCPP_WARN(this->get_logger(), "[CB] zed_detector is null, skipping");
 			return;
 		}
+		frame_collection_time = rclcpp::Time(msg->header.stamp, this->get_clock()->get_clock_type());
 		std::vector<sl::CustomBoxObjectData> zed_detections = extract_ZED_detections(msg);
 		// Convert ROS message to ZED SDK CustomBoxObjectData
 		zed_detector->process_detections(zed_detections);
@@ -384,7 +396,7 @@ private:
 		object_map_publisher->publish(object_map_msg);
 		rclcpp::Time pipeline_end_time = this->now();
 		rclcpp::Duration time_diff = pipeline_end_time - frame_collection_time;
-		RCLCPP_DEBUG(this->get_logger(), "Object map pipeline latency: %.9f seconds", time_diff.seconds());
+		RCLCPP_INFO(this->get_logger(), "Object map pipeline latency: %.9f seconds", time_diff.seconds());
 	}
 
 	void publish_pose(const std::tuple<Eigen::Vector3d,Eigen::Vector4d>& pose)
@@ -405,7 +417,6 @@ private:
 	std::vector<sl::CustomBoxObjectData> extract_ZED_detections(const vision_msgs::msg::Detection2DArray::SharedPtr msg)
 	{
 		std::vector<sl::CustomBoxObjectData> zed_detections;
-		
 		for(const auto& detection : msg->detections) {
 			sl::CustomBoxObjectData box;
 			box.unique_object_id = sl::generate_unique_id();
@@ -416,13 +427,12 @@ private:
 			if (!detection.results.empty()) {
 				box.probability = detection.results[0].hypothesis.score;
                 
-                std::string label = detection.results[0].hypothesis.class_id;
-                auto it = std::find(ID_TO_LABEL.begin(), ID_TO_LABEL.end(), label);
-                if (it != ID_TO_LABEL.end()) {
-                    box.label = std::distance(ID_TO_LABEL.begin(), it);
+				std::string label = detection.results[0].hypothesis.class_id;
+                auto it = std::find(class_labels.begin(), class_labels.end(), label);
+                if (it != class_labels.end()) {
+                    box.label = std::distance(class_labels.begin(), it);
                 }
 			}
-
             if (box.label != -1) {
 			    box.is_static = true;
 			    
@@ -435,7 +445,7 @@ private:
 			    // --- Post-Processing Physical Constraints ---
 			    // If the object is a gate, only feed the ZED SDK the top portion of the bounding box.
 			    // The gate's legs extend deep into noisy acoustic territory causing bad depth estimations.
-			    if (enable_gate_top_crop && ID_TO_LABEL[box.label] == "gate") {
+			    if (enable_gate_top_crop && class_labels[box.label] == "gate") {
 			        float original_top = cy - h / 2.0f;
 			        h = h * gate_top_crop_ratio;
 			        cy = original_top + h / 2.0f;
@@ -456,8 +466,6 @@ private:
 			    zed_detections.push_back(box);
             }
 		}
-
-		frame_collection_time = this->now();
 		return zed_detections;
 	}
 #endif
@@ -466,6 +474,7 @@ private:
 #endif
 
 	ObjectTracker object_tracker;
+    std::vector<std::string> class_labels;
 
 	bool zed_sdk;
 	rclcpp::Time frame_collection_time;
