@@ -178,7 +178,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxkbcommon-dev \
     ninja-build \
     v4l-utils \
-    && add-apt-repository ppa:deadsnakes/ppa -y \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
