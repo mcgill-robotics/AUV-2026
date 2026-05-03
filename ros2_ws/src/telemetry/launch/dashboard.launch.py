@@ -22,6 +22,12 @@ def generate_launch_description():
         description='Address to bind Foxglove bridge'
     )
 
+    send_buffer_limit_arg = DeclareLaunchArgument(
+        'send_buffer_limit',
+        default_value='10000000',
+        description='Send buffer limit for Foxglove bridge'
+    )
+
     # Foxglove Bridge node
     foxglove_bridge = Node(
         package='foxglove_bridge',
@@ -30,7 +36,7 @@ def generate_launch_description():
         parameters=[{
             'port': LaunchConfiguration('port'),
             'address': LaunchConfiguration('address'),
-            'send_buffer_limit': 10000000,  # 10MB buffer for images
+            'send_buffer_limit': LaunchConfiguration('send_buffer_limit'),  # 10MB buffer for images
             'use_compression': True,
             'best_effort_qos_topic_whitelist': [
                 '/vision/front_cam/detections/annotated/compressed',
@@ -65,6 +71,7 @@ def generate_launch_description():
     return LaunchDescription([
         port_arg,
         address_arg,
+        send_buffer_limit_arg,
         foxglove_bridge,
         dry_test_node,
         vision_to_foxglove_node,
