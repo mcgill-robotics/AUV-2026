@@ -1,0 +1,62 @@
+{
+        "globalVariables": {},
+        "userNodes": {},
+        "playbackConfig": {
+                "speed": 1
+        },
+        "layout": {
+                "first": {
+                        "first": "Plot!depth",
+                        "second": {
+                                "first": "RawMessages!imu",
+                                "second": "RawMessages!imuSetpoint",
+                                "direction": "row",
+                                "splitPercentage": 50
+                        },
+                        "direction": "column",
+                        "splitPercentage": 50
+                },
+                "second": {
+                        "first": "Publish!effort",
+                        "second": "RawMessages!forces",
+                        "direction": "column",
+                        "splitPercentage": 50
+                },
+                "direction": "row",
+                "splitPercentage": 60
+        },
+        "configById": {
+                "Plot!depth": {
+                        "title": "Depth Control (Setpoint vs Actual)",
+                        "isSynced": true,
+                        "paths": [
+                                {
+                                        "value": "/controls/depth_setpoint.data",
+                                        "label": "Setpoint"
+                                },
+                                {
+                                        "value": "/processed/depth.data",
+                                        "label": "Actual"
+                                }
+                        ],
+                        "showLegend": true
+                },
+                "RawMessages!imu": {
+                        "topicPath": "/processed/imu",
+                        "diffEnabled": false
+                },
+                "RawMessages!imuSetpoint": {
+                        "topicPath": "/controls/quaternion_setpoint",
+                        "diffEnabled": false
+                },
+                "Publish!effort": {
+                        "topicName": "/controls/effort",
+                        "datatype": "geometry_msgs/msg/Wrench",
+                        "advancedView": true
+                },
+                "RawMessages!forces": {
+                        "topicPath": "/propulsion/forces",
+                        "diffEnabled": false
+                }
+        }
+}

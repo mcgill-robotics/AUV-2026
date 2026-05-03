@@ -1,0 +1,233 @@
+{
+  "configById": {
+    "Indicator!32kccrh": {
+      "path": "/power/batteries/voltage.data[0]",
+      "style": "background",
+      "fontSize": 36,
+      "fallbackColor": "#828282",
+      "fallbackLabel": "B1: N/A",
+      "rules": [
+        {
+          "operator": ">",
+          "rawValue": "15.5",
+          "color": "#00ff20",
+          "label": "B1: >15.5V"
+        },
+        {
+          "operator": "<=",
+          "rawValue": "15.5",
+          "color": "#afc800",
+          "label": "B1: 15.0-15.5V"
+        },
+        {
+          "operator": "<=",
+          "rawValue": "15.0",
+          "color": "#e58700",
+          "label": "B1: 14.5-15.0V"
+        },
+        {
+          "operator": "<=",
+          "rawValue": "14.5",
+          "color": "#fb4700",
+          "label": "B1: 14.0-14.5V"
+        },
+        {
+          "operator": "<=",
+          "rawValue": "14.0",
+          "color": "#ff0000",
+          "label": "B1: <14.0V"
+        }
+      ],
+      "foxglovePanelTitle": "Battery 1 Status"
+    },
+    "Indicator!2jv5r2l": {
+      "path": "/power/batteries/voltage.data[1]",
+      "style": "background",
+      "fontSize": 36,
+      "fallbackColor": "#828282",
+      "fallbackLabel": "B2: N/A",
+      "rules": [
+        {
+          "operator": ">",
+          "rawValue": "15.5",
+          "color": "#00ff20",
+          "label": "B2: >15.5V"
+        },
+        {
+          "operator": "<=",
+          "rawValue": "15.5",
+          "color": "#afc800",
+          "label": "B2: 15.0-15.5V"
+        },
+        {
+          "operator": "<=",
+          "rawValue": "15.0",
+          "color": "#e58700",
+          "label": "B2: 14.5-15.0V"
+        },
+        {
+          "operator": "<=",
+          "rawValue": "14.5",
+          "color": "#fb4700",
+          "label": "B2: 14.0-14.5V"
+        },
+        {
+          "operator": "<=",
+          "rawValue": "14.0",
+          "color": "#ff0000",
+          "label": "B2: <14.0V"
+        }
+      ],
+      "foxglovePanelTitle": "Battery 2 Status"
+    },
+    "Plot!4am3t4e": {
+      "paths": [
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/power/batteries/voltage.data[0]",
+          "enabled": true,
+          "color": "#4e98e2",
+          "id": "4f37cf1a-82ce-4078-8d74-2fb1c0e81cf0",
+          "label": "Battery 0"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/power/batteries/voltage.data[1]",
+          "enabled": true,
+          "color": "#f5774d",
+          "id": "021350d6-a7ec-4a50-95b8-3300665b26e5",
+          "label": "Battery 1",
+          "showLine": true
+        }
+      ],
+      "minYValue": 13,
+      "showPlotValuesInLegend": true,
+      "yAxisLabel": "Voltage (V)",
+      "xAxisLabel": "Time (s)",
+      "legendDisplay": "floating",
+      "showLegend": true,
+      "foxglovePanelTitle": "Battery Voltages",
+      "sidebarDimension": 191
+    },
+    "Plot!2yl0iar": {
+      "paths": [
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/propulsion/microseconds.data[0]",
+          "enabled": true,
+          "color": "#ff4538",
+          "id": "4f37cf1a-82ce-4078-8d74-2fb1c0e81cf0",
+          "label": "Thruster 1 (back right)"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/propulsion/microseconds.data[1]",
+          "enabled": true,
+          "color": "#8fff38",
+          "id": "4f37cf1a-82ce-4078-8d74-2fb1c0e81cf0",
+          "label": "Thruster 2 (heave back right)"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/propulsion/microseconds.data[2]",
+          "enabled": true,
+          "color": "#38f2ff",
+          "id": "4f37cf1a-82ce-4078-8d74-2fb1c0e81cf0",
+          "label": "Thruster 3 (heave front right)"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/propulsion/microseconds.data[3]",
+          "enabled": true,
+          "color": "#a838ff",
+          "id": "4f37cf1a-82ce-4078-8d74-2fb1c0e81cf0",
+          "label": "Thruster 4 (front right)"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/propulsion/microseconds.data[4]",
+          "enabled": true,
+          "color": "#ff38c0",
+          "id": "4f37cf1a-82ce-4078-8d74-2fb1c0e81cf0",
+          "label": "Thruster 5 (front left)"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/propulsion/microseconds.data[5]",
+          "enabled": true,
+          "color": "#385dff",
+          "id": "4f37cf1a-82ce-4078-8d74-2fb1c0e81cf0",
+          "label": "Thruster 6 (heave front left)"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/propulsion/microseconds.data[6]",
+          "enabled": true,
+          "color": "#38ff77",
+          "id": "4f37cf1a-82ce-4078-8d74-2fb1c0e81cf0",
+          "label": "Thruster 7 (heave back left)"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/propulsion/microseconds.data[7]",
+          "enabled": true,
+          "color": "#ffda38",
+          "id": "4f37cf1a-82ce-4078-8d74-2fb1c0e81cf0",
+          "label": "Thruster 8 (back left)"
+        }
+      ],
+      "minYValue": 1400,
+      "showPlotValuesInLegend": true,
+      "yAxisLabel": "ms",
+      "xAxisLabel": "Time (s)",
+      "legendDisplay": "floating",
+      "showLegend": false,
+      "maxYValue": 1600,
+      "foxglovePanelTitle": "Propulsion Microseconds"
+    },
+    "Plot!3wdvgww": {
+      "paths": [
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/sensors/depth/z.data",
+          "enabled": true,
+          "color": "#ff4538",
+          "id": "4f37cf1a-82ce-4078-8d74-2fb1c0e81cf0",
+          "label": "Raw depth"
+        }
+      ],
+      "minYValue": -1,
+      "showPlotValuesInLegend": true,
+      "yAxisLabel": "Depth (m)",
+      "xAxisLabel": "Time (s)",
+      "legendDisplay": "floating",
+      "showLegend": true,
+      "maxYValue": 5,
+      "foxglovePanelTitle": "Sensor Depth"
+    }
+  },
+  "globalVariables": {},
+  "userNodes": {},
+  "playbackConfig": {
+    "speed": 1
+  },
+  "layout": {
+    "first": {
+      "first": {
+        "first": "Indicator!32kccrh",
+        "second": "Indicator!2jv5r2l",
+        "direction": "column"
+      },
+      "second": "Plot!4am3t4e",
+      "direction": "row",
+      "splitPercentage": 20.521172638436482
+    },
+    "second": {
+      "first": "Plot!2yl0iar",
+      "second": "Plot!3wdvgww",
+      "direction": "column"
+    },
+    "direction": "column",
+    "splitPercentage": 29.899480537003303
+  }
+}

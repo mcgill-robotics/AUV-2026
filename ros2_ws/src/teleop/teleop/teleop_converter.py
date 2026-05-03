@@ -83,7 +83,7 @@ class TeleopConverter(Node):
         
         # Publishers
         self.wrench_pub = self.create_publisher(
-            Wrench, '/controls/effort', 10)
+            Wrench, '/controls/total_effort', 10)
         
         # Timer for publishing at fixed rate and checking timeout
         self.timer = self.create_timer(0.05, self.publish_loop)  # 20 Hz
