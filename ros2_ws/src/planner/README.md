@@ -44,9 +44,9 @@ Here is a description of the available parameters:
 ./build.sh
 source ros2_ws/install/setup.bash
 ```
-4. Launch the planner launch file
+4. Launch bringup (with `sim:=true` if using sim), then launch planner:
 ```bash
-ros2 launch planner planner.launch.py
+ros2 launch planner planner.launch.py sim:=true
 ```
 
 5. Upon launching the planner, you will be prompted with a mission selection dialogue. To start a specific mission, manually publish an Int32 message, matching the mission choice, to the mission selector topic.
@@ -66,6 +66,14 @@ ros2 topic pub --once /mission_selector std_msgs/msg/Int32 "{data: 1}"
 ```
 
 To write a new Mission, consult the [README](missions/README.md) in the missions directory.
+
+### Visualization
+To live debug the behaviour tree, open a new terminal and run:
+```bash
+py-trees-tree-viewer
+```
+Select the node namespace (e.g., `/planner_root_tree`) and check **Blackboard Data** and **Periodic** in the stream settings.
+*CLI Fallback:* `py-trees-tree-watcher -b`
 
 ## ROS Nodes
 The package provides a single ROS Node: `RootNode` 

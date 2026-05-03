@@ -48,7 +48,7 @@ def main():
     orbit_pre_qual_hold_time_segments = node.get_parameter("orbit_pre_qual_hold_time_segments").get_parameter_value().double_value
 
     # Set the root of the tree
-    root = py_trees.composites.Parallel("Root", policy=py_trees.common.ParallelPolicy.SuccessOnAll())
+    root = py_trees.composites.Parallel("Root", policy=py_trees.common.ParallelPolicy.SuccessOnAll(synchronise=False))
 
     # Create navigation client instance as a singleton
     nav_client = navigation_client.NavigationClient(name="planner_nav_client")
