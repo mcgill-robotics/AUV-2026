@@ -17,8 +17,8 @@ FROM tuttelikz/opencv-cuda:4.10.0-cuda12.6.3-arch8.9-ubuntu22.04
 
 # all arguments after pulling from base image are flushed, so we re-declare them
 ARG ZED_SDK_MAJOR=5
-ARG ZED_SDK_MINOR=3
-ARG ZED_SDK_PATCH=0
+ARG ZED_SDK_MINOR=1
+ARG ZED_SDK_PATCH=1
 ARG CUDA_MAJOR=12
 ARG CUDA_MINOR=8
 ARG UBUNTU_RELEASE=22
