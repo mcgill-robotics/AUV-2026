@@ -28,21 +28,18 @@ class BasicActionBehaviour(py_trees.behaviour.Behaviour):
 
         def __init__(
             self, 
-            node,
             name = "ActionBehaviour",
             goal: AUVNavigate = None,
             ) -> None:
             """
             Initializes the node and blackboard client for this behaviour.
 
-            Inputs: rclpy.node.Node             : node - the ROS2 node to use for subscribing to topics 
-                    str                         : name - the name of the behaviour 
+            Inputs: str                         : name - the name of the behaviour 
                     auv_msgs.action.AUVNavigate : goal - the goal to send to the action client
 
             Outputs: None
             """   
             super().__init__(name)
-            self.node = node
             self.name = name
             self.blackboard = self.attach_blackboard_client(name=self.name)
             self.goal = goal
@@ -52,14 +49,15 @@ class BasicActionBehaviour(py_trees.behaviour.Behaviour):
             self.action_status = ActionStatus.NOT_SENT # Either succeeded, pending, failed or not sent
             self.is_waiting_for_result = False
             
-        def setup(self) -> None:
+        def setup(self, **kwargs) -> None:
             """
             Description: Sets up keys on the blackboard that this behaviour will use.
             """
-            # Get the navigation client from the blackboard to send goals
-            self.blackboard.register_key(key="/navigation_client/client", access=py_trees.common.Access.READ)
-            self.navigation_client = self.blackboard.navigation_client.client 
-            self.navigation_client.client_wait_for_server(timeout_sec=5.0) # Ensure the action server is ready
+            self.node = kwargs['node']
+            self.navigation_client = kwargs['shared_nav_client']
+            
+            # Ensure the action server is ready
+            self.navigation_client.client_wait_for_server(timeout_sec=5.0) 
 
             self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
         
@@ -143,6 +141,13 @@ class BasicActionBehaviour(py_trees.behaviour.Behaviour):
             else:
                 self.action_status = ActionStatus.FAILED
 
+        def terminate(self, new_status: py_trees.common.Status):
+            """Called if the tree aborts this branch or if it naturally finishes."""
+            if new_status == py_trees.common.Status.INVALID:
+                if hasattr(self, 'node') and self.node:
+                    self.node.get_logger().warn(f"[{self.name}] Aborted branch. Canceling active goal.")
+                if hasattr(self, 'navigation_client') and self.navigation_client:
+                    self.navigation_client.reset_action_client()
 
 
 class BasicTriggerServiceBehaviour(py_trees.behaviour.Behaviour):
@@ -156,31 +161,30 @@ class BasicTriggerServiceBehaviour(py_trees.behaviour.Behaviour):
 
         def __init__(
             self, 
-            node,
             name = "ActionBehaviour",
             service_name = None
             ) -> None:
             """
             Initializes the node and blackboard client for this behaviour.
 
-            Inputs: rclpy.node.Node             : node - the ROS2 node to use for subscribing to topics 
-                    str                         : name - the name of the behaviour 
+            Inputs: str                         : name - the name of the behaviour 
                     str                         : service_name - the name of the service to call
 
             Outputs: None
             """   
             super().__init__(name)
-            self.node = node
             self.name = name
+            self.service_name = service_name
             self.blackboard = self.attach_blackboard_client(name=self.name)
-            self.node.service_client = self.node.create_client(Trigger, service_name)
             self.sent_service_request = False
             self.future = None
 
-        def setup(self) -> None:
+        def setup(self, **kwargs) -> None:
             """
             Description: Sets up keys on the blackboard that this behaviour will use.
             """
+            self.node = kwargs['node']
+            self.node.service_client = self.node.create_client(Trigger, self.service_name)
             # FIND A BETTER WAY TO DO THIS
             
             # Check if the service is available, if not log an error and raise an exception
@@ -262,7 +266,7 @@ class MissionChoiceCheckBehaviour(py_trees.behaviour.Behaviour):
                 self.blackboard = self.attach_blackboard_client(name=self.name)
                 self.choice = choice
 
-        def setup(self) -> None:
+        def setup(self, **kwargs) -> None:
                 """
                 Description: Sets up keys on the blackboard that this behaviour will use.
                 """
@@ -293,23 +297,22 @@ class MissionCompleteBehaviour(py_trees.behaviour.Behaviour):
         self.attach_blackboard_client: blackboard        : the blackboard client for reading/writing sensors data
         """
 
-        def __init__(self, node, name="MissionCompleteBehaviour") -> None:
+        def __init__(self, name="MissionCompleteBehaviour") -> None:
                 """
                 Initializes the node and blackboard client for this behaviour.
 
-                Inputs: rclpy.node.Node    : node - the ROS2 node to use for subscribing to topics 
-                        str                : name - the name of the behaviour 
+                Inputs: str                : name - the name of the behaviour 
 
                 Outputs: None
                 """   
                 super().__init__(name)
-                self.node = node
                 self.blackboard = self.attach_blackboard_client(name=self.name)
 
-        def setup(self) -> None:
+        def setup(self, **kwargs) -> None:
                 """
                 Description: Sets up keys on the blackboard that this behaviour will use.
                 """
+                self.node = kwargs['node']
                 self.blackboard.register_key(key="/mission_choice", access=py_trees.common.Access.WRITE)
                 self.blackboard.register_key(key="/mission_choice", access=py_trees.common.Access.READ)
 
@@ -339,12 +342,11 @@ class TimerBehaviour(py_trees.behaviour.Behaviour):
         self.attach_blackboard_client: blackboard        : the blackboard client for reading/writing sensors data
         """
 
-        def __init__(self, node, timer: float, name="sensorsLeaf") -> None:
+        def __init__(self, timer: float, name="sensorsLeaf") -> None:
                 """
                 Initializes the node and blackboard client for this behaviour.
 
-                Inputs: rclpy.node.Node    : node - the ROS2 node to use for subscribing to topics 
-                        str                : name - the name of the behaviour 
+                Inputs: str                : name - the name of the behaviour 
                         float              : timer - the desired duration of the timer
 
                 Outputs: None
@@ -353,7 +355,9 @@ class TimerBehaviour(py_trees.behaviour.Behaviour):
                 self.timer = timer
                 self.start_time = 0.0
                 self.timer_started = False
-                self.node = node
+
+        def setup(self, **kwargs) -> None:
+                self.node = kwargs['node']
         
         def initialise(self) -> None:
                 """
@@ -378,13 +382,14 @@ class TimerBehaviour(py_trees.behaviour.Behaviour):
                 """
                 if not self.timer_started:
                         # Set the initial time at start of time counting
-                        self.start_time = time.time()
+                        self.start_time = self.node.get_clock().now().nanoseconds / 1e9
                         self.timer_started = True
                         return py_trees.common.Status.RUNNING
                 
+                current_time = self.node.get_clock().now().nanoseconds / 1e9
                 # Upon each tick, check if interval of time has been passed
-                self.node.get_logger().info(f"Time passed: {(time.time() - self.start_time)}")
-                if (time.time() - self.start_time) > float(self.timer):
+                self.node.get_logger().info(f"Time passed: {(current_time - self.start_time)}")
+                if (current_time - self.start_time) > float(self.timer):
                         return py_trees.common.Status.SUCCESS
                 
                 return py_trees.common.Status.RUNNING

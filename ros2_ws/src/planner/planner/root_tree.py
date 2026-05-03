@@ -1,101 +1,140 @@
 # Python dependencies
 import py_trees
+import threading
 
 # ROS dependencies
 import py_trees_ros
 import rclpy
-from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
+from rclpy.qos import QoSProfile, ReliabilityPolicy
+import geometry_msgs.msg
+import auv_msgs.msg
 
 # AUV dependencies
 from controls import navigation_client
 
 # Planner dependencies
 from .missions.mission_sequence import MissionSequence
-from . import sensors_behaviour
 
 # I like my ANSI colours :DDD
 green_text = "\033[32m"
 default_text = "\033[0m"
 
-
-class RootTree(Node):
-    """
-    This node initializes the root of the behaviour tree and adds the main branches of the tree as children to the root.
-    """
-    def __init__(self):
-        super().__init__("planner_root_tree")
-        
-        # Get tolerance, timeout and tick rate parameters from the configs
-        self.declare_parameter("pre_qual_yaw_tolerance", 1.0)
-        self.declare_parameter("pre_qual_positional_tolerance", 1.0)
-        self.declare_parameter("pre_qual_timeout", 1.0)
-        self.declare_parameter("pre_qual_hold_time", 1.0)
-        self.declare_parameter("tick_rate", 1.0)
-
-        self.pre_qual_yaw_tolerance = self.get_parameter("pre_qual_yaw_tolerance").get_parameter_value().double_value
-        self.pre_qual_positional_tolerance = self.get_parameter("pre_qual_positional_tolerance").get_parameter_value().double_value
-        self.pre_qual_timeout = self.get_parameter("pre_qual_timeout").get_parameter_value().double_value
-        self.pre_qual_hold_time = self.get_parameter("pre_qual_hold_time").get_parameter_value().double_value
-        self.tick_rate = self.get_parameter("tick_rate").get_parameter_value().double_value
-
-        # Set the root of the tree
-        root = py_trees.composites.Parallel("Root", policy=py_trees.common.ParallelPolicy.SuccessOnAll()) # SUCCESS_ON_ALL means the root will only return success if all children return success
-        
-        # Create navigation client instance as a singleton
-        # This is to consolidate all information concerning actions into one node client
-        self.navigation_client = navigation_client.NavigationClient(name="planner_nav_client")
-        self.navigation_client_ongoing_goal = self.navigation_client.current_goal_handle # Store the goal handle of the currently active goal, if any, to allow for cancellation when a new goal is sent.
-        
-        self.blackboard = py_trees.blackboard.Client(name="RootTreeBlackboard")
-        self.blackboard.register_key(key="/navigation_client/client", access=py_trees.common.Access.WRITE)
-        self.blackboard.register_key(key="/navigation_client/ongoing_goal", access=py_trees.common.Access.WRITE)
-        self.blackboard.navigation_client.client = self.navigation_client
-        self.blackboard.navigation_client.ongoing_goal = self.navigation_client_ongoing_goal
-                
-        # Add the sensors behaviour as a child running in parallel to the rest of the tree.
-        # This allows the rest of the tree to access the latest sensor data snapshot at each tick.
-        sensors_reader = sensors_behaviour.SensorsBehaviour(node=self, name="Sensors Reader")
-
-        # Add other behaviour here as mission controls node
-        missions = MissionSequence(self)
-
-        # Add children to root
-        root.add_children([sensors_reader, missions])
-
-        # Create the behaviour tree with the root and setup the tree and call the setup of the root to initialize and setup all the
-        # children behaviours recursively. This will setup all blackboards and ros2 publishers/subscribers
-        self.behaviour_tree = py_trees.trees.BehaviourTree(root=root)
-        self.behaviour_tree.setup(timeout=15)
-
-        self.timer = self.create_timer(self.tick_rate, self.tick_tree)  # tick every tick_rate seconds
-
-        # Debug log to confirm initialization, can remove but I like my colours :D
-        self.get_logger().info(f"{green_text}Yaw Behaviour Tree Node Initialized{default_text}")
-
-    def tick_tree(self):
-        self.behaviour_tree.tick()
-    
-
 def main():
     rclpy.init()
-    planner_node = RootTree()
-    action_client_node = planner_node.navigation_client # Get the navigation client node from the planner to spin it in parallel since it 
-                                                        #has its own executor and needs to be spun to process action results and feedback
-    
-    executor = MultiThreadedExecutor(num_threads=4)
-    executor.add_node(planner_node)
-    executor.add_node(action_client_node)
-    while rclpy.ok():
-        try:
-            executor.spin()
-        except KeyboardInterrupt:
-            planner_node.get_logger().info("Shutting down yaw BT node")
-            executor.shutdown()
-            action_client_node.destroy_node()
-            planner_node.destroy_node()
-            rclpy.shutdown()
+    node = rclpy.create_node("planner_root_tree")
 
+    # Get tolerance, timeout and tick rate parameters from the configs
+    node.declare_parameter("pre_qual_yaw_tolerance", 1.0)
+    node.declare_parameter("pre_qual_positional_tolerance", 1.0)
+    node.declare_parameter("pre_qual_timeout", 1.0)
+    node.declare_parameter("pre_qual_hold_time", 1.0)
+    node.declare_parameter("tick_rate", 1.0)
+
+    pre_qual_yaw_tolerance = node.get_parameter("pre_qual_yaw_tolerance").get_parameter_value().double_value
+    pre_qual_positional_tolerance = node.get_parameter("pre_qual_positional_tolerance").get_parameter_value().double_value
+    pre_qual_timeout = node.get_parameter("pre_qual_timeout").get_parameter_value().double_value
+    pre_qual_hold_time = node.get_parameter("pre_qual_hold_time").get_parameter_value().double_value
+    tick_rate = node.get_parameter("tick_rate").get_parameter_value().double_value
+
+    node.declare_parameter("orbit_pre_qual_yaw_tolerance_scale", 1.0)
+    node.declare_parameter("orbit_pre_qual_positional_tolerance_scale", 1.0)
+    node.declare_parameter("orbit_pre_qual_hold_time_initial", 1.0)
+    node.declare_parameter("orbit_pre_qual_hold_time_segments", 1.0)
+
+    orbit_pre_qual_yaw_tolerance_scale = node.get_parameter("orbit_pre_qual_yaw_tolerance_scale").get_parameter_value().double_value
+    orbit_pre_qual_positional_tolerance_scale = node.get_parameter("orbit_pre_qual_positional_tolerance_scale").get_parameter_value().double_value
+    orbit_pre_qual_hold_time_initial = node.get_parameter("orbit_pre_qual_hold_time_initial").get_parameter_value().double_value
+    orbit_pre_qual_hold_time_segments = node.get_parameter("orbit_pre_qual_hold_time_segments").get_parameter_value().double_value
+
+    # Set the root of the tree
+    root = py_trees.composites.Parallel("Root", policy=py_trees.common.ParallelPolicy.SuccessOnAll())
+
+    # Create navigation client instance as a singleton
+    nav_client = navigation_client.NavigationClient(name="planner_nav_client")
+    
+    # QoS for best effort sensors
+    qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
+
+    node.declare_parameter("sim", False)
+    node.declare_parameter("use_ground_truth", False)
+
+    use_sim = node.get_parameter("sim").get_parameter_value().bool_value
+    use_ground_truth = node.get_parameter("use_ground_truth").get_parameter_value().bool_value
+
+    topic_pose = "state/pose"
+    topic_twist = "auv_frame/dvl/velocity"
+
+    if use_sim and use_ground_truth: 
+        topic_pose = "/auv/ground_truth/pose"
+        topic_twist = "/auv/ground_truth/twist"
+
+    # ToBlackboard Subscribers
+    pose_subscriber = py_trees_ros.subscribers.ToBlackboard(
+        name="PoseSubscriber",
+        topic_name=topic_pose,
+        topic_type=geometry_msgs.msg.PoseStamped,
+        blackboard_variables={"sensors/pose": None},
+        initialise_variables={"sensors/pose": None},
+        qos_profile=qos,
+    )
+
+    twist_subscriber = py_trees_ros.subscribers.ToBlackboard(
+        name="TwistSubscriber",
+        topic_name=topic_twist,
+        topic_type=geometry_msgs.msg.TwistStamped,
+        blackboard_variables={"sensors/twist": None},
+        initialise_variables={"sensors/twist": None},
+        qos_profile=qos,
+    )
+
+    object_map_subscriber = py_trees_ros.subscribers.ToBlackboard(
+        name="ObjectMapSubscriber",
+        topic_name="/vision/object_map",
+        topic_type=auv_msgs.msg.VisionObjectArray,
+        blackboard_variables={"vision/object_map": None},
+        initialise_variables={"vision/object_map": None},
+        qos_profile=qos,
+    )
+
+    # Mission Sequence
+    missions = MissionSequence(
+        position_tolerance=pre_qual_positional_tolerance,
+        yaw_tolerance=pre_qual_yaw_tolerance,
+        hold_time=pre_qual_hold_time,
+        timeout=pre_qual_timeout,
+        orbit_pre_qual_yaw_tolerance_scale=orbit_pre_qual_yaw_tolerance_scale,
+        orbit_pre_qual_positional_tolerance_scale=orbit_pre_qual_positional_tolerance_scale,
+        orbit_pre_qual_hold_time_initial=orbit_pre_qual_hold_time_initial,
+        orbit_pre_qual_hold_time_segments=orbit_pre_qual_hold_time_segments
+    )
+
+    # Add children to root
+    root.add_children([pose_subscriber, twist_subscriber, object_map_subscriber, missions])
+
+    # Create the behaviour tree and setup
+    tree = py_trees_ros.trees.BehaviourTree(root=root, unicode_tree_debug=True)
+    tree.setup(node=node, shared_nav_client=nav_client, timeout=15.0)
+
+    # Setup ticking timer on the tree's node
+    tree.tick_tock(period_ms=int(1000.0 / tick_rate))
+
+    # Spin the action client in a parallel executor thread
+    executor = MultiThreadedExecutor(num_threads=4)
+    executor.add_node(nav_client)
+
+    executor_thread = threading.Thread(target=executor.spin, daemon=True)
+    executor_thread.start()
+
+    node.get_logger().info(f"{green_text}Yaw Behaviour Tree Node Initialized{default_text}")
+
+    try:
+        rclpy.spin(tree.node)
+    except KeyboardInterrupt:
+        node.get_logger().info("Shutting down yaw BT node")
+    finally:
+        tree.shutdown()
+        rclpy.try_shutdown()
 
 if __name__ == "__main__":
     main()

@@ -25,19 +25,27 @@ class MissionSequence(py_trees.composites.Sequence):
     """
     This PyTrees Sequence is the root of the rectangle pre-qualification mission
     """
-    def __init__(self, node):
+    def __init__(self, 
+                 position_tolerance: float, 
+                 yaw_tolerance: float, 
+                 hold_time: float, 
+                 timeout: float, 
+                 orbit_pre_qual_yaw_tolerance_scale: float, 
+                 orbit_pre_qual_positional_tolerance_scale: float, 
+                 orbit_pre_qual_hold_time_initial: float, 
+                 orbit_pre_qual_hold_time_segments: float):
         super().__init__("MissionSequence", memory=False)
 
         # Build the full mission sequence
         all_missions_selector = py_trees.composites.Selector("All missions", memory=True)
 
-        pre_qual_rectangle = RectangleQualificationMission(node)
-        pre_qual_orbit = OrbitQualificationMission(node)
-        test_move_forward = TestMoveForwardBehaviour(node)
-        test_dive = TestDiveBehaviour(node)
-        test_yaw = TestYawBehaviour(node)
-        translation_rectangle = TranslationRectangleMission(node)
-        test_service_call = TestServiceCallBehaviour(node)
+        pre_qual_rectangle = RectangleQualificationMission(yaw_tolerance=yaw_tolerance, position_tolerance=position_tolerance, hold_time=hold_time, timeout=timeout)
+        pre_qual_orbit = OrbitQualificationMission(yaw_tolerance=yaw_tolerance, position_tolerance=position_tolerance, hold_time=hold_time, timeout=timeout, orbit_pre_qual_yaw_tolerance_scale=orbit_pre_qual_yaw_tolerance_scale, orbit_pre_qual_positional_tolerance_scale=orbit_pre_qual_positional_tolerance_scale, orbit_pre_qual_hold_time_initial=orbit_pre_qual_hold_time_initial, orbit_pre_qual_hold_time_segments=orbit_pre_qual_hold_time_segments)
+        test_move_forward = TestMoveForwardBehaviour(position_tolerance=position_tolerance, hold_time=hold_time, timeout=timeout)
+        test_dive = TestDiveBehaviour(position_tolerance=position_tolerance, hold_time=hold_time, timeout=timeout)
+        test_yaw = TestYawBehaviour(yaw_tolerance=yaw_tolerance, hold_time=hold_time, timeout=timeout)
+        translation_rectangle = TranslationRectangleMission(position_tolerance=position_tolerance, hold_time=hold_time, timeout=timeout)
+        test_service_call = TestServiceCallBehaviour()
         
         mission_list = [pre_qual_orbit, 
             pre_qual_rectangle, 
@@ -48,7 +56,7 @@ class MissionSequence(py_trees.composites.Sequence):
             test_service_call]
 
         # Count the number of missions to put a boundary on user input
-        mission_choice = MissionChoiceBehaviour(node, name="Mission_Choice", mission_count=len(mission_list))
+        mission_choice = MissionChoiceBehaviour(name="Mission_Choice", mission_count=len(mission_list))
 
         all_missions_selector.add_children(mission_list)
         self.add_children([mission_choice, 
@@ -65,24 +73,23 @@ class MissionChoiceBehaviour(py_trees.behaviour.Behaviour):
     message_shown                    : boolean to track if the message prompting user input has been shown 
                                        to avoid spamming the console
     """
-    def __init__(self, node, name="MissionChoiceUser", mission_count=0):
+    def __init__(self, name="MissionChoiceUser", mission_count=0):
         """
 		Initializes the MissionChoiceUser behaviour. 
 
 		Inputs:
-			rclpy.Node: node -- The ROS2 node to use for logging and debugging purposes
 			str: name        -- The name of the behaviour (default: "userInputYaw")
 		"""
         super().__init__(name)
-        self.node = node
         self.blackboard = self.attach_blackboard_client(name=self.name)
         self.message_shown = False
         self.mission_count = mission_count
 	
-    def setup(self):
+    def setup(self, **kwargs):
         """
         Description: Sets up keys on the blackboard that this behaviour will use.
         """
+        self.node = kwargs['node']
         # Behaviour Tree bb setup in case of hardware setup or ros2 node setup
         self.blackboard.register_key(key="/mission_choice", access=py_trees.common.Access.WRITE)
         self.blackboard.register_key(key="/mission_choice", access=py_trees.common.Access.READ)

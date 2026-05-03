@@ -1,5 +1,5 @@
 general:
-  tick_rate       : 0.3
+  tick_rate       : 3.0
   sim             : true
   use_ground_truth: true
   pre_qual_yaw_tolerance: 0.5 # To figure out a minimum from the sensor's noise
