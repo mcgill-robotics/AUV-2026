@@ -19,27 +19,27 @@ IDVENDOR=$(echo $CMD_OUTPUT | grep -oP 'idVendor}=="\K[^"]+' | head -n 1)
 IDPRODUCT=$(echo $CMD_OUTPUT | grep -oP 'idProduct}=="\K[^"]+' | head -n 1)
 SERIALNO=$(echo $CMD_OUTPUT | grep -oP 'serial}=="\K[^"]+' | head -n 1)
 
-if [[ -e "$dev_name.rules" ]]; then
+if [[ -e "serial_rules/$dev_name.rules" ]]; then
     echo "WARN: Rules file $dev_name.rules already exists. Overwrite? [Y/n] "
     read tmp
     if [[ "$tmp" == "y" || "$tmp" == "Y" ]]; then
         if [[ $SUBSYSTEM == "video4linux" ]]; then
-            sudo echo "SUBSYSTEM==\"$SUBSYSTEM\", KERNEL==\"$KERNEL[0-9]*\", ATTRS{idVendor}==\"$IDVENDOR\", ATTRS{idProduct}==\"$IDPRODUCT\", SYMLINK+=\"$dev_name\"" > $dev_name.rules
+            sudo echo "SUBSYSTEM==\"$SUBSYSTEM\", KERNEL==\"$KERNEL[0-9]*\", ATTRS{idVendor}==\"$IDVENDOR\", ATTRS{idProduct}==\"$IDPRODUCT\", SYMLINK+=\"$dev_name\"" > serial_rules/$dev_name.rules
         else
-            sudo echo "SUBSYSTEM==\"$SUBSYSTEM\", KERNEL==\"$KERNEL[0-9]*\", ATTRS{idVendor}==\"$IDVENDOR\", ATTRS{idProduct}==\"$IDPRODUCT\", ATTRS{serial}==\"$SERIALNO\", SYMLINK+=\"$dev_name\"" > $dev_name.rules
+            sudo echo "SUBSYSTEM==\"$SUBSYSTEM\", KERNEL==\"$KERNEL[0-9]*\", ATTRS{idVendor}==\"$IDVENDOR\", ATTRS{idProduct}==\"$IDPRODUCT\", ATTRS{serial}==\"$SERIALNO\", SYMLINK+=\"$dev_name\"" > serial_rules/$dev_name.rules
         fi
     fi
 else
     if [[ $SUBSYSTEM == "video4linux" ]]; then
-        sudo echo "SUBSYSTEM==\"$SUBSYSTEM\", KERNEL==\"$KERNEL[0-9]*\", ATTRS{idVendor}==\"$IDVENDOR\", ATTRS{idProduct}==\"$IDPRODUCT\", SYMLINK+=\"$dev_name\"" > $dev_name.rules
+        sudo echo "SUBSYSTEM==\"$SUBSYSTEM\", KERNEL==\"$KERNEL[0-9]*\", ATTRS{idVendor}==\"$IDVENDOR\", ATTRS{idProduct}==\"$IDPRODUCT\", SYMLINK+=\"$dev_name\"" > serial_rules/$dev_name.rules
     else
-        sudo echo "SUBSYSTEM==\"$SUBSYSTEM\", KERNEL==\"$KERNEL[0-9]*\", ATTRS{idVendor}==\"$IDVENDOR\", ATTRS{idProduct}==\"$IDPRODUCT\", ATTRS{serial}==\"$SERIALNO\", SYMLINK+=\"$dev_name\"" > $dev_name.rules
+        sudo echo "SUBSYSTEM==\"$SUBSYSTEM\", KERNEL==\"$KERNEL[0-9]*\", ATTRS{idVendor}==\"$IDVENDOR\", ATTRS{idProduct}==\"$IDPRODUCT\", ATTRS{serial}==\"$SERIALNO\", SYMLINK+=\"$dev_name\"" > serial_rules/$dev_name.rules
     fi
 fi
 
 echo "Copy $dev_name.rules file to /etc/udev/rules.d (requires sudo)? [Y/n] "
 read tmp
 if [[ "$tmp" == "y" || "$tmp" == "Y" ]]; then
-    sudo cp $dev_name.rules /etc/udev/rules.d/
+    sudo cp serial_rules/$dev_name.rules /etc/udev/rules.d/
     sudo udevadm control --reload-rules && sudo service udev restart && sudo udevadm trigger
 fi
