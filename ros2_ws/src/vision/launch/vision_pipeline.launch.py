@@ -386,9 +386,9 @@ def generate_launch_description():
     launch_description.add_action(auv_to_camera_center_tf)
     launch_description.add_action(camera_center_to_detection_tf)
     launch_description.add_action(detection_to_optical_tf)
-    launch_description.add_action(front_cam_enhancement_node)
+    # launch_description.add_action(front_cam_enhancement_node)
     # launch_description.add_action(down_cam_enhancement_node)
-    # launch_description.add_action(front_detection_node)
+    launch_description.add_action(front_detection_node)
     launch_description.add_action(down_detection_node)
     launch_description.add_action(object_map_node)
     
