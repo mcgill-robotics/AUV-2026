@@ -100,7 +100,7 @@ class HealthMonitor(ABC):
         """
         pass
     
-    def assign_status_to_updater(self, function_name:str,get_status: Callable[[], tuple[int, str]],get_details: Callable[[], dict[str, str]] | None = None
+    def assign_status_to_updater(self, function_name:str,get_status: Callable[[], tuple[bytes, str]],get_details: Callable[[], dict[str, str]] | None = None
 ) -> None:
         """
         Helper function to assign a status to the diagnostics updater, which in turn will publish the status to the /diagnostics topic. This is used in sensor callbacks to update the status of the sensor based on conditions specific to that sensor.
