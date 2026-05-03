@@ -74,6 +74,8 @@ ros2 service call /image_collection/toggle_front_collection auv_msgs/srv/Automat
 # Stop automatic front collection
 ros2 service call /image_collection/toggle_front_collection auv_msgs/srv/AutomaticCapture "{data: false, time_interval: 0.0}"
 
+# This command securely copies all files from the remote Jetson's front camera data folder into your current local directory.
 scp jetson@ubuntu.local:~/AUV-2026/data_front_cam/* .
+
 ```
 
