@@ -328,7 +328,7 @@ class MissionCompleteBehaviour(py_trees.behaviour.Behaviour):
                 """
                 self.node.get_logger().info(f"Mission Completed! {self.blackboard.mission_choice}")
                 self.blackboard.mission_choice = None
-                return py_trees.common.Status.RUNNING
+                return py_trees.common.Status.SUCCESS
         
 
 class TimerBehaviour(py_trees.behaviour.Behaviour):

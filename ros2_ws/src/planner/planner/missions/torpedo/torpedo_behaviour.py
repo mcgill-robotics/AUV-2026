@@ -16,7 +16,6 @@ class Action(py_trees.behaviour.Behaviour):
 
     def update(self):
         self.logger.debug(f"Action::update {self.name}")
-        sleep(1)
         return py_trees.common.Status.SUCCESS
 
     def terminate(self, new_status):
@@ -34,7 +33,6 @@ class Condition(py_trees.behaviour.Behaviour):
 
     def update(self):
         self.logger.debug(f"Condition::update {self.name}")
-        sleep(1)
         return py_trees.common.Status.SUCCESS
 
     def terminate(self, new_status):
