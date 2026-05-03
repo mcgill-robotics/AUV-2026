@@ -367,11 +367,6 @@ def generate_launch_description():
         ],
         ros_arguments=["--ros-args", "--log-level", default_config["object_map"]["log_level"]]
     )
-    # wait 3 seconds before launching node to ensure zed wrapper is able to open and stream on port
-    object_map_node = TimerAction(
-        period=3.0,
-        actions=[object_map_node]
-    )
     
     launch_description = LaunchDescription()
     launch_description.add_action(sim_arg)

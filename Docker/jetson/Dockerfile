@@ -315,7 +315,7 @@ RUN pip install --no-cache-dir --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} "nu
     roboflow albumentations pandas \
     rfdetr supervision pytorch_lightning pycocotools faster-coco-eval onnx onnxruntime-gpu \
     inference-models "inference-models[torch-jp6-cu126,onnx-jp6-cu126]" transforms3d && \
-    pip install --no-cache-dir --ignore-install --upgrade typing_extensions
+    pip install --no-cache-dir --ignore-install --upgrade typing_extensions transforms3d
 
 # Install ZED Python API from source
 RUN git clone -b v${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}.${ZED_SDK_PATCH} https://github.com/stereolabs/zed-python-api.git /tmp/zed-python-api && \
