@@ -9,13 +9,14 @@ ros2 launch telemetry dashboard.launch.py
 
 Import layouts from `foxglove/` folder in Foxglove Studio (File → Import Layout):
 
-| Layout | Purpose |
-|--------|---------|
-| `mission_control.json` | **Competition**: 3D scene, tabbed cameras, logs, and health status |
-| `sensors.json` | **Sensor Validation**: Tabbed quadrants for IMU, Depth, DVL (Velocity/Odom), and State (Raw/3D) |
-| `controls.json` | **PID Tuning**: Stacked Depth/Attitude plots, Control Efforts, and Tabbed Propulsion (Forces/PWM) |
-| `teleop.json` | **Manual Control**: 3D visualizer + tabs for Teleop (Wrench), Thrusters (PWM), and Setpoints |
-| `perception_debug.json` | **Vision**: Maximized top-down 3D scene + tabbed debug images (YOLO, Depth, Ref) |
+| Layout                   | Purpose                                                                                           |
+| ------------------------ | ------------------------------------------------------------------------------------------------- |
+| `mission_control.json`   | **Competition**: 3D scene, tabbed cameras, logs, and health status                                |
+| `sensors.json`           | **Sensor Validation**: Tabbed quadrants for IMU, Depth, DVL (Velocity/Odom), and State (Raw/3D)   |
+| `controls.json`          | **PID Tuning**: Stacked Depth/Attitude plots, Control Efforts, and Tabbed Propulsion (Forces/PWM) |
+| `teleop.json`            | **Manual Control**: 3D visualizer + tabs for Teleop (Wrench), Thrusters (PWM), and Setpoints      |
+| `perception_debug.json`  | **Vision**: Maximized top-down 3D scene + tabbed debug images (YOLO, Depth, Ref)                  |
+| `electrical_status.json` | **Electrical**: Real-time monitoring of battery levels, PWM, and raw sensor depth                 |
 
 ## Topic Configuration
 
