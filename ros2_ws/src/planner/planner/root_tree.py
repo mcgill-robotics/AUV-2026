@@ -74,8 +74,8 @@ def main():
         name="PoseSubscriber",
         topic_name=topic_pose,
         topic_type=geometry_msgs.msg.PoseStamped,
-        blackboard_variables={"sensors/pose": None},
-        initialise_variables={"sensors/pose": None},
+        blackboard_variables={"/sensors/pose": None},
+        initialise_variables={"/sensors/pose": None},
         qos_profile=qos,
     )
 
@@ -83,8 +83,8 @@ def main():
         name="TwistSubscriber",
         topic_name=topic_twist,
         topic_type=geometry_msgs.msg.TwistStamped,
-        blackboard_variables={"sensors/twist": None},
-        initialise_variables={"sensors/twist": None},
+        blackboard_variables={"/sensors/twist": None},
+        initialise_variables={"/sensors/twist": None},
         qos_profile=qos,
     )
 
@@ -92,8 +92,8 @@ def main():
         name="ObjectMapSubscriber",
         topic_name="/vision/object_map",
         topic_type=auv_msgs.msg.VisionObjectArray,
-        blackboard_variables={"vision/object_map": None},
-        initialise_variables={"vision/object_map": None},
+        blackboard_variables={"/vision/object_map": None},
+        initialise_variables={"/vision/object_map": None},
         qos_profile=qos,
     )
 

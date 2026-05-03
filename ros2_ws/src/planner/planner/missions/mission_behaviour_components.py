@@ -184,13 +184,13 @@ class BasicTriggerServiceBehaviour(py_trees.behaviour.Behaviour):
             Description: Sets up keys on the blackboard that this behaviour will use.
             """
             self.node = kwargs['node']
-            self.node.service_client = self.node.create_client(Trigger, self.service_name)
+            self.service_client = self.node.create_client(Trigger, self.service_name)
             # FIND A BETTER WAY TO DO THIS
             
             # Check if the service is available, if not log an error and raise an exception
-            #if not self.node.service_client.wait_for_service(timeout_sec=2.0):
+            #if not self.service_client.wait_for_service(timeout_sec=2.0):
             #    self.node.get_logger().error(f"[{self.name}] Service not available.")
-            #    raise RuntimeError(f"Service {self.node.service_client.srv_name} not available.")
+            #    raise RuntimeError(f"Service {self.service_client.srv_name} not available.")
 
 
         def initialise(self) -> None:
@@ -221,7 +221,7 @@ class BasicTriggerServiceBehaviour(py_trees.behaviour.Behaviour):
             if not self.sent_service_request:
                 self.node.get_logger().info(f"[{self.name}] Sending service request.")
                 request = Trigger.Request()
-                self.future = self.node.service_client.call_async(request)
+                self.future = self.service_client.call_async(request)
                 self.sent_service_request = True
                 return py_trees.common.Status.RUNNING
             

@@ -30,7 +30,7 @@ class TestMoveForwardBehaviour(py_trees.composites.Sequence):
         4: Basic Dive
         5: Basic Yaw
         """
-        mission_choice_check = MissionChoiceCheckBehaviour(name="Test Move Forward", choice=3)
+        mission_choice_check = MissionChoiceCheckBehaviour(name="Check Move Forward", choice=3)
 
         # Build the full mission sequence
         # 1. Move Forward

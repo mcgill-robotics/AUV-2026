@@ -4,11 +4,11 @@ from time import sleep
 
 TORPEDO_COUNT = 2
 
-class Action(pytrees.behaviour.Behaviour):
+class Action(py_trees.behaviour.Behaviour):
     def __init__(self, name):
         super(Action, self).__init__(name)
 
-    def setup(self):
+    def setup(self, **kwargs):
         self.logger.debug(f"Action::setup {self.name}")
 
     def initialise(self):
@@ -22,11 +22,11 @@ class Action(pytrees.behaviour.Behaviour):
     def terminate(self, new_status):
         self.logger.debug(f"Action::terminate {self.name} to {new_status}")
 
-class Condition(pytrees.behaviour.Behaviour):
+class Condition(py_trees.behaviour.Behaviour):
     def __init__(self, name):
         super(Condition, self).__init__(name)
 
-    def setup(self):
+    def setup(self, **kwargs):
         self.logger.debug(f"Condition::setup {self.name}")
 
     def initialise(self):
@@ -113,7 +113,8 @@ class TorpedoBehaviourTree:
             ]
         )
 
-    def tick_tree()
+    def tick_tree(self):
+        pass
 
     # This is the first node in the torpedo BT
     def node_highest_pts(self)->py_trees.composites.Sequence: # rename this to something better

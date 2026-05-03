@@ -30,7 +30,7 @@ class TestYawBehaviour(py_trees.composites.Sequence):
         4: Basic Dive
         5: Basic Yaw
         """
-        mission_choice_check = MissionChoiceCheckBehaviour(name="Test Yaw", choice=5)
+        mission_choice_check = MissionChoiceCheckBehaviour(name="Check Yaw Test", choice=5)
 
         # Build the full mission sequence
         # 1. Rotate 180 deg Yaw

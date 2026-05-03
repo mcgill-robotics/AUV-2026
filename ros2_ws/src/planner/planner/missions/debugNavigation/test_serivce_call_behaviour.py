@@ -21,7 +21,7 @@ class TestServiceCallBehaviour(py_trees.composites.Sequence):
         super().__init__("Reset Dead Reckoning", memory=True)
 
         # 0 Check if user chose this mission
-        mission_choice_check = MissionChoiceCheckBehaviour(name="Reset Dead Reckoning", choice=7)
+        mission_choice_check = MissionChoiceCheckBehaviour(name="Check Reset Dead Reckoning", choice=7)
 
         # 1 Reset dead reckoning 
         reset_dr = BasicTriggerServiceBehaviour(name="Reset Dead Reckoning", service_name="reset_dead_reckoning")
