@@ -83,7 +83,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-robot-localization \
     ros-${ROS_DISTRO}-nmea-msgs \
     ros-${ROS_DISTRO}-marine-sensor-msgs \
-    ros-${ROS_DISTRO}-marine-acoustic-msgs \
     ros-${ROS_DISTRO}-vision-msgs \
     # Image & Transport
     ros-${ROS_DISTRO}-image-transport \
