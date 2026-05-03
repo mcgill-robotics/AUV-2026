@@ -3,6 +3,7 @@
 
 
 ObjectTracker::ObjectTracker(
+    const std::unordered_map<std::string, int>& max_per_class,
     float min_new_track_distance,
     float gating_threshold,
     int min_hits,
@@ -14,6 +15,7 @@ ObjectTracker::ObjectTracker(
 ) {
     this->tracks = std::vector<Track>();
     this->matches = std::vector<std::pair<size_t, size_t>>();
+    this->max_per_class = max_per_class;
 
     this->min_new_track_distance = min_new_track_distance;
     this->gating_threshold = gating_threshold;
@@ -311,7 +313,7 @@ void ObjectTracker::update_matched_tracks(
         }
 
         
-        if (track.state == TrackState::TENTATIVE && track.consecutive_hits >= min_hits) {
+        if (track.state == TrackState::TENTATIVE && track.hits >= min_hits) {
             track.state = TrackState::CONFIRMED;
         }
     }
@@ -344,7 +346,7 @@ void ObjectTracker::delete_dead_tracks() {
         }
         
         // tentative for too long 
-        if (it->state == TrackState::TENTATIVE && it->total_updates > min_hits + tent_init_buffer) {
+        if (it->state == TrackState::TENTATIVE && it->total_updates - it->hits > tent_init_buffer) {
             delete_track = true;
         }
 
@@ -374,8 +376,8 @@ void ObjectTracker::create_new_tracks(
         }
 
         // If we already have number of tracks for that class, skip creation
-        if (MAX_PER_CLASS.find(label) != MAX_PER_CLASS.end()) {
-            if (current_count >= MAX_PER_CLASS[label]) {
+        if (max_per_class.find(label) != max_per_class.end()) {
+            if (max_per_class[label] != -1 && current_count >= max_per_class[label]) {
                 continue;
             }
         }
