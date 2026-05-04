@@ -21,8 +21,29 @@ def generate_launch_description():
         default_value="true",
         description="Launch vision nodes",
     )
+    
+    controls_condition = DeclareLaunchArgument(
+        "controls",
+        default_value="true",
+        description="Launch controls nodes",
+    )
+        
+    sensors_condition = DeclareLaunchArgument(
+        "sensors",
+        default_value="true",
+        description="Launch sensors nodes",
+    )
+    
+    propulsion_condition = DeclareLaunchArgument(
+        "propulsion",
+        default_value="true",
+        description="Launch propulsion nodes",
+    )
 
     vision = LaunchConfiguration("vision")
+    controls = LaunchConfiguration("controls")
+    sensors = LaunchConfiguration("sensors")
+    propulsion = LaunchConfiguration("propulsion")
 
     sensors_pkg_path = get_package_share_directory("sensors")
     propulsion_pkg_path = get_package_share_directory("propulsion")
@@ -38,19 +59,34 @@ def generate_launch_description():
     ros_tcp_endpoint_launch_file = os.path.join(ros_tcp_endpoint_pkg_path, "launch", "endpoint.py")
     telemetry_launch_file = os.path.join(telemetry_pkg_path, "launch", "dashboard.launch.py")
 
-    launch_sensors = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(sensors_launch_file),
-        launch_arguments={"sim": sim}.items(),
+    launch_sensors = GroupAction(
+        condition=IfCondition(sensors),
+        actions=[
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(sensors_launch_file),
+                launch_arguments={"sim": sim}.items(),
+            )
+        ],
     )
 
-    launch_propulsion = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(propulsion_pkg_file),
-        launch_arguments={"sim": sim}.items(),
+    launch_propulsion = GroupAction(
+        condition=IfCondition(propulsion),
+        actions=[
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(propulsion_pkg_file),
+                launch_arguments={"sim": sim}.items(),
+            )
+        ],
     )
 
-    launch_controls = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(controls_launch_file),
-        launch_arguments={"sim": sim}.items(),
+    launch_controls = GroupAction(
+        condition=IfCondition(controls),
+        actions=[
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(controls_launch_file),
+                launch_arguments={"sim": sim}.items(),
+            )
+        ],
     )
 
     launch_vision = GroupAction(
@@ -79,6 +115,9 @@ def generate_launch_description():
     return LaunchDescription([
         sim_condition,
         vision_condition,
+        controls_condition,
+        sensors_condition,
+        propulsion_condition,
         launch_sensors,
         launch_propulsion,
         launch_controls,
