@@ -83,31 +83,6 @@ def generate_launch_description():
             "The log type for the zed wrapper node. Can be set to 'log' to enable logging to file, 'screen' to log to console, or 'both' to log to both."
         )
     )
-
-    # zed_wrapper_path = get_package_share_directory("zed_wrapper")
-    # zed_real_wrapper_launch = IncludeLaunchDescription(
-    #     PythonLaunchDescriptionSource(os.path.join(zed_wrapper_path, "launch", "zed_camera.launch.py")),
-    #     launch_arguments={
-    #         "camera_model": "zed2i",
-    #         "ros_params_override_path": PathJoinSubstitution([vision_dir, "config", "zed_wrapper_real.yaml"]),
-    #         "node_log_type": LaunchConfiguration("zed_wrapper_log_type")
-    #     }.items(),
-    #     condition=UnlessCondition(LaunchConfiguration("sim"))
-    # )
-
-    # zed_sim_wrapper_launch = IncludeLaunchDescription(
-    #     PythonLaunchDescriptionSource(os.path.join(zed_wrapper_path, "launch", "zed_camera.launch.py")),
-    #     launch_arguments={
-    #         "camera_model": "zedx",
-    #         "sim_mode": "true",
-    #         "sim_address": default_config["general"]["sim_ip"],
-    #         "sim_port": str(default_config["general"]["sim_port"]),
-    #         "ros_params_override_path": PathJoinSubstitution([vision_dir, "config", "zed_wrapper_unity_sim.yaml"]),
-    #         "use_sim_time": LaunchConfiguration("sim"),
-    #         "node_log_type": LaunchConfiguration("zed_wrapper_log_type")
-    #     }.items(),
-    #     condition=IfCondition(LaunchConfiguration("sim"))
-    # )
     
     compressed_launch_config = LaunchConfiguration("compressed")
     front_cam_topic = get_compressed_topic(default_config["camera"]["front_cam_topic"], compressed_launch_config)
@@ -297,53 +272,42 @@ def generate_launch_description():
         ],
     )
     
-    down_video_device_arg = DeclareLaunchArgument('down_video_device', default_value='/dev/video0')
-    down_width_arg        = DeclareLaunchArgument('down_image_width', default_value='320')
-    down_height_arg       = DeclareLaunchArgument('down_image_height', default_value='240')
-    down_fps_arg          = DeclareLaunchArgument('down_framerate', default_value='30.0')
-    down_pixfmt_arg       = DeclareLaunchArgument('down_pixel_format', default_value='mjpeg2rgb') 
-    down_frame_id_arg     = DeclareLaunchArgument('down_camera_frame_id', default_value='sensors/down_cam')
-
-    down_cam_publisher = Node(
-        package='usb_cam',
-        executable='usb_cam_node_exe',
-        name='down_cam_driver',
-        output='screen',
-        parameters=[{
-            'video_device':    LaunchConfiguration('down_video_device'),
-            'image_width':     LaunchConfiguration('down_image_width'),
-            'image_height':    LaunchConfiguration('down_image_height'),
-            'framerate':       LaunchConfiguration('down_framerate'),
-            'pixel_format':    LaunchConfiguration('down_pixel_format'),
-            'camera_frame_id': LaunchConfiguration('down_camera_frame_id'),
-            'io_method':       'mmap',
-            
-        }],
-        remappings=[
-            ('image_raw',  '/down_cam/image_raw'),
-            ('camera_info','/down_cam/camera_info'),
-        ],
-    )
-    
     down_detection_node = Node(
         package='vision',
         executable='down_cam_object_detection.py',
         name='down_cam_object_detection',
         parameters=[
             {
-                'input_topic': object_detection_down_input,
                 'detection_topic': default_config["object_detection"]["down_cam"]["detection_topic"],
                 'model_path': PathJoinSubstitution([vision_dir, LaunchConfiguration("down_model_relative_path")]),
                 'class_names': default_config["object_detection"]["down_cam"]["class_names"],
                 'queue_size': default_config["object_detection"]["down_cam"]["queue_size"],
                 'publish_annotated_image': default_config["object_detection"]["down_cam"]["publish_annotated_image"],
                 'publish_annotated_every_n_frames': default_config["object_detection"]["down_cam"]["publish_annotated_every_n_frames"],
-
                 'model_detection_threshold': default_config["object_detection"]["down_cam"]["model_detection_threshold"],
+
+                # Camera hardware (direct capture, no usb_cam_node needed)
+                'video_device': default_config["object_detection"]["down_cam"]["video_device"],
+                'image_width': default_config["object_detection"]["down_cam"]["image_width"],
+                'image_height': default_config["object_detection"]["down_cam"]["image_height"],
+                'camera_fps': default_config["object_detection"]["down_cam"]["camera_fps"],
+                'camera_frame_id': default_config["object_detection"]["down_cam"]["camera_frame_id"],
+
+                # V4L2 image controls
+                'brightness': default_config["object_detection"]["down_cam"]["brightness"],
+                'contrast': default_config["object_detection"]["down_cam"]["contrast"],
+                'saturation': default_config["object_detection"]["down_cam"]["saturation"],
+                'hue': default_config["object_detection"]["down_cam"]["hue"],
+                'sharpness': default_config["object_detection"]["down_cam"]["sharpness"],
+                'gamma': default_config["object_detection"]["down_cam"]["gamma"],
+                'gain': default_config["object_detection"]["down_cam"]["gain"],
+                'auto_white_balance': default_config["object_detection"]["down_cam"]["auto_white_balance"],
+                'white_balance_temperature': default_config["object_detection"]["down_cam"]["white_balance_temperature"],
+                'power_line_frequency': default_config["object_detection"]["down_cam"]["power_line_frequency"],
+
                 'collection_dir': default_config["object_detection"]["down_cam"]["collection_dir"],
                 'collection_interval_seconds': default_config["object_detection"]["down_cam"]["collection_interval_seconds"],
                 'use_sim_time': LaunchConfiguration("sim"),
-                'compressed': LaunchConfiguration("compressed"),
                 'log_level': default_config["object_detection"]["down_cam"]["log_level"],
             }
         ],
@@ -404,13 +368,7 @@ def generate_launch_description():
     launch_description.add_action(front_model_arg)
     launch_description.add_action(down_model_arg)
     
-    launch_description.add_action(down_video_device_arg)
-    launch_description.add_action(down_width_arg)
-    launch_description.add_action(down_height_arg)
-    launch_description.add_action(down_fps_arg)
-    launch_description.add_action(down_pixfmt_arg)
-    launch_description.add_action(down_frame_id_arg)
-    
+
     # launch_description.add_action(zed_wrapper_log_type_arg)
     # launch_description.add_action(zed_real_wrapper_launch)
     # launch_description.add_action(zed_sim_wrapper_launch)
@@ -419,8 +377,7 @@ def generate_launch_description():
     launch_description.add_action(detection_to_optical_tf)
     # launch_description.add_action(front_cam_enhancement_node)
     # launch_description.add_action(down_cam_enhancement_node)
-    launch_description.add_action(front_detection_node)# 
-    # launch_description.add_action(down_cam_publisher)
+    launch_description.add_action(front_detection_node)
     # launch_description.add_action(down_detection_node)
     launch_description.add_action(object_map_node)
 

@@ -124,6 +124,29 @@ object_detection:
     # Logging
     log_level: debug
   down_cam:
+    # Camera hardware (direct capture via cv2.VideoCapture, no usb_cam_node needed)
+    # ELP-USB500W02M-AF60 (5MP OV5640, autofocus, 60° FOV)
+    # Available MJPEG modes:   640x480@30  800x600@30  1024x768@30  1280x720@30  1280x1024@15  1600x1200@15  1920x1080@15  2592x1944@15
+    # Available YUY2 modes:    640x480@30  800x600@30  1024x768@15  1280x720@7.5 1280x1024@7.5 1600x1200@3   1920x1080@3   2592x1944@3
+    video_device: "/dev/video0"
+    image_width: 640
+    image_height: 480
+    camera_fps: 30
+    camera_frame_id: "sensors/down_cam"
+
+    # V4L2 image controls (ELP OV5640)
+    # Run `v4l2-ctl -l` on the Jetson with the camera plugged in to verify ranges
+    brightness: 4          # [0..8]   default 4
+    contrast: 4            # [0..8]   default 4
+    saturation: 4          # [0..8]   default 4
+    hue: 0                 # [0..11]  default 0
+    sharpness: 0           # [0..8]   default 0
+    gamma: 100             # [1..500] default 100
+    gain: 4                # [0..8]   default 4
+    auto_white_balance: true          # default true; when true, red_balance/blue_balance are ignored
+    white_balance_temperature: 4600   # [2800..6500] step 100; only used when auto_white_balance is false
+    power_line_frequency: 1           # 0=disabled 1=50Hz 2=60Hz; anti-flicker for artificial lighting
+
     enhanced_topic: /vision/down_cam/image_enhanced
     detection_topic: /vision/down_cam/detections
     model_detection_threshold: 0.40
