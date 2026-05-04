@@ -96,3 +96,29 @@ Multiple build flags are available:
 -  `./build.sh -p <package_name>` : Build a specific package and its required dependencies (as determined by colcon)
 
 Since the debug `-d` build is single-threaded for easier debugging, it may take very long to compile. As such, it should only be used in tandem with the `-p` flag to build a specific package. A typical debug build command would be `./build.sh -cd -p <package_name>`. Note that the `-c` will only clean the build artifacts for the specified package and its dependencies.
+
+## 3. Running the AUV
+
+To launch the entire AUV software stack, use the `bringup.launch.py` file:
+
+```bash
+ros2 launch bringup bringup.launch.py
+```
+
+Currently, this bringup script launches the following subsystems:
+- **Sensors** (`sensors.launch.py`): Aggregates and processes raw data from the IMU, Depth Sensor, and DVL.
+- **Propulsion** (`propulsion.launch.py`): Handles thruster allocation and hardware communication.
+- **Controls** (`controls.launch.py`): Manages the vehicle's PID controllers and superimposer.
+- **Vision** (`vision_pipeline.launch.py`): Runs the object detection, point cloud mapping, and TF pipeline.
+- **Telemetry** (`dashboard.launch.py`): Launches the Foxglove bridge for remote monitoring and debugging.
+- **ROS TCP Endpoint** (`endpoint.py`): Facilitates communication with the Unity Simulator (only when `sim:=true`).
+
+### Launch Options
+
+- `sim:=true|false` (default: `false`): Launch the AUV in simulation mode. *(Note: To set up and run the Unity simulator itself, please refer to the [auv-sim-unity repository](https://github.com/mcgill-robotics/auv-sim-unity).)*
+- `vision:=true|false` (default: `true`): Launch the vision pipeline. Set this to `false` when running the simulation on a machine without an NVIDIA GPU, as the simulator will directly provide the object map.
+
+**Example: Running simulation without vision**
+```bash
+ros2 launch bringup bringup.launch.py sim:=true vision:=false
+```

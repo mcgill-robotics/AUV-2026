@@ -16,6 +16,14 @@ def generate_launch_description():
 
     sim = LaunchConfiguration("sim")
 
+    vision_condition = DeclareLaunchArgument(
+        "vision",
+        default_value="true",
+        description="Launch vision nodes",
+    )
+
+    vision = LaunchConfiguration("vision")
+
     sensors_pkg_path = get_package_share_directory("sensors")
     propulsion_pkg_path = get_package_share_directory("propulsion")
     controls_pkg_path = get_package_share_directory("controls")
@@ -45,9 +53,14 @@ def generate_launch_description():
         launch_arguments={"sim": sim}.items(),
     )
 
-    launch_vision = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(vision_launch_file),
-        launch_arguments={"sim": sim}.items(),
+    launch_vision = GroupAction(
+        condition=IfCondition(vision),
+        actions=[
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(vision_launch_file),
+                launch_arguments={"sim": sim}.items(),
+            )
+        ],
     )
 
     launch_telemetry = IncludeLaunchDescription(
@@ -65,6 +78,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         sim_condition,
+        vision_condition,
         launch_sensors,
         launch_propulsion,
         launch_controls,
