@@ -14,6 +14,15 @@ ARG UBUNTU_RELEASE=22
 # FROM ${BASE_IMAGE}
 FROM tuttelikz/opencv-cuda:4.10.0-cuda12.6.3-arch8.9-ubuntu22.04
 
+# Get uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+ENV UV_SYSTEM_PYTHON=1
+
+# Standard CUDA paths
+ENV CUDA_ROOT=/usr/local/cuda
+ENV PATH=${CUDA_ROOT}/bin:${PATH}
+ENV CUDA_INC_DIR=${CUDA_ROOT}/include
+ENV LD_LIBRARY_PATH=${CUDA_ROOT}/lib64:${LD_LIBRARY_PATH}
 
 # all arguments after pulling from base image are flushed, so we re-declare them
 ARG ZED_SDK_MAJOR=5
@@ -215,35 +224,33 @@ RUN cd /tmp && ./${ZED_SDK_RUN} silent skip_cuda skip_python && \
 # Fake opencv-python
 RUN mkdir -p /tmp/fake_cv && \
         echo 'from setuptools import setup; setup(name="opencv-python", version="4.10.0", packages=[])' > /tmp/fake_cv/setup.py && \
-        pip3 install --no-cache-dir /tmp/fake_cv && \
+        uv pip install /tmp/fake_cv && \
         rm -rf /tmp/fake_cv
 
 # Fake opencv-contrib-python
 RUN mkdir -p /tmp/fake_cv_contrib && \
         echo 'from setuptools import setup; setup(name="opencv-contrib-python", version="4.10.0", packages=[])' > /tmp/fake_cv_contrib/setup.py && \
-        pip3 install --no-cache-dir /tmp/fake_cv_contrib && \
+        uv pip install /tmp/fake_cv_contrib && \
         rm -rf /tmp/fake_cv_contrib
 
 # Fake opencv-python-headless
 RUN mkdir -p /tmp/fake_cv_headless && \
         echo 'from setuptools import setup; setup(name="opencv-python-headless", version="4.10.0", packages=[])' > /tmp/fake_cv_headless/setup.py && \
-        pip3 install --no-cache-dir /tmp/fake_cv_headless && \
+        uv pip install /tmp/fake_cv_headless && \
         rm -rf /tmp/fake_cv_headless
 
 # Install actual requirements
 # Ensure Docker/dev/constraints.txt DOES NOT contain opencv lines
 COPY Docker/dev/requirements.txt Docker/dev/constraints.txt /tmp/
-RUN --mount=type=cache,target=/root/.cache/pip \
-        pip3 install --ignore-installed -c /tmp/constraints.txt -r /tmp/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/uv \
+        uv pip install -c /tmp/constraints.txt -r /tmp/requirements.txt
 
 # Install inference-models with TRT10 extra for GPU-accelerated inference
-RUN pip3 install onnxruntime-gpu "inference-models[torch-cu126,onnx-cu12,trt10]" -c /tmp/constraints.txt
+RUN uv pip install onnxruntime-gpu "inference-models[torch-cu126,onnx-cu12,trt10]" -c /tmp/constraints.txt
 
 # Install ZED Python API from source
 RUN git clone -b v${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}.${ZED_SDK_PATCH} https://github.com/stereolabs/zed-python-api.git /tmp/zed-python-api && \
-        cd /tmp/zed-python-api/src && \
-        python3 -m pip install --no-deps . && \
-        cd /tmp && \
+        uv pip install -v --no-deps --no-build-isolation /tmp/zed-python-api/src && \
         rm -rf /tmp/zed-python-api
 
 ARG USERNAME=douglas

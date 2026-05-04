@@ -78,6 +78,10 @@ ENV PATH=${CUDA_ROOT}/bin:${PATH}
 ENV CUDA_INC_DIR=${CUDA_ROOT}/include
 ENV LD_LIBRARY_PATH=${CUDA_ROOT}/lib64:${LD_LIBRARY_PATH}
 
+# Set UV to system mode and use Jetpack index
+ENV UV_SYSTEM_PYTHON=1 \
+    UV_EXTRA_INDEX_URL=${PIP_INDEX_FOR_NON_NVIDIA}
+
 # Check that this SDK URL exists
 RUN if [ "$(curl -L -I "${ZED_SDK_URL}" -o /dev/null -s -w '%{http_code}\n' | head -n 1)" = "200" ]; then \
     echo "The URL points to something."; \
@@ -303,11 +307,6 @@ RUN mkdir -p tmp_cudss && cd tmp_cudss && \
     cp -a ${CUSPARSE_SOLVER_NAME}/include/* /usr/local/cuda/include/ && \
     cp -a ${CUSPARSE_SOLVER_NAME}/lib/* /usr/local/cuda/lib64/ && \
     rm -rf ${CUSPARSE_SOLVER_NAME} ${CUSPARSE_SOLVER_NAME}.tar.xz
-
-
-# Set UV to system mode and use your Jetpack index
-ENV UV_SYSTEM_PYTHON=1 \
-    UV_EXTRA_INDEX_URL=${PIP_INDEX_FOR_NON_NVIDIA}
 
 # Copy dependency lists
 COPY Docker/jetson/requirements.txt Docker/jetson/constraints.txt /tmp/
