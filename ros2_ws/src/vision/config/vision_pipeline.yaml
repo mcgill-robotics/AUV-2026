@@ -135,17 +135,29 @@ object_detection:
     camera_frame_id: "sensors/down_cam"
 
     # V4L2 image controls (ELP OV5640)
-    # Run `v4l2-ctl -l` on the Jetson with the camera plugged in to verify ranges
-    brightness: 4          # [0..8]   default 4
-    contrast: 4            # [0..8]   default 4
-    saturation: 4          # [0..8]   default 4
-    hue: 0                 # [0..11]  default 0
-    sharpness: 0           # [0..8]   default 0
-    gamma: 100             # [1..500] default 100
-    gain: 4                # [0..8]   default 4
-    auto_white_balance: true          # default true; when true, red_balance/blue_balance are ignored
-    white_balance_temperature: 4600   # [2800..6500] step 100; only used when auto_white_balance is false
-    power_line_frequency: 1           # 0=disabled 1=50Hz 2=60Hz; anti-flicker for artificial lighting
+    # Run `v4l2-ctl -d /dev/videoX --all` on the Jetson with the camera plugged in to verify ranges
+    # v4l2-ctl --list-devices 
+    # v4l2-ctl -d /dev/video2 --all
+    # v4l2-ctl -d /dev/video2 --list-formats-ext
+
+    brightness: 8              # [0..15]    default 8
+    contrast: 8                # [0..15]    default 8
+    saturation: 7              # [0..15]    default 7
+    hue: 0                     # [-10..10]  default 0
+    sharpness: 6               # [0..15]    default 6
+    gamma: 7                   # [1..10]    default 7
+    backlight_compensation: 0  # [0..1]     default 0
+    power_line_frequency: 2    # 0=disabled 1=50Hz 2=60Hz; default 2
+
+    # White balance
+    auto_white_balance: true             # default true; when true, white_balance_temperature is ignored
+    white_balance_temperature: 2800      # [2800..6500] step 1; only used when auto_white_balance is false
+
+    # Exposure & focus
+    auto_exposure: 3                     # 1=Manual 3=Aperture Priority (auto); default 3
+    exposure_time_absolute: 625          # [4..5000]  only used when auto_exposure is 1 (Manual); default 625
+    auto_focus: true                     # default true; when true, focus_absolute is ignored
+    focus_absolute: 16                   # [0..21]    only used when auto_focus is false; default 16
 
     enhanced_topic: /vision/down_cam/image_enhanced
     detection_topic: /vision/down_cam/detections

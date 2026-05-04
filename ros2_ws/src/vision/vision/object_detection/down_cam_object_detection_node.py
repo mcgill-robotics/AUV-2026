@@ -49,17 +49,21 @@ class DownCamObjectDetectorNode():
         self.node.declare_parameter('camera_fps', 30)
         self.node.declare_parameter('camera_frame_id', 'sensors/down_cam')
 
-        # ── V4L2 image controls (ELP OV5640) ─────────────────────
-        self.node.declare_parameter('brightness', 4)
-        self.node.declare_parameter('contrast', 4)
-        self.node.declare_parameter('saturation', 4)
+        # ── V4L2 image controls (HD USB Camera) ──────────────────
+        self.node.declare_parameter('brightness', 8)
+        self.node.declare_parameter('contrast', 8)
+        self.node.declare_parameter('saturation', 7)
         self.node.declare_parameter('hue', 0)
-        self.node.declare_parameter('sharpness', 0)
-        self.node.declare_parameter('gamma', 100)
-        self.node.declare_parameter('gain', 4)
+        self.node.declare_parameter('sharpness', 6)
+        self.node.declare_parameter('gamma', 7)
+        self.node.declare_parameter('backlight_compensation', 0)
+        self.node.declare_parameter('power_line_frequency', 2)
         self.node.declare_parameter('auto_white_balance', True)
-        self.node.declare_parameter('white_balance_temperature', 4600)
-        self.node.declare_parameter('power_line_frequency', 1)
+        self.node.declare_parameter('white_balance_temperature', 2800)
+        self.node.declare_parameter('auto_exposure', 3)
+        self.node.declare_parameter('exposure_time_absolute', 625)
+        self.node.declare_parameter('auto_focus', True)
+        self.node.declare_parameter('focus_absolute', 16)
 
         # ── Collection parameters ────────────────────────────────
         self.node.declare_parameter('collection_dir', '/tmp/down_cam_collection')
@@ -148,16 +152,21 @@ class DownCamObjectDetectorNode():
     # ──────────────────────────────────────────────────────────────
 
     # V4L2 control name → OpenCV CAP_PROP mapping
-    V4L2_CAMERA_CONTROLS = (
+    # Controls with a direct OpenCV constant are applied via cap.set();
+    # the rest are applied via v4l2-ctl subprocess.
+    V4L2_OPENCV_CONTROLS = (
         ("brightness",               cv2.CAP_PROP_BRIGHTNESS),
         ("contrast",                 cv2.CAP_PROP_CONTRAST),
         ("saturation",               cv2.CAP_PROP_SATURATION),
         ("hue",                      cv2.CAP_PROP_HUE),
         ("sharpness",                cv2.CAP_PROP_SHARPNESS),
         ("gamma",                    cv2.CAP_PROP_GAMMA),
-        ("gain",                     cv2.CAP_PROP_GAIN),
         ("auto_white_balance",       cv2.CAP_PROP_AUTO_WB),
         ("white_balance_temperature", cv2.CAP_PROP_WB_TEMPERATURE),
+        ("auto_focus",               cv2.CAP_PROP_AUTOFOCUS),
+        ("focus_absolute",           cv2.CAP_PROP_FOCUS),
+        ("auto_exposure",            cv2.CAP_PROP_AUTO_EXPOSURE),
+        ("exposure_time_absolute",   cv2.CAP_PROP_EXPOSURE),
     )
 
     def _open_camera(self) -> cv2.VideoCapture:
@@ -190,17 +199,26 @@ class DownCamObjectDetectorNode():
 
         applied = []
 
-        for param_name, cv_prop in self.V4L2_CAMERA_CONTROLS:
+        for param_name, cv_prop in self.V4L2_OPENCV_CONTROLS:
             param = self.node.get_parameter(param_name)
             if param.type_ == Parameter.Type.BOOL:
                 value = int(param.get_parameter_value().bool_value)
             else:
                 value = param.get_parameter_value().integer_value
 
-            # Skip manual WB temp when auto WB is enabled
+            # Skip manual white balance temperature when auto WB is on
             if param_name == "white_balance_temperature":
-                auto_wb = self.node.get_parameter('auto_white_balance').get_parameter_value().bool_value
-                if auto_wb:
+                if self.node.get_parameter('auto_white_balance').get_parameter_value().bool_value:
+                    continue
+
+            # Skip manual exposure when auto exposure is on (3 = Aperture Priority)
+            if param_name == "exposure_time_absolute":
+                if self.node.get_parameter('auto_exposure').get_parameter_value().integer_value == 3:
+                    continue
+
+            # Skip manual focus when autofocus is on
+            if param_name == "focus_absolute":
+                if self.node.get_parameter('auto_focus').get_parameter_value().bool_value:
                     continue
 
             ok = self.cap.set(cv_prop, value)
@@ -209,17 +227,21 @@ class DownCamObjectDetectorNode():
             else:
                 applied.append(f"{param_name}={value}")
 
-        # power_line_frequency has no OpenCV constant — apply via v4l2-ctl
-        plf = self.node.get_parameter('power_line_frequency').get_parameter_value().integer_value
-        try:
-            subprocess.run(
-                ["v4l2-ctl", "-d", self.video_device,
-                 "--set-ctrl", f"power_line_frequency={plf}"],
-                check=True, capture_output=True, timeout=5,
-            )
-            applied.append(f"power_line_frequency={plf}")
-        except Exception as e:
-            self.node.get_logger().warn(f"v4l2-ctl power_line_frequency failed: {e}")
+        # Controls without OpenCV constants — apply via v4l2-ctl
+        v4l2_only_controls = [
+            ("power_line_frequency", self.node.get_parameter('power_line_frequency').get_parameter_value().integer_value),
+            ("backlight_compensation", self.node.get_parameter('backlight_compensation').get_parameter_value().integer_value),
+        ]
+        for ctrl_name, ctrl_value in v4l2_only_controls:
+            try:
+                subprocess.run(
+                    ["v4l2-ctl", "-d", self.video_device,
+                     "--set-ctrl", f"{ctrl_name}={ctrl_value}"],
+                    check=True, capture_output=True, timeout=5,
+                )
+                applied.append(f"{ctrl_name}={ctrl_value}")
+            except Exception as e:
+                self.node.get_logger().warn(f"v4l2-ctl {ctrl_name} failed: {e}")
 
         self.node.get_logger().info(f"Applied camera controls: {', '.join(applied)}")
 
