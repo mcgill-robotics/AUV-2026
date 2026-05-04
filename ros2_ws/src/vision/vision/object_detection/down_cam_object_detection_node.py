@@ -104,8 +104,7 @@ class DownCamObjectDetectorNode():
             partial(toggle_collection_callback_util, self),
         )
 
-        # We always publish raw (uncompressed) since we own the capture
-        self.compressed = False
+        self.compressed = self.node.get_parameter('compressed').get_parameter_value().bool_value
         self.bridge = CvBridge()
 
         # ── Load model ───────────────────────────────────────────
