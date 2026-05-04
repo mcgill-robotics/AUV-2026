@@ -105,6 +105,8 @@ class DownCamObjectDetectorNode():
         )
 
         self.compressed = self.node.get_parameter('compressed').get_parameter_value().bool_value
+        input_format = CompressedImage if self.compressed else Image
+
         self.bridge = CvBridge()
 
         # ── Load model ───────────────────────────────────────────
@@ -125,7 +127,7 @@ class DownCamObjectDetectorNode():
         if self.publish_annotated_image:
             publish_topic = detection_topic + "/annotated"
             self.pub_annotated_image = self.node.create_publisher(
-                Image,
+                input_format,
                 publish_topic,
                 queue_size,
             )
