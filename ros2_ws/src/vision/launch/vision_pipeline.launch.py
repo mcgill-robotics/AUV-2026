@@ -297,6 +297,34 @@ def generate_launch_description():
         ],
     )
     
+    down_video_device_arg = DeclareLaunchArgument('down_video_device', default_value='/dev/video0')
+    down_width_arg        = DeclareLaunchArgument('down_image_width', default_value='320')
+    down_height_arg       = DeclareLaunchArgument('down_image_height', default_value='240')
+    down_fps_arg          = DeclareLaunchArgument('down_framerate', default_value='30.0')
+    down_pixfmt_arg       = DeclareLaunchArgument('down_pixel_format', default_value='mjpeg2rgb') 
+    down_frame_id_arg     = DeclareLaunchArgument('down_camera_frame_id', default_value='sensors/down_cam')
+
+    down_cam_publisher = Node(
+        package='usb_cam',
+        executable='usb_cam_node_exe',
+        name='down_cam_driver',
+        output='screen',
+        parameters=[{
+            'video_device':    LaunchConfiguration('down_video_device'),
+            'image_width':     LaunchConfiguration('down_image_width'),
+            'image_height':    LaunchConfiguration('down_image_height'),
+            'framerate':       LaunchConfiguration('down_framerate'),
+            'pixel_format':    LaunchConfiguration('down_pixel_format'),
+            'camera_frame_id': LaunchConfiguration('down_camera_frame_id'),
+            'io_method':       'mmap',
+            
+        }],
+        remappings=[
+            ('image_raw',  '/down_cam/image_raw'),
+            ('camera_info','/down_cam/camera_info'),
+        ],
+    )
+    
     down_detection_node = Node(
         package='vision',
         executable='down_cam_object_detection.py',
@@ -375,6 +403,14 @@ def generate_launch_description():
     launch_description.add_action(use_enhance_arg)
     launch_description.add_action(front_model_arg)
     launch_description.add_action(down_model_arg)
+    
+    launch_description.add_action(down_video_device_arg)
+    launch_description.add_action(down_width_arg)
+    launch_description.add_action(down_height_arg)
+    launch_description.add_action(down_fps_arg)
+    launch_description.add_action(down_pixfmt_arg)
+    launch_description.add_action(down_frame_id_arg)
+    
     # launch_description.add_action(zed_wrapper_log_type_arg)
     # launch_description.add_action(zed_real_wrapper_launch)
     # launch_description.add_action(zed_sim_wrapper_launch)
@@ -383,8 +419,9 @@ def generate_launch_description():
     launch_description.add_action(detection_to_optical_tf)
     # launch_description.add_action(front_cam_enhancement_node)
     # launch_description.add_action(down_cam_enhancement_node)
-    launch_description.add_action(front_detection_node)
-    launch_description.add_action(down_detection_node)
+    launch_description.add_action(front_detection_node)# 
+    # launch_description.add_action(down_cam_publisher)
+    # launch_description.add_action(down_detection_node)
     launch_description.add_action(object_map_node)
-    
+
     return launch_description

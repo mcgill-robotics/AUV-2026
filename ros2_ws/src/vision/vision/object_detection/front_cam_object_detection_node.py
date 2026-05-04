@@ -729,10 +729,10 @@ class FrontCamObjectDetectorNode():
             health = self.zed.get_health_status()
             if health.low_image_quality:
                 self.node.get_logger().warn("Low image quality", throttle_duration_sec=5.0)
-                continue
+                # continue
             if health.low_lighting:
                 self.node.get_logger().warn("Low lighting conditions", throttle_duration_sec=5.0)
-                continue
+                # continue
 
             self.zed.retrieve_image(self.image_buffer, sl.VIEW.LEFT)
             img = cv2.cvtColor(self.image_buffer.get_data(), cv2.COLOR_RGBA2RGB)

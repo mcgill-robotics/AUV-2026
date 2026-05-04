@@ -4,9 +4,12 @@ ARG IMAGE_NAME=dustynv/ros:humble-desktop-l4t-r36.4.0
 
 FROM ${IMAGE_NAME}
 
+# Get uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
 ARG ZED_SDK_MAJOR=5
-ARG ZED_SDK_MINOR=3
-ARG ZED_SDK_PATCH=0
+ARG ZED_SDK_MINOR=1
+ARG ZED_SDK_PATCH=1
 ARG L4T_MAJOR=36
 ARG L4T_MINOR=4
 # Optional: Override ZED SDK URL
@@ -69,6 +72,11 @@ ENV TZ=Europe/Paris
 ENV ROS_DISTRO=${ROS2_DIST}
 # assume anything trying to build this container is for jetson, whether CI or physical jetson hardware
 ENV IS_JETSON=true
+# Standard Jetson CUDA paths
+ENV CUDA_ROOT=/usr/local/cuda
+ENV PATH=${CUDA_ROOT}/bin:${PATH}
+ENV CUDA_INC_DIR=${CUDA_ROOT}/include
+ENV LD_LIBRARY_PATH=${CUDA_ROOT}/lib64:${LD_LIBRARY_PATH}
 
 # Check that this SDK URL exists
 RUN if [ "$(curl -L -I "${ZED_SDK_URL}" -o /dev/null -s -w '%{http_code}\n' | head -n 1)" = "200" ]; then \
@@ -296,32 +304,35 @@ RUN mkdir -p tmp_cudss && cd tmp_cudss && \
     cp -a ${CUSPARSE_SOLVER_NAME}/lib/* /usr/local/cuda/lib64/ && \
     rm -rf ${CUSPARSE_SOLVER_NAME} ${CUSPARSE_SOLVER_NAME}.tar.xz
 
-# Install ultralytics, avoid reinstalling numpy and opencv (torch, tensorflow and torchvision installed in the .toml file, cuda supported cause pip index is Jetpack6 one)
-RUN pip install --no-cache-dir --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} --ignore-install sympy \ 
-    cython --upgrade
 
-# Manually install pytorch because it's not present in the base image
-RUN pip install --no-cache-dir torch torchvision
+# Set UV to system mode and use your Jetpack index
+ENV UV_SYSTEM_PYTHON=1 \
+    UV_EXTRA_INDEX_URL=${PIP_INDEX_FOR_NON_NVIDIA}
 
-RUN git clone https://github.com/ultralytics/ultralytics.git && \
-    cd ultralytics && \
-    sed -i '/"numpy>=1.23.0"/d; /"opencv-python>=4.6.0"/d; /"numpy<2.0.0"/d' pyproject.toml && \
-    pip install --no-cache-dir --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} . && \
-    cd .. && \
-    rm -rf ultralytics
+# Copy dependency lists
+COPY Docker/jetson/requirements.txt Docker/jetson/constraints.txt /tmp/
 
-# Install dependencies for vision
-RUN pip install --no-cache-dir --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} "numpy<2.0.0" "setuptools<70" \
-    roboflow albumentations pandas \
-    rfdetr supervision pytorch_lightning pycocotools faster-coco-eval onnx onnxruntime-gpu \
-    inference-models "inference-models[torch-jp6-cu126,onnx-jp6-cu126]" transforms3d && \
-    pip install --no-cache-dir --ignore-install --upgrade typing_extensions transforms3d
+# Install everything in one clean step
+# --no-build-isolation helps with some Jetson-specific wheels
+RUN uv pip install \
+    -v \ 
+    --index-strategy unsafe-best-match \
+    --no-cache \ 
+    --no-build-isolation \
+    --extra-index-url https://pypi.jetson-ai-lab.io/jp6/cu126 \
+    -r /tmp/requirements.txt \  
+    -c /tmp/constraints.txt
 
-# Install ZED Python API from source
-RUN git clone -b v${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}.${ZED_SDK_PATCH} https://github.com/stereolabs/zed-python-api.git /tmp/zed-python-api && \
-    cd /tmp/zed-python-api/src && \
-    python3 -m pip install --no-deps . && \
-    cd /tmp && \
+RUN uv pip install \
+    -v \
+    --extra-index-url https://pypi.jetson-ai-lab.io/jp6/cu126 \ 
+    --index-strategy unsafe-best-match \
+    --no-deps \
+    "inference-models[torch-jp6-cu126,onnx-jp6-cu126]" 
+
+# Install ZED (still separate as it's a local build from git)
+RUN git clone -b v${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}.${ZED_SDK_PATCH} https://github.com/stereolabs/zed-python-api.git  /tmp/zed-python-api && \
+    uv pip install -v --no-deps --no-build-isolation /tmp/zed-python-api/src && \
     rm -rf /tmp/zed-python-api
 
 # Environment Setup
