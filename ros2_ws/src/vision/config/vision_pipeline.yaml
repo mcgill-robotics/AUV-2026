@@ -17,6 +17,7 @@ image_enhancement:
 object_detection:
   front_cam:
     # Topics / model
+    enable_object_detection: true
     enhanced_topic: /vision/front_cam/image_enhanced # input topic if enhance_images is true, otherwise will subscribe to raw image topic
     detection_frame_topic: /vision/front_cam/detection_frame # synchronized camera-frame detections + AUV pose
     model_relative_path: models/local_rfdetr_onnx_test # inference-models package directory
@@ -83,8 +84,8 @@ object_detection:
     zed_led_status: -1 # -1 leaves the SDK/camera default unchanged; otherwise 0 off, 1 on
 
     # Pose / frame sync
-    enable_vio: false # if false, skip ZED positional tracking and do not publish vision VIO pose/TF
-    pose_source: auv_pose # auv_pose uses state/pose for synchronized detection frames; zed_vio uses the front ZED VIO estimate
+    enable_vio: true # if false, skip ZED positional tracking and do not publish vision VIO pose/TF
+    pose_source: zed_vio # auv_pose uses state/pose for synchronized detection frames; zed_vio uses the front ZED VIO estimate
     auv_pose_topic: state/pose # official aggregated AUV pose used for synchronized detection frames when pose_source=auv_pose
     vio_pose_topic: /vision/vio_pose # optional vision VIO measurement output for debugging or future fusion
     broadcast_vio_tf: true # if VIO is enabled, publish pool_link -> auv_vio_link for visualization/debugging
@@ -160,6 +161,7 @@ object_detection:
     auto_focus: false                    # default true; when true, focus_absolute is ignored
     focus_absolute: 7                    # [0..21]    only used when auto_focus is false; default 16
 
+    enable_object_detection: true
     enhanced_topic: /vision/down_cam/image_enhanced
     detection_topic: /vision/down_cam/detections
     model_detection_threshold: 0.40

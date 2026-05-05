@@ -21,6 +21,12 @@ def generate_launch_description():
         default_value="true",
         description="Launch vision nodes",
     )
+
+    enable_object_detection_arg = DeclareLaunchArgument(
+        "enable_object_detection",
+        default_value="true",
+        description="Enable object detection inference in the vision pipeline globally",
+    )
     
     controls_condition = DeclareLaunchArgument(
         "controls",
@@ -41,6 +47,7 @@ def generate_launch_description():
     )
 
     vision = LaunchConfiguration("vision")
+    enable_object_detection = LaunchConfiguration("enable_object_detection")
     controls = LaunchConfiguration("controls")
     sensors = LaunchConfiguration("sensors")
     propulsion = LaunchConfiguration("propulsion")
@@ -94,7 +101,10 @@ def generate_launch_description():
         actions=[
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(vision_launch_file),
-                launch_arguments={"sim": sim}.items(),
+                launch_arguments={
+                    "sim": sim,
+                    "enable_object_detection": enable_object_detection
+                }.items(),
             )
         ],
     )
@@ -115,6 +125,7 @@ def generate_launch_description():
     return LaunchDescription([
         sim_condition,
         vision_condition,
+        enable_object_detection_arg,
         controls_condition,
         sensors_condition,
         propulsion_condition,

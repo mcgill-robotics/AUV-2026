@@ -79,6 +79,7 @@ class FrontCamObjectDetectorNode():
         self.node.declare_parameter('collect_depth_image', True)
         self.node.declare_parameter("compressed", Parameter.Type.BOOL)
         self.node.declare_parameter("detection_frame_topic", Parameter.Type.STRING)
+        self.node.declare_parameter("enable_object_detection", True)
 
         self.node.declare_parameter("model_detection_threshold", 0.40)
         self.node.declare_parameter("depth_confidence_threshold", 95)
@@ -189,6 +190,7 @@ class FrontCamObjectDetectorNode():
         self.publish_depth_every_n_frames = self.node.get_parameter('publish_depth_every_n_frames').get_parameter_value().integer_value
         self.collect_depth_image = self.node.get_parameter('collect_depth_image').get_parameter_value().bool_value
         self.compressed = self.node.get_parameter('compressed').get_parameter_value().bool_value
+        self.enable_object_detection = self.node.get_parameter('enable_object_detection').get_parameter_value().bool_value
 
         self.conf_threshold = self.node.get_parameter('model_detection_threshold').get_parameter_value().double_value
         self.depth_confidence_threshold = (
@@ -424,7 +426,11 @@ class FrontCamObjectDetectorNode():
                 raise RuntimeError(f"Failed to enable ZED streaming: {err}")
 
         # Load Model using inference-models with TensorRT acceleration
-        self.model = load_model(model_path, self.node.get_logger())
+        if self.enable_object_detection:
+            self.model = load_model(model_path, self.node.get_logger())
+        else:
+            self.model = None
+            self.node.get_logger().info("Object detection is disabled. Publishing raw feed only.")
         
         self.node.get_logger().info(f"Setting QOL queue size to: {queue_size}")
 
@@ -783,7 +789,10 @@ class FrontCamObjectDetectorNode():
 
             self._publish_camera_info(frame_stamp)
 
-            tracked_detections = get_detections(self, img)
+            if self.enable_object_detection:
+                tracked_detections = get_detections(self, img)
+            else:
+                tracked_detections = None
 
             # --- Border Exclusion Filter ---
             if self.enable_border_exclusion and tracked_detections is not None:

@@ -42,6 +42,7 @@ class DownCamObjectDetectorNode():
         self.node.declare_parameter('publish_annotated_every_n_frames', 1)
         self.node.declare_parameter("model_detection_threshold", 0.40)
         self.node.declare_parameter('compressed', False)
+        self.node.declare_parameter("enable_object_detection", True)
 
         # ── Camera hardware parameters ───────────────────────────
         self.node.declare_parameter('video_device', '/dev/video0')
@@ -88,6 +89,9 @@ class DownCamObjectDetectorNode():
         self.conf_threshold = (
             self.node.get_parameter('model_detection_threshold').get_parameter_value().double_value
         )
+        self.enable_object_detection = (
+            self.node.get_parameter('enable_object_detection').get_parameter_value().bool_value
+        )
 
         # Camera hardware
         self.video_device = self.node.get_parameter('video_device').get_parameter_value().string_value
@@ -119,7 +123,11 @@ class DownCamObjectDetectorNode():
             self.node.get_logger().fatal(f"Model path does not exist: {model_path}")
             raise FileNotFoundError(f"Model path does not exist: {model_path}")
 
-        self.model = load_model(model_path, self.node.get_logger())
+        if self.enable_object_detection:
+            self.model = load_model(model_path, self.node.get_logger())
+        else:
+            self.model = None
+            self.node.get_logger().info("Object detection is disabled. Publishing raw feed only.")
 
         # ── Publishers ───────────────────────────────────────────
         self.pub_detections = self.node.create_publisher(
@@ -274,7 +282,10 @@ class DownCamObjectDetectorNode():
                     self.node.get_logger().debug(f"Saved {filepath}")
 
             # ── Inference ─────────────────────────────────────
-            tracked_detections = get_detections(self, img)
+            if self.enable_object_detection:
+                tracked_detections = get_detections(self, img)
+            else:
+                tracked_detections = None
             
             det_msg = build_detection2d_msg(self, tracked_detections)
             det_msg.header.stamp = frame_stamp.to_msg()

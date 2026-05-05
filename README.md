@@ -117,6 +117,7 @@ Currently, this bringup script launches the following subsystems:
 
 - `sim:=true|false` (default: `false`): Launch the AUV in simulation mode. *(Note: To set up and run the Unity simulator itself, please refer to the [auv-sim-unity repository](https://github.com/mcgill-robotics/auv-sim-unity).)*
 - `vision:=true|false` (default: `true`): Launch the vision pipeline. Set this to `false` when running the simulation on a machine without an NVIDIA GPU, as the simulator will directly provide the object map.
+- `enable_object_detection:=true|false` (default: `true`): Enable object detection inference globally. If set to `false`, the vision pipeline will still launch and publish raw camera feeds, but no AI inference models will be loaded or run. This is useful for viewing live camera feeds on machines without a GPU without fully disabling the vision pipeline.
 
 **Example: Running simulation without vision**
 ```bash

@@ -76,6 +76,12 @@ def generate_launch_description():
         description="Path to the down camera object detection model file."
     )
 
+    enable_object_detection_arg = DeclareLaunchArgument(
+        "enable_object_detection",
+        default_value="true",
+        description="Whether to enable object detection inference globally. If false, overrides the individual flags below."
+    )
+
     zed_wrapper_log_type_arg = DeclareLaunchArgument(
         "zed_wrapper_log_type",
         default_value=default_config["general"]["zed_wrapper_log_type"],
@@ -219,6 +225,10 @@ def generate_launch_description():
                 "depth_collection_dir": default_config["object_detection"]["front_cam"]["depth_collection_dir"],
                 "collect_depth_image": default_config["object_detection"]["front_cam"]["collect_depth_image"],
                 "collection_interval_seconds": default_config["object_detection"]["front_cam"]["collection_interval_seconds"],
+                "enable_object_detection": PythonExpression([
+                    "'", LaunchConfiguration("enable_object_detection"), "' == 'true' and '", 
+                    str(default_config["object_detection"]["front_cam"]["enable_object_detection"]).lower(), "' == 'true'"
+                ]),
             }
         ],
         ros_arguments=["--ros-args", "--log-level", "front_cam_object_detection:=" + default_config["object_detection"]["front_cam"]["log_level"]]
@@ -314,6 +324,10 @@ def generate_launch_description():
                 'collection_interval_seconds': default_config["object_detection"]["down_cam"]["collection_interval_seconds"],
                 'use_sim_time': LaunchConfiguration("sim"),
                 'log_level': default_config["object_detection"]["down_cam"]["log_level"],
+                'enable_object_detection': PythonExpression([
+                    "'", LaunchConfiguration("enable_object_detection"), "' == 'true' and '", 
+                    str(default_config["object_detection"]["down_cam"]["enable_object_detection"]).lower(), "' == 'true'"
+                ]),
             }
         ],
         ros_arguments=["--ros-args", "--log-level", default_config["object_detection"]["down_cam"]["log_level"]]
@@ -372,6 +386,7 @@ def generate_launch_description():
     launch_description.add_action(use_enhance_arg)
     launch_description.add_action(front_model_arg)
     launch_description.add_action(down_model_arg)
+    launch_description.add_action(enable_object_detection_arg)
     
 
     # launch_description.add_action(zed_wrapper_log_type_arg)
