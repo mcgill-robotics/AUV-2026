@@ -196,31 +196,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # copy our configs for zed2i
 COPY Docker/jetson/SN33688213.conf /usr/local/zed/settings/
 
-# # Install missing dependencies and wanted packages from source
-# WORKDIR /opt/dependencies_ws/src
-# RUN wget https://github.com/ros/xacro/archive/refs/tags/${XACRO_VERSION}.tar.gz -O - | tar -xvz && mv xacro-${XACRO_VERSION} xacro && \
-#     wget https://github.com/ros/diagnostics/archive/refs/tags/${DIAGNOSTICS_VERSION}.tar.gz -O - | tar -xvz && mv diagnostics-${DIAGNOSTICS_VERSION} diagnostics && \
-#     wget https://github.com/ament/ament_lint/archive/refs/tags/${AMENT_LINT_VERSION}.tar.gz -O - | tar -xvz && mv ament_lint-${AMENT_LINT_VERSION} ament-lint && \
-#     wget https://github.com/cra-ros-pkg/robot_localization/archive/refs/tags/${ROBOT_LOCALIZATION_VERSION}.tar.gz -O - | tar -xvz && mv robot_localization-${ROBOT_LOCALIZATION_VERSION} robot-localization && \
-#     wget https://github.com/stereolabs/zed-ros2-interfaces/archive/refs/tags/${ZED_MSGS_VERSION}.tar.gz -O - | tar -xvz && mv zed-ros2-interfaces-${ZED_MSGS_VERSION} zed-ros2-interfaces && \
-#     wget https://github.com/ros-drivers/nmea_msgs/archive/refs/tags/${NMEA_MSGS_VERSION}.tar.gz -O - | tar -xvz && mv nmea_msgs-${NMEA_MSGS_VERSION} nmea_msgs && \
-#     wget https://github.com/ros/angles/archive/refs/tags/${ANGLES_VERSION}.tar.gz -O - | tar -xvz && mv angles-${ANGLES_VERSION} angles && \
-#     wget https://github.com/ros-perception/point_cloud_transport/archive/refs/tags/${POINTCLOUD_TRANSPORT_VERSION}.tar.gz -O - | tar -xvz && mv point_cloud_transport-${POINTCLOUD_TRANSPORT_VERSION} point_cloud_transport && \
-#     wget https://github.com/ros-perception/point_cloud_transport_plugins/archive/refs/tags/${POINTCLOUD_TRANSPORT_PLUGINS_VERSION}.tar.gz -O - | tar -xvz && mv point_cloud_transport_plugins-${POINTCLOUD_TRANSPORT_PLUGINS_VERSION} point_cloud_transport_plugins && \
-#     wget https://github.com/ros2/rmw_cyclonedds/archive/refs/tags/${RMW_CYCLONEDDS_VERSION}.tar.gz -O - | tar -xvz && mv rmw_cyclonedds-${RMW_CYCLONEDDS_VERSION} rmw_cyclonedds && \
-#     wget https://github.com/ros-geographic-info/geographic_info/archive/refs/tags/${GEOGRAPHIC_INFO_VERSION}.tar.gz -O - | tar -xvz && mv geographic_info-${GEOGRAPHIC_INFO_VERSION} geographic-info && \
-#     wget https://github.com/pal-robotics/backward_ros/archive/refs/tags/${BACKWARD_ROS_VERSION}.tar.gz -O - | tar -xvz && mv backward_ros-${BACKWARD_ROS_VERSION} backward_ros && \
-#     wget https://github.com/ros-drivers/usb_cam/archive/refs/tags/${USB_CAM_VERSION}.tar.gz -O - | tar -xvz && mv usb_cam-${USB_CAM_VERSION} usb_cam && \
-#     wget https://github.com/mavlink/mavros/archive/refs/tags/${MAVROS_VERSION}.tar.gz -O - | tar -xvz && mv mavros-${MAVROS_VERSION} mavros && \
-#     wget https://github.com/ros-perception/image_common/archive/refs/tags/${IMAGE_COMMON_VERSION}.tar.gz -O - | tar -xvz && mv image_common-${IMAGE_COMMON_VERSION} image_common && \
-#     # copy needed packages to src
-#     cp -r geographic-info/geographic_msgs/ . && \
-#     cp -r mavros/mavros_msgs/ . && \
-#     # clean up unneeded source folders
-#     rm -rf geographic-info && \
-#     rm -rf mavros && \
-#     rm -rf /opt/dependencies_ws/src/.cache
-
 # ROS packages that do not depend on OpenCV/that ZED wrapper doesn't depend on can be installed here
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-$ROS_DISTRO-foxglove-msgs \
@@ -229,22 +204,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-$ROS_DISTRO-rosidl-default-generators \
     ros-$ROS_DISTRO-vision-msgs \
     ros-$ROS_DISTRO-tf-transformations \
+    ros-$ROS_DISTRO-nmea-msgs \
+    ros-$ROS_DISTRO-mavros-msgs \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
-
-# Build the dependencies from source against NVIDIA OpenCV
-# There are 2 workspaces so that all the dependencies installed source
-# do not clutter our ros2_ws
-# WORKDIR /opt/dependencies_ws
-
-# RUN . /opt/ros/$ROS_DISTRO/install/setup.bash && \
-#     colcon build --parallel-workers $(nproc) --merge-install \
-#         --event-handlers console_direct+ --base-paths src \
-#         --cmake-args ' -DCMAKE_BUILD_TYPE=Release' \
-#         ' -DCMAKE_LIBRARY_PATH=/usr/local/cuda/lib64/stubs' \
-#         ' -DCMAKE_CXX_FLAGS="-Wl,--allow-shlib-undefined"' \
-#         ' --no-warn-unused-cli' && \
-#     rm -rf build src log
 
 # install micro-ROS
 WORKDIR /opt/ros/micro_ros_ws
@@ -252,7 +215,6 @@ WORKDIR /opt/ros/micro_ros_ws
 RUN git clone -b $ROS_DISTRO https://github.com/micro-ROS/micro_ros_setup.git src/micro_ros_setup
 # build micro-ROS package and agent
 RUN . /opt/ros/$ROS_DISTRO/install/setup.bash && \
-    # . /opt/dependencies_ws/install/setup.bash && \
     colcon build \
         --parallel-workers $(nproc) \
         --merge-install \
