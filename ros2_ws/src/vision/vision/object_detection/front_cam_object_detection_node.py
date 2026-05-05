@@ -607,6 +607,7 @@ class FrontCamObjectDetectorNode():
         tracking_state = self.zed.get_position(cam_pose, sl.REFERENCE_FRAME.WORLD)
         if tracking_state != sl.POSITIONAL_TRACKING_STATE.OK:
             self.node.get_logger().warn(f"VIO tracking not OK: {tracking_state}", throttle_duration_sec=1.0)
+            return None
 
         with self._depth_lock:
             sensor_z = self._sensor_depth
