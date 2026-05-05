@@ -41,6 +41,7 @@ class DownCamObjectDetectorNode():
         self.node.declare_parameter('publish_annotated_image', False)
         self.node.declare_parameter('publish_annotated_every_n_frames', 1)
         self.node.declare_parameter("model_detection_threshold", 0.40)
+        self.node.declare_parameter('compressed', False)
 
         # ── Camera hardware parameters ───────────────────────────
         self.node.declare_parameter('video_device', '/dev/video0')
@@ -129,7 +130,7 @@ class DownCamObjectDetectorNode():
         self.node.get_logger().info(f"Publishing detections to: {detection_topic}")
 
         if self.publish_annotated_image:
-            publish_topic = detection_topic + "/annotated"
+            publish_topic = detection_topic + "/annotated" + ("/compressed" if self.compressed else "")
             self.pub_annotated_image = self.node.create_publisher(
                 input_format,
                 publish_topic,
