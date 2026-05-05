@@ -463,17 +463,18 @@ class FrontCamObjectDetectorNode():
         self.node.get_logger().info(
             f"Publishing synchronized detection frames to: {self.detection_frame_topic}"
         )
-
-        publish_topic = self.detection_frame_topic + "/annotated" + ("/compressed" if self.compressed else "")
-        self.pub_annotated_image = self.node.create_publisher(
-            input_format,
-            publish_topic,
-            queue_size
-        )
-        self.node.get_logger().info(
-            f"Annotated debug image topic ready at: {publish_topic} "
-            f"(enabled={self.annotated_image_enabled})"
-        )
+        
+        if self.publish_annotated_image:
+            publish_topic = self.detection_frame_topic + "/annotated" + ("/compressed" if self.compressed else "")
+            self.pub_annotated_image = self.node.create_publisher(
+                input_format,
+                publish_topic,
+                queue_size
+            )
+            self.node.get_logger().info(
+                f"Annotated debug image topic ready at: {publish_topic} "
+                f"(enabled={self.annotated_image_enabled})"
+            )
             
         self.depth_image_msg_type = None
         if self.publish_depth_image:

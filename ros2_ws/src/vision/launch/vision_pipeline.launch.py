@@ -285,6 +285,7 @@ def generate_launch_description():
                 'publish_annotated_image': default_config["object_detection"]["down_cam"]["publish_annotated_image"],
                 'publish_annotated_every_n_frames': default_config["object_detection"]["down_cam"]["publish_annotated_every_n_frames"],
                 'model_detection_threshold': default_config["object_detection"]["down_cam"]["model_detection_threshold"],
+                'compressed': LaunchConfiguration("compressed"),
 
                 # Camera hardware (direct capture, no usb_cam_node needed)
                 'video_device': default_config["object_detection"]["down_cam"]["video_device"],
@@ -382,7 +383,7 @@ def generate_launch_description():
     # launch_description.add_action(front_cam_enhancement_node)
     # launch_description.add_action(down_cam_enhancement_node)
     launch_description.add_action(front_detection_node)
-    # launch_description.add_action(down_detection_node)
+    launch_description.add_action(down_detection_node)
     launch_description.add_action(object_map_node)
 
     return launch_description

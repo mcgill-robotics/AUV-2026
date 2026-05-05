@@ -78,7 +78,8 @@ object_detection:
     zed_exposure: 25 # wrapper-aligned common stereo starting point [0..100] when auto exposure/gain is disabled
     zed_gain: 80 # wrapper-aligned common stereo starting point [0..100] when auto exposure/gain is disabled
     zed_auto_whitebalance: true # wrapper-aligned default; when true the manual white balance temperature is ignored
-    zed_whitebalance_temperature: 4200 # wrapper-aligned 42 x100 K starting point when auto white balance is disabled
+    zed_whitebalance_temperature: 2800 # Affected value should be between 2800 and 6500 with a step of 100.
+                                       # Setting a value will automatically set WHITEBALANCE_AUTO to 0. 
     zed_led_status: -1 # -1 leaves the SDK/camera default unchanged; otherwise 0 off, 1 on
 
     # Pose / frame sync
@@ -128,7 +129,7 @@ object_detection:
     # ELP-USB500W02M-AF60 (5MP OV5640, autofocus, 60° FOV)
     # Available MJPEG modes:   640x480@30  800x600@30  1024x768@30  1280x720@30  1280x1024@15  1600x1200@15  1920x1080@15  2592x1944@15
     # Available YUY2 modes:    640x480@30  800x600@30  1024x768@15  1280x720@7.5 1280x1024@7.5 1600x1200@3   1920x1080@3   2592x1944@3
-    video_device: "/dev/video0"
+    video_device: "/dev/down_cam"
     image_width: 640
     image_height: 480
     camera_fps: 30
@@ -150,14 +151,14 @@ object_detection:
     power_line_frequency: 2    # 0=disabled 1=50Hz 2=60Hz; default 2
 
     # White balance
-    auto_white_balance: true             # default true; when true, white_balance_temperature is ignored
-    white_balance_temperature: 2800      # [2800..6500] step 1; only used when auto_white_balance is false
+    auto_white_balance: false            # default true; when true, white_balance_temperature is ignored
+    white_balance_temperature: 4500      # [2800..6500] step 1; only used when auto_white_balance is false
 
     # Exposure & focus
-    auto_exposure: 3                     # 1=Manual 3=Aperture Priority (auto); default 3
-    exposure_time_absolute: 625          # [4..5000]  only used when auto_exposure is 1 (Manual); default 625
-    auto_focus: true                     # default true; when true, focus_absolute is ignored
-    focus_absolute: 16                   # [0..21]    only used when auto_focus is false; default 16
+    auto_exposure: 1                     # 1=Manual 3=Aperture Priority (auto); default 3
+    exposure_time_absolute: 40           # [4..5000]  only used when auto_exposure is 1 (Manual); default 625
+    auto_focus: false                    # default true; when true, focus_absolute is ignored
+    focus_absolute: 7                    # [0..21]    only used when auto_focus is false; default 16
 
     enhanced_topic: /vision/down_cam/image_enhanced
     detection_topic: /vision/down_cam/detections
