@@ -204,8 +204,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-$ROS_DISTRO-rosidl-default-generators \
     ros-$ROS_DISTRO-vision-msgs \
     ros-$ROS_DISTRO-tf-transformations \
+    ros-$ROS_DISTRO-tf2-ros \
     ros-$ROS_DISTRO-nmea-msgs \
     ros-$ROS_DISTRO-mavros-msgs \
+    ros-$ROS_DISTRO-actionlib-msgs \
+    ros-$ROS_DISTRO-diagnostic-msgs \
+    ros-$ROS_DISTRO-message-filters \
+    ros-$ROS_DISTRO-eigen3-cmake-module \
+    ros-$ROS_DISTRO-nav-msgs \
+    ros-$ROS_DISTRO-tf2-geometry-msgs \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 

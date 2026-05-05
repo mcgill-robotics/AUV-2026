@@ -8,6 +8,7 @@ torch
 torchvision
 
 # Main Libraries
+ultralytics
 roboflow
 albumentations
 pandas
