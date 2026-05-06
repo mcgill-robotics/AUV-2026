@@ -5,7 +5,7 @@ ARG IMAGE_NAME=dustynv/ros:humble-desktop-l4t-r36.4.0
 FROM ${IMAGE_NAME}
 
 # Get uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.11.9 /uv /uvx /bin/
 
 ARG ZED_SDK_MAJOR=5
 ARG ZED_SDK_MINOR=1
@@ -196,7 +196,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # copy our configs for zed2i
 COPY Docker/jetson/SN33688213.conf /usr/local/zed/settings/
 
-# ROS packages that do not depend on OpenCV/that ZED wrapper doesn't depend on can be installed here
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-$ROS_DISTRO-foxglove-msgs \
     ros-$ROS_DISTRO-joy \

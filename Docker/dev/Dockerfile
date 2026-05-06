@@ -5,7 +5,7 @@
 FROM althack/ros2:humble-dev
 
 # Get uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.11.9 /uv /uvx /bin/
 ENV UV_SYSTEM_PYTHON=1
 
 # CI has a different runner than the jetson (notably git permissions are different and there is no GPU)

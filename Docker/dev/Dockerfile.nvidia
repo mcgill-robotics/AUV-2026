@@ -15,7 +15,7 @@ ARG UBUNTU_RELEASE=22
 FROM tuttelikz/opencv-cuda:4.10.0-cuda12.6.3-arch8.9-ubuntu22.04
 
 # Get uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.11.9 /uv /uvx /bin/
 ENV UV_SYSTEM_PYTHON=1
 
 # Standard CUDA paths
@@ -85,7 +85,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         # GUI Support (RQT/Rviz)
         libgl1-mesa-glx \
         libgl1-mesa-dri \
-        # Tensorrt for model export
         && rm -rf /var/lib/apt/lists/*
 
 # Add ROS 2 Humble Repository
