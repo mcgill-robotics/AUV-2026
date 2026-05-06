@@ -207,8 +207,8 @@ object_map:
   new_object_min_distance_threshold: 0.5 # distance in meters between a new detection and existing tracks to be considered a new object and start a new track
   large_structure_labels: ["gate", "table", "board", "bin_structure"]
   pipe_labels: ["red_pipe", "white_pipe"]
-  min_large_structure_separation_m: 2.0 # minimum XY spacing required before spawning gate/table/board/bin_structure near another confirmed large structure
-  min_large_structure_pipe_separation_m: 1.0 # minimum XY spacing required before spawning gate/table/board/bin_structure near a confirmed pipe
+  min_large_structure_separation_m: 2.0 # minimum XY spacing required before placing gate/table/board/bin_structure near another confirmed large structure
+  min_large_structure_pipe_separation_m: 1.0 # minimum XY spacing required before placing gate/table/board/bin_structure near a confirmed pipe
 
   # Feature Toggles (Game-Specific Constraints)
   enable_z_axis_locking: true # Forces specific unique objects to snap to pool floor/surface Z coordinates

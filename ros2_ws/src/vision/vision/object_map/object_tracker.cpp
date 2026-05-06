@@ -14,33 +14,49 @@ Eigen::Vector2d xy(const Eigen::Vector3d& position) {
 double xy_distance(const Eigen::Vector3d& lhs, const Eigen::Vector3d& rhs) {
     return (xy(lhs) - xy(rhs)).norm();
 }
-
+/// @brief Computes the vector that is normal to the given axis and faces towards the observer.
+/// @param axis_xy The axis vector in the XY plane that we want to compute the normal from.
+/// @param object_xy Reference point for direction in which observer is facing
+/// @param observer_xy The position of the observer in the XY plane.
+/// @param chosen_normal The computed normal vector. filled in only if the function returns true.
+/// @return True if the normal vector was computed successfully, false otherwise.
 bool compute_facing_normal(
     const Eigen::Vector2d& axis_xy,
     const Eigen::Vector2d& object_xy,
     const Eigen::Vector2d& observer_xy,
     Eigen::Vector2d& chosen_normal)
 {
+    // if axis is too small, we can't determine direction
     if (axis_xy.norm() < 1e-6) {
         return false;
     }
 
+    // if observer is too close to object, we can't reliably determine facing direction (could be on either side of axis)
     Eigen::Vector2d to_observer = observer_xy - object_xy;
     if (to_observer.norm() < 1e-6) {
         return false;
     }
-
+    
+    // normals can be either (-y,x) or (y,-x). we want to choose the one that faces towards the observer.
     Eigen::Vector2d axis_unit = axis_xy.normalized();
-    Eigen::Vector2d candidate_a(-axis_unit.y(), axis_unit.x());
-    Eigen::Vector2d candidate_b = -candidate_a;
+    Eigen::Vector2d positive_unit_normal(-axis_unit.y(), axis_unit.x());
+    Eigen::Vector2d positive_negative_normal = -positive_unit_normal;
 
+    // large positive dot product implies vectors in the same direction
+    // so pick the larger dot product to get the normal that faces towards the observer
     chosen_normal =
-        candidate_a.dot(to_observer) >= candidate_b.dot(to_observer)
-            ? candidate_a
-            : candidate_b;
+        positive_unit_normal.dot(to_observer) >= positive_negative_normal.dot(to_observer)
+            ? positive_unit_normal
+            : positive_negative_normal;
     return true;
 }
-
+/// @brief Computes the yaw angle that makes the object face towards the observer, first computing the normal vector to the given axis and then computing the angle from that normal.
+/// @param axis_xy Axis we want to face head on (such that we point toward the axis' normal).
+/// @param object_xy Reference point for direction in which observer is facing
+/// @param observer_xy The position of the observer in the XY plane.
+/// @param yaw_out The computed yaw angle.
+/// @param normal_out The computed normal vector.
+/// @return True if the yaw angle was computed successfully, false otherwise.
 bool compute_facing_yaw(
     const Eigen::Vector2d& axis_xy,
     const Eigen::Vector2d& object_xy,
@@ -56,7 +72,7 @@ bool compute_facing_yaw(
     if (normal_out != nullptr) {
         *normal_out = chosen_normal;
     }
-
+    // compute angle of normal to get the absolute orientation that faces axis_xy
     yaw_out = std::atan2(chosen_normal.y(), chosen_normal.x());
     return true;
 }
@@ -472,7 +488,7 @@ void ObjectTracker::create_new_tracks(
                 break;
             }
         }
-
+        // special consideration for large structures
         if (!too_close && is_large_structure) {
             for (const auto& existing_track : tracks) {
                 if (existing_track.state != TrackState::CONFIRMED) {
@@ -481,13 +497,13 @@ void ObjectTracker::create_new_tracks(
 
                 const Eigen::Vector3d existing_pos = existing_track.kf.state();
                 const double dist_xy = xy_distance(new_pos, existing_pos);
-
+                // check if new large structure is too close to existing pipe
                 if (pipe_labels.count(existing_track.label) > 0 &&
                     dist_xy < min_large_structure_pipe_separation) {
                     too_close = true;
                     break;
                 }
-
+                // check if new large structure is too close to existing large structure of different class
                 if (large_structure_labels.count(existing_track.label) > 0 &&
                     existing_track.label != label &&
                     dist_xy < min_large_structure_separation) {
@@ -551,8 +567,9 @@ void ObjectTracker::apply_gate_physical_constraints() {
         
         // 1. Position Refinement
         Eigen::Vector3d midpoint = (p_search_rescue + p_survey_repair) / 2.0;
-
+        // only update if refined position is within plausibility radius of original board position (prevents large jumps from erroneous measurements)
         if ((p_gate - midpoint).norm() < kRefinementPlausibilityRadiusMeters) {
+            // Use very small measurement covariance to strongly pull gate position towards midpoint
             Eigen::Matrix3d tiny_R = Eigen::Matrix3d::Identity() * 0.001;
             gate_track->kf.update(midpoint, tiny_R);
             p_gate = gate_track->kf.state();
@@ -596,31 +613,41 @@ void ObjectTracker::apply_board_physical_constraints() {
 
     const bool has_vehicle_pair = ambulance_track && firetruck_track;
     const bool has_hazard_pair = fire_track && blood_track;
+    // if neither pair exists, we have no basis for icon refinement, so skip entire process
     if (!has_vehicle_pair && !has_hazard_pair) {
         return;
     }
 
     Eigen::Vector3d refined_board_position = board_track->kf.state();
     if (has_vehicle_pair && has_hazard_pair) {
+        // take average of all 4 points for icon position refinement
         Eigen::Vector3d centroid =
             (ambulance_track->kf.state() + firetruck_track->kf.state() +
              fire_track->kf.state() + blood_track->kf.state()) /
             4.0;
+        // only update if refined position is within plausibility radius of original board position (prevents large jumps from erroneous measurements)
         if ((refined_board_position - centroid).norm() < kRefinementPlausibilityRadiusMeters) {
+            // Use very small measurement covariance to strongly pull board position towards centroid
             board_track->kf.update(centroid, Eigen::Matrix3d::Identity() * 0.001);
             refined_board_position = board_track->kf.state();
         }
     } else if (has_vehicle_pair) {
+        // take average of vehicle positions for icon position refinement
         Eigen::Vector3d midpoint =
             (ambulance_track->kf.state() + firetruck_track->kf.state()) / 2.0;
+        // only update if refined position is within plausibility radius of original board position (prevents large jumps from erroneous measurements)
         if ((refined_board_position - midpoint).norm() < kRefinementPlausibilityRadiusMeters) {
+            // Use very small measurement covariance to strongly pull board position towards centroid
             board_track->kf.update(midpoint, Eigen::Matrix3d::Identity() * 0.001);
             refined_board_position = board_track->kf.state();
         }
     } else {
+        // take average of hazard positions for icon position refinement
         Eigen::Vector3d midpoint =
             (fire_track->kf.state() + blood_track->kf.state()) / 2.0;
+        // only update if refined position is within plausibility radius of original board position (prevents large jumps from erroneous measurements)
         if ((refined_board_position - midpoint).norm() < kRefinementPlausibilityRadiusMeters) {
+            // Use very small measurement covariance to strongly pull board position towards centroid
             board_track->kf.update(midpoint, Eigen::Matrix3d::Identity() * 0.001);
             refined_board_position = board_track->kf.state();
         }
@@ -634,6 +661,8 @@ void ObjectTracker::apply_board_physical_constraints() {
 
     if (has_vehicle_pair) {
         Eigen::Vector2d normal;
+        // vector between vehicles is the direction (in global frame) of the board
+        // compute the normal to the board that faces towards the observer, which gives us the board orientation
         if (compute_facing_normal(
                 xy(firetruck_track->kf.state()) - xy(ambulance_track->kf.state()),
                 xy(refined_board_position),
@@ -645,6 +674,8 @@ void ObjectTracker::apply_board_physical_constraints() {
 
     if (has_hazard_pair) {
         Eigen::Vector2d normal;
+        // vector between hazards is the direction (in global frame) of the board
+        // compute the normal to the board that faces towards the observer, which gives us the board orientation
         if (compute_facing_normal(
                 xy(blood_track->kf.state()) - xy(fire_track->kf.state()),
                 xy(refined_board_position),
@@ -657,7 +688,7 @@ void ObjectTracker::apply_board_physical_constraints() {
     if (chosen_normals.empty()) {
         return;
     }
-
+    // vehicles and hazard both give us a normal, we can fuse them by adding them (we only case about orientation)
     Eigen::Vector2d fused_normal = Eigen::Vector2d::Zero();
     for (const auto& normal : chosen_normals) {
         fused_normal += normal;
@@ -666,7 +697,7 @@ void ObjectTracker::apply_board_physical_constraints() {
     if (fused_normal.norm() < 1e-6) {
         return;
     }
-
+    // extract yaw from orientation of fused normal
     fused_normal.normalize();
     board_track->theta_z = std::atan2(fused_normal.y(), fused_normal.x());
     board_track->has_orientation = true;

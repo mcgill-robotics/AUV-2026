@@ -359,7 +359,8 @@ private:
         for (auto& [label, perm_track] : persistent_objects) {
             publish_tracks.push_back(perm_track);
         }
-
+        // Octagon/Table refinement
+        // Get pointers to current table and octagon tracks if they exist
         const Track* table_track = nullptr;
         const Track* octagon_track = nullptr;
         for (const auto& track : publish_tracks) {
@@ -369,7 +370,7 @@ private:
                 octagon_track = &track;
             }
         }
-
+        // Set all non-table/octagon tracks for publishing 
         for (const auto& track : publish_tracks) {
             if (is_table_octagon_mode_enabled() &&
                 (track.label == "table" || track.label == "octagon")) {
@@ -384,7 +385,9 @@ private:
                 track.confidence,
                 track.age));
         }
-
+        // Refine Octagon
+        // Set octagon to table track xy if it exists then apply surface z
+        // Then add a ID paired back to table
         if (enable_octagon_from_table_xy && table_track != nullptr) {
             object_map_msg.array.push_back(build_object_message(
                 "table",
@@ -406,7 +409,9 @@ private:
                 table_track->confidence,
                 table_track->age));
         }
-
+        // Refine Table
+        // Set octagon to octagon track xy if it exists then apply floor z
+        // Then add a ID paired back to octagon
         if (enable_table_from_octagon_xy && octagon_track != nullptr) {
             Eigen::Vector3d octagon_position = octagon_track->get_position();
             octagon_position.z() = pool_surface_z;
@@ -430,9 +435,10 @@ private:
                 octagon_track->confidence,
                 octagon_track->age));
         }
-
+        // use midpoint of the two instead of setting one to the other
         if (enable_table_octagon_xy_midpoint && (table_track != nullptr || octagon_track != nullptr)) {
             Eigen::Vector2d pair_xy = Eigen::Vector2d::Zero();
+            // if both exist take midpoint, otherwise take existing track's xy
             if (table_track != nullptr && octagon_track != nullptr) {
                 pair_xy = (xy(table_track->get_position()) + xy(octagon_track->get_position())) / 2.0;
             } else if (table_track != nullptr) {
@@ -440,25 +446,26 @@ private:
             } else {
                 pair_xy = xy(octagon_track->get_position());
             }
-
+            // assign table Z to floor
             Eigen::Vector3d table_position =
                 table_track != nullptr
                     ? table_track->get_position()
                     : Eigen::Vector3d(pair_xy.x(), pair_xy.y(), pool_floor_z);
             table_position.x() = pair_xy.x();
             table_position.y() = pair_xy.y();
-
+            // assign octagon Z to surface
             Eigen::Vector3d octagon_position(pair_xy.x(), pair_xy.y(), pool_surface_z);
-
+            // assign table id based on if it depended on octagon
             const int table_id =
                 table_track != nullptr
                     ? table_track->id
                     : octagon_track->id + kSyntheticPairIdOffset;
+            // assign octagon id based on if it depended on table
             const int octagon_id =
                 octagon_track != nullptr
                     ? octagon_track->id
                     : table_track->id + kSyntheticPairIdOffset;
-
+            // only table has an orientation component
             const bool table_has_orientation =
                 table_track != nullptr && table_track->has_orientation;
             const double table_theta_z =
