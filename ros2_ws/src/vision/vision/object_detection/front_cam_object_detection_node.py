@@ -97,6 +97,7 @@ class FrontCamObjectDetectorNode():
         self.node.declare_parameter("zed_depth_maximum_distance", 20.0)
         self.node.declare_parameter("zed_depth_minimum_distance", 0.01)
         self.node.declare_parameter("zed_positional_tracking_depth_min_range", 0.3)
+        self.node.declare_parameter("zed_depth_mode", "NEURAL")
         self.node.declare_parameter("zed_depth_stabilization", 30)
         self.node.declare_parameter("zed_camera_resolution_sim", "SVGA")
         self.node.declare_parameter("zed_camera_resolution_real", "HD1080")
@@ -212,11 +213,26 @@ class FrontCamObjectDetectorNode():
         self.zed_depth_maximum_distance = (
             self.node.get_parameter('zed_depth_maximum_distance').get_parameter_value().double_value
         )
+        if self.zed_depth_maximum_distance > 40.0:
+            self.node.get_logger().warn(f"zed_depth_maximum_distance capped from {self.zed_depth_maximum_distance} to 40.0 (ZED maximum)")
+            self.zed_depth_maximum_distance = 40.0
+
         self.zed_depth_minimum_distance = (
             self.node.get_parameter('zed_depth_minimum_distance').get_parameter_value().double_value
         )
+        if self.zed_depth_minimum_distance < 0.2:
+            self.node.get_logger().warn(f"zed_depth_minimum_distance capped from {self.zed_depth_minimum_distance} to 0.2 (ZED minimum)")
+            self.zed_depth_minimum_distance = 0.2
+
         self.zed_positional_tracking_depth_min_range = (
             self.node.get_parameter('zed_positional_tracking_depth_min_range').get_parameter_value().double_value
+        )
+        if self.zed_positional_tracking_depth_min_range < 0.2:
+            self.node.get_logger().warn(f"zed_positional_tracking_depth_min_range capped from {self.zed_positional_tracking_depth_min_range} to 0.2 (ZED minimum)")
+            self.zed_positional_tracking_depth_min_range = 0.2
+
+        self.zed_depth_mode_name = (
+            self.node.get_parameter('zed_depth_mode').get_parameter_value().string_value
         )
         self.zed_depth_stabilization = (
             self.node.get_parameter('zed_depth_stabilization').get_parameter_value().integer_value
@@ -361,7 +377,11 @@ class FrontCamObjectDetectorNode():
             init_params.enable_right_side_measure = self.zed_enable_right_side_measure
             init_params.coordinate_units = sl.UNIT.METER
             init_params.coordinate_system = sl.COORDINATE_SYSTEM.RIGHT_HANDED_Z_UP_X_FWD
-            init_params.depth_mode = sl.DEPTH_MODE.NEURAL
+            init_params.depth_mode = self._enum_from_name(
+                sl.DEPTH_MODE,
+                self.zed_depth_mode_name,
+                'zed_depth_mode',
+            )
             init_params.depth_stabilization = self.zed_depth_stabilization if self.enable_vio else 0
             init_params.depth_maximum_distance = self.zed_depth_maximum_distance
             init_params.depth_minimum_distance = self.zed_depth_minimum_distance

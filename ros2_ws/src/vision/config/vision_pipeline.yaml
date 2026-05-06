@@ -22,6 +22,9 @@ object_detection:
     enhanced_topic: /vision/front_cam/image_enhanced # input topic if enhance_images is true, otherwise will subscribe to raw image topic
     detection_frame_topic: /vision/front_cam/detection_frame # synchronized camera-frame detections + AUV pose
     model_relative_path: models/local_rfdetr_onnx_test # inference-models package directory
+    # WARNING: These class names MUST be manually maintained when changing models to have new classes. 
+    # You must also update the `class_names.txt` file in the model package.
+    # A mismatch here can crash the vision node.
     class_names:
       - "gate"
       - "lane_marker"
@@ -62,7 +65,8 @@ object_detection:
     zed_enable_image_validity_check: false # wrapper-aligned frame corruption check
     zed_optional_opencv_calibration_file: '' # optional OpenCV override for factory calibration
     zed_depth_stabilization: 30 # init-time ZED depth stabilization; forced to 0 when enable_vio is false to avoid implicit tracking enablement
-    zed_depth_minimum_distance: 0.01 # minimum depth range in meters used by the ZED SDK
+    zed_depth_mode: NEURAL # NEURAL or NEURAL_PLUS
+    zed_depth_minimum_distance: 0.2 # minimum depth range in meters used by the ZED SDK
     zed_depth_maximum_distance: 20.0 # maximum depth range in meters used by the ZED SDK
 
     # ZED runtime depth / tracking controls
@@ -168,6 +172,9 @@ object_detection:
     model_detection_threshold: 0.40
     # relative to src directory
     model_relative_path: models/local_rfdetr_onnx_test # inference-models package directory (TODO: create this package)
+    # WARNING: These class names MUST be manually maintained when changing models to have new classes. 
+    # You must also update the `class_names.txt` file in the model package.
+    # A mismatch here can crash the vision node.
     class_names:
       - "gate"
       - "lane_marker"

@@ -2,6 +2,7 @@
 from datetime import datetime
 from functools import partial
 import os
+import subprocess
 import threading
 import time
 
@@ -307,7 +308,7 @@ class DownCamObjectDetectorNode():
             if now - self._last_collection_time >= self.collection_interval:
                 self._last_collection_time = now
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
-                filepath = os.path.join(self.collection_dir, f'down_{timestamp}.jpg')
+                filepath = os.path.join(self.collection_dir, f'down_{timestamp}.png')
                 cv2.imwrite(filepath, img)
                 self.node.get_logger().debug(f"Saved {filepath}")
 

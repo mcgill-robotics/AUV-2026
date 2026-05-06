@@ -11,7 +11,7 @@ from tqdm import tqdm
 parser = argparse.ArgumentParser(description="Run inference benchmark on a folder of images")
 parser.add_argument("folder", type=str, help="Path to folder containing images")
 parser.add_argument("--amount", type=int, default=10000, help="Number of inference iterations")
-# parser.add_argument("--delay", type=int, default=1, help="cv2.waitKey delay (ms), 0 for manual stepping")
+parser.add_argument("--delay", type=int, default=1, help="cv2.waitKey delay (ms), 0 for manual stepping")
 args = parser.parse_args()
 
 # Collect image paths from folder
@@ -49,18 +49,18 @@ for i in tqdm(range(args.amount)):
     # Convert to supervision and visualize
     detections = predictions[0].to_supervision()
     
-    # labels = [
-    #     f"Class: {class_id} {confidence:.2f}"
-    #     for class_id, confidence in zip(detections.class_id, detections.confidence)
-    # ]
+    labels = [
+        f"Class: {class_id} {confidence:.2f}"
+        for class_id, confidence in zip(detections.class_id, detections.confidence)
+    ]
     
-    # annotated_image = bounding_box_annotator.annotate(scene=image.copy(), detections=detections)
-    # annotated_image = label_annotator.annotate(scene=annotated_image, detections=detections, labels=labels)
+    annotated_image = bounding_box_annotator.annotate(scene=image.copy(), detections=detections)
+    annotated_image = label_annotator.annotate(scene=annotated_image, detections=detections, labels=labels)
     
-    # cv2.imshow("Inference", annotated_image)
-    # if cv2.waitKey(args.delay) & 0xFF == ord('q'):
-    #     print("Visualization interrupted by user.")
-    #     break
+    cv2.imshow("Inference", annotated_image)
+    if cv2.waitKey(args.delay) & 0xFF == ord('q'):
+        print("Visualization interrupted by user.")
+        break
         
 print(f"Last image: {image_path}")
 print("Detections: ", predictions[0].to_supervision())
