@@ -357,9 +357,6 @@ private:
         }
 
         for (auto& [label, perm_track] : persistent_objects) {
-            if (enable_octagon_from_table_xy && label == "octagon") {
-                continue;
-            }
             publish_tracks.push_back(perm_track);
         }
 

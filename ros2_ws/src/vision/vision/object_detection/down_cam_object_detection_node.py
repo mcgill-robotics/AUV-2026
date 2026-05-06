@@ -43,6 +43,8 @@ class DownCamObjectDetectorNode():
         self.node.declare_parameter("model_detection_threshold", 0.40)
         self.node.declare_parameter('compressed', False)
         self.node.declare_parameter("enable_object_detection", True)
+        self.node.declare_parameter('sim', False)
+        self.node.declare_parameter('image_topic', '')
 
         # ── Camera hardware parameters ───────────────────────────
         self.node.declare_parameter('video_device', '/dev/video0')
@@ -92,6 +94,8 @@ class DownCamObjectDetectorNode():
         self.enable_object_detection = (
             self.node.get_parameter('enable_object_detection').get_parameter_value().bool_value
         )
+        self.sim = self.node.get_parameter('sim').get_parameter_value().bool_value
+        self.image_topic = self.node.get_parameter('image_topic').get_parameter_value().string_value
 
         # Camera hardware
         self.video_device = self.node.get_parameter('video_device').get_parameter_value().string_value
@@ -147,14 +151,24 @@ class DownCamObjectDetectorNode():
             self.node.get_logger().info(f"Publishing annotated debug image to: {publish_topic}")
 
         # ── Open camera & apply controls ──────────────────────────
-        self.cap = self._open_camera()
-        self._apply_camera_controls()
+        self.node.get_logger().info(f"HERE!!!!!!!!!! {self.sim}")
+        if not self.sim:
+            self.cap = self._open_camera()
+            self._apply_camera_controls()
+
+            # ── Start grab loop ──────────────────────────────────────
+            self._grab_thread = threading.Thread(target=self._grab_loop, daemon=True)
+            self._grab_thread.start()
+        else:
+            self.node.get_logger().info(f"Simulation mode: Subscribing to {self.image_topic}")
+            self.image_sub = self.node.create_subscription(
+                input_format,
+                self.image_topic,
+                self._image_callback,
+                queue_size
+            )
 
         self.node.get_logger().info(f"{self.node.get_name()} initialized.")
-
-        # ── Start grab loop ──────────────────────────────────────
-        self._grab_thread = threading.Thread(target=self._grab_loop, daemon=True)
-        self._grab_thread.start()
 
     # ──────────────────────────────────────────────────────────────
     # Camera helpers
@@ -268,41 +282,57 @@ class DownCamObjectDetectorNode():
                 )
                 continue
 
-            self._frame_counter += 1
             frame_stamp = self.node.get_clock().now()
+            self._process_frame(img, frame_stamp)
 
-            # ── Dataset collection ────────────────────────────
-            if self._collecting:
-                now = time.time()
-                if now - self._last_collection_time >= self.collection_interval:
-                    self._last_collection_time = now
-                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
-                    filepath = os.path.join(self.collection_dir, f'down_{timestamp}.jpg')
-                    cv2.imwrite(filepath, img)
-                    self.node.get_logger().debug(f"Saved {filepath}")
-
-            # ── Inference ─────────────────────────────────────
-            if self.enable_object_detection:
-                tracked_detections = get_detections(self, img)
+    def _image_callback(self, msg):
+        try:
+            if self.compressed:
+                img = self.bridge.compressed_imgmsg_to_cv2(msg, desired_encoding="bgr8")
             else:
-                tracked_detections = None
+                img = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
+        except Exception as e:
+            self.node.get_logger().error(f"CV Bridge error: {e}", throttle_duration_sec=5.0)
+            return
             
-            det_msg = build_detection2d_msg(self, tracked_detections)
-            det_msg.header.stamp = frame_stamp.to_msg()
-            det_msg.header.frame_id = self.camera_frame_id
-            self.pub_detections.publish(det_msg)
+        frame_stamp = rclpy.time.Time.from_msg(msg.header.stamp)
+        self._process_frame(img, frame_stamp)
 
-            if (
-                self.publish_annotated_image
-                and self._frame_counter % self.publish_annotated_every_n_frames == 0
-            ):
-                publish_annotated_image_util(
-                    self,
-                    img,
-                    tracked_detections,
-                    frame_stamp.to_msg(),
-                    self.camera_frame_id,
-                )
+    def _process_frame(self, img, frame_stamp):
+        self._frame_counter += 1
+
+        # ── Dataset collection ────────────────────────────
+        if self._collecting:
+            now = time.time()
+            if now - self._last_collection_time >= self.collection_interval:
+                self._last_collection_time = now
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+                filepath = os.path.join(self.collection_dir, f'down_{timestamp}.jpg')
+                cv2.imwrite(filepath, img)
+                self.node.get_logger().debug(f"Saved {filepath}")
+
+        # ── Inference ─────────────────────────────────────
+        if self.enable_object_detection:
+            tracked_detections = get_detections(self, img)
+        else:
+            tracked_detections = None
+        
+        det_msg = build_detection2d_msg(self, tracked_detections)
+        det_msg.header.stamp = frame_stamp.to_msg()
+        det_msg.header.frame_id = self.camera_frame_id
+        self.pub_detections.publish(det_msg)
+
+        if (
+            self.publish_annotated_image
+            and self._frame_counter % self.publish_annotated_every_n_frames == 0
+        ):
+            publish_annotated_image_util(
+                self,
+                img,
+                tracked_detections,
+                frame_stamp.to_msg(),
+                self.camera_frame_id,
+            )
 
     def destroy(self):
         """Release camera resources."""

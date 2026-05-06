@@ -1,8 +1,8 @@
 # not the standard ROS node config parameters, these are topics passed to the vision pipeline launch file
 camera:
   # inputs to the vision pipeline
-  front_cam_topic: /zed/zed_node/rgb/color/rect/image 
-  down_cam_topic: /down_cam/image_raw
+  front_cam_topic: /zed/zed_node/rgb/color/rect/image # will be used if sim=true and no zed sdk 
+  down_cam_topic: /down_cam/image_raw # will be used if sim=true
 
 image_enhancement:
   front_cam: 
@@ -18,6 +18,7 @@ object_detection:
   front_cam:
     # Topics / model
     enable_object_detection: true
+    has_zed_sdk: true
     enhanced_topic: /vision/front_cam/image_enhanced # input topic if enhance_images is true, otherwise will subscribe to raw image topic
     detection_frame_topic: /vision/front_cam/detection_frame # synchronized camera-frame detections + AUV pose
     model_relative_path: models/local_rfdetr_onnx_test # inference-models package directory
@@ -84,8 +85,8 @@ object_detection:
     zed_led_status: -1 # -1 leaves the SDK/camera default unchanged; otherwise 0 off, 1 on
 
     # Pose / frame sync
-    enable_vio: true # if false, skip ZED positional tracking and do not publish vision VIO pose/TF
-    pose_source: zed_vio # auv_pose uses state/pose for synchronized detection frames; zed_vio uses the front ZED VIO estimate
+    enable_vio: false # if false, skip ZED positional tracking and do not publish vision VIO pose/TF
+    pose_source: auv_pose # auv_pose uses state/pose for synchronized detection frames; zed_vio uses the front ZED VIO estimate
     auv_pose_topic: state/pose # official aggregated AUV pose used for synchronized detection frames when pose_source=auv_pose
     vio_pose_topic: /vision/vio_pose # optional vision VIO measurement output for debugging or future fusion
     broadcast_vio_tf: true # if VIO is enabled, publish pool_link -> auv_vio_link for visualization/debugging

@@ -13,7 +13,12 @@ import cv2
 from cv_bridge import CvBridge
 from geometry_msgs.msg import PoseStamped, TransformStamped
 import numpy as np
-import pyzed.sl as sl
+try:
+    import pyzed.sl as sl
+    ZED_SDK_AVAILABLE = True
+except ImportError:
+    sl = None
+    ZED_SDK_AVAILABLE = False
 import rclpy
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
@@ -40,17 +45,21 @@ from vision.object_detection.utils import (
 class FrontCamObjectDetectorNode():
     POSE_SOURCE_ZED_VIO = "zed_vio"
     POSE_SOURCE_AUV_POSE = "auv_pose"
-    ZED_RUNTIME_CAMERA_SETTINGS = (
-        ("zed_brightness", sl.VIDEO_SETTINGS.BRIGHTNESS),
-        ("zed_contrast", sl.VIDEO_SETTINGS.CONTRAST),
-        ("zed_hue", sl.VIDEO_SETTINGS.HUE),
-        ("zed_saturation", sl.VIDEO_SETTINGS.SATURATION),
-        ("zed_sharpness", sl.VIDEO_SETTINGS.SHARPNESS),
-        ("zed_gamma", sl.VIDEO_SETTINGS.GAMMA),
-        ("zed_auto_exposure_gain", sl.VIDEO_SETTINGS.AEC_AGC),
-        ("zed_auto_whitebalance", sl.VIDEO_SETTINGS.WHITEBALANCE_AUTO),
-        ("zed_led_status", sl.VIDEO_SETTINGS.LED_STATUS),
-    )
+    
+    if ZED_SDK_AVAILABLE:
+        ZED_RUNTIME_CAMERA_SETTINGS = (
+            ("zed_brightness", sl.VIDEO_SETTINGS.BRIGHTNESS),
+            ("zed_contrast", sl.VIDEO_SETTINGS.CONTRAST),
+            ("zed_hue", sl.VIDEO_SETTINGS.HUE),
+            ("zed_saturation", sl.VIDEO_SETTINGS.SATURATION),
+            ("zed_sharpness", sl.VIDEO_SETTINGS.SHARPNESS),
+            ("zed_gamma", sl.VIDEO_SETTINGS.GAMMA),
+            ("zed_auto_exposure_gain", sl.VIDEO_SETTINGS.AEC_AGC),
+            ("zed_auto_whitebalance", sl.VIDEO_SETTINGS.WHITEBALANCE_AUTO),
+            ("zed_led_status", sl.VIDEO_SETTINGS.LED_STATUS),
+        )
+    else:
+        ZED_RUNTIME_CAMERA_SETTINGS = ()
 
     @staticmethod
     def _enum_from_name(enum_cls, raw_name, param_name: str):
@@ -80,6 +89,8 @@ class FrontCamObjectDetectorNode():
         self.node.declare_parameter("compressed", Parameter.Type.BOOL)
         self.node.declare_parameter("detection_frame_topic", Parameter.Type.STRING)
         self.node.declare_parameter("enable_object_detection", True)
+        self.node.declare_parameter("has_zed_sdk", True)
+        self.node.declare_parameter("image_topic", "")
 
         self.node.declare_parameter("model_detection_threshold", 0.40)
         self.node.declare_parameter("depth_confidence_threshold", 95)
@@ -191,6 +202,8 @@ class FrontCamObjectDetectorNode():
         self.collect_depth_image = self.node.get_parameter('collect_depth_image').get_parameter_value().bool_value
         self.compressed = self.node.get_parameter('compressed').get_parameter_value().bool_value
         self.enable_object_detection = self.node.get_parameter('enable_object_detection').get_parameter_value().bool_value
+        self.has_zed_sdk = self.node.get_parameter('has_zed_sdk').get_parameter_value().bool_value
+        self.image_topic = self.node.get_parameter('image_topic').get_parameter_value().string_value
 
         self.conf_threshold = self.node.get_parameter('model_detection_threshold').get_parameter_value().double_value
         self.depth_confidence_threshold = (
@@ -250,6 +263,11 @@ class FrontCamObjectDetectorNode():
         ).get_parameter_value().string_value
         stream_port = self.node.get_parameter('stream_port').get_parameter_value().integer_value
         self.enable_vio = self.node.get_parameter('enable_vio').get_parameter_value().bool_value
+        if not self.has_zed_sdk and self.enable_vio:
+            self.enable_vio = False
+            self.node.get_logger().warn(
+                (f"WARNING: {self.node.get_name()} disabling vio since has_zed_sdk is False.")
+            )
         self.pose_source = self.node.get_parameter('pose_source').get_parameter_value().string_value
         self.auv_pose_topic = self.node.get_parameter('auv_pose_topic').get_parameter_value().string_value
         self.enable_gate_top_crop = self.node.get_parameter('enable_gate_top_crop').get_parameter_value().bool_value
@@ -319,111 +337,116 @@ class FrontCamObjectDetectorNode():
             self.node.get_logger().fatal("Exiting due to missing model.")
             raise FileNotFoundError(f"Model path does not exist: {model_path}")
         
-        self.zed = sl.Camera()
-        init_params = sl.InitParameters()
-        init_params.sdk_verbose = self.zed_sdk_verbose
-        init_params.sdk_gpu_id = self.zed_sdk_gpu_id
-        init_params.camera_resolution = self._enum_from_name(
-            sl.RESOLUTION,
-            self.zed_camera_resolution_name,
-            'zed_camera_resolution',
-        )
-        init_params.camera_fps = self.zed_camera_fps
-        init_params.camera_disable_self_calib = not self.zed_self_calib
-        init_params.camera_image_flip = self._enum_from_name(
-            sl.FLIP_MODE,
-            self.zed_camera_flip_mode_name,
-            'zed_camera_flip_mode',
-        )
-        init_params.enable_right_side_measure = self.zed_enable_right_side_measure
-        init_params.coordinate_units = sl.UNIT.METER
-        init_params.coordinate_system = sl.COORDINATE_SYSTEM.RIGHT_HANDED_Z_UP_X_FWD
-        init_params.depth_mode = sl.DEPTH_MODE.NEURAL
-        init_params.depth_stabilization = self.zed_depth_stabilization if self.enable_vio else 0
-        init_params.depth_maximum_distance = self.zed_depth_maximum_distance
-        init_params.depth_minimum_distance = self.zed_depth_minimum_distance
-        init_params.enable_image_enhancement = self.zed_enable_image_enhancement
-        init_params.open_timeout_sec = self.zed_open_timeout_sec
-        init_params.async_grab_camera_recovery = self.zed_async_grab_camera_recovery
-        init_params.grab_compute_capping_fps = self.zed_grab_compute_capping_fps
-        init_params.enable_image_validity_check = self.zed_enable_image_validity_check
-        if self.zed_optional_opencv_calibration_file:
-            init_params.optional_opencv_calibration_file = self.zed_optional_opencv_calibration_file
-        init_params.input = sl.InputType()
+        if self.has_zed_sdk:
+            if not ZED_SDK_AVAILABLE:
+                self.node.get_logger().fatal("has_zed_sdk is true but pyzed.sl is not installed!")
+                raise ImportError("pyzed.sl is not installed.")
+                
+            self.zed = sl.Camera()
+            init_params = sl.InitParameters()
+            init_params.sdk_verbose = self.zed_sdk_verbose
+            init_params.sdk_gpu_id = self.zed_sdk_gpu_id
+            init_params.camera_resolution = self._enum_from_name(
+                sl.RESOLUTION,
+                self.zed_camera_resolution_name,
+                'zed_camera_resolution',
+            )
+            init_params.camera_fps = self.zed_camera_fps
+            init_params.camera_disable_self_calib = not self.zed_self_calib
+            init_params.camera_image_flip = self._enum_from_name(
+                sl.FLIP_MODE,
+                self.zed_camera_flip_mode_name,
+                'zed_camera_flip_mode',
+            )
+            init_params.enable_right_side_measure = self.zed_enable_right_side_measure
+            init_params.coordinate_units = sl.UNIT.METER
+            init_params.coordinate_system = sl.COORDINATE_SYSTEM.RIGHT_HANDED_Z_UP_X_FWD
+            init_params.depth_mode = sl.DEPTH_MODE.NEURAL
+            init_params.depth_stabilization = self.zed_depth_stabilization if self.enable_vio else 0
+            init_params.depth_maximum_distance = self.zed_depth_maximum_distance
+            init_params.depth_minimum_distance = self.zed_depth_minimum_distance
+            init_params.enable_image_enhancement = self.zed_enable_image_enhancement
+            init_params.open_timeout_sec = self.zed_open_timeout_sec
+            init_params.async_grab_camera_recovery = self.zed_async_grab_camera_recovery
+            init_params.grab_compute_capping_fps = self.zed_grab_compute_capping_fps
+            init_params.enable_image_validity_check = self.zed_enable_image_validity_check
+            if self.zed_optional_opencv_calibration_file:
+                init_params.optional_opencv_calibration_file = self.zed_optional_opencv_calibration_file
+            init_params.input = sl.InputType()
 
-        if sim:
-            stream_ip = self.node.get_parameter('stream_ip').get_parameter_value().string_value
-            init_params.set_from_stream(stream_ip, stream_port)
+            if sim:
+                stream_ip = self.node.get_parameter('stream_ip').get_parameter_value().string_value
+                init_params.set_from_stream(stream_ip, stream_port)
 
-        self.image_buffer = sl.Mat()
+            self.image_buffer = sl.Mat()
 
-        for i in range(5):
-            result = self.zed.open(init_params)
-            if result == sl.ERROR_CODE.SUCCESS: break
-            else:
-                self.node.get_logger().error(f"Failed to open zed camera:, retrying {5-i} more times: {result}")
-                self.zed.close()
-                sleep(2)
-        
-        if result != sl.ERROR_CODE.SUCCESS:
-            self.node.get_logger().fatal("Failed to open zed camera after 5 attempts")
-            raise RuntimeError("Failed to open ZED camera after 5 attempts.")
-
-        self._apply_zed_camera_controls()
-
-        if self.enable_vio:
-            # Enable Positional Tracking
-            pos_param = sl.PositionalTrackingParameters()
-            pos_param.mode = sl.POSITIONAL_TRACKING_MODE.GEN_1
-            pos_param.enable_imu_fusion = True
-            pos_param.set_floor_as_origin = False
-            pos_param.enable_area_memory = False
-            pos_param.depth_min_range = self.zed_positional_tracking_depth_min_range
+            for i in range(5):
+                result = self.zed.open(init_params)
+                if result == sl.ERROR_CODE.SUCCESS: break
+                else:
+                    self.node.get_logger().error(f"Failed to open zed camera:, retrying {5-i} more times: {result}")
+                    self.zed.close()
+                    sleep(2)
             
-            err = self.zed.enable_positional_tracking(pos_param)
+            if result != sl.ERROR_CODE.SUCCESS:
+                self.node.get_logger().fatal("Failed to open zed camera after 5 attempts")
+                raise RuntimeError("Failed to open ZED camera after 5 attempts.")
+
+            self._apply_zed_camera_controls()
+
+            if self.enable_vio:
+                # Enable Positional Tracking
+                pos_param = sl.PositionalTrackingParameters()
+                pos_param.mode = sl.POSITIONAL_TRACKING_MODE.GEN_1
+                pos_param.enable_imu_fusion = True
+                pos_param.set_floor_as_origin = False
+                pos_param.enable_area_memory = False
+                pos_param.depth_min_range = self.zed_positional_tracking_depth_min_range
+                
+                err = self.zed.enable_positional_tracking(pos_param)
+                if err != sl.ERROR_CODE.SUCCESS:
+                    self.node.get_logger().error(f"Failed to enable positional tracking: {err}")
+                    self.zed.close()
+                    raise RuntimeError(f"Failed to enable ZED positional tracking: {err}")
+            else:
+                self.node.get_logger().info("VIO disabled: skipping ZED positional tracking and VIO pose publication.")
+
+            # Configure ZED Object Detection
+            obj_param = sl.ObjectDetectionParameters()
+            obj_param.detection_model = sl.OBJECT_DETECTION_MODEL.CUSTOM_BOX_OBJECTS
+            obj_param.enable_tracking = False
+            obj_param.enable_segmentation = False
+            obj_param.filtering_mode = sl.OBJECT_FILTERING_MODE.NONE
+
+            err = self.zed.enable_object_detection(obj_param)
             if err != sl.ERROR_CODE.SUCCESS:
-                self.node.get_logger().error(f"Failed to enable positional tracking: {err}")
+                self.node.get_logger().error(f"Failed to enable object detection: {err}")
                 self.zed.close()
-                raise RuntimeError(f"Failed to enable ZED positional tracking: {err}")
-        else:
-            self.node.get_logger().info("VIO disabled: skipping ZED positional tracking and VIO pose publication.")
+                raise RuntimeError(f"Failed to enable ZED object detection: {err}")
+            
+            self.obj_runtime_param = sl.CustomObjectDetectionRuntimeParameters()
+            self.obj_runtime_param.object_detection_properties.detection_confidence_threshold = 0
+            self.obj_runtime_param.object_detection_properties.is_grounded = False
+            self.obj_runtime_param.object_detection_properties.is_static = True
 
-        # Configure ZED Object Detection
-        obj_param = sl.ObjectDetectionParameters()
-        obj_param.detection_model = sl.OBJECT_DETECTION_MODEL.CUSTOM_BOX_OBJECTS
-        obj_param.enable_tracking = False
-        obj_param.enable_segmentation = False
-        obj_param.filtering_mode = sl.OBJECT_FILTERING_MODE.NONE
+            self.runtime_params = sl.RuntimeParameters()
+            self.runtime_params.measure3D_reference_frame = sl.REFERENCE_FRAME.CAMERA
+            self.runtime_params.confidence_threshold = self.depth_confidence_threshold
+            self.runtime_params.texture_confidence_threshold  = 100
 
-        err = self.zed.enable_object_detection(obj_param)
-        if err != sl.ERROR_CODE.SUCCESS:
-            self.node.get_logger().error(f"Failed to enable object detection: {err}")
-            self.zed.close()
-            raise RuntimeError(f"Failed to enable ZED object detection: {err}")
-        
-        self.obj_runtime_param = sl.CustomObjectDetectionRuntimeParameters()
-        self.obj_runtime_param.object_detection_properties.detection_confidence_threshold = 0
-        self.obj_runtime_param.object_detection_properties.is_grounded = False
-        self.obj_runtime_param.object_detection_properties.is_static = True
+            if not sim:
+                # Configure streaming
+                stream_params = sl.StreamingParameters()
+                stream_params.codec = sl.STREAMING_CODEC.H264
+                stream_params.port = stream_port
+                stream_params.bitrate = 8000 # kbps
 
-        self.runtime_params = sl.RuntimeParameters()
-        self.runtime_params.measure3D_reference_frame = sl.REFERENCE_FRAME.CAMERA
-        self.runtime_params.confidence_threshold = self.depth_confidence_threshold
-        self.runtime_params.texture_confidence_threshold  = 100
-
-        if not sim:
-            # Configure streaming
-            stream_params = sl.StreamingParameters()
-            stream_params.codec = sl.STREAMING_CODEC.H264
-            stream_params.port = stream_port
-            stream_params.bitrate = 8000 # kbps
-
-            # Enable streaming
-            err = self.zed.enable_streaming(stream_params)
-            if err != sl.ERROR_CODE.SUCCESS:
-                self.node.get_logger().error(f"Streaming not enabled: {err}")
-                self.zed.close()
-                raise RuntimeError(f"Failed to enable ZED streaming: {err}")
+                # Enable streaming
+                err = self.zed.enable_streaming(stream_params)
+                if err != sl.ERROR_CODE.SUCCESS:
+                    self.node.get_logger().error(f"Streaming not enabled: {err}")
+                    self.zed.close()
+                    raise RuntimeError(f"Failed to enable ZED streaming: {err}")
 
         # Load Model using inference-models with TensorRT acceleration
         if self.enable_object_detection:
@@ -433,8 +456,8 @@ class FrontCamObjectDetectorNode():
             self.node.get_logger().info("Object detection is disabled. Publishing raw feed only.")
         
         self.node.get_logger().info(f"Setting QOL queue size to: {queue_size}")
-
-        self.camera_info_template = self._build_camera_info_template()
+        if self.has_zed_sdk:
+            self.camera_info_template = self._build_camera_info_template()
         
         self.pub_detection_frame = self.node.create_publisher(
             VisionDetectionFrame,
@@ -501,9 +524,18 @@ class FrontCamObjectDetectorNode():
         self.tf_broadcaster = TransformBroadcaster(self.node)
         self.node.get_logger().info(f"{self.node.get_name()} initialized.")
 
-        # Start the grab loop on a dedicated daemon thread
-        self._grab_thread = threading.Thread(target=self._grab_loop, daemon=True)
-        self._grab_thread.start()
+        if self.has_zed_sdk:
+            # Start the grab loop on a dedicated daemon thread
+            self._grab_thread = threading.Thread(target=self._grab_loop, daemon=True)
+            self._grab_thread.start()
+        else:
+            self.node.get_logger().info(f"ZED SDK disabled. Subscribing to {self.image_topic}")
+            self.image_sub = self.node.create_subscription(
+                input_format,
+                self.image_topic,
+                self._image_callback,
+                queue_size
+            )
 
     def _apply_zed_camera_controls(self):
         applied_settings = []
@@ -699,48 +731,13 @@ class FrontCamObjectDetectorNode():
 
             frame_stamp = self.node.get_clock().now().to_msg()
             vio_pose_msg = self._get_vio_world_pose_snapshot(frame_stamp) if self.enable_vio else None
-            if vio_pose_msg is not None:
-                # Publish VIO pose continuously, even without active detections
-                self.pub_vio_pose.publish(vio_pose_msg)
             
-            # Publish VIO TF if configured
-            if vio_pose_msg is not None and self.broadcast_vio_tf:
-                t = TransformStamped()
-                t.header.stamp = frame_stamp
-                t.header.frame_id = self.global_frame_id
-                t.child_frame_id = self.vio_frame_id
-                t.transform.translation.x = vio_pose_msg.pose.position.x
-                t.transform.translation.y = vio_pose_msg.pose.position.y
-                t.transform.translation.z = vio_pose_msg.pose.position.z
-                t.transform.rotation = vio_pose_msg.pose.orientation
-                self.tf_broadcaster.sendTransform(t)
-
-            if not self._has_required_pose_source():
-                self.node.get_logger().warn(
-                    f"Waiting for AUV pose on {self.auv_pose_topic}",
-                    throttle_duration_sec=1.0
-                )
-                continue
-
-            detection_frame_auv_pose_msg = self._capture_detection_frame_auv_pose_snapshot(
-                frame_stamp,
-                vio_pose_msg=vio_pose_msg,
-            )
-            if detection_frame_auv_pose_msg is None:
-                self.node.get_logger().warn(
-                    f"Waiting for AUV pose on {self.auv_pose_topic}",
-                    throttle_duration_sec=1.0
-                )
-                continue
-
             # --- ZED Health Checks ---
             health = self.zed.get_health_status()
             if health.low_image_quality:
                 self.node.get_logger().warn("Low image quality", throttle_duration_sec=5.0)
-                # continue
             if health.low_lighting:
                 self.node.get_logger().warn("Low lighting conditions", throttle_duration_sec=5.0)
-                # continue
 
             self.zed.retrieve_image(self.image_buffer, sl.VIEW.LEFT)
             img = cv2.cvtColor(self.image_buffer.get_data(), cv2.COLOR_RGBA2RGB)
@@ -759,65 +756,138 @@ class FrontCamObjectDetectorNode():
             if should_get_depth:
                 self.zed.retrieve_measure(self.depth_buffer, sl.MEASURE.DEPTH)
                 depth = self.depth_buffer.get_data() # sl.UNIT.METER, shape (H,W) with NaNs
+            else:
+                depth = None
 
-            if is_collection_frame:
-                self._last_collection_time = time.time()
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
-                
-                filepath = os.path.join(self.collection_dir, f'front_{timestamp}.jpg')
-                cv2.imwrite(filepath, img)
-                
-                if self.collect_depth_image:
-                    depth_mm = np.nan_to_num(depth, nan=0.0, posinf=0.0, neginf=0.0)
-                    depth_mm = (depth_mm * 1000.0).clip(0, 65535).astype(np.uint16)
-                    depth_path = os.path.join(self.depth_collection_dir, f'depth_{timestamp}.png')
-                    cv2.imwrite(depth_path, depth_mm)
-                
-                self.node.get_logger().debug(f"Collected dataset step: {timestamp}")
+            self._process_frame(
+                img, 
+                frame_stamp, 
+                depth=depth, 
+                vio_pose_msg=vio_pose_msg, 
+                is_collection_frame=is_collection_frame, 
+                t_start=t_start
+            )
+
+    def _image_callback(self, msg):
+        try:
+            if self.compressed:
+                img = self.bridge.compressed_imgmsg_to_cv2(msg, desired_encoding="rgb8")
+            else:
+                img = self.bridge.imgmsg_to_cv2(msg, desired_encoding="rgb8")
+        except Exception as e:
+            self.node.get_logger().error(f"CV Bridge error: {e}", throttle_duration_sec=5.0)
+            return
             
-            if self.publish_depth_image and self._frame_counter % self.publish_depth_every_n_frames == 0:
-                if self.publish_depth_compressed:
-                    depth_mm = np.nan_to_num(depth, nan=0.0, posinf=0.0, neginf=0.0)
-                    depth_mm = (depth_mm * 1000.0).clip(0, 65535).astype(np.uint16)
-                    depth_msg = self.bridge.cv2_to_compressed_imgmsg(depth_mm, dst_format='png')
-                else:
-                    depth_msg = self.bridge.cv2_to_imgmsg(depth, encoding="32FC1")
-                
-                depth_msg.header.stamp = frame_stamp
-                depth_msg.header.frame_id = self.image_frame_id
-                self.pub_depth_image.publish(depth_msg)
+        frame_stamp = msg.header.stamp
+        t_start = time.perf_counter()
+        self._frame_counter += 1
+        
+        is_collection_frame = self._collecting and (time.time() - self._last_collection_time) >= self.collection_interval
+        
+        self._process_frame(
+            img, 
+            frame_stamp, 
+            depth=None, 
+            vio_pose_msg=None, 
+            is_collection_frame=is_collection_frame, 
+            t_start=t_start
+        )
 
+    def _process_frame(self, img, frame_stamp, depth=None, vio_pose_msg=None, is_collection_frame=False, t_start=None):
+        if vio_pose_msg is not None:
+            # Publish VIO pose continuously, even without active detections
+            self.pub_vio_pose.publish(vio_pose_msg)
+        
+        # Publish VIO TF if configured
+        if vio_pose_msg is not None and self.broadcast_vio_tf:
+            t = TransformStamped()
+            t.header.stamp = frame_stamp
+            t.header.frame_id = self.global_frame_id
+            t.child_frame_id = self.vio_frame_id
+            t.transform.translation.x = vio_pose_msg.pose.position.x
+            t.transform.translation.y = vio_pose_msg.pose.position.y
+            t.transform.translation.z = vio_pose_msg.pose.position.z
+            t.transform.rotation = vio_pose_msg.pose.orientation
+            self.tf_broadcaster.sendTransform(t)
+
+        if not self._has_required_pose_source():
+            self.node.get_logger().warn(
+                f"Waiting for AUV pose on {self.auv_pose_topic}",
+                throttle_duration_sec=1.0
+            )
+            return
+
+        detection_frame_auv_pose_msg = self._capture_detection_frame_auv_pose_snapshot(
+            frame_stamp,
+            vio_pose_msg=vio_pose_msg,
+        )
+        if detection_frame_auv_pose_msg is None:
+            self.node.get_logger().warn(
+                f"Waiting for AUV pose on {self.auv_pose_topic}",
+                throttle_duration_sec=1.0
+            )
+            return
+
+        if is_collection_frame:
+            self._last_collection_time = time.time()
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+            
+            filepath = os.path.join(self.collection_dir, f'front_{timestamp}.jpg')
+            cv2.imwrite(filepath, img)
+            
+            if self.collect_depth_image and depth is not None:
+                depth_mm = np.nan_to_num(depth, nan=0.0, posinf=0.0, neginf=0.0)
+                depth_mm = (depth_mm * 1000.0).clip(0, 65535).astype(np.uint16)
+                depth_path = os.path.join(self.depth_collection_dir, f'depth_{timestamp}.png')
+                cv2.imwrite(depth_path, depth_mm)
+            
+            self.node.get_logger().debug(f"Collected dataset step: {timestamp}")
+        
+        if self.publish_depth_image and depth is not None and self._frame_counter % self.publish_depth_every_n_frames == 0:
+            if self.publish_depth_compressed:
+                depth_mm = np.nan_to_num(depth, nan=0.0, posinf=0.0, neginf=0.0)
+                depth_mm = (depth_mm * 1000.0).clip(0, 65535).astype(np.uint16)
+                depth_msg = self.bridge.cv2_to_compressed_imgmsg(depth_mm, dst_format='png')
+            else:
+                depth_msg = self.bridge.cv2_to_imgmsg(depth, encoding="32FC1")
+            
+            depth_msg.header.stamp = frame_stamp
+            depth_msg.header.frame_id = self.image_frame_id
+            self.pub_depth_image.publish(depth_msg)
+
+        if self.has_zed_sdk:
             self._publish_camera_info(frame_stamp)
 
-            if self.enable_object_detection:
-                tracked_detections = get_detections(self, img)
-            else:
-                tracked_detections = None
+        if self.enable_object_detection:
+            tracked_detections = get_detections(self, img)
+        else:
+            tracked_detections = None
 
-            # --- Border Exclusion Filter ---
-            if self.enable_border_exclusion and tracked_detections is not None:
-                img_h, img_w = img.shape[:2]
-                margin = self.border_exclusion_margin_px
-                mask = np.ones(len(tracked_detections), dtype=bool)
-                for i in range(len(tracked_detections)):
-                    cls_id = int(tracked_detections.class_id[i])
-                    if cls_id >= len(self.class_names): continue
-                    label = self.class_names[cls_id]
-                    
-                    if label in self.border_exclusion_labels:
-                        x1, y1, x2, y2 = tracked_detections.xyxy[i]
-                        if (x1 <= margin or x2 >= img_w - margin or
-                            y1 <= margin or y2 >= img_h - margin):
-                            mask[i] = False
-                tracked_detections = tracked_detections[mask]
+        # --- Border Exclusion Filter ---
+        if self.enable_border_exclusion and tracked_detections is not None:
+            img_h, img_w = img.shape[:2]
+            margin = self.border_exclusion_margin_px
+            mask = np.ones(len(tracked_detections), dtype=bool)
+            for i in range(len(tracked_detections)):
+                cls_id = int(tracked_detections.class_id[i])
+                if cls_id >= len(self.class_names): continue
+                label = self.class_names[cls_id]
+                
+                if label in self.border_exclusion_labels:
+                    x1, y1, x2, y2 = tracked_detections.xyxy[i]
+                    if (x1 <= margin or x2 >= img_w - margin or
+                        y1 <= margin or y2 >= img_h - margin):
+                        mask[i] = False
+            tracked_detections = tracked_detections[mask]
 
-            det_msg = VisionDetectionFrame()
-            det_msg.header.stamp = frame_stamp
-            det_msg.header.frame_id = self.detection_frame_id
-            det_msg.auv_pose = detection_frame_auv_pose_msg
-            det_objects = []
+        det_msg = VisionDetectionFrame()
+        det_msg.header.stamp = frame_stamp
+        det_msg.header.frame_id = self.detection_frame_id
+        det_msg.auv_pose = detection_frame_auv_pose_msg
+        det_objects = []
 
-            if tracked_detections is not None:
+        if tracked_detections is not None:
+            if self.has_zed_sdk:
                 # 1. Ingest into ZED SDK
                 custom_boxes = []
                 model_bboxes_by_unique_id = {}
@@ -910,14 +980,32 @@ class FrontCamObjectDetectorNode():
                             detection.bbox_size_y,
                         ) = bbox_from_zed_corners(obj.bounding_box_2d)
                     det_objects.append(detection)
+            else:
+                # ZED SDK Disabled: publish 2D detections without depth
+                for i in range(len(tracked_detections)):
+                    x1, y1, x2, y2 = tracked_detections.xyxy[i]
+                    cls_id = int(tracked_detections.class_id[i])
+                    if cls_id >= len(self.class_names): continue
 
-            det_msg.detections = det_objects
-            self.pub_detection_frame.publish(det_msg)
+                    detection = VisionDetection()
+                    detection.label = self.class_names[cls_id]
+                    detection.confidence = float(tracked_detections.confidence[i])
+                    (
+                        detection.bbox_center_x,
+                        detection.bbox_center_y,
+                        detection.bbox_size_x,
+                        detection.bbox_size_y,
+                    ) = bbox_from_xyxy(float(x1), float(y1), float(x2), float(y2))
+                    
+                    det_objects.append(detection)
+
+        det_msg.detections = det_objects
+        self.pub_detection_frame.publish(det_msg)
 
 
-            # Always publish the (possibly annotated) image, even with no detections
-            if self.publish_annotated_image and (self._frame_counter % self.publish_annotated_every_n_frames == 0):
-                publish_annotated_image_util(self, img, tracked_detections, frame_stamp, self.image_frame_id)
-            
-            t_end = time.perf_counter()
-            self.node.get_logger().debug(f"Detection latency: {(t_end - t_start)*1000:.1f} ms | Active 3D detections: {len(det_objects)}")
+        # Always publish the (possibly annotated) image, even with no detections
+        if self.publish_annotated_image and (self._frame_counter % self.publish_annotated_every_n_frames == 0):
+            publish_annotated_image_util(self, img, tracked_detections, frame_stamp, self.image_frame_id)
+        
+        t_end = time.perf_counter()
+        self.node.get_logger().debug(f"Detection latency: {(t_end - t_start)*1000:.1f} ms | Active 3D detections: {len(det_objects)}")

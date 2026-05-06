@@ -82,6 +82,12 @@ def generate_launch_description():
         description="Whether to enable object detection inference globally. If false, overrides the individual flags below."
     )
 
+    has_zed_sdk_arg = DeclareLaunchArgument(
+        "has_zed_sdk",
+        default_value=str(default_config["object_detection"]["front_cam"]["has_zed_sdk"]).lower(),
+        description="Whether the ZED SDK is installed and available. If false, the front camera will subscribe to a ROS image topic instead of using hardware capture."
+    )
+
     zed_wrapper_log_type_arg = DeclareLaunchArgument(
         "zed_wrapper_log_type",
         default_value=default_config["general"]["zed_wrapper_log_type"],
@@ -229,6 +235,8 @@ def generate_launch_description():
                     "'", LaunchConfiguration("enable_object_detection"), "' == 'true' and '", 
                     str(default_config["object_detection"]["front_cam"]["enable_object_detection"]).lower(), "' == 'true'"
                 ]),
+                "has_zed_sdk": LaunchConfiguration("has_zed_sdk"),
+                "image_topic": front_cam_topic,
             }
         ],
         ros_arguments=["--ros-args", "--log-level", "front_cam_object_detection:=" + default_config["object_detection"]["front_cam"]["log_level"]]
@@ -296,6 +304,7 @@ def generate_launch_description():
                 'publish_annotated_every_n_frames': default_config["object_detection"]["down_cam"]["publish_annotated_every_n_frames"],
                 'model_detection_threshold': default_config["object_detection"]["down_cam"]["model_detection_threshold"],
                 'compressed': LaunchConfiguration("compressed"),
+                "sim": LaunchConfiguration("sim"),
 
                 # Camera hardware (direct capture, no usb_cam_node needed)
                 'video_device': default_config["object_detection"]["down_cam"]["video_device"],
@@ -328,6 +337,7 @@ def generate_launch_description():
                     "'", LaunchConfiguration("enable_object_detection"), "' == 'true' and '", 
                     str(default_config["object_detection"]["down_cam"]["enable_object_detection"]).lower(), "' == 'true'"
                 ]),
+                "image_topic": down_cam_topic,
             }
         ],
         ros_arguments=["--ros-args", "--log-level", default_config["object_detection"]["down_cam"]["log_level"]]
@@ -387,6 +397,7 @@ def generate_launch_description():
     launch_description.add_action(front_model_arg)
     launch_description.add_action(down_model_arg)
     launch_description.add_action(enable_object_detection_arg)
+    launch_description.add_action(has_zed_sdk_arg)
     
 
     # launch_description.add_action(zed_wrapper_log_type_arg)
