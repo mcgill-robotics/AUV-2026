@@ -40,14 +40,6 @@ def generate_launch_description():
         )
     )
     
-    wrapper_stream_arg = DeclareLaunchArgument(
-        "wrapper_stream_enabled",
-        default_value=str(default_config["general"]["use_wrapper_stream"]).lower(),
-        description=(
-            "Whether to use the stream server for the ZED wrapper."
-        )
-    )
-    
     compressed_arg = DeclareLaunchArgument(
         "compressed",
         default_value=str(default_config["general"]["compressed"]).lower(),
@@ -88,13 +80,7 @@ def generate_launch_description():
         description="Whether the ZED SDK is installed and available. If false, the front camera will subscribe to a ROS image topic instead of using hardware capture."
     )
 
-    zed_wrapper_log_type_arg = DeclareLaunchArgument(
-        "zed_wrapper_log_type",
-        default_value=default_config["general"]["zed_wrapper_log_type"],
-        description=(
-            "The log type for the zed wrapper node. Can be set to 'log' to enable logging to file, 'screen' to log to console, or 'both' to log to both."
-        )
-    )
+
     
     compressed_launch_config = LaunchConfiguration("compressed")
     front_cam_topic = get_compressed_topic(default_config["camera"]["front_cam_topic"], compressed_launch_config)
@@ -367,10 +353,10 @@ def generate_launch_description():
                 "enable_z_axis_locking": default_config["object_map"]["enable_z_axis_locking"],
                 "enable_gate_midpoint_refinement": default_config["object_map"]["enable_gate_midpoint_refinement"],
                 "enable_board_icon_refinement": default_config["object_map"]["enable_board_icon_refinement"],
-                "enable_octagon_from_table_xy": default_config["object_map"]["enable_octagon_from_table_xy"],
-                "enable_table_from_octagon_xy": default_config["object_map"]["enable_table_from_octagon_xy"],
-                "enable_table_octagon_xy_midpoint": default_config["object_map"]["enable_table_octagon_xy_midpoint"],
+                "refinement_plausibility_radius": default_config["object_map"]["refinement_plausibility_radius"],
+                "table_octagon_refinement_mode": default_config["object_map"]["table_octagon_refinement_mode"],
                 "max_pipe_distance": default_config["object_map"]["max_pipe_distance"],
+                "enable_pipe_distance_truncation": default_config["object_map"]["enable_pipe_distance_truncation"],
                 "enable_lane_boundary": default_config["object_map"]["enable_lane_boundary"],
                 "lane_x_min": default_config["object_map"]["lane_x_min"],
                 "lane_x_max": default_config["object_map"]["lane_x_max"],
@@ -391,7 +377,6 @@ def generate_launch_description():
     
     launch_description = LaunchDescription()
     launch_description.add_action(sim_arg)
-    launch_description.add_action(wrapper_stream_arg)
     launch_description.add_action(compressed_arg)
     launch_description.add_action(use_enhance_arg)
     launch_description.add_action(front_model_arg)
@@ -400,9 +385,7 @@ def generate_launch_description():
     launch_description.add_action(has_zed_sdk_arg)
     
 
-    # launch_description.add_action(zed_wrapper_log_type_arg)
-    # launch_description.add_action(zed_real_wrapper_launch)
-    # launch_description.add_action(zed_sim_wrapper_launch)
+
     launch_description.add_action(auv_to_camera_center_tf)
     launch_description.add_action(camera_center_to_detection_tf)
     launch_description.add_action(detection_to_optical_tf)

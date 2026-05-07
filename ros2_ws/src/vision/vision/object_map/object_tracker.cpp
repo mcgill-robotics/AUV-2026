@@ -5,7 +5,8 @@
 
 namespace {
 
-constexpr double kRefinementPlausibilityRadiusMeters = 5.0;
+constexpr double kEpsilon = 1e-6;
+constexpr double kTinyCovariance = 0.001;
 
 Eigen::Vector2d xy(const Eigen::Vector3d& position) {
     return position.head<2>();
@@ -27,13 +28,13 @@ bool compute_facing_normal(
     Eigen::Vector2d& chosen_normal)
 {
     // if axis is too small, we can't determine direction
-    if (axis_xy.norm() < 1e-6) {
+    if (axis_xy.norm() < kEpsilon) {
         return false;
     }
 
     // if observer is too close to object, we can't reliably determine facing direction (could be on either side of axis)
     Eigen::Vector2d to_observer = observer_xy - object_xy;
-    if (to_observer.norm() < 1e-6) {
+    if (to_observer.norm() < kEpsilon) {
         return false;
     }
     
@@ -93,7 +94,8 @@ ObjectTracker::ObjectTracker(
     int conf_to_tent_threshold,
     int tent_init_buffer,
     bool enable_gate_midpoint_refinement,
-    bool enable_board_icon_refinement
+    bool enable_board_icon_refinement,
+    float refinement_plausibility_radius
 ) {
     this->tracks = std::vector<Track>();
     this->matches = std::vector<std::pair<size_t, size_t>>();
@@ -102,7 +104,7 @@ ObjectTracker::ObjectTracker(
         std::unordered_set<std::string>(large_structure_labels.begin(), large_structure_labels.end());
     this->pipe_labels =
         std::unordered_set<std::string>(pipe_labels.begin(), pipe_labels.end());
-
+ 
     this->min_new_track_distance = min_new_track_distance;
     this->min_large_structure_separation = min_large_structure_separation;
     this->min_large_structure_pipe_separation = min_large_structure_pipe_separation;
@@ -114,6 +116,7 @@ ObjectTracker::ObjectTracker(
     this->tent_init_buffer = tent_init_buffer;
     this->enable_gate_midpoint_refinement = enable_gate_midpoint_refinement;
     this->enable_board_icon_refinement = enable_board_icon_refinement;
+    this->refinement_plausibility_radius = refinement_plausibility_radius;
 }
 
 // destructor implicitly defined
@@ -142,9 +145,9 @@ KalmanFilter ObjectTracker::create_kf(const Eigen::Vector3d& initial_pos) {
 
     // Reasonable covariance matrices
     // Q (Process Noise): Extremely small for static objects (enforces heavy inertia)
-    Q << 0.001, 0, 0, 
-         0, 0.001, 0, 
-         0, 0, 0.001;
+    Q << kTinyCovariance, 0, 0, 
+         0, kTinyCovariance, 0, 
+         0, 0, kTinyCovariance;
          
     // R (Measurement Noise): Initial placeholder, will be overwritten by ZED cov
     R << 0.1, 0, 0, 
@@ -320,15 +323,12 @@ std::vector<std::pair<size_t, size_t>> ObjectTracker::match_tracks(
         int det_idx = assignment[assign_idx];
 
         // (track_idx, det_idx) forms the pairing
-        // TODO: Iterate through unmatched tracks and detections and remove from those lists, tentative implementation below
+        // Iterate through unmatched tracks and detections and remove from those lists, tentative implementation below
         // assignment is set to -1 if no assignment was made for that track
         // otherwise we check if we cost threshold
         if (det_idx != -1 && cost_matrix[track_idx][det_idx] <= gating_threshold) {
             // Valid match, at this point det_idx must be positive i.e. valid size_t
             matches.push_back(std::make_pair(track_idx, det_idx));
-        } else {
-             // Debug print for rejected match?
-             // std::cerr << "[TRACKER] Rejected match: track " << track_idx << " det " << det_idx << " cost " << cost_matrix[track_idx][det_idx] << std::endl;
         }
     }
 
@@ -397,7 +397,6 @@ void ObjectTracker::update_matched_tracks(
         track.consecutive_hits++;
         track.total_updates++;
 
-        // TODO: Update to the time data type instead of using ints
         track.age = 0;
         track.confidence = confidences[meas_idx];
         
@@ -481,9 +480,12 @@ void ObjectTracker::create_new_tracks(
         bool too_close = false;
         Eigen::Vector3d new_pos = measurements[det_idx];
         for (const auto& existing_track : tracks) {
+            if (existing_track.label != label) {
+                continue;
+            }
             Eigen::Vector3d existing_pos = existing_track.kf.state();
             double dist = (new_pos - existing_pos).norm();
-            if (existing_track.label == label && dist < min_new_track_distance) {
+            if (dist < min_new_track_distance) {
                 too_close = true;
                 break;
             }
@@ -568,9 +570,9 @@ void ObjectTracker::apply_gate_physical_constraints() {
         // 1. Position Refinement
         Eigen::Vector3d midpoint = (p_search_rescue + p_survey_repair) / 2.0;
         // only update if refined position is within plausibility radius of original board position (prevents large jumps from erroneous measurements)
-        if ((p_gate - midpoint).norm() < kRefinementPlausibilityRadiusMeters) {
+        if ((p_gate - midpoint).norm() < refinement_plausibility_radius) {
             // Use very small measurement covariance to strongly pull gate position towards midpoint
-            Eigen::Matrix3d tiny_R = Eigen::Matrix3d::Identity() * 0.001;
+            Eigen::Matrix3d tiny_R = Eigen::Matrix3d::Identity() * kTinyCovariance;
             gate_track->kf.update(midpoint, tiny_R);
             p_gate = gate_track->kf.state();
         }
@@ -626,9 +628,9 @@ void ObjectTracker::apply_board_physical_constraints() {
              fire_track->kf.state() + blood_track->kf.state()) /
             4.0;
         // only update if refined position is within plausibility radius of original board position (prevents large jumps from erroneous measurements)
-        if ((refined_board_position - centroid).norm() < kRefinementPlausibilityRadiusMeters) {
+        if ((refined_board_position - centroid).norm() < refinement_plausibility_radius) {
             // Use very small measurement covariance to strongly pull board position towards centroid
-            board_track->kf.update(centroid, Eigen::Matrix3d::Identity() * 0.001);
+            board_track->kf.update(centroid, Eigen::Matrix3d::Identity() * kTinyCovariance);
             refined_board_position = board_track->kf.state();
         }
     } else if (has_vehicle_pair) {
@@ -636,9 +638,9 @@ void ObjectTracker::apply_board_physical_constraints() {
         Eigen::Vector3d midpoint =
             (ambulance_track->kf.state() + firetruck_track->kf.state()) / 2.0;
         // only update if refined position is within plausibility radius of original board position (prevents large jumps from erroneous measurements)
-        if ((refined_board_position - midpoint).norm() < kRefinementPlausibilityRadiusMeters) {
+        if ((refined_board_position - midpoint).norm() < refinement_plausibility_radius) {
             // Use very small measurement covariance to strongly pull board position towards centroid
-            board_track->kf.update(midpoint, Eigen::Matrix3d::Identity() * 0.001);
+            board_track->kf.update(midpoint, Eigen::Matrix3d::Identity() * kTinyCovariance);
             refined_board_position = board_track->kf.state();
         }
     } else {
@@ -646,9 +648,9 @@ void ObjectTracker::apply_board_physical_constraints() {
         Eigen::Vector3d midpoint =
             (fire_track->kf.state() + blood_track->kf.state()) / 2.0;
         // only update if refined position is within plausibility radius of original board position (prevents large jumps from erroneous measurements)
-        if ((refined_board_position - midpoint).norm() < kRefinementPlausibilityRadiusMeters) {
+        if ((refined_board_position - midpoint).norm() < refinement_plausibility_radius) {
             // Use very small measurement covariance to strongly pull board position towards centroid
-            board_track->kf.update(midpoint, Eigen::Matrix3d::Identity() * 0.001);
+            board_track->kf.update(midpoint, Eigen::Matrix3d::Identity() * kTinyCovariance);
             refined_board_position = board_track->kf.state();
         }
     }
@@ -694,7 +696,7 @@ void ObjectTracker::apply_board_physical_constraints() {
         fused_normal += normal;
     }
 
-    if (fused_normal.norm() < 1e-6) {
+    if (fused_normal.norm() < kEpsilon) {
         return;
     }
     // extract yaw from orientation of fused normal

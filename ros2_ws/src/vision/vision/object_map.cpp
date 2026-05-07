@@ -54,6 +54,8 @@ public:
             this->declare_parameter<bool>("enable_gate_midpoint_refinement");
         bool enable_board_icon_refinement =
             this->declare_parameter<bool>("enable_board_icon_refinement");
+        float refinement_plausibility_radius =
+            this->declare_parameter<float>("refinement_plausibility_radius");
 
         std::vector<std::string> large_structure_labels =
             this->declare_parameter<std::vector<std::string>>("large_structure_labels");
@@ -83,19 +85,19 @@ public:
             conf_to_tent_threshold,
             tent_init_buffer,
             enable_gate_midpoint_refinement,
-            enable_board_icon_refinement
+            enable_board_icon_refinement,
+            refinement_plausibility_radius
         );
 
         enable_z_axis_locking = this->declare_parameter<bool>("enable_z_axis_locking");
-        enable_octagon_from_table_xy = this->declare_parameter<bool>("enable_octagon_from_table_xy");
-        enable_table_from_octagon_xy = this->declare_parameter<bool>("enable_table_from_octagon_xy");
-        enable_table_octagon_xy_midpoint = this->declare_parameter<bool>("enable_table_octagon_xy_midpoint");
+        table_octagon_refinement_mode = this->declare_parameter<std::string>("table_octagon_refinement_mode", "none");
         pool_floor_z = this->declare_parameter<double>("pool_floor_z");
         pool_surface_z = this->declare_parameter<double>("pool_surface_z");
         unique_objects = this->declare_parameter<std::vector<std::string>>("unique_objects");
         floor_objects = this->declare_parameter<std::vector<std::string>>("floor_objects");
         surface_objects = this->declare_parameter<std::vector<std::string>>("surface_objects");
         max_pipe_distance = this->declare_parameter<double>("max_pipe_distance");
+        enable_pipe_distance_truncation = this->declare_parameter<bool>("enable_pipe_distance_truncation", true);
         enable_lane_boundary = this->declare_parameter<bool>("enable_lane_boundary", false);
         lane_x_min = this->declare_parameter<double>("lane_x_min", -100.0);
         lane_x_max = this->declare_parameter<double>("lane_x_max", 100.0);
@@ -107,17 +109,6 @@ public:
                 this->get_logger(),
                 "Lane boundary enabled: x=[%.1f, %.1f] y=[%.1f, %.1f]",
                 lane_x_min, lane_x_max, lane_y_min, lane_y_max);
-        }
-
-        const int enabled_table_octagon_modes =
-            static_cast<int>(enable_octagon_from_table_xy) +
-            static_cast<int>(enable_table_from_octagon_xy) +
-            static_cast<int>(enable_table_octagon_xy_midpoint);
-        if (enabled_table_octagon_modes > 1) {
-            throw std::runtime_error(
-                "Only one of enable_octagon_from_table_xy, "
-                "enable_table_from_octagon_xy, or "
-                "enable_table_octagon_xy_midpoint may be enabled at a time.");
         }
 
         object_map_publisher =
@@ -176,9 +167,7 @@ private:
 
     bool is_table_octagon_mode_enabled() const
     {
-        return enable_octagon_from_table_xy ||
-               enable_table_from_octagon_xy ||
-               enable_table_octagon_xy_midpoint;
+        return table_octagon_refinement_mode != "none";
     }
 
     void apply_z_axis_depth_constraints(
@@ -266,6 +255,9 @@ private:
         }
 
         Eigen::Vector3d observer_position = eigen_from_point(msg->auv_pose.pose.position);
+        // Currently always true as auv_pose is bundled in the synchronized detection frame,
+        // but kept as a flag for the tracker to support future non-localized updates if
+        // a camera does not have an auv_pose.
         bool has_observer_position = true;
 
         std::vector<Eigen::Vector3d> filtered_measurements;
@@ -284,7 +276,7 @@ private:
             const std::string& label = detection.label;
 
             Eigen::Vector3d pos_camera = eigen_from_point(detection.pose_camera.pose.position);
-            if (label == "red_pipe" || label == "white_pipe") {
+            if (enable_pipe_distance_truncation && (label == "red_pipe" || label == "white_pipe")) {
                 if (pos_camera.norm() > max_pipe_distance) {
                     continue;
                 }
@@ -388,7 +380,7 @@ private:
         // Refine Octagon
         // Set octagon to table track xy if it exists then apply surface z
         // Then add a ID paired back to table
-        if (enable_octagon_from_table_xy && table_track != nullptr) {
+        if (table_octagon_refinement_mode == "table_primary" && table_track != nullptr) {
             object_map_msg.array.push_back(build_object_message(
                 "table",
                 table_track->id,
@@ -412,7 +404,7 @@ private:
         // Refine Table
         // Set octagon to octagon track xy if it exists then apply floor z
         // Then add a ID paired back to octagon
-        if (enable_table_from_octagon_xy && octagon_track != nullptr) {
+        if (table_octagon_refinement_mode == "octagon_primary" && octagon_track != nullptr) {
             Eigen::Vector3d octagon_position = octagon_track->get_position();
             octagon_position.z() = pool_surface_z;
             object_map_msg.array.push_back(build_object_message(
@@ -436,7 +428,7 @@ private:
                 octagon_track->age));
         }
         // use midpoint of the two instead of setting one to the other
-        if (enable_table_octagon_xy_midpoint && (table_track != nullptr || octagon_track != nullptr)) {
+        if (table_octagon_refinement_mode == "midpoint" && (table_track != nullptr || octagon_track != nullptr)) {
             Eigen::Vector2d pair_xy = Eigen::Vector2d::Zero();
             // if both exist take midpoint, otherwise take existing track's xy
             if (table_track != nullptr && octagon_track != nullptr) {
@@ -509,12 +501,11 @@ private:
 
     std::map<std::string, Track> persistent_objects;
     bool enable_z_axis_locking;
-    bool enable_octagon_from_table_xy;
-    bool enable_table_from_octagon_xy;
-    bool enable_table_octagon_xy_midpoint;
+    std::string table_octagon_refinement_mode;
     double pool_floor_z;
     double pool_surface_z;
     double max_pipe_distance;
+    bool enable_pipe_distance_truncation;
     bool enable_lane_boundary;
     double lane_x_min;
     double lane_x_max;

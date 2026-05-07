@@ -13,6 +13,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from sensor_msgs.msg import CompressedImage, Image
+from std_srvs.srv import Trigger
 from vision_msgs.msg import Detection2DArray
 
 from vision.object_detection.utils import (
@@ -86,6 +87,7 @@ class DownCamObjectDetectorNode():
         self.publish_annotated_image = (
             self.node.get_parameter('publish_annotated_image').get_parameter_value().bool_value
         )
+        self.annotated_image_enabled = self.publish_annotated_image
         self.publish_annotated_every_n_frames = (
             self.node.get_parameter('publish_annotated_every_n_frames').get_parameter_value().integer_value
         )
@@ -114,8 +116,13 @@ class DownCamObjectDetectorNode():
 
         self.node.create_service(
             AutomaticCapture,
-            '~/toggle_collection',
+            '/vision/down_cam/toggle_collection',
             partial(toggle_collection_callback_util, self),
+        )
+        self.node.create_service(
+            Trigger,
+            '/vision/down_cam/toggle_annotated_image',
+            self._toggle_annotated_image_callback,
         )
 
         self.compressed = self.node.get_parameter('compressed').get_parameter_value().bool_value
@@ -219,7 +226,6 @@ class DownCamObjectDetectorNode():
 
     def _apply_camera_controls(self):
         """Apply V4L2 image controls from ROS parameters to the open camera."""
-        import subprocess
 
         applied = []
 
@@ -299,6 +305,16 @@ class DownCamObjectDetectorNode():
         frame_stamp = rclpy.time.Time.from_msg(msg.header.stamp)
         self._process_frame(img, frame_stamp)
 
+    def _toggle_annotated_image_callback(self, request, response):
+        del request
+        self.annotated_image_enabled = not self.annotated_image_enabled
+        response.success = True
+        response.message = (
+            f"Annotated image {'enabled' if self.annotated_image_enabled else 'disabled'}"
+        )
+        self.node.get_logger().info(response.message)
+        return response
+
     def _process_frame(self, img, frame_stamp):
         self._frame_counter += 1
 
@@ -324,7 +340,7 @@ class DownCamObjectDetectorNode():
         self.pub_detections.publish(det_msg)
 
         if (
-            self.publish_annotated_image
+            self.annotated_image_enabled
             and self._frame_counter % self.publish_annotated_every_n_frames == 0
         ):
             publish_annotated_image_util(

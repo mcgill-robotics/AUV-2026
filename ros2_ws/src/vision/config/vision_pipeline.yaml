@@ -19,7 +19,7 @@ object_detection:
     # Topics / model
     enable_object_detection: true
     has_zed_sdk: true
-    enhanced_topic: /vision/front_cam/image_enhanced # input topic if enhance_images is true, otherwise will subscribe to raw image topic
+    enhanced_topic: /vision/front_cam/image_enhanced # this will be the input topic if sim=true and no zed sdk AND general.enhance_images=true, otherwise see camera.front_cam_topic for input topic
     detection_frame_topic: /vision/front_cam/detection_frame # synchronized camera-frame detections + AUV pose
     model_relative_path: models/local_rfdetr_onnx_test # inference-models package directory
     # WARNING: These class names MUST be manually maintained when changing models to have new classes. 
@@ -125,7 +125,7 @@ object_detection:
     # Dataset collection
     collection_dir: front_cam_collection # directory for direct-to-disk RGB image saving (toggled via service)
     depth_collection_dir: depth_collection # directory for direct-to-disk 16-bit millimeter depth saving
-    collect_depth_image: false # flag to enable/disable depth saving
+    collect_depth_image: true # flag to enable/disable depth saving
     collection_interval_seconds: 2.0 # seconds between saved frames when collection is active
 
     # Logging
@@ -167,7 +167,7 @@ object_detection:
     focus_absolute: 7                    # [0..21]    only used when auto_focus is false; default 16
 
     enable_object_detection: true
-    enhanced_topic: /vision/down_cam/image_enhanced
+    enhanced_topic: /vision/down_cam/image_enhanced # this will be the input topic if sim=true AND general.enhance_images=true, otherwise see camera.down_cam_topic for input topic
     detection_topic: /vision/down_cam/detections
     model_detection_threshold: 0.40
     # relative to src directory
@@ -214,11 +214,15 @@ object_map:
   enable_z_axis_locking: true # Forces specific unique objects to snap to pool floor/surface Z coordinates
   enable_gate_midpoint_refinement: true # Uses search_rescue/survey_repair panel detections to refine the gate pose
   enable_board_icon_refinement: true # Uses board icons to refine the board pose and make yaw face the AUV
-  enable_octagon_from_table_xy: false # publish-time only: publish the octagon at the table XY and suppress direct octagon output
-  enable_table_from_octagon_xy: false # publish-time only: publish the table at the octagon XY and suppress direct table output
-  enable_table_octagon_xy_midpoint: true # publish-time only: publish both at the shared midpoint XY; if only one is seen, use that XY for both
-  # Only one of the three table/octagon publish modes should be enabled at a time; object_map will fail fast if multiple are true.
+  refinement_plausibility_radius: 5.0 # Max distance in meters for a refinement to be considered plausible
+  # table_octagon_refinement_mode: 
+  #   - none: no refinement
+  #   - table_primary: publish octagon at table XY
+  #   - octagon_primary: publish table at octagon XY
+  #   - midpoint: publish both at shared midpoint XY
+  table_octagon_refinement_mode: "midpoint" 
   max_pipe_distance: 7.0 # Truncates tracking of red/white pipes beyond this distance to reduce noise in map
+  enable_pipe_distance_truncation: true # toggle the above truncation logic
   enable_lane_boundary: false # discard world-frame detections outside the competition lane AABB
   lane_x_min: -3.0 # back boundary (meters, world frame)
   lane_x_max: 25.0  # front boundary
@@ -280,15 +284,9 @@ object_map:
   log_level: warn
 
 general:
-  # sim is what the wrapper listens to (the Unity sim stream), stream is what the wrapper republishes as a ROS topic for the rest of the vision pipeline to use
-  # whether to use the ZED wrapper in simulation mode (true) or with a real camera (false)
   sim: false
-  sim_ip: "127.0.0.1"
-  sim_port: 30000
-  # whether to use the wrapper as a streaming server that multiple nodes can subscribe to
-  use_wrapper_stream: true
+  # wrapper stream settings used by front_cam_object_detection for ZED SDK streaming
   wrapper_stream_ip: "127.0.1.1"
   wrapper_stream_port: 30000
-  zed_wrapper_log_type: "log" # log, screen, or both
   compressed: true
   enhance_images: false

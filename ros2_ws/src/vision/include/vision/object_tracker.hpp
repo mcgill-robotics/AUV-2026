@@ -59,7 +59,8 @@ public:
         int conf_to_tent_threshold = 5,
         int tent_init_buffer = 5,
         bool enable_gate_midpoint_refinement = true,
-        bool enable_board_icon_refinement = true
+        bool enable_board_icon_refinement = true,
+        float refinement_plausibility_radius = 5.0
     );
 
     ~ObjectTracker() = default;
@@ -145,6 +146,7 @@ private:
 
     bool enable_gate_midpoint_refinement;
     bool enable_board_icon_refinement;
+    float refinement_plausibility_radius;
     Eigen::Vector3d observer_position = Eigen::Vector3d::Zero();
     bool has_observer_position = false;
     
