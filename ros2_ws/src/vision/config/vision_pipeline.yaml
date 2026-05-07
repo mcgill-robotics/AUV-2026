@@ -1,0 +1,101 @@
+# not the standard ROS node config parameters, these are topics passed to the vision pipeline launch file
+camera:
+  # inputs to the vision pipeline
+  front_cam_topic: /zed/zed_node/rgb/color/rect/image 
+  down_cam_topic: /vision/down_cam/image_raw
+
+image_enhancement:
+  front_cam: 
+    enhanced_topic: /vision/front_cam/image_enhanced # output topic
+    queue_size: 10 # QOL queue size, how many messages to buffer if the node can't process them fast enough
+    log_level: warn # ros2 log level for the image enhancement node [debug, info, warn, error, fatal]
+  down_cam:
+    enhanced_topic: /vision/down_cam/image_enhanced
+    queue_size: 10
+    log_level: warn
+
+object_detection:
+  front_cam:
+    enhanced_topic: /vision/front_cam/image_enhanced # input topic if enhance_images is true, otherwise will subscribe to raw image topic
+    detection_topic: /vision/front_cam/detections # output topic for detections
+    model_relative_path: models/frontcam.pt # relative to src/vision directory
+    class_names:
+      - "board_image"
+      - "gate_prequal"
+      - "shark"
+      - "sawfish"
+      - "marker_prequal"
+      - "white_pipe_medn"
+    queue_size: 10
+    publish_annotated_image: true # whether to publish an annotated image with bounding boxes drawn (for visualization/debugging). will publish to detection_topic + /annotated
+    log_level: warn
+  down_cam:
+    enhanced_topic: /vision/down_cam/image_enhanced
+    detection_topic: /vision/down_cam/detections
+    # relative to src directory
+    model_relative_path: models/downcam.pt
+    class_names:
+      - "gate"
+      - "octagon_table"
+      - "octagon_top"
+      - "path_marker"
+      - "sawfish"
+      - "shark"
+    queue_size: 10
+    publish_annotated_image: true
+    log_level: warn
+
+object_map:
+  map_topic: /vision/object_map # final output of vision pipeline
+  pose_topic: /vision/vio_pose # output VIO pose topic used to determine 3D position, eventually will subscribe to state estimation instead
+  confidence_threshold: 0.5 # minimum confidence for detections to be considered for tracking (0.0 to 1.0)
+  zed_depth_confidence_threshold: 90 # minimum confidence for ZED depth measurements to be used in tracking (0 to 100)
+  max_range: 9.0 # maximum range in meters for detections to be considered for tracking
+  frame_rate: 30 # maximum frame rate for the object map (tracks will be updated at this rate, may be lower than camera frame rate if processing is too slow)
+  new_object_min_distance_threshold: 0.5 # distance in meters between a new detection and existing tracks to be considered a new object and start a new track
+
+  # Feature Toggles (Game-Specific Constraints)
+  enable_gate_top_crop: true # Removes bottom 60% of bounding box for gate to ignore legs/pool floor noise
+  enable_z_axis_locking: true # Forces specific unique objects to snap to pool floor/surface Z coordinates
+  enable_gate_midpoint_refinement: true # Uses surrounding shark/sawfish tracks to perfectly center the gate
+  enable_octagon_xy_inheritance: true # Ignores true octagon detections, creates synthetic octagon directly above the table
+  gate_top_crop_ratio: 0.50 # The ratio (0.0 to 1.0) of the gate bounding box to keep from the top edge
+  max_pipe_distance: 7.0 # Truncates tracking of red/white pipes beyond this distance to reduce noise in map
+  pool_floor_z: -2.1
+  pool_surface_z: 0.0
+  unique_objects: ["gate", "bin", "table", "board", "octagon"]
+  floor_objects: ["bin", "table", "lane_marker", "board"]
+  surface_objects: ["gate", "octagon"]
+
+  max_per_class:
+    board_image: 1
+    gate_prequal: 1
+    shark: 2
+    sawfish: 2
+    marker_prequal: 2
+    white_pipe_medn: 2
+
+  # Tracker Parameters
+  gating_threshold: 3.5 # Mahalanobis distance threshold (~3 sigma) for associating detections to tracks
+  min_hits: 20 # Consecutive frames a detection must be matched to confirm a new track
+  max_age: 8 # Number of frames to keep a lost track alive before deleting it
+  max_position_jump: 2.0 # Maximum allowed distance (meters) between predictions and measurements
+  conf_to_tent_threshold: 5 # Number of consecutive missed frames before a CONFIRMED track degrades to TENTATIVE
+  tent_init_buffer: 5 # Extra frames allowed for a new TENTATIVE track to initialize before being deleted if unmatched
+  
+  # Debug
+  log_level: warn
+
+general:
+  # sim is what the wrapper listens to (the Unity sim stream), stream is what the wrapper republishes as a ROS topic for the rest of the vision pipeline to use
+  # whether to use the ZED wrapper in simulation mode (true) or with a real camera (false)
+  sim: false
+  sim_ip: "127.0.0.1"
+  sim_port: 30000
+  # whether to use the wrapper as a streaming server that multiple nodes can subscribe to
+  use_wrapper_stream: true
+  wrapper_stream_ip: "127.0.1.1"
+  wrapper_stream_port: 30000
+  zed_wrapper_log_type: "log" # log, screen, or both
+  compressed: true
+  enhance_images: false

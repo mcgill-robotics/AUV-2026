@@ -142,6 +142,8 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone &
     libxkbcommon-dev \
     libopenblas-dev \
     xauth \
+    ninja-build \
+    v4l-utils \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -290,9 +292,10 @@ RUN git clone --depth 1 --branch ${ULTRALYTICS_REF} https://github.com/ultralyti
     cd .. && \
     rm -rf ultralytics
 
-# Computer vision tooling (Jupyter for remote notebooks, roboflow for dataset management)
-RUN pip install --no-cache-dir --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} notebook \
-    roboflow albumentations pandas && \
+# Computer vision tooling
+RUN pip install --no-cache-dir --extra-index-url ${PIP_INDEX_FOR_NON_NVIDIA} "numpy<2.0.0" notebook \
+    roboflow albumentations pandas \
+    rfdetr supervision pytorch_lightning pycocotools faster-coco-eval onnx onnxruntime-gpu && \
     pip install --no-cache-dir --ignore-install --upgrade typing_extensions
 
 # ===== User Setup =====
