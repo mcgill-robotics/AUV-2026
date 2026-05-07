@@ -74,6 +74,7 @@ class DownCamObjectDetectorNode():
         # ── Collection parameters ────────────────────────────────
         self.node.declare_parameter('collection_dir', '/tmp/down_cam_collection')
         self.node.declare_parameter('collection_interval_seconds', 2.0)
+        self.node.declare_parameter('collection_file_extension', '.png')
 
         # ── Read parameters ──────────────────────────────────────
         self.class_names = list(
@@ -113,6 +114,7 @@ class DownCamObjectDetectorNode():
         self._frame_counter = 0
         self.collection_dir = self.node.get_parameter('collection_dir').get_parameter_value().string_value
         self.collection_interval = self.node.get_parameter('collection_interval_seconds').get_parameter_value().double_value
+        self.collection_extension = self.node.get_parameter('collection_file_extension').get_parameter_value().string_value
 
         self.node.create_service(
             AutomaticCapture,
@@ -324,7 +326,7 @@ class DownCamObjectDetectorNode():
             if now - self._last_collection_time >= self.collection_interval:
                 self._last_collection_time = now
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
-                filepath = os.path.join(self.collection_dir, f'down_{timestamp}.png')
+                filepath = os.path.join(self.collection_dir, f'down_{timestamp}{self.collection_extension}')
                 cv2.imwrite(filepath, img)
                 self.node.get_logger().debug(f"Saved {filepath}")
 

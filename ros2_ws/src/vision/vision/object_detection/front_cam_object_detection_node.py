@@ -158,6 +158,7 @@ class FrontCamObjectDetectorNode():
         # Image collection parameters
         self.node.declare_parameter('collection_dir', '/tmp/front_cam_collection')
         self.node.declare_parameter('collection_interval_seconds', 2.0)
+        self.node.declare_parameter('collection_file_extension', '.png')
 
         # Depth sensor state (pressure sensor overrides VIO Z)
         self._depth_lock = threading.Lock()
@@ -178,6 +179,7 @@ class FrontCamObjectDetectorNode():
         self.collection_dir = self.node.get_parameter('collection_dir').get_parameter_value().string_value
         self.depth_collection_dir = self.node.get_parameter('depth_collection_dir').get_parameter_value().string_value
         self.collection_interval = self.node.get_parameter('collection_interval_seconds').get_parameter_value().double_value
+        self.collection_extension = self.node.get_parameter('collection_file_extension').get_parameter_value().string_value
         self._frame_counter = 0
 
         # Service to toggle image collection on/off
@@ -852,7 +854,7 @@ class FrontCamObjectDetectorNode():
             self._last_collection_time = time.time()
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
             
-            filepath = os.path.join(self.collection_dir, f'front_{timestamp}.jpg')
+            filepath = os.path.join(self.collection_dir, f'front_{timestamp}{self.collection_extension}')
             cv2.imwrite(filepath, img)
             
             if self.collect_depth_image and depth is not None:

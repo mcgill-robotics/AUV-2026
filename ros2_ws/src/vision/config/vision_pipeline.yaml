@@ -127,6 +127,7 @@ object_detection:
     depth_collection_dir: depth_collection # directory for direct-to-disk 16-bit millimeter depth saving
     collect_depth_image: true # flag to enable/disable depth saving
     collection_interval_seconds: 2.0 # seconds between saved frames when collection is active
+    collection_file_extension: ".png"
 
     # Logging
     log_level: debug
@@ -200,6 +201,7 @@ object_detection:
     publish_annotated_every_n_frames: 1
     collection_dir: down_cam_collection
     collection_interval_seconds: 2.0
+    collection_file_extension: ".png"
     log_level: info
 
 object_map:

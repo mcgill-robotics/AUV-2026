@@ -217,6 +217,7 @@ def generate_launch_description():
                 "depth_collection_dir": default_config["object_detection"]["front_cam"]["depth_collection_dir"],
                 "collect_depth_image": default_config["object_detection"]["front_cam"]["collect_depth_image"],
                 "collection_interval_seconds": default_config["object_detection"]["front_cam"]["collection_interval_seconds"],
+                "collection_file_extension": default_config["object_detection"]["front_cam"]["collection_file_extension"],
                 "enable_object_detection": PythonExpression([
                     "'", LaunchConfiguration("enable_object_detection"), "' == 'true' and '", 
                     str(default_config["object_detection"]["front_cam"]["enable_object_detection"]).lower(), "' == 'true'"
@@ -317,6 +318,7 @@ def generate_launch_description():
 
                 'collection_dir': default_config["object_detection"]["down_cam"]["collection_dir"],
                 'collection_interval_seconds': default_config["object_detection"]["down_cam"]["collection_interval_seconds"],
+                'collection_file_extension': default_config["object_detection"]["down_cam"]["collection_file_extension"],
                 'use_sim_time': LaunchConfiguration("sim"),
                 'log_level': default_config["object_detection"]["down_cam"]["log_level"],
                 'enable_object_detection': PythonExpression([
