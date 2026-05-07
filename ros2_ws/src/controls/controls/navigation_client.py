@@ -18,7 +18,7 @@ class NavigationClient(Node):
                 self.current_caller_publisher = self.create_publisher(String, '/controls/client/caller', 10)
 
         def send_navigation_goal(self, 
-                goal_msg: AUVNavigate, 
+                goal_msg: AUVNavigate.Goal, 
                 caller_name: String, 
                 custom_goal_response=None, 
                 custom_goal_result=None) -> None:
@@ -40,23 +40,9 @@ class NavigationClient(Node):
                 caller_info_msg.data = caller_name
                 self.current_caller_publisher.publish(caller_info_msg)
                 
-                # Create a new goal 
-                goal_to_send = AUVNavigate.Goal()
+                # Send the goal directly
+                self._send_goal_future = self._action_client.send_goal_async(goal_msg, feedback_callback=self.feedback_callback)
 
-                # Match the goal to send with the goal message type
-                goal_to_send.target_pose = goal_msg.target_pose
-                goal_to_send.do_x = goal_msg.do_x
-                goal_to_send.do_y = goal_msg.do_y
-                goal_to_send.do_z = goal_msg.do_z
-                goal_to_send.do_yaw = goal_msg.do_yaw
-                goal_to_send.is_relative = goal_msg.is_relative
-                goal_to_send.is_local_frame = goal_msg.is_local_frame
-                goal_to_send.position_tolerance = goal_msg.position_tolerance
-                goal_to_send.yaw_tolerance = goal_msg.yaw_tolerance
-                goal_to_send.hold_time = goal_msg.hold_time
-                goal_to_send.timeout = goal_msg.timeout
-
-                self._send_goal_future = self._action_client.send_goal_async(goal_to_send, feedback_callback=self.feedback_callback)
                 # Set callback upon goal response, use lambda function to allow for extra parameters
                 self._send_goal_future.add_done_callback(lambda future: 
                         self.goal_response_callback(future, custom_goal_response, custom_goal_result))

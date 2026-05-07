@@ -16,6 +16,7 @@ Publishes setpoints to:
 """
 
 import math
+import threading
 import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
@@ -27,7 +28,7 @@ from geometry_msgs.msg import PoseStamped, Quaternion, Vector3
 from std_msgs.msg import Float64
 from auv_msgs.action import AUVNavigate
 
-from controls.utils import normalize_angle, yaw_from_quaternion
+from controls.utils import yaw_from_quaternion
 import numpy as np
 from scipy.spatial.transform import Rotation
 
@@ -41,13 +42,23 @@ class NavigationServer(Node):
         # ── Parameters ───────────────────────────────────────────────────────
         self.declare_parameter('feedback_rate_hz', 10.0)
         self.declare_parameter('state_topic', 'state/pose')
+        self.declare_parameter('depth_setpoint_topic', '/controls/depth_setpoint')
+        self.declare_parameter('x_setpoint_topic', '/controls/x_setpoint')
+        self.declare_parameter('y_setpoint_topic', '/controls/y_setpoint')
+        self.declare_parameter('quat_setpoint_topic', '/controls/quaternion_setpoint')
 
         self.feedback_rate_hz = self.get_parameter('feedback_rate_hz').value
         state_topic = self.get_parameter('state_topic').value
+        depth_setpoint_topic = self.get_parameter('depth_setpoint_topic').value
+        x_setpoint_topic = self.get_parameter('x_setpoint_topic').value
+        y_setpoint_topic = self.get_parameter('y_setpoint_topic').value
+        quat_setpoint_topic = self.get_parameter('quat_setpoint_topic').value
         self._feedback_period = 1.0 / self.feedback_rate_hz
 
         # ── State ────────────────────────────────────────────────────────────
         self.current_pose = None  # Latest PoseStamped from state_aggregator
+        self._goal_handle = None
+        self._goal_lock = threading.Lock()
 
         # Callback group for concurrent action + subscriptions
         self.cb_group = ReentrantCallbackGroup()
@@ -78,10 +89,10 @@ class NavigationServer(Node):
         )
 
         # ── Publishers: controller setpoints ─────────────────────────────────
-        self.pub_depth_sp = self.create_publisher(Float64, '/controls/depth_setpoint', setpoint_qos)
-        self.pub_x_sp = self.create_publisher(Float64, '/controls/x_setpoint', setpoint_qos)
-        self.pub_y_sp = self.create_publisher(Float64, '/controls/y_setpoint', setpoint_qos)
-        self.pub_quat_sp = self.create_publisher(Quaternion, '/controls/quaternion_setpoint', setpoint_qos)
+        self.pub_depth_sp = self.create_publisher(Float64, depth_setpoint_topic, setpoint_qos)
+        self.pub_x_sp = self.create_publisher(Float64, x_setpoint_topic, setpoint_qos)
+        self.pub_y_sp = self.create_publisher(Float64, y_setpoint_topic, setpoint_qos)
+        self.pub_quat_sp = self.create_publisher(Quaternion, quat_setpoint_topic, setpoint_qos)
 
         # ── Action server ────────────────────────────────────────────────────
         self.action_server = ActionServer(
@@ -120,6 +131,15 @@ class NavigationServer(Node):
 
     async def _execute_callback(self, goal_handle):
         """Main execution loop for a navigation goal."""
+        # Handle preemption: ensure only one goal is running at a time
+        with self._goal_lock:
+            if self._goal_handle is not None and self._goal_handle.is_active:
+                self.get_logger().info('Preempting previous goal with new request')
+                # Note: We don't need to wait for it to finish; the old loop 
+                # will detect 'not goal_handle.is_active' and exit.
+                self._goal_handle.abort()
+            self._goal_handle = goal_handle
+
         goal = goal_handle.request
         result = AUVNavigate.Result()
 
@@ -178,9 +198,13 @@ class NavigationServer(Node):
             )
             
             if goal.do_yaw:
-                current_yaw = yaw_from_quaternion(current.orientation)
-                target_yaw = yaw_from_quaternion(target_quat)
-                yaw_error = abs(normalize_angle(target_yaw - current_yaw))
+                # Compute orientation error via quaternion difference (q_error = q_target * q_current^-1)
+                r_current = Rotation.from_quat([current.orientation.x, current.orientation.y,
+                                                current.orientation.z, current.orientation.w])
+                r_target = Rotation.from_quat([target_quat.x, target_quat.y,
+                                               target_quat.z, target_quat.w])
+                r_error = r_target * r_current.inv()
+                yaw_error = abs(r_error.as_euler('ZYX', degrees=False)[0])
             else:
                 yaw_error = 0.0
 

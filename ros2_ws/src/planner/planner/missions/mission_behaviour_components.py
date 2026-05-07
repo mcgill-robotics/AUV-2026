@@ -185,7 +185,6 @@ class BasicTriggerServiceBehaviour(py_trees.behaviour.Behaviour):
             """
             self.node = kwargs['node']
             self.service_client = self.node.create_client(Trigger, self.service_name)
-            # FIND A BETTER WAY TO DO THIS
             
             # Check if the service is available, if not log an error and raise an exception
             #if not self.service_client.wait_for_service(timeout_sec=2.0):
@@ -229,17 +228,18 @@ class BasicTriggerServiceBehaviour(py_trees.behaviour.Behaviour):
             if not self.future.done():
                 return py_trees.common.Status.RUNNING
             
+            # Check if the service call itself failed (e.g. middleware error)
+            if self.future.exception() is not None:
+                self.node.get_logger().error(f"[{self.name}] Service call failed: {self.future.exception()}")
+                return py_trees.common.Status.FAILURE
+            
             # Verify if service is successful or not
-            try:
-                response = self.future.result()
-                if response.success:
-                    self.node.get_logger().info(f"[{self.name}] Service succeeded.")
-                    return py_trees.common.Status.SUCCESS
-                else:
-                    self.node.get_logger().info(f"[{self.name}] Service failed.")
-                    return py_trees.common.Status.FAILURE
-            except Exception as e:
-                self.node.get_logger().error(f"[{self.name}] Service call failed with exception: {e}")
+            response = self.future.result()
+            if response.success:
+                self.node.get_logger().info(f"[{self.name}] Service succeeded.")
+                return py_trees.common.Status.SUCCESS
+            else:
+                self.node.get_logger().info(f"[{self.name}] Service failed: {response.message}")
                 return py_trees.common.Status.FAILURE
 
 
@@ -255,9 +255,9 @@ class MissionChoiceCheckBehaviour(py_trees.behaviour.Behaviour):
 
         def __init__(self, choice: int, name="MissionChoiceCheckBehaviour") -> None:
                 """
-                Initializes the node and blackboard client for this behaviour.
+                Initializes the blackboard client for this behaviour.
 
-                Inputs: rclpy.node.Node    : node - the ROS2 node to use for subscribing to topics 
+                Inputs: int                : choice - the mission choice to check against 
                         str                : name - the name of the behaviour 
 
                 Outputs: None
@@ -268,8 +268,9 @@ class MissionChoiceCheckBehaviour(py_trees.behaviour.Behaviour):
 
         def setup(self, **kwargs) -> None:
                 """
-                Description: Sets up keys on the blackboard that this behaviour will use.
+                Description: Sets up the node and blackboard keys for this behaviour.
                 """
+                self.node = kwargs['node']
                 self.blackboard.register_key(key="/mission_choice", access=py_trees.common.Access.READ) 
                 
         def update(self) -> py_trees.common.Status:
@@ -342,17 +343,17 @@ class TimerBehaviour(py_trees.behaviour.Behaviour):
         self.attach_blackboard_client: blackboard        : the blackboard client for reading/writing sensors data
         """
 
-        def __init__(self, timer: float, name="sensorsLeaf") -> None:
+        def __init__(self, timer_duration: float, name="sensorsLeaf") -> None:
                 """
                 Initializes the node and blackboard client for this behaviour.
 
                 Inputs: str                : name - the name of the behaviour 
-                        float              : timer - the desired duration of the timer
+                        float              : timer_duration - the desired duration of the timer
 
                 Outputs: None
                 """   
                 super().__init__(name)
-                self.timer = timer
+                self.timer_duration = timer_duration
                 self.start_time = 0.0
                 self.timer_started = False
 
@@ -389,7 +390,7 @@ class TimerBehaviour(py_trees.behaviour.Behaviour):
                 current_time = self.node.get_clock().now().nanoseconds / 1e9
                 # Upon each tick, check if interval of time has been passed
                 self.node.get_logger().info(f"Time passed: {(current_time - self.start_time)}")
-                if (current_time - self.start_time) > float(self.timer):
+                if (current_time - self.start_time) > float(self.timer_duration):
                         return py_trees.common.Status.SUCCESS
                 
                 return py_trees.common.Status.RUNNING

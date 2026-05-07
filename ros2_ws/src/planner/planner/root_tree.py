@@ -25,27 +25,27 @@ def main():
     node = rclpy.create_node("planner_root_tree")
 
     # Get tolerance, timeout and tick rate parameters from the configs
-    node.declare_parameter("pre_qual_yaw_tolerance", 1.0)
-    node.declare_parameter("pre_qual_positional_tolerance", 1.0)
-    node.declare_parameter("pre_qual_timeout", 1.0)
-    node.declare_parameter("pre_qual_hold_time", 1.0)
+    node.declare_parameter("pre_qual.yaw_tolerance", 1.0)
+    node.declare_parameter("pre_qual.positional_tolerance", 1.0)
+    node.declare_parameter("pre_qual.timeout", 1.0)
+    node.declare_parameter("pre_qual.hold_time", 1.0)
     node.declare_parameter("tick_rate", 1.0)
 
-    pre_qual_yaw_tolerance = node.get_parameter("pre_qual_yaw_tolerance").get_parameter_value().double_value
-    pre_qual_positional_tolerance = node.get_parameter("pre_qual_positional_tolerance").get_parameter_value().double_value
-    pre_qual_timeout = node.get_parameter("pre_qual_timeout").get_parameter_value().double_value
-    pre_qual_hold_time = node.get_parameter("pre_qual_hold_time").get_parameter_value().double_value
+    pre_qual_yaw_tolerance = node.get_parameter("pre_qual.yaw_tolerance").get_parameter_value().double_value
+    pre_qual_positional_tolerance = node.get_parameter("pre_qual.positional_tolerance").get_parameter_value().double_value
+    pre_qual_timeout = node.get_parameter("pre_qual.timeout").get_parameter_value().double_value
+    pre_qual_hold_time = node.get_parameter("pre_qual.hold_time").get_parameter_value().double_value
     tick_rate = node.get_parameter("tick_rate").get_parameter_value().double_value
 
-    node.declare_parameter("orbit_pre_qual_yaw_tolerance_scale", 1.0)
-    node.declare_parameter("orbit_pre_qual_positional_tolerance_scale", 1.0)
-    node.declare_parameter("orbit_pre_qual_hold_time_initial", 1.0)
-    node.declare_parameter("orbit_pre_qual_hold_time_segments", 1.0)
+    node.declare_parameter("pre_qual.orbit.yaw_tolerance_scale", 1.0)
+    node.declare_parameter("pre_qual.orbit.positional_tolerance_scale", 1.0)
+    node.declare_parameter("pre_qual.orbit.hold_time_initial", 1.0)
+    node.declare_parameter("pre_qual.orbit.hold_time_segments", 1.0)
 
-    orbit_pre_qual_yaw_tolerance_scale = node.get_parameter("orbit_pre_qual_yaw_tolerance_scale").get_parameter_value().double_value
-    orbit_pre_qual_positional_tolerance_scale = node.get_parameter("orbit_pre_qual_positional_tolerance_scale").get_parameter_value().double_value
-    orbit_pre_qual_hold_time_initial = node.get_parameter("orbit_pre_qual_hold_time_initial").get_parameter_value().double_value
-    orbit_pre_qual_hold_time_segments = node.get_parameter("orbit_pre_qual_hold_time_segments").get_parameter_value().double_value
+    orbit_pre_qual_yaw_tolerance_scale = node.get_parameter("pre_qual.orbit.yaw_tolerance_scale").get_parameter_value().double_value
+    orbit_pre_qual_positional_tolerance_scale = node.get_parameter("pre_qual.orbit.positional_tolerance_scale").get_parameter_value().double_value
+    orbit_pre_qual_hold_time_initial = node.get_parameter("pre_qual.orbit.hold_time_initial").get_parameter_value().double_value
+    orbit_pre_qual_hold_time_segments = node.get_parameter("pre_qual.orbit.hold_time_segments").get_parameter_value().double_value
 
     # Set the root of the tree
     root = py_trees.composites.Parallel("Root", policy=py_trees.common.ParallelPolicy.SuccessOnAll(synchronise=False))

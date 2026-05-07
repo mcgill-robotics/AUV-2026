@@ -29,7 +29,7 @@ class TranslationRectangleMission(py_trees.composites.Sequence):
         mission_choice_check = MissionChoiceCheckBehaviour(name="TranslationRectangleCheck", choice=6)
 
         # 1 Wait for 10 seconds before starting the mission
-        timer = TimerBehaviour(timer=10.0, name="Translation Rectangle Timer")
+        timer = TimerBehaviour(timer_duration=10.0, name="Translation Rectangle Timer")
 
         # 2. Dive to -1.5m
         dive_leaf = BasicActionBehaviour("Dive", set_depth(z=-1.5, tolerance=position_tolerance, hold_time=hold_time, timeout=timeout))

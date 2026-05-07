@@ -56,11 +56,25 @@ def generate_launch_description():
             PythonLaunchDescriptionSource(ros_tcp_endpoint_launch_file))]
         )
 
+        planner_condition = DeclareLaunchArgument(
+                "planner", default_value="false", description="Launch the behaviour tree planner"
+        )
+
+        planner = LaunchConfiguration("planner")
+
+        launch_planner = IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(planner_launch_file),
+                launch_arguments={"sim": sim}.items(),
+                condition=IfCondition(planner)
+        )
+
         return LaunchDescription([
             sim_condition,
+            planner_condition,
             launch_sensors,
             launch_propulsion,
             launch_controls,
             launch_telemetry,
+            launch_planner,
             sim_group
         ])

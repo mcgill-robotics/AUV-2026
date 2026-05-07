@@ -45,7 +45,7 @@ class OrbitQualificationMission(py_trees.composites.Sequence):
         mission_choice_check = MissionChoiceCheckBehaviour(name="OrbitPrequalUserCheck", choice=1)
 
         # 1 Wait for 10 seconds before starting the mission
-        timer = TimerBehaviour(timer=10.0, name="Orbit Prequal Timer")
+        timer = TimerBehaviour(timer_duration=10.0, name="Orbit Prequal Timer")
 
         # Build the full mission sequence
         # 2. Dive to -1.5m
