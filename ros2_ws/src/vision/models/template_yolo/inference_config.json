@@ -1,0 +1,28 @@
+{
+    "image_pre_processing": {},
+    "network_input": {
+        "training_input_size": {
+            "height": 640,
+            "width": 640
+        },
+        "dynamic_spatial_size_supported": false,
+        "color_mode": "rgb",
+        "resize_mode": "letterbox",
+        "input_channels": 3,
+        "scaling_factor": 255.0
+    },
+    "forward_pass": {
+        "static_batch_size": 1,
+        "max_dynamic_batch_size": 1
+    },
+    "post_processing": {
+        "type": "nms",
+        "fused": false,
+        "nms_parameters": {
+            "max_detections": 300,
+            "confidence_threshold": 0.25,
+            "iou_threshold": 0.45,
+            "class_agnostic": 0
+        }
+    }
+}

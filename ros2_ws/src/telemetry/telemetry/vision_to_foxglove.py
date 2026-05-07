@@ -27,7 +27,7 @@ class SphereConverterNode(Node):
         self.declare_parameter('input_topic', '/vision/object_map')
         input_topic = self.get_parameter('input_topic').get_parameter_value().string_value
         
-        self.declare_parameter('frame_id', 'map')
+        self.declare_parameter('frame_id', 'pool_link')
         self.frame_id = self.get_parameter('frame_id').get_parameter_value().string_value
         
         self.declare_parameter('pool_floor_z', -2.1)

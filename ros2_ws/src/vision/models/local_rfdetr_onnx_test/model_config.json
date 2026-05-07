@@ -1,0 +1,5 @@
+{
+  "model_architecture": "rfdetr",
+  "task_type": "object-detection",
+  "backend_type": "onnx"
+}

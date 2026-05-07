@@ -1,0 +1,4 @@
+# Protect system packages
+numpy==1.26.4
+opencv-python==4.10.0
+# opencv-python-headless==4.10.0

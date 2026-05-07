@@ -1,23 +1,113 @@
 #include <object_tracker.hpp>
 #include <hungarian.hpp>
 
+#include <cmath>
+
+namespace {
+
+constexpr double kEpsilon = 1e-6;
+constexpr double kTinyCovariance = 0.001;
+
+Eigen::Vector2d xy(const Eigen::Vector3d& position) {
+    return position.head<2>();
+}
+
+double xy_distance(const Eigen::Vector3d& lhs, const Eigen::Vector3d& rhs) {
+    return (xy(lhs) - xy(rhs)).norm();
+}
+/// @brief Computes the vector that is normal to the given axis and faces towards the observer.
+/// @param axis_xy The axis vector in the XY plane that we want to compute the normal from.
+/// @param object_xy Reference point for direction in which observer is facing
+/// @param observer_xy The position of the observer in the XY plane.
+/// @param chosen_normal The computed normal vector. filled in only if the function returns true.
+/// @return True if the normal vector was computed successfully, false otherwise.
+bool compute_facing_normal(
+    const Eigen::Vector2d& axis_xy,
+    const Eigen::Vector2d& object_xy,
+    const Eigen::Vector2d& observer_xy,
+    Eigen::Vector2d& chosen_normal)
+{
+    // if axis is too small, we can't determine direction
+    if (axis_xy.norm() < kEpsilon) {
+        return false;
+    }
+
+    // if observer is too close to object, we can't reliably determine facing direction (could be on either side of axis)
+    Eigen::Vector2d to_observer = observer_xy - object_xy;
+    if (to_observer.norm() < kEpsilon) {
+        return false;
+    }
+    
+    // normals can be either (-y,x) or (y,-x). we want to choose the one that faces towards the observer.
+    Eigen::Vector2d axis_unit = axis_xy.normalized();
+    Eigen::Vector2d positive_unit_normal(-axis_unit.y(), axis_unit.x());
+    Eigen::Vector2d positive_negative_normal = -positive_unit_normal;
+
+    // large positive dot product implies vectors in the same direction
+    // so pick the larger dot product to get the normal that faces towards the observer
+    chosen_normal =
+        positive_unit_normal.dot(to_observer) >= positive_negative_normal.dot(to_observer)
+            ? positive_unit_normal
+            : positive_negative_normal;
+    return true;
+}
+/// @brief Computes the yaw angle that makes the object face towards the observer, first computing the normal vector to the given axis and then computing the angle from that normal.
+/// @param axis_xy Axis we want to face head on (such that we point toward the axis' normal).
+/// @param object_xy Reference point for direction in which observer is facing
+/// @param observer_xy The position of the observer in the XY plane.
+/// @param yaw_out The computed yaw angle.
+/// @param normal_out The computed normal vector.
+/// @return True if the yaw angle was computed successfully, false otherwise.
+bool compute_facing_yaw(
+    const Eigen::Vector2d& axis_xy,
+    const Eigen::Vector2d& object_xy,
+    const Eigen::Vector2d& observer_xy,
+    double& yaw_out,
+    Eigen::Vector2d* normal_out = nullptr)
+{
+    Eigen::Vector2d chosen_normal;
+    if (!compute_facing_normal(axis_xy, object_xy, observer_xy, chosen_normal)) {
+        return false;
+    }
+
+    if (normal_out != nullptr) {
+        *normal_out = chosen_normal;
+    }
+    // compute angle of normal to get the absolute orientation that faces axis_xy
+    yaw_out = std::atan2(chosen_normal.y(), chosen_normal.x());
+    return true;
+}
+
+}  // namespace
 
 ObjectTracker::ObjectTracker(
     const std::unordered_map<std::string, int>& max_per_class,
+    const std::vector<std::string>& large_structure_labels,
+    const std::vector<std::string>& pipe_labels,
     float min_new_track_distance,
+    float min_large_structure_separation,
+    float min_large_structure_pipe_separation,
     float gating_threshold,
     int min_hits,
     int max_age,
     float max_position_jump,
     int conf_to_tent_threshold,
     int tent_init_buffer,
-    bool enable_gate_midpoint_refinement
+    bool enable_gate_midpoint_refinement,
+    bool enable_board_icon_refinement,
+    float refinement_plausibility_radius
 ) {
     this->tracks = std::vector<Track>();
     this->matches = std::vector<std::pair<size_t, size_t>>();
     this->max_per_class = max_per_class;
-
+    this->large_structure_labels =
+        std::unordered_set<std::string>(large_structure_labels.begin(), large_structure_labels.end());
+    this->pipe_labels =
+        std::unordered_set<std::string>(pipe_labels.begin(), pipe_labels.end());
+ 
     this->min_new_track_distance = min_new_track_distance;
+    this->min_large_structure_separation = min_large_structure_separation;
+    this->min_large_structure_pipe_separation = min_large_structure_pipe_separation;
     this->gating_threshold = gating_threshold;
     this->min_hits = min_hits;
     this->max_age = max_age;
@@ -25,6 +115,8 @@ ObjectTracker::ObjectTracker(
     this->conf_to_tent_threshold = conf_to_tent_threshold;
     this->tent_init_buffer = tent_init_buffer;
     this->enable_gate_midpoint_refinement = enable_gate_midpoint_refinement;
+    this->enable_board_icon_refinement = enable_board_icon_refinement;
+    this->refinement_plausibility_radius = refinement_plausibility_radius;
 }
 
 // destructor implicitly defined
@@ -53,9 +145,9 @@ KalmanFilter ObjectTracker::create_kf(const Eigen::Vector3d& initial_pos) {
 
     // Reasonable covariance matrices
     // Q (Process Noise): Extremely small for static objects (enforces heavy inertia)
-    Q << 0.001, 0, 0, 
-         0, 0.001, 0, 
-         0, 0, 0.001;
+    Q << kTinyCovariance, 0, 0, 
+         0, kTinyCovariance, 0, 
+         0, 0, kTinyCovariance;
          
     // R (Measurement Noise): Initial placeholder, will be overwritten by ZED cov
     R << 0.1, 0, 0, 
@@ -81,7 +173,10 @@ std::vector<Track> ObjectTracker::update(
     const std::vector<Eigen::Matrix3d>& measurement_covariances,
     const std::vector<std::string>& classes,
     const std::vector<double>& orientations, 
-    const std::vector<double>& confidences  
+    const std::vector<double>& confidences,
+    const Eigen::Vector3d& observer_position,
+    bool has_observer_position,
+    const std::vector<std::pair<std::string, Eigen::Vector3d>>& persistent_positions
 ) {
     // 1. Compute cost matrix
     auto cost_matrix = compute_cost_matrix(measurements, measurement_covariances, classes);
@@ -113,7 +208,10 @@ std::vector<Track> ObjectTracker::update(
     delete_dead_tracks();
 
     // 6. Create new tracks
-    create_new_tracks(unmatched_dets, measurements, classes, orientations, confidences);
+    create_new_tracks(unmatched_dets, measurements, classes, orientations, confidences, persistent_positions);
+
+    this->observer_position = observer_position;
+    this->has_observer_position = has_observer_position;
     
     // 7. Post-processing: Apply physical domain constraints to tracking state
     apply_physical_constraints();
@@ -226,15 +324,12 @@ std::vector<std::pair<size_t, size_t>> ObjectTracker::match_tracks(
         int det_idx = assignment[assign_idx];
 
         // (track_idx, det_idx) forms the pairing
-        // TODO: Iterate through unmatched tracks and detections and remove from those lists, tentative implementation below
+        // Iterate through unmatched tracks and detections and remove from those lists, tentative implementation below
         // assignment is set to -1 if no assignment was made for that track
         // otherwise we check if we cost threshold
         if (det_idx != -1 && cost_matrix[track_idx][det_idx] <= gating_threshold) {
             // Valid match, at this point det_idx must be positive i.e. valid size_t
             matches.push_back(std::make_pair(track_idx, det_idx));
-        } else {
-             // Debug print for rejected match?
-             // std::cerr << "[TRACKER] Rejected match: track " << track_idx << " det " << det_idx << " cost " << cost_matrix[track_idx][det_idx] << std::endl;
         }
     }
 
@@ -303,7 +398,6 @@ void ObjectTracker::update_matched_tracks(
         track.consecutive_hits++;
         track.total_updates++;
 
-        // TODO: Update to the time data type instead of using ints
         track.age = 0;
         track.confidence = confidences[meas_idx];
         
@@ -363,10 +457,12 @@ void ObjectTracker::create_new_tracks(
     const std::vector<Eigen::Vector3d>& measurements,
     const std::vector<std::string>& classes,
     const std::vector<double>& orientations,
-    const std::vector<double>& confidences
+    const std::vector<double>& confidences,
+    const std::vector<std::pair<std::string, Eigen::Vector3d>>& persistent_positions
 ) {
     for (int det_idx : unmatched_detections) {
         std::string label = classes[det_idx];
+        const bool is_large_structure = large_structure_labels.count(label) > 0;
 
         int current_count = 0;
         for (const auto& t : tracks) {
@@ -386,11 +482,57 @@ void ObjectTracker::create_new_tracks(
         bool too_close = false;
         Eigen::Vector3d new_pos = measurements[det_idx];
         for (const auto& existing_track : tracks) {
+            if (existing_track.label != label) {
+                continue;
+            }
             Eigen::Vector3d existing_pos = existing_track.kf.state();
             double dist = (new_pos - existing_pos).norm();
             if (dist < min_new_track_distance) {
                 too_close = true;
                 break;
+            }
+        }
+        // special consideration for large structures
+        if (!too_close && is_large_structure) {
+            for (const auto& existing_track : tracks) {
+                if (existing_track.state != TrackState::CONFIRMED) {
+                    continue;
+                }
+
+                const Eigen::Vector3d existing_pos = existing_track.kf.state();
+                const double dist_xy = xy_distance(new_pos, existing_pos);
+                // check if new large structure is too close to existing pipe
+                if (pipe_labels.count(existing_track.label) > 0 &&
+                    dist_xy < min_large_structure_pipe_separation) {
+                    too_close = true;
+                    break;
+                }
+                // check if new large structure is too close to existing large structure of different class
+                if (large_structure_labels.count(existing_track.label) > 0 &&
+                    existing_track.label != label &&
+                    dist_xy < min_large_structure_separation) {
+                    too_close = true;
+                    break;
+                }
+            }
+        }
+        // Also check persistent objects that have been pruned from the tracker
+        // but still exist in the object map (prevents placing a new large structure
+        // where a previously confirmed one was)
+        if (!too_close && is_large_structure) {
+            for (const auto& [persistent_label, persistent_pos] : persistent_positions) {
+                const double dist_xy = xy_distance(new_pos, persistent_pos);
+                if (pipe_labels.count(persistent_label) > 0 &&
+                    dist_xy < min_large_structure_pipe_separation) {
+                    too_close = true;
+                    break;
+                }
+                if (large_structure_labels.count(persistent_label) > 0 &&
+                    persistent_label != label &&
+                    dist_xy < min_large_structure_separation) {
+                    too_close = true;
+                    break;
+                }
             }
         }
         
@@ -418,14 +560,18 @@ void ObjectTracker::create_new_tracks(
 
 void ObjectTracker::apply_physical_constraints() {
     // Apply physical realm constraints that affect the tracked position 
-    // Currently, we refine the gate position and orientation using left and right shark/sawfish positions.
     apply_gate_physical_constraints();
+    apply_board_physical_constraints();
 }
 
 void ObjectTracker::apply_gate_physical_constraints() {
+    if (!enable_gate_midpoint_refinement) {
+        return;
+    }
+
     Track* gate_track = nullptr;
-    Track* shark_track = nullptr;
-    Track* sawfish_track = nullptr;
+    Track* search_rescue_track = nullptr;
+    Track* survey_repair_track = nullptr;
 
     // Single loop to find all necessary tracks
     for (auto& t : tracks) {
@@ -433,50 +579,149 @@ void ObjectTracker::apply_gate_physical_constraints() {
         if (t.state != TrackState::CONFIRMED) continue;
 
         if (t.label == "gate") gate_track = &t;
-        else if (t.label == "shark") shark_track = &t;
-        else if (t.label == "sawfish") sawfish_track = &t;
+        else if (t.label == "search_rescue") search_rescue_track = &t;
+        else if (t.label == "survey_repair") survey_repair_track = &t;
     }
 
-    if (gate_track && shark_track && sawfish_track) {
-        Eigen::Vector3d p_shark = shark_track->kf.state();
-        Eigen::Vector3d p_sawfish = sawfish_track->kf.state();
+    if (gate_track && search_rescue_track && survey_repair_track) {
+        Eigen::Vector3d p_search_rescue = search_rescue_track->kf.state();
+        Eigen::Vector3d p_survey_repair = survey_repair_track->kf.state();
         Eigen::Vector3d p_gate = gate_track->kf.state();
         
         // 1. Position Refinement
-        if (enable_gate_midpoint_refinement) {
-            Eigen::Vector3d midpoint = (p_shark + p_sawfish) / 2.0;
+        Eigen::Vector3d midpoint = (p_search_rescue + p_survey_repair) / 2.0;
+        // only update if refined position is within plausibility radius of original board position (prevents large jumps from erroneous measurements)
+        if ((p_gate - midpoint).norm() < refinement_plausibility_radius) {
+            // Use very small measurement covariance to strongly pull gate position towards midpoint
+            Eigen::Matrix3d tiny_R = Eigen::Matrix3d::Identity() * kTinyCovariance;
+            gate_track->kf.update(midpoint, tiny_R);
+            p_gate = gate_track->kf.state();
+        }
 
-            // Apply refinement if the fish midpoint is physically plausible (e.g. within 5 meters of gate)
-            if ((p_gate - midpoint).norm() < 5.0) {
-                // Apply a very high confidence measurement update to pull the gate to the fish midpoint
-                Eigen::Matrix3d tiny_R = Eigen::Matrix3d::Identity() * 0.001;
-                gate_track->kf.update(midpoint, tiny_R);
-                // Update p_gate for orientation calculation
-                p_gate = gate_track->kf.state();
+        if (has_observer_position) {
+            Eigen::Vector2d gate_span = xy(p_survey_repair) - xy(p_search_rescue);
+            double yaw = 0.0;
+            if (compute_facing_yaw(gate_span, xy(p_gate), xy(observer_position), yaw)) {
+                gate_track->theta_z = yaw;
+                gate_track->has_orientation = true;
             }
         }
-
-        // 2. Orientation Calculation
-        // Vector along the gate posts
-        double dx = p_sawfish.x() - p_shark.x();
-        double dy = p_sawfish.y() - p_shark.y();
-        
-        // Normal vector perpendicular to the gate plane (facing either forwards or backwards)
-        double nx = -dy;
-        double ny = dx;
-        
-        // We want the normal to consistently point towards the map origin (for easy offsetting).
-        // Check if the normal points away from the origin (dot product > 0). If so, flip it.
-        if ((nx * p_gate.x() + ny * p_gate.y()) > 0) {
-            nx = -nx;
-            ny = -ny;
-        }
-        
-        // The yaw angle represents the normal vector pointing through the gate
-        double yaw = std::atan2(ny, nx);
-        
-        gate_track->theta_z = yaw;
-        gate_track->has_orientation = true;
     }
 }
 
+void ObjectTracker::apply_board_physical_constraints() {
+    if (!enable_board_icon_refinement) {
+        return;
+    }
+
+    Track* board_track = nullptr;
+    Track* ambulance_track = nullptr;
+    Track* firetruck_track = nullptr;
+    Track* blood_track = nullptr;
+    Track* fire_track = nullptr;
+
+    for (auto& t : tracks) {
+        if (t.state != TrackState::CONFIRMED) continue;
+
+        if (t.label == "board") board_track = &t;
+        else if (t.label == "ambulance") ambulance_track = &t;
+        else if (t.label == "firetruck") firetruck_track = &t;
+        else if (t.label == "blood") blood_track = &t;
+        else if (t.label == "fire") fire_track = &t;
+    }
+
+    if (!board_track) {
+        return;
+    }
+
+    const bool has_vehicle_pair = ambulance_track && firetruck_track;
+    const bool has_hazard_pair = fire_track && blood_track;
+    // if neither pair exists, we have no basis for icon refinement, so skip entire process
+    if (!has_vehicle_pair && !has_hazard_pair) {
+        return;
+    }
+
+    Eigen::Vector3d refined_board_position = board_track->kf.state();
+    if (has_vehicle_pair && has_hazard_pair) {
+        // take average of all 4 points for icon position refinement
+        Eigen::Vector3d centroid =
+            (ambulance_track->kf.state() + firetruck_track->kf.state() +
+             fire_track->kf.state() + blood_track->kf.state()) /
+            4.0;
+        // only update if refined position is within plausibility radius of original board position (prevents large jumps from erroneous measurements)
+        if ((refined_board_position - centroid).norm() < refinement_plausibility_radius) {
+            // Use very small measurement covariance to strongly pull board position towards centroid
+            board_track->kf.update(centroid, Eigen::Matrix3d::Identity() * kTinyCovariance);
+            refined_board_position = board_track->kf.state();
+        }
+    } else if (has_vehicle_pair) {
+        // take average of vehicle positions for icon position refinement
+        Eigen::Vector3d midpoint =
+            (ambulance_track->kf.state() + firetruck_track->kf.state()) / 2.0;
+        // only update if refined position is within plausibility radius of original board position (prevents large jumps from erroneous measurements)
+        if ((refined_board_position - midpoint).norm() < refinement_plausibility_radius) {
+            // Use very small measurement covariance to strongly pull board position towards centroid
+            board_track->kf.update(midpoint, Eigen::Matrix3d::Identity() * kTinyCovariance);
+            refined_board_position = board_track->kf.state();
+        }
+    } else {
+        // take average of hazard positions for icon position refinement
+        Eigen::Vector3d midpoint =
+            (fire_track->kf.state() + blood_track->kf.state()) / 2.0;
+        // only update if refined position is within plausibility radius of original board position (prevents large jumps from erroneous measurements)
+        if ((refined_board_position - midpoint).norm() < refinement_plausibility_radius) {
+            // Use very small measurement covariance to strongly pull board position towards centroid
+            board_track->kf.update(midpoint, Eigen::Matrix3d::Identity() * kTinyCovariance);
+            refined_board_position = board_track->kf.state();
+        }
+    }
+
+    if (!has_observer_position) {
+        return;
+    }
+
+    std::vector<Eigen::Vector2d> chosen_normals;
+
+    if (has_vehicle_pair) {
+        Eigen::Vector2d normal;
+        // vector between vehicles is the direction (in global frame) of the board
+        // compute the normal to the board that faces towards the observer, which gives us the board orientation
+        if (compute_facing_normal(
+                xy(firetruck_track->kf.state()) - xy(ambulance_track->kf.state()),
+                xy(refined_board_position),
+                xy(observer_position),
+                normal)) {
+            chosen_normals.push_back(normal);
+        }
+    }
+
+    if (has_hazard_pair) {
+        Eigen::Vector2d normal;
+        // vector between hazards is the direction (in global frame) of the board
+        // compute the normal to the board that faces towards the observer, which gives us the board orientation
+        if (compute_facing_normal(
+                xy(blood_track->kf.state()) - xy(fire_track->kf.state()),
+                xy(refined_board_position),
+                xy(observer_position),
+                normal)) {
+            chosen_normals.push_back(normal);
+        }
+    }
+
+    if (chosen_normals.empty()) {
+        return;
+    }
+    // vehicles and hazard both give us a normal, we can fuse them by adding them (we only case about orientation)
+    Eigen::Vector2d fused_normal = Eigen::Vector2d::Zero();
+    for (const auto& normal : chosen_normals) {
+        fused_normal += normal;
+    }
+
+    if (fused_normal.norm() < kEpsilon) {
+        return;
+    }
+    // extract yaw from orientation of fused normal
+    fused_normal.normalize();
+    board_track->theta_z = std::atan2(fused_normal.y(), fused_normal.x());
+    board_track->has_orientation = true;
+}

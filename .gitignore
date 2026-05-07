@@ -23,6 +23,9 @@
 
 # PyTorch models
 *.pt
+*.pth
+# onnx models
+*.onnx
 # TensorRT engine files
 *.engine
 
