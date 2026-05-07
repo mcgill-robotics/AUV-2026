@@ -1,4 +1,6 @@
 from setuptools import setup, find_packages
+import os
+from glob import glob
 
 package_name = 'propulsion'
 
@@ -9,9 +11,12 @@ setup(
     data_files=[
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        ('share/' + package_name + '/launch', [
+
+        (os.path.join('share', package_name, 'launch'), [
             'launch/propulsion.launch.py',
         ]),
+
+        (os.path.join('share', package_name, 'params'), glob('params/*.yaml')),
     ],
     install_requires=['setuptools', 'numpy'],
     zip_safe=True,
@@ -21,9 +26,8 @@ setup(
     license='GPLv3',
     entry_points={
         'console_scripts': [
-            # ros2 run propulsion thrust_mapper
             'thrust_mapper = propulsion.thrust_mapper:main',
-            'drytest = propulsion.drytest:main',  # ros2 run propulsion drytest
+            'drytest = propulsion.drytest:main',
         ],
     },
 )

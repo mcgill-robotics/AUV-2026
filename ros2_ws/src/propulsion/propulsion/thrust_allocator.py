@@ -33,10 +33,8 @@ class ThrustAllocator:
         self.q_lp = np.zeros(9)
         self.q_lp[8] = -1.0  # Maximize alpha (minimize -alpha)
 
-        self.scaled_rows = np.array([0, 1, 3, 4, 5])
-
+        # Uniform scaling: all 6 wrench components are scaled by alpha.
         tau_placeholder = -np.ones((6, 1))
-        tau_placeholder[2, 0] = 0.0  # Do not scale HEAVE
 
         self.A_lp = sp.bmat([
             [sp.csc_matrix(self.T), sp.csc_matrix(tau_placeholder)],
@@ -62,7 +60,7 @@ class ThrustAllocator:
         rows = self.A_lp.indices[start:end]
 
         self.alpha_col_data_indices = []
-        for row in self.scaled_rows:
+        for row in range(6):
             matches = np.where(rows == row)[0]
             if len(matches) != 1:
                 raise RuntimeError(f"Could not find alpha-column entry for row {row}")
@@ -115,25 +113,24 @@ class ThrustAllocator:
         desired_wrench = np.asarray(desired_wrench, dtype=float)
 
         A_data = self.A_lp.data.copy()
-        A_data[self.alpha_col_data_indices] = -desired_wrench[self.scaled_rows]
+        A_data[self.alpha_col_data_indices] = -desired_wrench
 
-        l = self.l_lp.copy()
-        u = self.u_lp.copy()
-
-        l[2] = desired_wrench[2]
-        u[2] = desired_wrench[2]
-
-        self.lp_solver.update(Ax=A_data, l=l, u=u)
+        self.lp_solver.update(Ax=A_data)
         results = self.lp_solver.solve()
 
         if results.info.status_val != osqp.constant("OSQP_SOLVED"):
             raise RuntimeError(f"LP solver failed with status: {results.info.status}")
 
         alpha = float(results.x[8])
+        alpha = float(np.clip(alpha, 0.0, 1.0))
+
         return alpha
 
     def minimize_thrust(self, target_wrench: np.ndarray):
         target_wrench = np.asarray(target_wrench, dtype=float)
+
+        if target_wrench.shape != (6,):
+            raise ValueError(f"Expected target_wrench shape (6,), got {target_wrench.shape}")
 
         thrust_commands = self.T_inv @ target_wrench
 
@@ -170,8 +167,8 @@ class ThrustAllocator:
 
         alpha = self.maximize_alpha(desired_wrench)
 
+        # Uniform scaling: heave is scaled with the rest of the wrench.
         target_wrench = alpha * desired_wrench
-        target_wrench[2] = desired_wrench[2]  # Preserve HEAVE
 
         thrust_commands, method = self.minimize_thrust(target_wrench)
 
