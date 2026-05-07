@@ -16,10 +16,10 @@ from .debugNavigation.test_serivce_call_behaviour import TestServiceCallBehaviou
 
 # --- NEW ROBOSUB 2026 TASKS ---
 from .robosub2026.gate_task import GateTask
-# from .robosub2026.slalom_task import SlalomTask
-# from .robosub2026.bins_task import BinsTask
-# from .robosub2026.torpedo_task import TorpedoTask
-# from .robosub2026.table_octagon_task import TableOctagonTask
+from .robosub2026.slalom_task import SlalomTask
+from .robosub2026.bins_task import BinsTask
+from .robosub2026.torpedo_task import TorpedoTask
+from .robosub2026.table_octagon_task import TableOctagonTask
 
 
 class MissionSequence(py_trees.composites.Sequence):
@@ -62,10 +62,10 @@ class MissionSequence(py_trees.composites.Sequence):
             return seq
 
         standalone_gate    = make_standalone(GateTask(position_tolerance, hold_time, timeout), choice_id=8, name_prefix="Gate")
-        # standalone_slalom  = make_standalone(SlalomTask(position_tolerance, hold_time, timeout), choice_id=9, name_prefix="Slalom")
-        # standalone_bins    = make_standalone(BinsTask(position_tolerance, hold_time, timeout), choice_id=10, name_prefix="Bins")
-        # standalone_torpedo = make_standalone(TorpedoTask(position_tolerance, hold_time, timeout), choice_id=11, name_prefix="Torpedo")
-        # standalone_tab_oct = make_standalone(TableOctagonTask(position_tolerance, hold_time, timeout), choice_id=12, name_prefix="Table & Octagon")
+        standalone_slalom  = make_standalone(SlalomTask(position_tolerance, hold_time, timeout), choice_id=9, name_prefix="Slalom")
+        standalone_bins    = make_standalone(BinsTask(position_tolerance, hold_time, timeout), choice_id=10, name_prefix="Bins")
+        standalone_torpedo = make_standalone(TorpedoTask(position_tolerance, hold_time, timeout), choice_id=11, name_prefix="Torpedo")
+        standalone_tab_oct = make_standalone(TableOctagonTask(position_tolerance, hold_time, timeout), choice_id=12, name_prefix="Table & Octagon")
 
         # ---------------------------------------------------------
         # 3. INITIALIZE FULL COMPETITION RUN (Choice 13)
@@ -76,10 +76,10 @@ class MissionSequence(py_trees.composites.Sequence):
             
             # Instantiate fresh copies of the tasks for the chain
             GateTask(position_tolerance, hold_time, timeout),
-            # SlalomTask(position_tolerance, hold_time, timeout),
-            # BinsTask(position_tolerance, hold_time, timeout),
-            # TorpedoTask(position_tolerance, hold_time, timeout),
-            # TableOctagonTask(position_tolerance, hold_time, timeout),
+            SlalomTask(position_tolerance, hold_time, timeout),
+            BinsTask(position_tolerance, hold_time, timeout),
+            TorpedoTask(position_tolerance, hold_time, timeout),
+            TableOctagonTask(position_tolerance, hold_time, timeout),
 
             MissionCompleteBehaviour(name="Complete Full Run")
         ])
@@ -96,10 +96,10 @@ class MissionSequence(py_trees.composites.Sequence):
             translation_rectangle, 
             test_service_call,
             standalone_gate,
-            # standalone_slalom,
-            # standalone_bins,
-            # standalone_torpedo,
-            # standalone_tab_oct,
+            standalone_slalom,
+            standalone_bins,
+            standalone_torpedo,
+            standalone_tab_oct,
             full_competition_run
         ]
 

@@ -11,6 +11,12 @@ Currently, there is only skeleton functionality and the pre-qual missions. It is
 
 *TODO*, put a high-level diagram representing the Behaviour Tree
 
+## Competition Tasks
+
+The autonomous missions are designed based on the official **RoboSub 2026** challenge descriptions. For detailed technical specifications, scoring rules, and task elements, refer to the official handbook:
+
+🔗 **[RoboSub Task Descriptions](https://robonation.gitbook.io/robosub-resources/section-3-autonomy-challenge/3.2-task-descriptions)**
+
 ## Usage
 To use the planner, configure the parameters inside `config/behaviour_tree_params.yaml`. It is recommended to maintain separate configuration files for significantly different trees (e.g., `pre_qual_params.yaml` vs `competition_2026_params.yaml`).
 
@@ -73,7 +79,13 @@ Selection of implemented missions:
 4: Basic Dive (Down 1.5m)
 5: Basic Yaw (180 deg)
 6: Translation Rectangle (no yaw)
-7: Test Service Call (reset dead reckoning)"
+7: Test Service Call (reset dead reckoning)
+8: Gate Task
+9: Slalom Task
+10: Bins Task
+11: Torpedo Task
+12: Table & Octagon Task
+13: FULL COMPETITION RUN
 ```
 ```bash
 ros2 topic pub --once /mission_selector std_msgs/msg/Int32 "{data: 1}"
