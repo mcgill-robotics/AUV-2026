@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>bringup</name>
+  <version>0.1.0</version>
+  <description>Launch files to bring up the AUV system</description>
+
+  <maintainer email="nadim.asmar@mail.mcgill.ca">Nadim Asmar</maintainer>
+  <license>MIT</license>
+
+  <!-- Build system -->
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <!-- Runtime dependencies (launch only) -->
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+
+  <!-- Packages that are launched -->
+  <exec_depend>sensors</exec_depend>
+  <exec_depend>controls</exec_depend>
+  <exec_depend>vision</exec_depend>
+  <exec_depend>xsens_mti_ros2_driver</exec_depend>
+  <exec_depend>micro_ros_agent</exec_depend>
+
+  <exec_depend>ament_index_python</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

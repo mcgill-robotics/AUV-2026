@@ -5,26 +5,26 @@ on:
     branches: [ "main", "pooltest/*", "dev/*" ]
   pull_request:
     branches: [ "main", "pooltest/*" ]
-    
+
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Docker Tag (e.g., 2026-01 or dev)'
+        description: "Docker Tag (e.g., 2026-01 or dev)"
         required: true
-        default: 'dev'
+        default: "dev"
       allow_overwrite:
-        description: 'Overwrite existing tag if found?'
+        description: "Overwrite existing tag if found?"
         type: boolean
         default: false
 
   schedule:
-    - cron: '0 0,12 * * *'
+    - cron: "0 0,12 * * *"
 
 jobs:
   build-and-push:
     name: Build ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
-    
+
     strategy:
       fail-fast: false
       matrix:
@@ -66,7 +66,8 @@ jobs:
           submodules: recursive
           lfs: true
 
-      - uses: ./.github/actions/cleanup_disk
+      - name: Clean up Disk Space
+        uses: ./.github/actions/cleanup_disk
 
       - name: Set Docker Tags
         id: docker_tags
@@ -74,22 +75,22 @@ jobs:
           # 1. Determine the base tag (manual input or default 'dev')
           BASE_TAG="${{ github.event.inputs.tag_name }}"
           TAG_NAME="${BASE_TAG:-dev}"
-          
+
           # 2. Define the image name
           IMAGE="mcgillrobotics/auv_2026"
-          
+
           # 3. Create the primary tag string (used for verification)
           PRIMARY_TAG="$IMAGE:$TAG_NAME-${{ matrix.suffix }}"
-          
+
           # 4. Create the list of tags to push
           # Start with the primary tag
           TAGS="$PRIMARY_TAG"
-          
+
           # If this is a push to main, append the 'latest' tag
           if [[ "${{ github.ref }}" == "refs/heads/main" && "${{ github.event_name }}" == "push" ]]; then
             TAGS="$TAGS,$IMAGE:latest-${{ matrix.suffix }}"
           fi
-          
+
           echo "PRIMARY_TAG=$PRIMARY_TAG" >> $GITHUB_ENV
           echo "DOCKER_TAGS=$TAGS" >> $GITHUB_ENV
 
@@ -106,7 +107,7 @@ jobs:
         run: |
           FULL_TAG="${{ env.PRIMARY_TAG }}"
           ALLOW_OVERWRITE="${{ github.event.inputs.allow_overwrite }}"
-          
+
           # Check if tag exists on Docker Hub
           # Note: This check only validates the PRIMARY tag to avoid accidental overwrite of explicit version.
           # We generally don't check 'latest' here as it is intended to move.
@@ -136,12 +137,48 @@ jobs:
           build-args: |
             CI=true
 
+      - name: Add Swapfile
+        uses: ./.github/actions/swapfile
+
       - name: Verify Build
         run: |
           docker run --rm --user $(id -u):$(id -g) -v ${{ github.workspace }}:/home/douglas/AUV-2026 ${{ env.PRIMARY_TAG }} /bin/bash -c "./build.sh -d"
 
+      - name: Verify Python Libraries Permissions
+        run: |
+          docker run --rm --user $(id -u):$(id -g) ${{ env.PRIMARY_TAG }} python3 -c "
+          import cv2, torch, torchvision, ultralytics, pandas, scipy, albumentations, sys, re
+          print('All key Python libraries imported successfully as non-root user.')
+
+          matrix_suffix = '${{ matrix.suffix }}'
+          if matrix_suffix in ['nvidia-amd64', 'jetson']:
+              build_info = cv2.getBuildInformation()
+              print('--- OpenCV Build Information ---')
+              print(build_info)
+              print('--------------------------------')
+              if not re.search(r'NVIDIA CUDA:\s+YES', build_info):
+                  sys.exit('ERROR: OpenCV is NOT CUDA enabled.')
+              else:
+                  print('SUCCESS: OpenCV is CUDA enabled.')
+          else:
+              print('CPU container, skipping CUDA check.')
+          "
+      - name: Teardown swap space
+        if: always()
+        run: |
+          if swapon --show | grep -q /swapfile; then
+            echo "Disabling and removing swapfile..."
+            sudo swapoff /swapfile
+            sudo rm /swapfile
+            echo "Done. Disk reclaimed:"
+            df -h /
+          else
+            echo "No swapfile found, nothing to clean up."
+          fi
+
       - name: Push image
-        if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push'
+          && github.ref == 'refs/heads/main') }}
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}

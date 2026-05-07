@@ -54,8 +54,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # ROS Build Tools
     python3-colcon-common-extensions \
     python3-rosdep \
-    python3-vcstools \
-    # Hardware & Devices
+    python3-vcstool \
     tar \
     v4l-utils \
     usbutils \
@@ -77,7 +76,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Bridge & Teleop
     ros-${ROS_DISTRO}-joy \
     ros-${ROS_DISTRO}-joy-teleop \
-    ros-${ROS_DISTRO}-foxglove-bridge \
+    ros-${ROS_DISTRO}-foxglove-msgs \
     # Navigation & Localization
     ros-${ROS_DISTRO}-mavros \
     ros-${ROS_DISTRO}-mavros-msgs \
@@ -102,6 +101,49 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-zed-msgs \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
+
+# ----------------------------------------------------------
+# Install micro-ROS Agent (for microcontroller communication)
+# ------------------------------------------
+WORKDIR /opt/ros/micro_ros_ws
+RUN git clone -b ${ROS_DISTRO} https://github.com/micro-ROS/micro_ros_setup.git src/micro_ros_setup
+
+RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \
+    colcon build \
+        --parallel-workers $(nproc) \
+        --merge-install \
+        --event-handlers console_direct+ \
+        --base-paths src \
+        --cmake-args -DCMAKE_BUILD_TYPE=Release && \
+    . /opt/ros/micro_ros_ws/install/setup.sh && \
+    MICROROS_PREFIX=$(ros2 pkg prefix micro_ros_setup) && \
+    ros2 run micro_ros_setup create_ws.sh src "$MICROROS_PREFIX/config/agent_ros2_packages.txt" "$MICROROS_PREFIX/config/agent_uros_packages.repos" && \
+    colcon build \
+        --packages-up-to micro_ros_agent $@ \
+        --parallel-workers $(nproc) \
+        --merge-install \
+        --event-handlers console_direct+ \
+        --cmake-args \
+            "-DUAGENT_BUILD_EXECUTABLE=OFF" \
+            "-DUAGENT_P2P_PROFILE=OFF" \
+            "--no-warn-unused-cli" && \
+    rm -rf build src log
+
+# ----------------------------------------------------------
+# Install Foxglove Bridge from source
+# ----------------------------------------------------------
+WORKDIR /opt/ros/foxglove_ws
+RUN git clone --depth 1 --branch sdk/v0.21.0 https://github.com/foxglove/foxglove-sdk.git src/foxglove-sdk && \
+    apt-get update && \
+    rm -rf /etc/ros/rosdep/sources.list.d/* && \
+    rosdep init && \
+    rosdep update --rosdistro ${ROS_DISTRO} && \
+    rosdep install -y --from-paths src --ignore-src --rosdistro ${ROS_DISTRO} && \
+    . /opt/ros/${ROS_DISTRO}/setup.sh && \
+    colcon build --packages-select foxglove_bridge \
+    --cmake-args -DCMAKE_BUILD_TYPE=Release && \
+    rm -rf build log src /var/lib/apt/lists/*
+WORKDIR /root
 
 # ---------------------------------------------------------
 # 3. Install Python ML & Vision Dependencies (CPU)
@@ -147,6 +189,11 @@ RUN ARCH="$(dpkg --print-architecture)" && \
     mkdir -p /etc/fixuid && \
     printf "user: $USERNAME\ngroup: $USERNAME\n" > /etc/fixuid/config.yml
 
+# Copy entrypoint
+COPY Docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Switch to the User and configure the environment
 USER $USERNAME
 
 # set colcon home after adding user
@@ -157,11 +204,11 @@ COPY .colcon ${COLCON_HOME}/
 WORKDIR /home/$USERNAME/AUV-2026
 
 # Add source commands to bashrc
-RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc && \
+RUN echo "source /opt/ros/${ROS_DISTRO}/local_setup.bash && source /opt/ros/micro_ros_ws/install/local_setup.bash && source /opt/ros/foxglove_ws/install/local_setup.bash" >> ~/.bashrc && \
     echo "if [ -f ~/AUV-2026/ros2_ws/install/setup.bash ]; then source ~/AUV-2026/ros2_ws/install/setup.bash; fi" >> ~/.bashrc
 
 # Entrypoint uses fixuid to remap UID/GID if running with --user
-ENTRYPOINT ["fixuid", "-q"]
+ENTRYPOINT ["entrypoint.sh"]
 
 # Keep container alive
 CMD ["bash"]

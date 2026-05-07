@@ -1,0 +1,26 @@
+# Teleop Converter default parameters
+teleop_converter:
+  ros__parameters:
+    # Scaling (forces in Newtons, torques in Nm)
+    surge_scale: 20.0
+    sway_scale: 20.0
+    heave_scale: 40.0
+    yaw_scale: 5.0
+    roll_scale: 2.0
+    pitch_scale: 2.0
+    
+    # Safety
+    require_deadman: true
+    timeout_sec: 0.5
+    deadzone: 0.1
+    
+    # Axis indices (Xbox One S Controller, USB mode, Linux)
+    # See: https://wiki.ros.org/joy
+    axis_left_x: 0
+    axis_left_y: 1
+    axis_right_x: 3
+    axis_lt: 2
+    axis_rt: 5
+    axis_dpad_x: 6
+    axis_dpad_y: 7
+    btn_deadman: 4
