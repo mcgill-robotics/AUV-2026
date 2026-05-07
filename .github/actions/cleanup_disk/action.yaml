@@ -1,5 +1,7 @@
 name: Cleanup disk
-description: Github actions contains many packages we don't need for our docker builds (e.g. .NET, Android SDK, GHC, hosted toolcache). This action removes them to free up disk space.
+description: Github actions contains many packages we don't need for our docker
+  builds (e.g. .NET, Android SDK, GHC, hosted toolcache). This action removes
+  them to free up disk space.
 
 runs:
   using: composite
@@ -24,7 +26,6 @@ runs:
 
         # 4. Hosted Tool Cache (CodeQL, Go, etc.)
         sudo rm -rf /opt/hostedtoolcache
-        
         # 5. Swift, Java, Julia
         sudo rm -rf /usr/share/swift
         sudo rm -rf /usr/lib/jvm
@@ -59,7 +60,6 @@ runs:
 
         echo "=== After Cleanup ==="
         df -h
-        
         FINAL_USAGE=$(df / --output=used | tail -n 1)
         RECLAIMED=$((INITIAL_USAGE - FINAL_USAGE))
         # Convert from 1K-blocks to GB

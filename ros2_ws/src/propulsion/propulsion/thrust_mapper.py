@@ -26,8 +26,15 @@ class ThrusterMapper(Node):
     def __init__(self):
         super().__init__('thrust_mapper')
 
-        # QoS: Always use most recent controller signals, reliable, volatile durability
+        # QoS: Always use most recent controller signals, best effort, volatile durability
         qos = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            durability=DurabilityPolicy.VOLATILE,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+        )
+
+        qos_reliable = QoSProfile(
             reliability=ReliabilityPolicy.RELIABLE,
             durability=DurabilityPolicy.VOLATILE,
             history=HistoryPolicy.KEEP_LAST,
@@ -35,8 +42,8 @@ class ThrusterMapper(Node):
         )
 
         # --- Publishers
-        self.pub_us = self.create_publisher(Int16MultiArray, 'propulsion/microseconds', qos)
-        self.pub_forces = self.create_publisher(ThrusterForces, 'propulsion/forces', qos)
+        self.pub_us = self.create_publisher(Int16MultiArray, 'propulsion/microseconds', qos_reliable)
+        self.pub_forces = self.create_publisher(ThrusterForces, 'propulsion/forces', qos_reliable)
 
         # --- Thruster PWM Limits
         self.declare_parameter('thruster_PWM_lower_limit', 1228)
@@ -93,7 +100,7 @@ class ThrusterMapper(Node):
         # --- Subscriber
         self.sub_cmd = self.create_subscription(
             Wrench,
-            'controls/effort',
+            'controls/total_effort',
             self.wrench_to_thrust,
             qos
         )
