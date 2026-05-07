@@ -21,6 +21,45 @@
 **/build/
 **/log/
 
+# OS generated files
+# macOS
+.DS_Store
+.DS_Store?
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+Icon
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+[Dd]esktop.ini
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
 #xsens ros2 driver lib 
 ros2_ws/src/xsens_mti_ros2_driver/lib/**
 
