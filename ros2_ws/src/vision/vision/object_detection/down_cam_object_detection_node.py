@@ -161,7 +161,6 @@ class DownCamObjectDetectorNode():
             self.node.get_logger().info(f"Publishing annotated debug image to: {publish_topic}")
 
         # ── Open camera & apply controls ──────────────────────────
-        self.node.get_logger().info(f"HERE!!!!!!!!!! {self.sim}")
         if not self.sim:
             self.cap = self._open_camera()
             self._apply_camera_controls()
