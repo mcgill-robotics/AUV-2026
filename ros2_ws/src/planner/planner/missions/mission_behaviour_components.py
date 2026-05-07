@@ -162,22 +162,31 @@ class BasicTriggerServiceBehaviour(py_trees.behaviour.Behaviour):
         def __init__(
             self, 
             name = "ActionBehaviour",
-            service_name = None
+            service_name = None,
+            timeout_sec: float = 10.0,
+            max_retries: int = 3
             ) -> None:
             """
             Initializes the node and blackboard client for this behaviour.
 
             Inputs: str                         : name - the name of the behaviour 
                     str                         : service_name - the name of the service to call
+                    float                       : timeout_sec - max seconds to wait for a response (default: 10.0)
+                    int                         : max_retries - max number of attempts before permanent failure (default: 3)
 
             Outputs: None
             """   
             super().__init__(name)
             self.name = name
             self.service_name = service_name
+            self.timeout_sec = timeout_sec
+            self.max_retries = max_retries
             self.blackboard = self.attach_blackboard_client(name=self.name)
             self.sent_service_request = False
             self.future = None
+            self.request_time = None
+            self.attempt_count = 0
+            self._exhausted_logged = False
 
         def setup(self, **kwargs) -> None:
             """
@@ -186,10 +195,9 @@ class BasicTriggerServiceBehaviour(py_trees.behaviour.Behaviour):
             self.node = kwargs['node']
             self.service_client = self.node.create_client(Trigger, self.service_name)
             
-            # Check if the service is available, if not log an error and raise an exception
-            #if not self.service_client.wait_for_service(timeout_sec=2.0):
-            #    self.node.get_logger().error(f"[{self.name}] Service not available.")
-            #    raise RuntimeError(f"Service {self.service_client.srv_name} not available.")
+            # Check if the service is available at startup
+            if not self.service_client.wait_for_service(timeout_sec=2.0):
+                self.node.get_logger().warn(f"[{self.name}] Service '{self.service_name}' not yet available. Will retry when triggered.")
 
 
         def initialise(self) -> None:
@@ -204,6 +212,7 @@ class BasicTriggerServiceBehaviour(py_trees.behaviour.Behaviour):
             # Reset field needed to keep track of goal
             self.sent_service_request = False
             self.future = None
+            self.request_time = None
 
         def update(self) -> py_trees.common.Status:
             """
@@ -216,22 +225,41 @@ class BasicTriggerServiceBehaviour(py_trees.behaviour.Behaviour):
                         py_trees.common.Status.RUNNING if it is still running.
                 
             """
-            # Set the request and send it asynchronously
+            # Check if max retries exhausted
+            if self.attempt_count >= self.max_retries and not self.sent_service_request:
+                if not self._exhausted_logged:
+                    self.node.get_logger().error(f"[{self.name}] Max retries ({self.max_retries}) exhausted. Giving up.")
+                    self._exhausted_logged = True
+                return py_trees.common.Status.FAILURE
+
+            # Send the request asynchronously
             if not self.sent_service_request:
-                self.node.get_logger().info(f"[{self.name}] Sending service request.")
+                self.attempt_count += 1
+                self.node.get_logger().info(f"[{self.name}] Sending service request (attempt {self.attempt_count}/{self.max_retries}).")
                 request = Trigger.Request()
                 self.future = self.service_client.call_async(request)
                 self.sent_service_request = True
+                self.request_time = self.node.get_clock().now()
                 return py_trees.common.Status.RUNNING
             
-            # Verify if the service response has been received
+            # Still waiting for response
             if not self.future.done():
+                # Check for timeout
+                elapsed = (self.node.get_clock().now() - self.request_time).nanoseconds / 1e9
+                if elapsed >= self.timeout_sec:
+                    self.node.get_logger().error(f"[{self.name}] Service call timed out after {self.timeout_sec:.1f}s")
+                    self.future.cancel()
+                    # Reset to allow retry on the next tick (stays RUNNING)
+                    self.sent_service_request = False
+                    return py_trees.common.Status.RUNNING
                 return py_trees.common.Status.RUNNING
             
             # Check if the service call itself failed (e.g. middleware error)
             if self.future.exception() is not None:
                 self.node.get_logger().error(f"[{self.name}] Service call failed: {self.future.exception()}")
-                return py_trees.common.Status.FAILURE
+                # Reset to allow retry on the next tick (stays RUNNING)
+                self.sent_service_request = False
+                return py_trees.common.Status.RUNNING
             
             # Verify if service is successful or not
             response = self.future.result()

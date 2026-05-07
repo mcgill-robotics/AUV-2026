@@ -35,7 +35,7 @@ class MissionSequence(py_trees.composites.Sequence):
                  orbit_pre_qual_positional_tolerance_scale: float, 
                  orbit_pre_qual_hold_time_initial: float, 
                  orbit_pre_qual_hold_time_segments: float):
-        super().__init__("Mission Master Sequence", memory=False)
+        super().__init__("Mission Master Sequence", memory=True)
 
         # ---------------------------------------------------------
         # 1. INITIALIZE OLD MISSIONS (Choices 1-7)
@@ -155,6 +155,7 @@ class MissionChoiceBehaviour(py_trees.behaviour.Behaviour):
     def initialise(self):
         """Called every time this behavior transitions is not RUNNING."""
         self.message_shown = False
+        self.blackboard.mission_choice = None
     
     def update(self):
         if self.blackboard.mission_choice is None:
