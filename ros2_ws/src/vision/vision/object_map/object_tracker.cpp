@@ -175,7 +175,8 @@ std::vector<Track> ObjectTracker::update(
     const std::vector<double>& orientations, 
     const std::vector<double>& confidences,
     const Eigen::Vector3d& observer_position,
-    bool has_observer_position
+    bool has_observer_position,
+    const std::vector<std::pair<std::string, Eigen::Vector3d>>& persistent_positions
 ) {
     // 1. Compute cost matrix
     auto cost_matrix = compute_cost_matrix(measurements, measurement_covariances, classes);
@@ -207,7 +208,7 @@ std::vector<Track> ObjectTracker::update(
     delete_dead_tracks();
 
     // 6. Create new tracks
-    create_new_tracks(unmatched_dets, measurements, classes, orientations, confidences);
+    create_new_tracks(unmatched_dets, measurements, classes, orientations, confidences, persistent_positions);
 
     this->observer_position = observer_position;
     this->has_observer_position = has_observer_position;
@@ -456,7 +457,8 @@ void ObjectTracker::create_new_tracks(
     const std::vector<Eigen::Vector3d>& measurements,
     const std::vector<std::string>& classes,
     const std::vector<double>& orientations,
-    const std::vector<double>& confidences
+    const std::vector<double>& confidences,
+    const std::vector<std::pair<std::string, Eigen::Vector3d>>& persistent_positions
 ) {
     for (int det_idx : unmatched_detections) {
         std::string label = classes[det_idx];
@@ -508,6 +510,25 @@ void ObjectTracker::create_new_tracks(
                 // check if new large structure is too close to existing large structure of different class
                 if (large_structure_labels.count(existing_track.label) > 0 &&
                     existing_track.label != label &&
+                    dist_xy < min_large_structure_separation) {
+                    too_close = true;
+                    break;
+                }
+            }
+        }
+        // Also check persistent objects that have been pruned from the tracker
+        // but still exist in the object map (prevents placing a new large structure
+        // where a previously confirmed one was)
+        if (!too_close && is_large_structure) {
+            for (const auto& [persistent_label, persistent_pos] : persistent_positions) {
+                const double dist_xy = xy_distance(new_pos, persistent_pos);
+                if (pipe_labels.count(persistent_label) > 0 &&
+                    dist_xy < min_large_structure_pipe_separation) {
+                    too_close = true;
+                    break;
+                }
+                if (large_structure_labels.count(persistent_label) > 0 &&
+                    persistent_label != label &&
                     dist_xy < min_large_structure_separation) {
                     too_close = true;
                     break;

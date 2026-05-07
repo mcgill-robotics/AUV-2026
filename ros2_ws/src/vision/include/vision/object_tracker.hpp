@@ -68,6 +68,8 @@ public:
     KalmanFilter create_kf(const Eigen::Vector3d& initial_pos);
 
     // Accepts current frame data and returns the list of CONFIRMED tracks
+    // persistent_positions: positions of objects that are no longer tracked but still 
+    // exist in the persistent map (used for large-structure proximity checks)
     std::vector<Track> update(
         const std::vector<Eigen::Vector3d>& measurements,
         const std::vector<Eigen::Matrix3d>& measurement_covariances,
@@ -75,7 +77,8 @@ public:
         const std::vector<double>& orientations,
         const std::vector<double>& confidences,
         const Eigen::Vector3d& observer_position,
-        bool has_observer_position
+        bool has_observer_position,
+        const std::vector<std::pair<std::string, Eigen::Vector3d>>& persistent_positions = {}
     ); 
 
 private:
@@ -119,7 +122,8 @@ private:
         const std::vector<Eigen::Vector3d>& measurements,
         const std::vector<std::string>& classes,
         const std::vector<double>& orientations,
-        const std::vector<double>& confidences
+        const std::vector<double>& confidences,
+        const std::vector<std::pair<std::string, Eigen::Vector3d>>& persistent_positions
     );
 
     // Step 7: Post-processing constraints applied to tracking states

@@ -311,6 +311,15 @@ private:
             filtered_confidences.push_back(detection.confidence);
         }
 
+        // Build persistent positions for the tracker's large-structure proximity check.
+        // These are objects that may have been pruned from the tracker (max_age exceeded)
+        // but are still held in the node's persistent map.
+        std::vector<std::pair<std::string, Eigen::Vector3d>> persistent_positions;
+        persistent_positions.reserve(persistent_objects.size());
+        for (const auto& [label, track] : persistent_objects) {
+            persistent_positions.emplace_back(label, track.get_position());
+        }
+
         std::vector<Track> all_tracks = object_tracker.update(
             filtered_measurements,
             filtered_covariances,
@@ -318,7 +327,8 @@ private:
             filtered_orientations,
             filtered_confidences,
             observer_position,
-            has_observer_position);
+            has_observer_position,
+            persistent_positions);
 
         publish_object_map(all_tracks);
     }
