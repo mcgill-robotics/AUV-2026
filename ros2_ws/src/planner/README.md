@@ -12,34 +12,48 @@ Currently, there is only skeleton functionality and the pre-qual missions. It is
 *TODO*, put a high-level diagram representing the Behaviour Tree
 
 ## Usage
-To use the planner, configurate the parameters inside the config folder:
-Here is a description of the available parameters:
+To use the planner, configure the parameters inside `config/behaviour_tree_params.yaml`. It is recommended to maintain separate configuration files for significantly different trees (e.g., `pre_qual_params.yaml` vs `competition_2026_params.yaml`).
 
-| Parameter | Type | Description |
-| ------ | ------- | ---------- |
-| `tick_rate` | `float` | The tick rate of the behaviour tree in Hz. Determines how often the tree is ticked and thus how often each behaviour is updated. Higher tick rates can lead to more responsive behaviour but at a tradeoff of more compute usage. |
-| `sim` | `bool` | Determines whether to use simulation time. Should be true when running in simulation and false when running on the real AUV. |
-| `use_ground_truth` | `bool` | Determines whether to use ground truth pose and twist data from the simulator. Parameter is only relevant if sim is true. | 
+Note that while `sim` and `use_ground_truth` can be toggled via launch arguments, most mission parameters are hierarchical (namespaced with dots) and should be modified directly in the configuration file.
+
+### General Parameters
+
+| Parameter | Type | Default | Description |
+| ------ | ------- | ------- | ---------- |
+| `tick_rate` | `float` | `3.0` | The tick rate of the behaviour tree in Hz. Higher tick rates increase responsiveness but consume more compute. |
+| `sim` | `bool` | `true` | Whether to use simulation time. |
+| `use_ground_truth` | `bool` | `true` | Whether to use ground truth pose and twist data from the simulator. Only relevant if `sim` is true. | 
 
 ### Pre-Qualification Parameters
 
-| Parameter | Type | Description |
-| ------ | ------- | ---------- |
-| `pre_qual_yaw_tolerance` | `float` | Allowed yaw error in radians for pre-qualification. Tune based on sensor noise floor. |
-| `pre_qual_positional_tolerance` | `float` | Allowed positional error in meters for pre-qualification. Tune based on localization accuracy. |
-| `pre_qual_hold_time` | `float` | Time in seconds the vehicle must remain within tolerances to pass pre-qualification. |
-| `pre_qual_timeout` | `float` | Maximum time in seconds to meet pre-qualification conditions before failure. |
-| `orbit_pre_qual_yaw_tolerance_scale` | `float` | Scaling factor applied to yaw tolerance during orbit pre-qualification based on trajectory curvature. |
-| `orbit_pre_qual_positional_tolerance_scale` | `float` | Scaling factor applied to positional tolerance during orbit pre-qualification based on orbit radius. |
-| `orbit_pre_qual_hold_time_initial` | `float` | Required hold time in seconds for the initial orbit segment. |
-| `orbit_pre_qual_hold_time_segments` | `float` | Required hold time in seconds for subsequent orbit segments. |
-| `orbit_pre_qual_timeout` | `float` | Maximum time in seconds to complete orbit pre-qualification before failure. |
+| Parameter | Type | Default | Description |
+| ------ | ------- | ------- | ---------- |
+| `pre_qual.yaw_tolerance` | `float` | `0.5` | Allowed yaw error in radians. |
+| `pre_qual.positional_tolerance` | `float` | `0.2` | Allowed positional error in meters. |
+| `pre_qual.hold_time` | `float` | `1.0` | Required stabilization time within tolerances. |
+| `pre_qual.timeout` | `float` | `20.0` | Maximum time allowed to complete the task before failure. |
+
+#### Orbit Pre-Qualification
+| Parameter | Type | Default | Description |
+| ------ | ------- | ------- | ---------- |
+| `pre_qual.orbit.yaw_tolerance_scale` | `float` | `0.5` | Scaling factor for yaw tolerance based on trajectory curvature. |
+| `pre_qual.orbit.positional_tolerance_scale` | `float` | `0.5` | Scaling factor for positional tolerance based on orbit radius. |
+| `pre_qual.orbit.hold_time_initial` | `float` | `1.0` | Hold time for the initial orbit segment. |
+| `pre_qual.orbit.hold_time_segments` | `float` | `0.2` | Hold time for subsequent orbit segments. |
+| `pre_qual.orbit.timeout` | `float` | `30.0` | Total timeout for the orbit mission. |
 
 ### Steps
 (If using sim, follow step 1 and 2, otherwise move on to step 3)
-1. Launch the sim and toggle the **connect to ROS** button and stream IMU data
-2. Follow the steps inside AUV-2026/Docker/dev to start up the Docker development environment
-3. Build the project in AUV-2026/ directory and source the work space
+1. **Launch Simulator**:
+   - Launch the sim and toggle the **connect to ROS** button.
+   - **Stream Data**: Navigate to `Config -> Sensors` and toggle the following:
+     - `IMU / AHRS`
+     - `Doppler Velocity`
+     - `Depth Sensor`
+2. **Setup Environment**:
+   - Follow the steps in [AUV-2026/Docker/dev](../../../Docker/dev/README.md) to start the development environment.
+3. **Build & Source**:
+   - Build the project in the root directory and source the workspace:
 ```bash
 ./build.sh
 source ros2_ws/install/setup.bash
@@ -80,7 +94,7 @@ The package provides a single ROS Node: `RootNode`
 
 ### Subscribed Topics
 
- Topic | Message | Description |
+| Topic | Message | Description |
 | ------ | ------- | ---------- |
 | `/state_estimation/pose` | `geometry_msgs/PoseStamped` | State estimation pose used to write related information to the blackboard when sim = false |
 | `/state_estimation/twist` | `geometry_msgs/TwistStamped` | State estimation twist used to write related information to the blackboard when sim = false|
@@ -88,13 +102,6 @@ The package provides a single ROS Node: `RootNode`
 | `/auv/ground_truth/pose"` | `geometry_msgs/PoseStamped` | Sim's ground truth twist used to write related information to the blackboard when sim = true |
 | `/vision/object_map` | `auv_msgs/VisionObjectArray` | Object map information to be used in specific Behaviours |
 | `/mission_selector` | `std_msgs/Int32` | User input for mission selection. Int32 value matches missions associated with the mission dashboard.
-
-
-### Published Topics
-
- Topic | Message | Description |
-| ------ | ------- | ---------- |
-| None | None | None|
 
 
 ## Blackboard keys

@@ -27,7 +27,7 @@ This process occurs in three stages:
 
 
 ## Overview
-The controls package implements separate depth, planar, and attitude controllers. The depth controller uses a PID loop on `/processed/depth` and publishes a vertical effort on `/controls/depth_effort`. The attitude controller uses IMU orientation (`processed/imu`) and a target quaternion (`quaternion_setpoint`) to publish torques on `/controls/attitude_effort`. The superimposer node sums all efforts, applies optional bias terms, and publishes `/controls/combined_effort` for propulsion.
+The controls package implements separate depth, planar, and attitude controllers. The depth controller uses a PID loop on `/processed/depth` and publishes a vertical effort on `/controls/depth_effort`. The planar controller handles X and Y translation by subscribing to DVL position data (`auv_frame/dvl/position`) and publishing efforts on `/controls/x_effort` and `/controls/y_effort`. The attitude controller uses IMU orientation (`processed/imu`) and a target quaternion (`quaternion_setpoint`) to publish torques on `/controls/attitude_effort`. The superimposer node sums all efforts, applies optional bias terms, and publishes `/controls/combined_effort` for propulsion.
 
 Additionally, the **Navigation Server** acts as a high-level orchestrator. It hosts an Action Server (`/motion/navigate`) that accepts goal poses and handles computing errors, resolving coordinates, publishing setpoints to the underlying PID controllers, and reporting convergence.
 

@@ -65,7 +65,7 @@ Now, onto the structure of the actual mission. All missions start with the **Mis
 mission_choice_check = MissionChoiceBehaviour(name="Test Move Forward", choice=3)
 ```
 
-Next up is the heart of your mission, here you add all the implentations required to accomplish your task. In this example, the task is simple: it is to move forward. To make any movements with the robot, use the **BasicActionBehaviour** class. As third argument, the class needs a navigation goal. Thankfully, this is abscrated with the functions provided in the controls package in *controls/controls/goal_helpers.py*. In this case the ***move_robot_centric*** function from goal_helpers makes a goal in the perspective of the robot.
+Next up is the heart of your mission, here you add all the implementations required to accomplish your task. In this example, the task is simple: it is to move forward. To make any movements with the robot, use the **BasicActionBehaviour** class. As third argument, the class needs a navigation goal. Thankfully, this is abstracted with the functions provided in the controls package in [*controls/controls/goal_helpers.py*](../../../controls/controls/goal_helpers.py). In this case the ***move_robot_centric*** function from goal_helpers makes a goal in the perspective of the robot.
 
 ```python
 forward_move_leaf = BasicActionBehaviour(node, "Move to forward", move_robot_centric(forward=1.0, tolrance=position_tolerance, hold_time=hold_time, timeout=timeout))
