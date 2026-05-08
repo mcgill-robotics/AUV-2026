@@ -1,0 +1,6 @@
+{
+    "static_batch_size": 1,
+    "dynamic_batch_size_min": null,
+    "dynamic_batch_size_opt": null,
+    "dynamic_batch_size_max": null
+}

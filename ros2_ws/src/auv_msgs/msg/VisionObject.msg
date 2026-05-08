@@ -13,3 +13,4 @@ geometry_msgs/Pose pose
 bool has_orientation             # True if orientation was explicitly calculated
 geometry_msgs/Vector3 size       # Dimensions (x, y, z)
 float64 confidence               # 0.0 to 1.0
+int32 frames_since_last_seen     # 0 means actively seen this frame, >0 means from memory
