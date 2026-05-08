@@ -289,7 +289,7 @@ The package provides a single ROS node: `sensor_node`.
 | `/sensors/dvl` | TBD | TBD |
 | `state/pose` | PoseStamped | Aggregated pose of the AUV in `pool` frame | 
 
-**Note on TF Publishing:** The `state_aggregator` node can optionally publish a TF transform (`publish_pose_tf` parameter in `sensors_frames.yaml`) from the global frame (`pool_link`) to the AUV frame (`auv_link`). This is primarily used for Foxglove visualization and provides an easier ROS-native way to transform poses from the global frame to the AUV frame. This is disabled by default for actual missions to save computation.
+**Note on TF Publishing:** The `state_aggregator` node can optionally publish a TF transform (`publish_pose_tf` parameter in `sensors_frames.yaml`) from the global frame (`pool_link`) to the AUV frame (`auv_link`). This is primarily used for Foxglove visualization and provides an easier ROS-native way to transform poses from the global frame to the AUV frame.
 
 ---
 
