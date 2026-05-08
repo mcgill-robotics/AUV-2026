@@ -1,25 +1,9 @@
-# not the standard ROS node config parameters, these are topics passed to the vision pipeline launch file
-camera:
-  # inputs to the vision pipeline
-  front_cam_topic: /zed/zed_node/rgb/color/rect/image # will be used if sim=true and no zed sdk 
-  down_cam_topic: /down_cam/image_raw # will be used if sim=true
-
-image_enhancement:
-  front_cam: 
-    enhanced_topic: /vision/front_cam/image_enhanced # output topic
-    queue_size: 10 # QOL queue size, how many messages to buffer if the node can't process them fast enough
-    log_level: warn # ros2 log level for the image enhancement node [debug, info, warn, error, fatal]
-  down_cam:
-    enhanced_topic: /vision/down_cam/image_enhanced
-    queue_size: 10
-    log_level: warn
-
-object_detection:
-  front_cam:
+front_cam_object_detection:
+  ros__parameters:
     # Topics / model
+    image_topic: /zed/zed_node/rgb/color/rect/image # this will be the input topic if sim=true and no zed sdk is available, this will be set to &front_enhanced_topic if enhance_images is set to true
     enable_object_detection: true
     has_zed_sdk: true
-    enhanced_topic: /vision/front_cam/image_enhanced # this will be the input topic if sim=true and no zed sdk AND general.enhance_images=true, otherwise see camera.front_cam_topic for input topic
     detection_frame_topic: /vision/front_cam/detection_frame # synchronized camera-frame detections + AUV pose
     model_relative_path: models/local_rfdetr_onnx_test # inference-models package directory
     # WARNING: These class names MUST be manually maintained when changing models to have new classes. 
@@ -121,6 +105,8 @@ object_detection:
     publish_depth_image: false # publish raw 32FC1 depth map image
     publish_depth_compressed: false # publish depth map as compressed 16-bit PNG
     publish_depth_every_n_frames: 5 # publish depth image every N frames
+    stream_ip: "127.0.1.1"
+    stream_port: 30000
 
     # Dataset collection
     collection_dir: front_cam_collection # directory for direct-to-disk RGB image saving (toggled via service)
@@ -131,7 +117,11 @@ object_detection:
 
     # Logging
     log_level: debug
-  down_cam:
+
+
+down_cam_object_detection:
+  ros__parameters:
+    image_topic: /down_cam/image_raw # this will be the input topic if sim=true, this will be set to &down_enhanced_topic if enhance_images is set to true
     # Camera hardware (direct capture via cv2.VideoCapture, no usb_cam_node needed)
     # ELP-USB500W02M-AF60 (5MP OV5640, autofocus, 60° FOV)
     # Available MJPEG modes:   640x480@30  800x600@30  1024x768@30  1280x720@30  1280x1024@15  1600x1200@15  1920x1080@15  2592x1944@15
@@ -168,7 +158,6 @@ object_detection:
     focus_absolute: 7                    # [0..21]    only used when auto_focus is false; default 16
 
     enable_object_detection: true
-    enhanced_topic: /vision/down_cam/image_enhanced # this will be the input topic if sim=true AND general.enhance_images=true, otherwise see camera.down_cam_topic for input topic
     detection_topic: /vision/down_cam/detections
     model_detection_threshold: 0.40
     # relative to src directory
@@ -205,90 +194,97 @@ object_detection:
     log_level: debug
 
 object_map:
-  map_topic: /vision/object_map # final output of vision pipeline
-  new_object_min_distance_threshold: 0.5 # distance in meters between a new detection and existing tracks to be considered a new object and start a new track
-  large_structure_labels: ["gate", "table", "board", "bin_structure"]
-  pipe_labels: ["red_pipe", "white_pipe"]
-  min_large_structure_separation_m: 2.0 # minimum XY spacing required before placing gate/table/board/bin_structure near another confirmed large structure
-  min_large_structure_pipe_separation_m: 1.0 # minimum XY spacing required before placing gate/table/board/bin_structure near a confirmed pipe
+  ros__parameters:
+    object_map_topic: /vision/object_map
+    new_object_min_distance_threshold: 0.5 # distance in meters between a new detection and existing tracks to be considered a new object and start a new track
+    large_structure_labels: ["gate", "table", "board", "bin_structure"]
+    pipe_labels: ["red_pipe", "white_pipe"]
+    min_large_structure_separation_m: 2.0 # minimum XY spacing required before placing gate/table/board/bin_structure near another confirmed large structure
+    min_large_structure_pipe_separation_m: 1.0 # minimum XY spacing required before placing gate/table/board/bin_structure near a confirmed pipe
 
-  # Feature Toggles (Game-Specific Constraints)
-  enable_z_axis_locking: true # Forces specific unique objects to snap to pool floor/surface Z coordinates
-  enable_gate_midpoint_refinement: true # Uses search_rescue/survey_repair panel detections to refine the gate pose
-  enable_board_icon_refinement: true # Uses board icons to refine the board pose and make yaw face the AUV
-  refinement_plausibility_radius: 5.0 # Max distance in meters for a refinement to be considered plausible
-  # table_octagon_refinement_mode: 
-  #   - none: no refinement
-  #   - table_primary: publish octagon at table XY
-  #   - octagon_primary: publish table at octagon XY
-  #   - midpoint: publish both at shared midpoint XY
-  table_octagon_refinement_mode: "midpoint" 
-  max_pipe_distance: 7.0 # Truncates tracking of red/white pipes beyond this distance to reduce noise in map
-  enable_pipe_distance_truncation: true # toggle the above truncation logic
-  enable_lane_boundary: false # discard world-frame detections outside the competition lane AABB
-  lane_x_min: -3.0 # back boundary (meters, world frame)
-  lane_x_max: 25.0  # front boundary
-  lane_y_min: -7.5 # right boundary
-  lane_y_max: 7.5  # left boundary
-  pool_floor_z: -2.1
-  pool_surface_z: 0.0
-  unique_objects: ["gate", "bin_structure", "table", "board", "octagon"]
-  floor_objects: ["bin_structure", "table", "lane_marker", "board"]
-  surface_objects: ["gate", "octagon"]
+    # Feature Toggles (Game-Specific Constraints)
+    enable_z_axis_locking: true # Forces specific unique objects to snap to pool floor/surface Z coordinates
+    enable_gate_midpoint_refinement: true # Uses search_rescue/survey_repair panel detections to refine the gate pose
+    enable_board_icon_refinement: true # Uses board icons to refine the board pose and make yaw face the AUV
+    refinement_plausibility_radius: 5.0 # Max distance in meters for a refinement to be considered plausible
+    # table_octagon_refinement_mode: 
+    #   - none: no refinement
+    #   - table_primary: publish octagon at table XY
+    #   - octagon_primary: publish table at octagon XY
+    #   - midpoint: publish both at shared midpoint XY
+    table_octagon_refinement_mode: "midpoint" 
+    max_pipe_distance: 7.0 # Truncates tracking of red/white pipes beyond this distance to reduce noise in map
+    enable_pipe_distance_truncation: true # toggle the above truncation logic
+    enable_lane_boundary: false # discard world-frame detections outside the competition lane AABB
+    lane_x_min: -3.0 # back boundary (meters, world frame)
+    lane_x_max: 25.0  # front boundary
+    lane_y_min: -7.5 # right boundary
+    lane_y_max: 7.5  # left boundary
+    pool_floor_z: -2.1
+    pool_surface_z: 0.0
+    unique_objects: ["gate", "bin_structure", "table", "board", "octagon"]
+    floor_objects: ["bin_structure", "table", "lane_marker", "board"]
+    surface_objects: ["gate", "octagon"]
 
-  max_per_class:
-    gate: 1
-    board: 1
-    octagon: 1
-    table: 1
-    bin_structure: 1
-    lane_marker: 2
-    white_pipe: 6
-    red_pipe: 3
-    bin: 4
-    search_rescue: 1
-    survey_repair: 1
-    compass: 1
-    tools: 1
-    lifebuoy: 1
-    sos: 1
-    ambulance: 1
-    firetruck: 1
-    blood: 1
-    fire: 1
+    max_per_class:
+      gate: 1
+      board: 1
+      octagon: 1
+      table: 1
+      bin_structure: 1
+      lane_marker: 2
+      white_pipe: 6
+      red_pipe: 3
+      bin: 4
+      search_rescue: 1
+      survey_repair: 1
+      compass: 1
+      tools: 1
+      lifebuoy: 1
+      sos: 1
+      ambulance: 1
+      firetruck: 1
+      blood: 1
+      fire: 1
 
-  # Tracker Parameters
-  # relatively strict
-  gating_threshold: 3.5 # Mahalanobis distance threshold (~3 sigma) for associating detections to tracks
-  min_hits: 20 # Consecutive frames a detection must be matched to confirm a new track
-  max_age: 8 # Number of frames to keep a lost track alive before deleting it
-  max_position_jump: 2.0 # Maximum allowed distance (meters) between predictions and measurements
-  conf_to_tent_threshold: 5 # Number of consecutive missed frames before a CONFIRMED track degrades to TENTATIVE
-  tent_init_buffer: 5 # Extra frames allowed for a new TENTATIVE track to initialize before being deleted if unmatched
-  
-  # loose parameters
-  # gating_threshold: 5.0
-  # min_hits: 5
-  # max_age: 15
-  # max_position_jump: 4.0
-  # conf_to_tent_threshold: 10
-  # tent_init_buffer: 10
+    # Tracker Parameters
+    # relatively strict
+    gating_threshold: 3.5 # Mahalanobis distance threshold (~3 sigma) for associating detections to tracks
+    min_hits: 20 # Consecutive frames a detection must be matched to confirm a new track
+    max_age: 8 # Number of frames to keep a lost track alive before deleting it
+    max_position_jump: 2.0 # Maximum allowed distance (meters) between predictions and measurements
+    conf_to_tent_threshold: 5 # Number of consecutive missed frames before a CONFIRMED track degrades to TENTATIVE
+    tent_init_buffer: 5 # Extra frames allowed for a new TENTATIVE track to initialize before being deleted if unmatched
+    
+    # loose parameters
+    # gating_threshold: 5.0
+    # min_hits: 5
+    # max_age: 15
+    # max_position_jump: 4.0
+    # conf_to_tent_threshold: 10
+    # tent_init_buffer: 10
 
-  # raw detection parameters
-  # gating_threshold: 99.0
-  # min_hits: 1
-  # max_age: 1
-  # max_position_jump: 99.0
-  # conf_to_tent_threshold: 1
-  # tent_init_buffer: 1
+    # raw detection parameters
+    # gating_threshold: 99.0
+    # min_hits: 1
+    # max_age: 1
+    # max_position_jump: 99.0
+    # conf_to_tent_threshold: 1
+    # tent_init_buffer: 1
 
-  # Debug
-  log_level: warn
+    # Debug
+    log_level: warn
 
-general:
-  sim: false
-  # wrapper stream settings used by front_cam_object_detection for ZED SDK streaming
-  wrapper_stream_ip: "127.0.1.1"
-  wrapper_stream_port: 30000
-  compressed: true
-  enhance_images: false
+      
+
+front_image_enhancement:
+  ros__parameters:
+    output_topic: /vision/front_cam/image_enhanced
+    queue_size: 10
+    log_level: "warn"
+
+down_image_enhancement:
+  ros__parameters:
+    output_topic: /vision/down_cam/image_enhanced
+    queue_size: 10
+    log_level: "warn"
