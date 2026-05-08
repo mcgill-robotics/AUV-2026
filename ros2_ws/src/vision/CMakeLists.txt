@@ -42,8 +42,8 @@ endforeach()
 # ---Object Map library---
 add_library(object_map_lib SHARED
     ${PROJECT_NAME}/object_map/object_tracker.cpp
-    ${PROJECT_NAME}/utils/hungarian.cpp
-    ${PROJECT_NAME}/utils/kalman.cpp
+    ${PROJECT_NAME}/external/hungarian.cpp
+    ${PROJECT_NAME}/external/kalman.cpp
 )
 
 
