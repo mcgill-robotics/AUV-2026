@@ -217,6 +217,8 @@ private:
 
     void detection_callback(const auv_msgs::msg::VisionDetectionFrame::SharedPtr msg)
     {
+        auto t0 = std::chrono::high_resolution_clock::now();
+
         frame_collection_time = rclcpp::Time(msg->header.stamp, this->get_clock()->get_clock_type());
         world_frame_id = msg->auv_pose.header.frame_id.empty() ? "pool_link" : msg->auv_pose.header.frame_id;
         const std::string detection_frame_id =
@@ -237,6 +239,8 @@ private:
                 ex.what());
             return;
         }
+
+        // auto t1 = std::chrono::high_resolution_clock::now();
 
         tf2::Transform tf_world_auv;
         tf2::fromMsg(msg->auv_pose.pose, tf_world_auv);
@@ -314,6 +318,9 @@ private:
         // Build persistent positions for the tracker's large-structure proximity check.
         // These are objects that may have been pruned from the tracker (max_age exceeded)
         // but are still held in the node's persistent map.
+
+        // auto t2 = std::chrono::high_resolution_clock::now();
+
         std::vector<std::pair<std::string, Eigen::Vector3d>> persistent_positions;
         persistent_positions.reserve(persistent_objects.size());
         for (const auto& [label, track] : persistent_objects) {
@@ -330,7 +337,27 @@ private:
             has_observer_position,
             persistent_positions);
 
+        // auto t3 = std::chrono::high_resolution_clock::now();
+
         publish_object_map(all_tracks);
+
+        auto t4 = std::chrono::high_resolution_clock::now();
+
+        // auto d_tf    = std::chrono::duration<double, std::milli>(t1 - t0).count();
+        // auto d_pre   = std::chrono::duration<double, std::milli>(t2 - t1).count();
+        // auto d_track = std::chrono::duration<double, std::milli>(t3 - t2).count();
+        // auto d_pub   = std::chrono::duration<double, std::milli>(t4 - t3).count();
+        auto d_total = std::chrono::duration<double, std::milli>(t4 - t0).count();
+
+        // rclcpp::Time pipeline_end_time = this->now();
+        // rclcpp::Duration pipeline_latency = pipeline_end_time - frame_collection_time;
+
+        // RCLCPP_DEBUG(
+        //     this->get_logger(),
+        //     "Object map latency: %.3f ms | TF: %.2f Pre: %.2f Track: %.2f Pub: %.2f | Pipe: %.1f ms",
+        //     d_total, d_tf, d_pre, d_track, d_pub, pipeline_latency.seconds() * 1000.0);
+
+        RCLCPP_DEBUG(this->get_logger(), "Object map latency: %.3f ms", d_total);    
     }
 
     void publish_object_map(const std::vector<Track>& tracks)

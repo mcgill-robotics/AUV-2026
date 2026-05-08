@@ -228,8 +228,8 @@ object_map:
   enable_lane_boundary: false # discard world-frame detections outside the competition lane AABB
   lane_x_min: -3.0 # back boundary (meters, world frame)
   lane_x_max: 25.0  # front boundary
-  lane_y_min: -15.0 # right boundary
-  lane_y_max: 15.0  # left boundary
+  lane_y_min: -7.5 # right boundary
+  lane_y_max: 7.5  # left boundary
   pool_floor_z: -2.1
   pool_surface_z: 0.0
   unique_objects: ["gate", "bin_structure", "table", "board", "octagon"]

@@ -359,10 +359,32 @@ This repository package is currently a mixed runtime + model-development package
 
 That is convenient for development, but it also means the package is heavier than a pure runtime deployment package.
 
+## Model Packages
+
+Detection nodes load models using the [Roboflow `inference-models`](https://github.com/roboflow/inference/tree/main/inference_models) library. Each model lives in a self-contained directory under `models/` that `AutoModel.from_pretrained()` reads at startup.
+
+A model package directory must contain:
+
+| File | Purpose |
+|------|---------|
+| `model_config.json` | Architecture (`yolov11`, `rfdetr`), task type, backend (`onnx` or `trt`) |
+| `inference_config.json` | Input preprocessing: resolution, color mode, resize strategy, pixel scaling, and normalization. Also post-processing settings like NMS thresholds for YOLO |
+| `class_names.txt` | One class label per line, order matches the model output indices |
+| `weights.onnx` | ONNX weights file (`.placeholder` in templates, replaced with real weights after export) |
+
+The two templates under `models/` show the required layout:
+
+- **`template_yolo/`** — YOLOv11 config. Preprocessing is just pixel scaling (`/255`), no mean/std normalization.
+- **`template_rfdetr/`** — RF-DETR config. Pixel scaling (`/255`) followed by ImageNet mean/std normalization (`[0.485, 0.456, 0.406]` / `[0.229, 0.224, 0.225]`), which is standard for DINOv2-backbone models.
+
+The `inference-models` library handles all preprocessing and postprocessing automatically based on these configs. The detection nodes just call `model(image)`.
+
+> **Do not delete the template folders.** They are the reference for how to package a new model for deployment. To deploy a new model, copy the matching template, replace `weights.onnx.placeholder` with the real weights, and update `class_names.txt` if needed.
+
 ## Training And Model Export
 
-The training/export helpers are still under:
+The training/export helpers are under:
 - [model_pipeline/README.md](model_pipeline/README.md)
 - [models/export_rfdetr.py](models/export_rfdetr.py)
 
-Those tools are not part of the runtime launch path, but they are still the source of the deployed detector packages under `models/`.
+These tools are not part of the runtime launch path but they produce the deployed model packages under `models/`.
