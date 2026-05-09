@@ -4,6 +4,10 @@
 # ---------------------------------------------------------
 FROM althack/ros2:humble-dev
 
+# Get uv
+COPY --from=ghcr.io/astral-sh/uv:0.11.9 /uv /uvx /bin/
+ENV UV_SYSTEM_PYTHON=1
+
 # CI has a different runner than the jetson (notably git permissions are different and there is no GPU)
 ARG CI
 RUN if [ "$CI" = "true" ]; then \
@@ -84,6 +88,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-nmea-msgs \
     ros-${ROS_DISTRO}-marine-sensor-msgs \
     ros-${ROS_DISTRO}-vision-msgs \
+    ros-${ROS_DISTRO}-tf-transformations \
     # Image & Transport
     ros-${ROS_DISTRO}-image-transport \
     ros-${ROS_DISTRO}-image-transport-plugins \
@@ -149,17 +154,13 @@ WORKDIR /root
 # ---------------------------------------------------------
 COPY Docker/dev/requirements.txt Docker/dev/constraints.txt /tmp/
 
-RUN pip3 install --no-cache-dir -c /tmp/constraints.txt torch torchvision --index-url https://download.pytorch.org/whl/cpu
+RUN uv pip install --no-cache -c /tmp/constraints.txt torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
-RUN pip3 install --no-cache-dir -c /tmp/constraints.txt "opencv-python==4.10.0.84"
+RUN uv pip install --no-cache -c /tmp/constraints.txt "opencv-python==4.10.0.84"
 
 # Install other requirements (Pip will skip torch since it's already done)
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip3 install --ignore-installed -c /tmp/constraints.txt -r /tmp/requirements.txt
-
-# DOWNGRADE Setuptools for ROS 2
-# Restores compatibility with 'colcon build'
-RUN pip3 install --no-cache-dir --force-reinstall "setuptools==65.5.1"
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install -c /tmp/constraints.txt -r /tmp/requirements.txt
 
 # ---------------------------------------------------------
 # 4. Environment Setup

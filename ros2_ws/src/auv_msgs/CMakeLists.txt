@@ -19,8 +19,15 @@ set(msg_files
 	"msg/ThrusterMicroseconds.msg"
 	"msg/UnityState.msg"
 	"msg/VelocityReport.msg"
+	"msg/VisionDetection.msg"
+	"msg/VisionDetectionFrame.msg"
 	"msg/VisionObject.msg"
 	"msg/VisionObjectArray.msg"
+)
+
+set(srv_files
+	"srv/SetInt32.srv"
+	"srv/AutomaticCapture.srv"
 )
 
 set(action_files
@@ -38,6 +45,7 @@ endforeach()
 
 rosidl_generate_interfaces(${PROJECT_NAME}
 	${msg_files}
+	${srv_files}
 	${action_files}
 	DEPENDENCIES ${MSG_DEP_SET}
 )
