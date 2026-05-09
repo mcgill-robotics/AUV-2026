@@ -9,7 +9,54 @@ Currently, there is only skeleton functionality and the pre-qual missions. It is
 
 ## Tree Graph
 
-*TODO*, put a high-level diagram representing the Behaviour Tree
+Below is a high-level representation of the planner's Behaviour Tree structure. The root node is a `Parallel` composite that concurrently runs background blackboard subscribers and the main mission logic.
+
+```mermaid
+graph TD
+    Root{"Root<br/>(Parallel)"}
+    
+    %% Background Subscribers
+    PoseSub["PoseSubscriber<br/>(ToBlackboard)"]
+    TwistSub["TwistSubscriber<br/>(ToBlackboard)"]
+    VisionSub["ObjectMapSubscriber<br/>(ToBlackboard)"]
+    
+    %% Main Mission Sequence
+    MasterSeq{"Mission Master Sequence<br/>(Sequence, memory=True)"}
+    
+    Root --> PoseSub
+    Root --> TwistSub
+    Root --> VisionSub
+    Root --> MasterSeq
+    
+    %% Mission Control
+    UserInput["Wait For User Input<br/>(Action)"]
+    MissionSelector{"Available Missions<br/>(Selector, memory=True)"}
+    
+    MasterSeq --> UserInput
+    MasterSeq --> MissionSelector
+    
+    %% Mission Branches
+    Mission1["1-7: Pre-Qual & Tests<br/>(Sequences)"]
+    Mission8["8-12: Standalone 2026 Tasks<br/>(Sequences)"]
+    Mission13{"13: FULL COMPETITION RUN<br/>(Sequence)"}
+    
+    MissionSelector --> Mission1
+    MissionSelector --> Mission8
+    MissionSelector --> Mission13
+    
+    %% Full Competition Run Breakdown
+    GateTask["Gate Task"]
+    SlalomTask["Slalom Task"]
+    BinsTask["Bins Task"]
+    TorpTask["Torpedo Task"]
+    OctTask["Table & Octagon Task"]
+    
+    Mission13 --> GateTask
+    Mission13 --> SlalomTask
+    Mission13 --> BinsTask
+    Mission13 --> TorpTask
+    Mission13 --> OctTask
+```
 
 ## Competition Tasks
 
