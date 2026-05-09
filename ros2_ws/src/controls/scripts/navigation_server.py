@@ -230,7 +230,7 @@ class NavigationServer(Node):
             goal_handle.publish_feedback(feedback_msg)
 
             # Success condition
-            if time_in_tolerance >= goal.hold_time:
+            if time_in_tolerance > goal.hold_time:
                 result.success = True
                 result.message = f'Reached target (held for {goal.hold_time:.1f}s)'
                 goal_handle.succeed()

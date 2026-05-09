@@ -1,3 +1,4 @@
+from ..vision_behaviours import SearchSweepBehaviour
 import py_trees
 
 class GateTask(py_trees.composites.Sequence):
@@ -17,5 +18,6 @@ class GateTask(py_trees.composites.Sequence):
         # 4. Optional: Perform style maneuvers (roll/pitch/yaw)
         # 5. Record chosen role to blackboard for subsequent tasks
         self.add_children([
+            SearchSweepBehaviour(target_class="gate", num_steps=5, max_attempts=2, step_timeout=0.5, clockwise=False),
             py_trees.behaviours.Success(name="Placeholder Gate Success")
         ])

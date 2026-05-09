@@ -5,7 +5,7 @@ class TorpedoTask(py_trees.composites.Sequence):
     """
     Sequence for the RoboSub 2026 Torpedo Task (Deploy).
     AUV fires torpedoes through openings in a board.
-    Targets match role (Fire/Fire-truck vs Blood/Ambulance).
+    Targets match role (Fire/Firetruck vs Blood/Ambulance).
     Sequence: Large opening then Small opening.
     """
     def __init__(self, position_tolerance: float, hold_time: float, timeout: float):
