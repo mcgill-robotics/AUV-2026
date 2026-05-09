@@ -7,8 +7,6 @@ import py_trees_ros
 import rclpy
 from rclpy.node import Node
 
-# AUV dependencies
-
 # Planner dependencies
 from ..mission_behaviour_components import MissionChoiceCheckBehaviour, \
        MissionCompleteBehaviour, BasicTriggerServiceBehaviour
