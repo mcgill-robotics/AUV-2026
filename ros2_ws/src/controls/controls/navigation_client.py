@@ -26,7 +26,8 @@ class NavigationClient(Node):
                 
                 Args: goal_msg (auv_msgs.action.AUVNavigate): The navigation goal message
                       caller_name (str)                     : The Behaviour sending the goal, this is for debug purposes
-                      goal_response_callback                : The goal response callback, can be customized
+                      custom_goal_response                  : The goal response callback for when the server accepts or rejects the goal
+                      custom_goal_result                    : The goal result callback for once the goal succeeds or fails
                 Outputs: None, but will log the result and set up the result callback."""
 
                 # Check if there is an active goal and cancel it before sending a new one
