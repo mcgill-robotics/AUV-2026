@@ -10,6 +10,7 @@ without manually setting boolean flags. Example usage::
     goal = stabilize(hold_time=5.0)
 """
 
+import math
 from geometry_msgs.msg import Pose, Point, Quaternion
 from auv_msgs.action import AUVNavigate
 from controls.utils import quaternion_from_yaw
@@ -169,6 +170,32 @@ def set_global_yaw(
         hold_time=hold_time,
         timeout=timeout,
     )
+
+
+def look_at(
+    target_x: float,
+    target_y: float,
+    current_x: float,
+    current_y: float,
+    tolerance: float = _DEFAULT_YAW_TOL,
+    hold_time: float = _DEFAULT_HOLD,
+    timeout: float = _DEFAULT_TIMEOUT,
+) -> AUVNavigate.Goal:
+    """Rotate the AUV to face a specific global (X, Y) coordinate.
+    
+    Args:
+        target_x: Target X position in the global frame.
+        target_y: Target Y position in the global frame.
+        current_x: Current AUV X position in the global frame.
+        current_y: Current AUV Y position in the global frame.
+        tolerance: Yaw convergence threshold in radians.
+        hold_time: Seconds to hold within tolerance before SUCCESS.
+        timeout: Seconds before FAILURE (0 = no timeout).
+    """
+    dy = target_y - current_y
+    dx = target_x - current_x
+    yaw_rad = math.atan2(dy, dx)
+    return set_global_yaw(yaw_rad, tolerance, hold_time, timeout)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

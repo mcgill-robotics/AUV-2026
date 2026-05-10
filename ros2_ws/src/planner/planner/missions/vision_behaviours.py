@@ -1,7 +1,7 @@
 import math
 import py_trees
-from auv_msgs.msg import VisionObjectArray
-from controls.goal_helpers import rotate_relative
+from controls.goal_helpers import set_global_yaw, look_at
+from controls.utils import yaw_from_quaternion, normalize_angle
 from .action_status_enum import ActionStatus
 
 class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
@@ -11,13 +11,14 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
     If it completes `max_attempts` full 360-degree sweeps without finding `target_class`, it fails.
     If the object is seen at any point, it returns SUCCESS immediately.
     """
-    def __init__(self, target_class: str, num_steps: int = 5, max_attempts: int = 2, step_timeout: float = 2.0, clockwise: bool = False, name="SearchSweep"):
+    def __init__(self, target_class: str, num_steps: int = 5, max_attempts: int = 2, step_timeout: float = 2.0, clockwise: bool = False, look_at_on_success: bool = True, name="SearchSweep"):
         super().__init__(name)
         self.target_class = target_class
         self.num_steps = num_steps
         self.max_attempts = max_attempts
         self.step_timeout = step_timeout
         self.clockwise = clockwise
+        self.look_at_on_success = look_at_on_success
         
         # Calculate how much to turn per step (in radians)
         self.sweep_angle_rad = (2 * math.pi) / float(num_steps)
@@ -35,12 +36,20 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
         # Pause tracking
         self.is_pausing = False
         self.pause_start_time = 0.0
+        
+        # Absolute angle tracking
+        self.start_yaw = None
+        
+        # Success alignment tracking
+        self.is_looking_at_target = False
+        self.target_found_pos = None
 
     def setup(self, **kwargs):
         self.node = kwargs['node']
         self.navigation_client = kwargs['shared_nav_client']
         self.navigation_client.client_wait_for_server(timeout_sec=5.0) 
         self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
 
     def initialise(self):
         # Reset state when this behavior starts
@@ -49,19 +58,68 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
         self.action_status = ActionStatus.NOT_SENT
         self.sent_goal = False
         self.is_pausing = False
+        self.start_yaw = None
+        self.is_looking_at_target = False
+        self.target_found_pos = None
 
     def update(self):
         # 1. LIVE LOGIC: Check the blackboard for the target object right now
-        if hasattr(self.blackboard, 'vision') and self.blackboard.vision.object_map is not None:
-            for obj in self.blackboard.vision.object_map.array:
-                if obj.label == self.target_class:
-                    self.node.get_logger().info(f"[{self.name}] Found target '{self.target_class}' in vision!")
-                    # Cancel any active turn since we found what we were looking for
-                    if self.action_status == ActionStatus.PENDING:
-                        self.navigation_client.reset_action_client()
-                    return py_trees.common.Status.SUCCESS
+        # Skip this if we already found it and are just finishing the "look at" turn
+        if not self.is_looking_at_target:
+            if hasattr(self.blackboard, 'vision') and self.blackboard.vision.object_map is not None:
+                for obj in self.blackboard.vision.object_map.array:
+                    if obj.label == self.target_class:
+                        self.node.get_logger().info(f"[{self.name}] Found target '{self.target_class}' in vision!")
+                        
+                        # Cancel any active sweep turn
+                        if self.action_status == ActionStatus.PENDING:
+                            self.navigation_client.reset_action_client()
+                        
+                        if self.look_at_on_success:
+                            self.node.get_logger().info(f"[{self.name}] Transitioning to final alignment with {self.target_class}.")
+                            self.is_looking_at_target = True
+                            self.target_found_pos = (obj.pose.position.x, obj.pose.position.y)
+                            self.action_status = ActionStatus.NOT_SENT
+                            self.sent_goal = False
+                            # Continue update() to send the look_at goal immediately
+                        else:
+                            return py_trees.common.Status.SUCCESS
         
-        # 2. STATE MACHINE: Object not found. Manage the turning sequence.
+        # 2. STATE MACHINE: Manage turns (either sweep steps or final alignment)
+        
+        # If we are in the "look at" phase
+        if self.is_looking_at_target:
+            if self.action_status == ActionStatus.SUCCEEDED:
+                self.node.get_logger().info(f"[{self.name}] Final alignment complete. Target centered.")
+                return py_trees.common.Status.SUCCESS
+            
+            if self.action_status == ActionStatus.FAILED:
+                self.node.get_logger().error(f"[{self.name}] Final alignment turn failed.")
+                return py_trees.common.Status.FAILURE
+            
+            if self.action_status == ActionStatus.NOT_SENT:
+                # Fetch current position to calculate the look_at yaw
+                if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.pose is None:
+                    return py_trees.common.Status.RUNNING
+                
+                auv_x = self.blackboard.sensors.pose.pose.position.x
+                auv_y = self.blackboard.sensors.pose.pose.position.y
+                
+                goal = look_at(
+                    target_x=self.target_found_pos[0],
+                    target_y=self.target_found_pos[1],
+                    current_x=auv_x,
+                    current_y=auv_y,
+                    hold_time=self.step_timeout # Hold a bit to let vision settle on target
+                )
+                
+                self.navigation_client.send_navigation_goal(goal, self.name, self.on_server_goal_response, self.on_server_goal_result)
+                self.action_status = ActionStatus.PENDING
+                self.sent_goal = True
+            
+            return py_trees.common.Status.RUNNING
+
+        # 3. SWEEP LOGIC: Object not found yet. Manage the turning sequence.
         
         # If we are currently executing a turn, keep waiting.
         if self.action_status == ActionStatus.PENDING:
@@ -102,10 +160,24 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
                 self.node.get_logger().info(f"[{self.name}] Max 360 attempts ({self.max_attempts}) reached. Target not found.")
                 return py_trees.common.Status.FAILURE
                 
-            self.node.get_logger().info(f"[{self.name}] Turning {math.degrees(self.sweep_angle_rad):.1f} deg (Sweep {self.current_attempt+1}/{self.max_attempts}, Step {self.current_step+1}/{self.num_steps})")
+            # Grab the starting yaw once when the sweep first begins
+            if self.start_yaw is None:
+                if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.pose is None:
+                    self.node.get_logger().warn(f"[{self.name}] Waiting for /sensors/pose to determine starting yaw.")
+                    return py_trees.common.Status.RUNNING
+                current_quat = self.blackboard.sensors.pose.pose.orientation
+                self.start_yaw = yaw_from_quaternion(current_quat)
+                
+            # Compute absolute target angle for this step
+            target_yaw = self.start_yaw + (self.sweep_angle_rad * (self.current_step + 1))
+            # Normalize to [-pi, pi]
+            target_yaw = normalize_angle(target_yaw)
+                
+            self.node.get_logger().info(f"[{self.name}] Turning to {math.degrees(target_yaw):.1f} deg (Sweep {self.current_attempt+1}/{self.max_attempts}, Step {self.current_step+1}/{self.num_steps})")
             
-            # Send the next relative yaw turn (with a large timeout to ensure it has time to physically turn)
-            goal = rotate_relative(dyaw_rad=self.sweep_angle_rad, hold_time=self.step_timeout, tolerance=0.175*3, timeout=30.0)
+            # Send the absolute yaw turn (with a large timeout to ensure it has time to physically turn)
+            # We use a tiny hold_time because the behavior itself handles the stabilization pause.
+            goal = set_global_yaw(yaw_rad=target_yaw, hold_time=0.1, tolerance=0.175*3, timeout=30.0)
             
             self.navigation_client.send_navigation_goal(
                 goal, 
