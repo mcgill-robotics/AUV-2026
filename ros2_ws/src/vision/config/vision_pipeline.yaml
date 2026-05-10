@@ -130,7 +130,7 @@ object_detection:
     collection_file_extension: ".png"
 
     # Logging
-    log_level: debug
+    log_level: info
   down_cam:
     # Camera hardware (direct capture via cv2.VideoCapture, no usb_cam_node needed)
     # ELP-USB500W02M-AF60 (5MP OV5640, autofocus, 60° FOV)
@@ -232,7 +232,7 @@ object_map:
   lane_y_max: 7.5  # left boundary
   pool_floor_z: -2.1
   pool_surface_z: 0.0
-  unique_objects: ["gate", "bin_structure", "table", "board", "octagon"]
+  unique_objects: ["gate", "bin_structure", "table", "board", "octagon", "search_rescue", "survey_repair"]
   floor_objects: ["bin_structure", "table", "lane_marker", "board"]
   surface_objects: ["gate", "octagon"]
 
@@ -257,11 +257,17 @@ object_map:
     blood: 1
     fire: 1
 
+  # Semi-persistent tracking: keeps tracks for these labels CONFIRMED for longer, 
+  # so they survive sweep scans and can be re-matched when they re-enter the FOV. 
+  # Value is in frames (e.g. 300 = 10s at 30fps).
+  semi_persistent_labels: ["red_pipe", "white_pipe"]
+  semi_persistent_conf_to_tent_threshold: 300
+  
   # Tracker Parameters
   # relatively strict
   gating_threshold: 3.5 # Mahalanobis distance threshold (~3 sigma) for associating detections to tracks
   min_hits: 20 # Consecutive frames a detection must be matched to confirm a new track
-  max_age: 8 # Number of frames to keep a lost track alive before deleting it
+  max_age: 8 # Number of frames to keep a lost track alive before deleting it [CURRENTLY UNUSED]
   max_position_jump: 2.0 # Maximum allowed distance (meters) between predictions and measurements
   conf_to_tent_threshold: 5 # Number of consecutive missed frames before a CONFIRMED track degrades to TENTATIVE
   tent_init_buffer: 5 # Extra frames allowed for a new TENTATIVE track to initialize before being deleted if unmatched
@@ -283,7 +289,7 @@ object_map:
   # tent_init_buffer: 1
 
   # Debug
-  log_level: warn
+  log_level: info
 
 general:
   sim: false

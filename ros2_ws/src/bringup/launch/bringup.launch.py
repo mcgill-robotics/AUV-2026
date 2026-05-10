@@ -46,6 +46,12 @@ def generate_launch_description():
         description="Launch propulsion nodes",
     )
 
+    telemetry_condition = DeclareLaunchArgument(
+        "telemetry", 
+        default_value="true", 
+        description="Launch the telemetry dashboard"
+    )
+
     planner_condition = DeclareLaunchArgument(
         "planner", 
         default_value="false", 
@@ -57,6 +63,7 @@ def generate_launch_description():
     controls = LaunchConfiguration("controls")
     sensors = LaunchConfiguration("sensors")
     propulsion = LaunchConfiguration("propulsion")
+    telemetry = LaunchConfiguration("telemetry")
     planner = LaunchConfiguration("planner")
 
     sensors_pkg_path = get_package_share_directory("sensors")
@@ -105,6 +112,15 @@ def generate_launch_description():
         ],
     )
 
+    launch_telemetry = GroupAction(
+        condition=IfCondition(telemetry),
+        actions=[
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(telemetry_launch_file)
+            )
+        ],
+    )
+
     launch_vision = GroupAction(
         condition=IfCondition(vision),
         actions=[
@@ -129,10 +145,6 @@ def generate_launch_description():
         ],
     )
 
-    launch_telemetry = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(telemetry_launch_file)
-    )
-
     sim_group = GroupAction(
         condition=IfCondition(sim),
         actions=[
@@ -149,6 +161,7 @@ def generate_launch_description():
         controls_condition,
         sensors_condition,
         propulsion_condition,
+        telemetry_condition,
         planner_condition,
         launch_sensors,
         launch_propulsion,
