@@ -538,7 +538,7 @@ private:
         object_map_publisher->publish(object_map_msg);
         rclcpp::Time pipeline_end_time = this->now();
         rclcpp::Duration time_diff = pipeline_end_time - frame_collection_time;
-        RCLCPP_INFO(
+        RCLCPP_DEBUG(
             this->get_logger(),
             "Object map pipeline latency: %.9f seconds",
             time_diff.seconds());
