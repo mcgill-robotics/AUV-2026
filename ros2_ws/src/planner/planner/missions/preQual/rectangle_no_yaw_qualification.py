@@ -12,8 +12,7 @@ from controls import navigation_client
 from controls.goal_helpers import set_depth, move_global
 
 # Planner dependencies
-from ..mission_behaviour_components import BasicActionBehaviour, MissionChoiceCheckBehaviour, \
-       MissionCompleteBehaviour, TimerBehaviour
+from ..mission_behaviour_components import BasicActionBehaviour, TimerBehaviour
 
 
 class TranslationRectangleMission(py_trees.composites.Sequence):
@@ -25,8 +24,7 @@ class TranslationRectangleMission(py_trees.composites.Sequence):
     def __init__(self, position_tolerance: float, hold_time: float, timeout: float):
         super().__init__("TranslationRectangle", memory=True)
 
-        # 0 Check if user chose this mission
-        mission_choice_check = MissionChoiceCheckBehaviour(name="TranslationRectangleCheck", choice=6)
+
 
         # 1 Wait for 10 seconds before starting the mission
         timer = TimerBehaviour(timer_duration=10.0, name="Translation Rectangle Timer")
@@ -70,10 +68,9 @@ class TranslationRectangleMission(py_trees.composites.Sequence):
         # 10. Ascend to surface
         ascend_leaf = BasicActionBehaviour("Ascend to Surface", set_depth(z=0.0, tolerance=position_tolerance, hold_time=hold_time, timeout=timeout))
         
-        # 11. Reset mission choice
-        mission_choice_reset = MissionCompleteBehaviour("Completed Translation Rectangle")
 
-        self.add_children([mission_choice_check,
+
+        self.add_children([
             timer,
             dive_leaf,
             past_gate,
@@ -87,6 +84,5 @@ class TranslationRectangleMission(py_trees.composites.Sequence):
             back_to_gate,
             descend_at_gate,
             return_leaf,
-            ascend_leaf,
-            mission_choice_reset
+            ascend_leaf
             ])

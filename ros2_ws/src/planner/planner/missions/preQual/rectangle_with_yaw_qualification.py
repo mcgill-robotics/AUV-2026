@@ -12,8 +12,7 @@ from controls import navigation_client
 from controls.goal_helpers import set_depth, set_global_yaw, move_global
 
 # Planner dependencies
-from ..mission_behaviour_components import BasicActionBehaviour, MissionChoiceCheckBehaviour, \
-       MissionCompleteBehaviour, TimerBehaviour
+from ..mission_behaviour_components import BasicActionBehaviour, TimerBehaviour
 
 
 class RectangleQualificationMission(py_trees.composites.Sequence):
@@ -23,14 +22,7 @@ class RectangleQualificationMission(py_trees.composites.Sequence):
     def __init__(self, yaw_tolerance: float, position_tolerance: float, hold_time: float, timeout: float):
         super().__init__("RectanglePrequalification", memory=True)
 
-        # 0 Check if user input the desired mission choce
-        """
-        1: Orbit Prequal
-        2: Rectangle Prequal
-        3: Basic Move forward
-        4: Basic Dive
-        """
-        mission_choice_check = MissionChoiceCheckBehaviour(name="RectanglePrequalUserCheck", choice=2)
+
 
         # 1 Wait for 10 seconds before starting the mission
         timer = TimerBehaviour(timer_duration=10.0, name="Orbit Prequal Timer")
@@ -71,10 +63,9 @@ class RectangleQualificationMission(py_trees.composites.Sequence):
         # 11. Ascend to surface
         ascend_leaf = BasicActionBehaviour("Ascend to Surface", set_depth(z=0.0, tolerance=position_tolerance, hold_time=hold_time, timeout=timeout))
         
-        # 12. Reset the user mission choice to allow for new mission to be selected
-        mission_choice_reset = MissionCompleteBehaviour("Completed Rectangle Prequal")
 
-        self.add_children([mission_choice_check,
+
+        self.add_children([
             timer,
             dive_leaf, 
             go_square_start_leaf, 
@@ -85,6 +76,5 @@ class RectangleQualificationMission(py_trees.composites.Sequence):
             go_square_start_leaf_2,
             turn_leaf,
             return_leaf,
-            ascend_leaf,
-            mission_choice_reset
+            ascend_leaf
             ])

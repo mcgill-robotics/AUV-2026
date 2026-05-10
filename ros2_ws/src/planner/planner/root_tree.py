@@ -14,7 +14,7 @@ import auv_msgs.msg
 from controls import navigation_client
 
 # Planner dependencies
-from .missions.mission_sequence import MissionSequence
+from .missions.mission_sequence import DynamicMissionSequence
 
 # I like my ANSI colours :DDD
 green_text = "\033[32m"
@@ -98,7 +98,7 @@ def main():
     )
 
     # Mission Sequence
-    missions = MissionSequence(
+    missions = DynamicMissionSequence(
         position_tolerance=pre_qual_positional_tolerance,
         yaw_tolerance=pre_qual_yaw_tolerance,
         hold_time=pre_qual_hold_time,
