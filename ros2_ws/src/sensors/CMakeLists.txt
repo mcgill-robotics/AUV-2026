@@ -18,7 +18,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(message_filters REQUIRED)
 find_package(eigen3_cmake_module REQUIRED)
 find_package(Eigen3 REQUIRED)
-find_package(nav_msgs REQUIRED)
+find_package(dvl_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 
 # Executables
@@ -40,7 +40,7 @@ target_include_directories(imu_processor PUBLIC
 )
 
 add_executable(depth_processor src/depth_processor.cpp)
-ament_target_dependencies(depth_processor rclcpp std_msgs std_srvs geometry_msgs sensor_msgs sensor_msgs message_filters)
+ament_target_dependencies(depth_processor rclcpp std_msgs std_srvs geometry_msgs sensor_msgs sensor_msgs message_filters )
 target_link_libraries(depth_processor Eigen3::Eigen)
 target_include_directories(depth_processor PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -48,7 +48,7 @@ target_include_directories(depth_processor PUBLIC
 )
 
 add_executable(dvl_processor src/dvl_processor.cpp)
-ament_target_dependencies(dvl_processor rclcpp std_msgs geometry_msgs sensor_msgs message_filters nav_msgs)
+ament_target_dependencies(dvl_processor rclcpp std_msgs geometry_msgs sensor_msgs message_filters nav_msgs dvl_msgs)
 target_link_libraries(dvl_processor Eigen3::Eigen)
 target_include_directories(dvl_processor PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
