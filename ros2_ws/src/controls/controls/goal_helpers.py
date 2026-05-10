@@ -19,6 +19,8 @@ _DEFAULT_POS_TOL = 0.1     # meters
 _DEFAULT_YAW_TOL = 0.175   # radians (~10 degrees)
 _DEFAULT_HOLD = 2.0        # seconds
 _DEFAULT_TIMEOUT = 30.0    # seconds
+POSITION_EPSILON = 1e-5 # small threshold to consider position as "zero" for do_* flags
+ORIENTATION_EPSILON = 1e-5 # small threshold to consider orientation as "zero" for do_* flags
 
 
 def _make_goal(
@@ -198,8 +200,8 @@ def move_robot_centric(
         hold_time: Seconds to hold within tolerance before SUCCESS.
         timeout: Seconds before FAILURE (0 = no timeout).
     """
-    do_pos = (forward != 0.0 or sway != 0.0 or heave != 0.0)
-    do_yaw = (dyaw != 0.0)
+    do_pos = (abs(forward) > POSITION_EPSILON or abs(sway) > POSITION_EPSILON or abs(heave) > POSITION_EPSILON)
+    do_yaw = (abs(dyaw) > ORIENTATION_EPSILON)
 
     pose = Pose()
     pose.position = Point(x=forward, y=sway, z=heave)
