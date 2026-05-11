@@ -13,8 +13,10 @@ ObjectMapNode::ObjectMapNode() : Node("object_map_node")
 
     float new_object_min_distance_threshold =
         this->declare_parameter<float>("tracker.new_object_min_distance_threshold");
+    bool large_structure_separation_enabled = this->declare_parameter<bool>("map_filters.large_structure_separation.enable");
     float min_large_structure_separation =
         this->declare_parameter<float>("map_filters.large_structure_separation.min_distance_m");
+    bool large_structure_pipe_separation_enabled = this->declare_parameter<bool>("map_filters.large_structure_pipe_separation.enable");
     float min_large_structure_pipe_separation =
         this->declare_parameter<float>("map_filters.large_structure_pipe_separation.min_distance_m");
     double gating_threshold = this->declare_parameter<double>("tracker.gating_threshold");
@@ -50,7 +52,9 @@ ObjectMapNode::ObjectMapNode() : Node("object_map_node")
         large_structure_labels,
         pipe_labels,
         new_object_min_distance_threshold,
+        large_structure_separation_enabled,
         min_large_structure_separation,
+        large_structure_pipe_separation_enabled,
         min_large_structure_pipe_separation,
         gating_threshold,
         min_hits,

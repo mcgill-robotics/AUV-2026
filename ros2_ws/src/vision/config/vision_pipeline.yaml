@@ -282,11 +282,13 @@ object_map:
     # Object Map Filters
     map_filters:
       large_structure_separation: # assume large structures near each other are the same structure
+        enable: true
         min_distance_m: 2.0  # minimum XY spacing required
       pipe_distance_truncation:
         enable: true # Truncates tracking of red/white pipes beyond some distance to reduce noise in map     
         max_distance_m: 7.0 #  distance used for distance_truncation
       large_structure_pipe_separation:
+        enable: true
         min_distance_m: 0.5 # distance in meters between a new detection and existing tracks to be considered a new object and start a new track
       lane_boundary:
         enable: false # discard world-frame detections outside the competition lane AABB

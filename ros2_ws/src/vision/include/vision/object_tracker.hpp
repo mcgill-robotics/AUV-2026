@@ -50,7 +50,9 @@ public:
         const std::vector<std::string>& large_structure_labels = {},
         const std::vector<std::string>& pipe_labels = {},
         float min_new_track_distance = 0.5,
+        bool large_structure_separation_enabled = true,
         float min_large_structure_separation = 2.0,
+        bool large_structure_pipe_separation_enabled = true,
         float min_large_structure_pipe_separation = 1.0,
         float gating_threshold = 3.5,
         int min_hits = 20,
@@ -135,7 +137,9 @@ private:
 
     int track_id_counter = 1;
     float min_new_track_distance;   // set within constructor
+    bool large_structure_separation_enabled;
     float min_large_structure_separation;
+    bool large_structure_pipe_separation_enabled;
     float min_large_structure_pipe_separation;
         
     // Tuning Parameters
