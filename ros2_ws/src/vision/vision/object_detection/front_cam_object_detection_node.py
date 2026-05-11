@@ -48,15 +48,15 @@ class FrontCamObjectDetectorNode():
     
     if ZED_SDK_AVAILABLE:
         ZED_RUNTIME_CAMERA_SETTINGS = (
-            ("zed_brightness", sl.VIDEO_SETTINGS.BRIGHTNESS),
-            ("zed_contrast", sl.VIDEO_SETTINGS.CONTRAST),
-            ("zed_hue", sl.VIDEO_SETTINGS.HUE),
-            ("zed_saturation", sl.VIDEO_SETTINGS.SATURATION),
-            ("zed_sharpness", sl.VIDEO_SETTINGS.SHARPNESS),
-            ("zed_gamma", sl.VIDEO_SETTINGS.GAMMA),
-            ("zed_auto_exposure_gain", sl.VIDEO_SETTINGS.AEC_AGC),
-            ("zed_auto_whitebalance", sl.VIDEO_SETTINGS.WHITEBALANCE_AUTO),
-            ("zed_led_status", sl.VIDEO_SETTINGS.LED_STATUS),
+            ("zed.image.brightness", sl.VIDEO_SETTINGS.BRIGHTNESS),
+            ("zed.image.contrast", sl.VIDEO_SETTINGS.CONTRAST),
+            ("zed.image.hue", sl.VIDEO_SETTINGS.HUE),
+            ("zed.image.saturation", sl.VIDEO_SETTINGS.SATURATION),
+            ("zed.image.sharpness", sl.VIDEO_SETTINGS.SHARPNESS),
+            ("zed.image.gamma", sl.VIDEO_SETTINGS.GAMMA),
+            ("zed.image.auto_exposure_gain", sl.VIDEO_SETTINGS.AEC_AGC),
+            ("zed.image.auto_whitebalance", sl.VIDEO_SETTINGS.WHITEBALANCE_AUTO),
+            ("zed.image.led_status", sl.VIDEO_SETTINGS.LED_STATUS),
         )
     else:
         ZED_RUNTIME_CAMERA_SETTINGS = ()
@@ -75,90 +75,90 @@ class FrontCamObjectDetectorNode():
 
     def __init__(self, node: Node):
         self.node = node
-        self.node.declare_parameter('class_names', Parameter.Type.STRING_ARRAY)
-        self.node.declare_parameter('model_path', Parameter.Type.STRING)
-        self.node.declare_parameter('queue_size', Parameter.Type.INTEGER)
-        self.node.declare_parameter('publish_annotated_image', False)
-        self.node.declare_parameter('publish_annotated_every_n_frames', 1)
-        self.node.declare_parameter('publish_camera_info', True)
-        self.node.declare_parameter('publish_depth_image', False)
-        self.node.declare_parameter('publish_depth_compressed', False)
-        self.node.declare_parameter('publish_depth_every_n_frames', 5)
-        self.node.declare_parameter('depth_collection_dir', '/tmp/depth_collection')
-        self.node.declare_parameter('collect_depth_image', True)
+        self.node.declare_parameter('model.class_names', Parameter.Type.STRING_ARRAY)
+        self.node.declare_parameter('model.path', Parameter.Type.STRING)
+        self.node.declare_parameter('qos.queue_size', Parameter.Type.INTEGER)
+        self.node.declare_parameter('debug.publish.annotated.enable', False)
+        self.node.declare_parameter('debug.publish.annotated.frequency', 1)
+        self.node.declare_parameter('debug.publish.camera_info', True)
+        self.node.declare_parameter('debug.publish.depth.enable', False)
+        self.node.declare_parameter('debug.publish.depth.compressed', False)
+        self.node.declare_parameter('debug.publish.depth.frequency', 5)
+        self.node.declare_parameter('collection.depth.enable', True)
+        self.node.declare_parameter('collection.depth.dir', '/tmp/depth_collection')
         self.node.declare_parameter("compressed", Parameter.Type.BOOL)
-        self.node.declare_parameter("detection_frame_topic", Parameter.Type.STRING)
+        self.node.declare_parameter("topics.detection_frame", Parameter.Type.STRING)
         self.node.declare_parameter("enable_object_detection", True)
         self.node.declare_parameter("has_zed_sdk", True)
-        self.node.declare_parameter("image_topic", "")
+        self.node.declare_parameter("topics.image", Parameter.Type.STRING)
 
-        self.node.declare_parameter("model_detection_threshold", 0.40)
-        self.node.declare_parameter("depth_confidence_threshold", 95)
-        self.node.declare_parameter("zed_depth_maximum_distance", 20.0)
-        self.node.declare_parameter("zed_depth_minimum_distance", 0.01)
-        self.node.declare_parameter("zed_positional_tracking_depth_min_range", 0.3)
-        self.node.declare_parameter("zed_depth_mode", "NEURAL")
-        self.node.declare_parameter("zed_depth_stabilization", 30)
-        self.node.declare_parameter("zed_camera_resolution_sim", "SVGA")
-        self.node.declare_parameter("zed_camera_resolution_real", "HD1080")
-        self.node.declare_parameter("zed_camera_fps_sim", 30)
-        self.node.declare_parameter("zed_camera_fps_real", 15)
+        self.node.declare_parameter("model.detection_threshold", 0.40)
+        self.node.declare_parameter("zed.depth.confidence_threshold", 95)
+        self.node.declare_parameter("zed.depth.maximum_distance", 20.0)
+        self.node.declare_parameter("zed.depth.minimum_distance", 0.01)
+        self.node.declare_parameter("zed.depth.positional_tracking_min_range", 0.3)
+        self.node.declare_parameter("zed.depth.mode", "NEURAL")
+        self.node.declare_parameter("zed.depth.stabilization", 30)
+        self.node.declare_parameter("zed.resolution.sim", "SVGA")
+        self.node.declare_parameter("zed.resolution.real", "HD1080")
+        self.node.declare_parameter("zed.fps.sim", 30)
+        self.node.declare_parameter("zed.fps.real", 15)
         self.node.declare_parameter(
-            "zed_camera_flip_mode",
+            "zed.flip_mode",
             "OFF",
             ParameterDescriptor(dynamic_typing=True),
         )
-        self.node.declare_parameter("zed_self_calib", True)
-        self.node.declare_parameter("zed_enable_right_side_measure", False)
-        self.node.declare_parameter("zed_sdk_verbose", 1)
-        self.node.declare_parameter("zed_sdk_gpu_id", -1)
-        self.node.declare_parameter("zed_enable_image_enhancement", True)
-        self.node.declare_parameter("zed_open_timeout_sec", 5.0)
-        self.node.declare_parameter("zed_async_grab_camera_recovery", False)
-        self.node.declare_parameter("zed_grab_compute_capping_fps", 0.0)
-        self.node.declare_parameter("zed_enable_image_validity_check", True)
-        self.node.declare_parameter("zed_optional_opencv_calibration_file", "")
-        self.node.declare_parameter("zed_brightness", 4)
-        self.node.declare_parameter("zed_contrast", 4)
-        self.node.declare_parameter("zed_hue", 0)
-        self.node.declare_parameter("zed_saturation", 4)
-        self.node.declare_parameter("zed_sharpness", 4)
-        self.node.declare_parameter("zed_gamma", 8)
-        self.node.declare_parameter("zed_gain", 80)
-        self.node.declare_parameter("zed_exposure", 80)
-        self.node.declare_parameter("zed_auto_exposure_gain", True)
-        self.node.declare_parameter("zed_auto_whitebalance", True)
-        self.node.declare_parameter("zed_whitebalance_temperature", 4200)
-        self.node.declare_parameter("zed_led_status", -1)
+        self.node.declare_parameter("zed.self_calib", True)
+        self.node.declare_parameter("zed.enable_right_side_measure", False)
+        self.node.declare_parameter("zed.sdk_verbose", 1)
+        self.node.declare_parameter("zed.sdk_gpu_id", -1)
+        self.node.declare_parameter("zed.enable_image_enhancement", True)
+        self.node.declare_parameter("zed.open_timeout_sec", 5.0)
+        self.node.declare_parameter("zed.async_grab_camera_recovery", False)
+        self.node.declare_parameter("zed.grab_compute_capping_fps", 0.0)
+        self.node.declare_parameter("zed.enable_image_validity_check", True)
+        self.node.declare_parameter("zed.optional_opencv_calibration_file", "")
+        self.node.declare_parameter("zed.image.brightness", 4)
+        self.node.declare_parameter("zed.image.contrast", 4)
+        self.node.declare_parameter("zed.image.hue", 0)
+        self.node.declare_parameter("zed.image.saturation", 4)
+        self.node.declare_parameter("zed.image.sharpness", 4)
+        self.node.declare_parameter("zed.image.gamma", 8)
+        self.node.declare_parameter("zed.image.gain", 80)
+        self.node.declare_parameter("zed.image.exposure", 80)
+        self.node.declare_parameter("zed.image.auto_exposure_gain", True)
+        self.node.declare_parameter("zed.image.auto_whitebalance", True)
+        self.node.declare_parameter("zed.image.whitebalance_temperature", 4200)
+        self.node.declare_parameter("zed.image.led_status", -1)
 
         # we consume stream_ip and sim properties for zed sdk configuration
         self.node.declare_parameter('sim', Parameter.Type.BOOL)
         self.node.declare_parameter('stream_ip', Parameter.Type.STRING)
         self.node.declare_parameter('stream_port', Parameter.Type.INTEGER)
-        self.node.declare_parameter('enable_vio', True)
-        self.node.declare_parameter('vio_pose_topic', '/vision/vio_pose')
-        self.node.declare_parameter('pose_source', self.POSE_SOURCE_ZED_VIO)
-        self.node.declare_parameter('broadcast_vio_tf', False)
-        self.node.declare_parameter('auv_pose_topic', 'state/pose')
-        self.node.declare_parameter('enable_gate_top_crop', True)
-        self.node.declare_parameter('gate_top_crop_ratio', 0.50)
-        self.node.declare_parameter('enable_border_exclusion', True)
-        self.node.declare_parameter('border_exclusion_margin_px', 20)
-        self.node.declare_parameter('border_exclusion_labels', Parameter.Type.STRING_ARRAY)
-        self.node.declare_parameter('global_frame_id', 'pool_link')
-        self.node.declare_parameter('auv_frame_id', 'auv_link')
-        self.node.declare_parameter('vio_frame_id', 'auv_vio_link')
-        self.node.declare_parameter('detection_frame_id', 'zed_left_camera_frame')
-        self.node.declare_parameter('image_frame_id', 'zed_left_camera_frame_optical')
-        self.node.declare_parameter('auv_to_camera_center_xyz', [0.0, 0.0, 0.0])
-        self.node.declare_parameter('auv_to_camera_center_rpy', [0.0, 0.0, 0.0])
-        self.node.declare_parameter('camera_center_to_detection_xyz', [0.0, 0.06, 0.0])
-        self.node.declare_parameter('camera_center_to_detection_rpy', [0.0, 0.0, 0.0])
+        self.node.declare_parameter('pose.vio.enable', True)
+        self.node.declare_parameter('pose.vio.topic', '/vision/vio_pose')
+        self.node.declare_parameter('pose.source', self.POSE_SOURCE_ZED_VIO)
+        self.node.declare_parameter('pose.vio.broadcast_tf', False)
+        self.node.declare_parameter('pose.auv.topic', 'state/pose')
+        self.node.declare_parameter('filters.gate_top_crop', True)
+        self.node.declare_parameter('filters.gate_top_crop_ratio', 0.50)
+        self.node.declare_parameter('filters.enable_border_exclusion', True)
+        self.node.declare_parameter('filters.border_exclusion_margin_px', 20)
+        self.node.declare_parameter('filters.border_exclusion_labels', Parameter.Type.STRING_ARRAY)
+        self.node.declare_parameter('frame_id.global', 'pool_link')
+        self.node.declare_parameter('frame_id.auv', 'auv_link')
+        self.node.declare_parameter('frame_id.vio', 'auv_vio_link')
+        self.node.declare_parameter('frame_id.detection', 'zed_left_camera_frame')
+        self.node.declare_parameter('frame_id.image', 'zed_left_camera_frame_optical')
+        self.node.declare_parameter('extrinsics.auv_to_camera_center.xyz', [0.0, 0.0, 0.0])
+        self.node.declare_parameter('extrinsics.auv_to_camera_center.rpy', [0.0, 0.0, 0.0])
+        self.node.declare_parameter('extrinsics.camera_center_to_detection.xyz', [0.0, 0.06, 0.0])
+        self.node.declare_parameter('extrinsics.camera_center_to_detection.rpy', [0.0, 0.0, 0.0])
 
         # Image collection parameters
-        self.node.declare_parameter('collection_dir', '/tmp/front_cam_collection')
-        self.node.declare_parameter('collection_interval_seconds', 2.0)
-        self.node.declare_parameter('collection_file_extension', '.png')
+        self.node.declare_parameter('collection.image.dir', '/tmp/front_cam_collection')
+        self.node.declare_parameter('collection.interval_seconds', 2.0)
+        self.node.declare_parameter('collection.file_extension', '.png')
 
         # Depth sensor state (pressure sensor overrides VIO Z)
         self._depth_lock = threading.Lock()
@@ -176,10 +176,10 @@ class FrontCamObjectDetectorNode():
         # Image collection state
         self._collecting = False
         self._last_collection_time = 0.0
-        self.collection_dir = self.node.get_parameter('collection_dir').get_parameter_value().string_value
-        self.depth_collection_dir = self.node.get_parameter('depth_collection_dir').get_parameter_value().string_value
-        self.collection_interval = self.node.get_parameter('collection_interval_seconds').get_parameter_value().double_value
-        self.collection_extension = self.node.get_parameter('collection_file_extension').get_parameter_value().string_value
+        self.collection_dir = self.node.get_parameter('collection.image.dir').get_parameter_value().string_value
+        self.depth_collection_dir = self.node.get_parameter('collection.depth.dir').get_parameter_value().string_value
+        self.collection_interval = self.node.get_parameter('collection.interval_seconds').get_parameter_value().double_value
+        self.collection_extension = self.node.get_parameter('collection.file_extension').get_parameter_value().string_value
         self._frame_counter = 0
 
         # Service to toggle image collection on/off
@@ -187,126 +187,127 @@ class FrontCamObjectDetectorNode():
         self.node.create_service(AutomaticCapture, '/vision/front_cam/toggle_collection', partial(toggle_collection_callback_util, self))
         self.node.create_service(Trigger, '/vision/front_cam/toggle_annotated_image', self._toggle_annotated_image_callback)
  
-        self.class_names = list(self.node.get_parameter('class_names').get_parameter_value().string_array_value)
+        self.class_names = list(self.node.get_parameter('model.class_names').get_parameter_value().string_array_value)
         self.node.get_logger().info(f"Class names: {self.class_names}")
-        model_path = self.node.get_parameter('model_path').get_parameter_value().string_value
+        model_path = self.node.get_parameter('model.path').get_parameter_value().string_value
         self.detection_frame_topic = (
-            self.node.get_parameter('detection_frame_topic').get_parameter_value().string_value
+            self.node.get_parameter('topics.detection_frame').get_parameter_value().string_value
         )
-        queue_size = self.node.get_parameter('queue_size').get_parameter_value().integer_value
-        self.publish_annotated_image = self.node.get_parameter('publish_annotated_image').get_parameter_value().bool_value
+        queue_size = self.node.get_parameter('qos.queue_size').get_parameter_value().integer_value
+        self.publish_annotated_image = self.node.get_parameter('debug.publish.annotated.enable').get_parameter_value().bool_value
         self.annotated_image_enabled = self.publish_annotated_image
-        self.publish_annotated_every_n_frames = self.node.get_parameter('publish_annotated_every_n_frames').get_parameter_value().integer_value
-        self.publish_camera_info = self.node.get_parameter('publish_camera_info').get_parameter_value().bool_value
-        self.publish_depth_image = self.node.get_parameter('publish_depth_image').get_parameter_value().bool_value
-        self.publish_depth_compressed = self.node.get_parameter('publish_depth_compressed').get_parameter_value().bool_value
-        self.broadcast_vio_tf = self.node.get_parameter('broadcast_vio_tf').get_parameter_value().bool_value
-        self.publish_depth_every_n_frames = self.node.get_parameter('publish_depth_every_n_frames').get_parameter_value().integer_value
-        self.collect_depth_image = self.node.get_parameter('collect_depth_image').get_parameter_value().bool_value
+        self.publish_annotated_every_n_frames = self.node.get_parameter('debug.publish.annotated.frequency').get_parameter_value().integer_value
+        self.publish_camera_info = self.node.get_parameter('debug.publish.camera_info').get_parameter_value().bool_value
+        self.publish_depth_image = self.node.get_parameter('debug.publish.depth.enable').get_parameter_value().bool_value
+        self.publish_depth_compressed = self.node.get_parameter('debug.publish.depth.compressed').get_parameter_value().bool_value
+        self.broadcast_vio_tf = self.node.get_parameter('pose.vio.broadcast_tf').get_parameter_value().bool_value
+        self.publish_depth_every_n_frames = self.node.get_parameter('debug.publish.depth.frequency').get_parameter_value().integer_value
+        self.collect_depth_image = self.node.get_parameter('collection.depth.enable').get_parameter_value().bool_value
         self.compressed = self.node.get_parameter('compressed').get_parameter_value().bool_value
         self.enable_object_detection = self.node.get_parameter('enable_object_detection').get_parameter_value().bool_value
         self.has_zed_sdk = self.node.get_parameter('has_zed_sdk').get_parameter_value().bool_value
-        self.image_topic = self.node.get_parameter('image_topic').get_parameter_value().string_value
+        self.image_topic = self.node.get_parameter('topics.image').get_parameter_value().string_value
 
-        self.conf_threshold = self.node.get_parameter('model_detection_threshold').get_parameter_value().double_value
+        self.conf_threshold = self.node.get_parameter('model.detection_threshold').get_parameter_value().double_value
         self.depth_confidence_threshold = (
-            self.node.get_parameter('depth_confidence_threshold').get_parameter_value().integer_value
+            self.node.get_parameter('zed.depth.confidence_threshold').get_parameter_value().integer_value
         )
         self.zed_depth_maximum_distance = (
-            self.node.get_parameter('zed_depth_maximum_distance').get_parameter_value().double_value
+            self.node.get_parameter('zed.depth.maximum_distance').get_parameter_value().double_value
         )
-        if self.zed_depth_maximum_distance > 40.0:
-            self.node.get_logger().warn(f"zed_depth_maximum_distance capped from {self.zed_depth_maximum_distance} to 40.0 (ZED maximum)")
-            self.zed_depth_maximum_distance = 40.0
-
+        zed_max_depth = 40.0
+        if self.zed_depth_maximum_distance > zed_max_depth:
+            self.node.get_logger().warn(f"zed.depth.maximum_distance capped from {self.zed_depth_maximum_distance} to {zed_max_depth} (ZED maximum)")
+            self.zed_depth_maximum_distance = zed_max_depth
+        zed_min_depth = 0.2
         self.zed_depth_minimum_distance = (
-            self.node.get_parameter('zed_depth_minimum_distance').get_parameter_value().double_value
+            self.node.get_parameter('zed.depth.minimum_distance').get_parameter_value().double_value
         )
-        if self.zed_depth_minimum_distance < 0.2:
-            self.node.get_logger().warn(f"zed_depth_minimum_distance capped from {self.zed_depth_minimum_distance} to 0.2 (ZED minimum)")
+        if self.zed_depth_minimum_distance < zed_min_depth:
+            self.node.get_logger().warn(f"zed.depth.minimum_distance capped from {self.zed_depth_minimum_distance} to {zed_min_depth} (ZED minimum)")
             self.zed_depth_minimum_distance = 0.2
-
+        zed_min_tracking_depth = 0.2
         self.zed_positional_tracking_depth_min_range = (
-            self.node.get_parameter('zed_positional_tracking_depth_min_range').get_parameter_value().double_value
+            self.node.get_parameter('zed.depth.positional_tracking_min_range').get_parameter_value().double_value
         )
-        if self.zed_positional_tracking_depth_min_range < 0.2:
-            self.node.get_logger().warn(f"zed_positional_tracking_depth_min_range capped from {self.zed_positional_tracking_depth_min_range} to 0.2 (ZED minimum)")
-            self.zed_positional_tracking_depth_min_range = 0.2
+        if self.zed_positional_tracking_depth_min_range < zed_min_tracking_depth:
+            self.node.get_logger().warn(f"zed.depth.positional_tracking_min_range capped from {self.zed_positional_tracking_depth_min_range} to {zed_min_tracking_depth} (ZED minimum)")
+            self.zed_positional_tracking_depth_min_range = zed_min_tracking_depth
 
         self.zed_depth_mode_name = (
-            self.node.get_parameter('zed_depth_mode').get_parameter_value().string_value
+            self.node.get_parameter('zed.depth.mode').get_parameter_value().string_value
         )
         self.zed_depth_stabilization = (
-            self.node.get_parameter('zed_depth_stabilization').get_parameter_value().integer_value
+            self.node.get_parameter('zed.depth.stabilization').get_parameter_value().integer_value
         )
         sim = self.node.get_parameter('sim').get_parameter_value().bool_value
         self.zed_camera_resolution_name = self.node.get_parameter(
-            'zed_camera_resolution_sim' if sim else 'zed_camera_resolution_real'
+            'zed.resolution.sim' if sim else 'zed.resolution.real'
         ).get_parameter_value().string_value
         self.zed_camera_fps = self.node.get_parameter(
-            'zed_camera_fps_sim' if sim else 'zed_camera_fps_real'
+            'zed.fps.sim' if sim else 'zed.fps.real'
         ).get_parameter_value().integer_value
         self.zed_camera_flip_mode_name = self.node.get_parameter(
-            'zed_camera_flip_mode'
+            'zed.flip_mode'
         ).get_parameter_value().string_value
         self.zed_self_calib = self.node.get_parameter(
-            'zed_self_calib'
+            'zed.self_calib'
         ).get_parameter_value().bool_value
         self.zed_enable_right_side_measure = self.node.get_parameter(
-            'zed_enable_right_side_measure'
+            'zed.enable_right_side_measure'
         ).get_parameter_value().bool_value
         self.zed_sdk_verbose = self.node.get_parameter(
-            'zed_sdk_verbose'
+            'zed.sdk_verbose'
         ).get_parameter_value().integer_value
         self.zed_sdk_gpu_id = self.node.get_parameter(
-            'zed_sdk_gpu_id'
+            'zed.sdk_gpu_id'
         ).get_parameter_value().integer_value
         self.zed_enable_image_enhancement = self.node.get_parameter(
-            'zed_enable_image_enhancement'
+            'zed.enable_image_enhancement'
         ).get_parameter_value().bool_value
         self.zed_open_timeout_sec = self.node.get_parameter(
-            'zed_open_timeout_sec'
+            'zed.open_timeout_sec'
         ).get_parameter_value().double_value
         self.zed_async_grab_camera_recovery = self.node.get_parameter(
-            'zed_async_grab_camera_recovery'
+            'zed.async_grab_camera_recovery'
         ).get_parameter_value().bool_value
         self.zed_grab_compute_capping_fps = self.node.get_parameter(
-            'zed_grab_compute_capping_fps'
+            'zed.grab_compute_capping_fps'
         ).get_parameter_value().double_value
         self.zed_enable_image_validity_check = self.node.get_parameter(
-            'zed_enable_image_validity_check'
+            'zed.enable_image_validity_check'
         ).get_parameter_value().bool_value
         self.zed_optional_opencv_calibration_file = self.node.get_parameter(
-            'zed_optional_opencv_calibration_file'
+            'zed.optional_opencv_calibration_file'
         ).get_parameter_value().string_value
         stream_port = self.node.get_parameter('stream_port').get_parameter_value().integer_value
-        self.enable_vio = self.node.get_parameter('enable_vio').get_parameter_value().bool_value
+        self.enable_vio = self.node.get_parameter('pose.vio.enable').get_parameter_value().bool_value
         if not self.has_zed_sdk and self.enable_vio:
             self.enable_vio = False
             self.node.get_logger().warn(
                 (f"WARNING: {self.node.get_name()} disabling vio since has_zed_sdk is False.")
             )
-        self.pose_source = self.node.get_parameter('pose_source').get_parameter_value().string_value
-        self.auv_pose_topic = self.node.get_parameter('auv_pose_topic').get_parameter_value().string_value
-        self.enable_gate_top_crop = self.node.get_parameter('enable_gate_top_crop').get_parameter_value().bool_value
-        self.gate_top_crop_ratio = self.node.get_parameter('gate_top_crop_ratio').get_parameter_value().double_value
-        self.enable_border_exclusion = self.node.get_parameter('enable_border_exclusion').get_parameter_value().bool_value
-        self.border_exclusion_margin_px = self.node.get_parameter('border_exclusion_margin_px').get_parameter_value().integer_value
-        self.border_exclusion_labels = list(self.node.get_parameter('border_exclusion_labels').get_parameter_value().string_array_value)
-        self.global_frame_id = self.node.get_parameter('global_frame_id').get_parameter_value().string_value
-        self.auv_frame_id = self.node.get_parameter('auv_frame_id').get_parameter_value().string_value
-        self.vio_frame_id = self.node.get_parameter('vio_frame_id').get_parameter_value().string_value
+        self.pose_source = self.node.get_parameter('pose.source').get_parameter_value().string_value
+        self.auv_pose_topic = self.node.get_parameter('pose.auv.topic').get_parameter_value().string_value
+        self.enable_gate_top_crop = self.node.get_parameter('filters.gate_top_crop').get_parameter_value().bool_value
+        self.gate_top_crop_ratio = self.node.get_parameter('filters.gate_top_crop_ratio').get_parameter_value().double_value
+        self.enable_border_exclusion = self.node.get_parameter('filters.enable_border_exclusion').get_parameter_value().bool_value
+        self.border_exclusion_margin_px = self.node.get_parameter('filters.border_exclusion_margin_px').get_parameter_value().integer_value
+        self.border_exclusion_labels = list(self.node.get_parameter('filters.border_exclusion_labels').get_parameter_value().string_array_value)
+        self.global_frame_id = self.node.get_parameter('frame_id.global').get_parameter_value().string_value
+        self.auv_frame_id = self.node.get_parameter('frame_id.auv').get_parameter_value().string_value
+        self.vio_frame_id = self.node.get_parameter('frame_id.vio').get_parameter_value().string_value
         self.detection_frame_id = (
-            self.node.get_parameter('detection_frame_id').get_parameter_value().string_value
+            self.node.get_parameter('frame_id.detection').get_parameter_value().string_value
         )
         self.image_frame_id = (
-            self.node.get_parameter('image_frame_id').get_parameter_value().string_value
+            self.node.get_parameter('frame_id.image').get_parameter_value().string_value
         )
 
-        auv_to_camera_center_xyz = get_vector3_parameter(self.node, 'auv_to_camera_center_xyz')
-        auv_to_camera_center_rpy = get_vector3_parameter(self.node, 'auv_to_camera_center_rpy')
-        camera_center_to_detection_xyz = get_vector3_parameter(self.node, 'camera_center_to_detection_xyz')
-        camera_center_to_detection_rpy = get_vector3_parameter(self.node, 'camera_center_to_detection_rpy')
+        auv_to_camera_center_xyz = get_vector3_parameter(self.node, 'extrinsics.auv_to_camera_center.xyz')
+        auv_to_camera_center_rpy = get_vector3_parameter(self.node, 'extrinsics.auv_to_camera_center.rpy')
+        camera_center_to_detection_xyz = get_vector3_parameter(self.node, 'extrinsics.camera_center_to_detection.xyz')
+        camera_center_to_detection_rpy = get_vector3_parameter(self.node, 'extrinsics.camera_center_to_detection.rpy')
 
         self.T_auv_camera_center = build_transform_matrix_from_xyz_rpy(
             auv_to_camera_center_xyz,
@@ -324,21 +325,21 @@ class FrontCamObjectDetectorNode():
 
         if self.pose_source not in {self.POSE_SOURCE_ZED_VIO, self.POSE_SOURCE_AUV_POSE}:
             raise ValueError(
-                f"Unsupported pose_source '{self.pose_source}'. "
+                f"Unsupported pose.source '{self.pose_source}'. "
                 f"Expected '{self.POSE_SOURCE_ZED_VIO}' or '{self.POSE_SOURCE_AUV_POSE}'."
             )
         if not self.enable_vio and self.pose_source == self.POSE_SOURCE_ZED_VIO:
             raise ValueError(
-                "pose_source='zed_vio' requires enable_vio=true. "
-                "Either enable VIO or switch pose_source to 'auv_pose'."
+                "pose.source='zed_vio' requires pose.vio.enable=true. "
+                "Either enable VIO or switch pose.source to 'auv_pose'."
             )
         if not self.enable_vio and self.broadcast_vio_tf:
             self.node.get_logger().warn(
-                "broadcast_vio_tf is enabled but enable_vio is false; VIO TF publication will be skipped."
+                "pose.vio.broadcast_tf is enabled but pose.vio.enable is false; VIO TF publication will be skipped."
             )
         if not self.enable_vio and self.zed_depth_stabilization != 0:
             self.node.get_logger().warn(
-                "enable_vio is false, so zed_depth_stabilization will be forced to 0 "
+                "pose.vio.enable is false, so zed.depth.stabilization will be forced to 0 "
                 "to avoid implicit positional tracking enablement."
             )
 
@@ -499,7 +500,7 @@ class FrontCamObjectDetectorNode():
             self.camera_info_topic = None
             self.pub_camera_info = None
 
-        vio_pose_topic = self.node.get_parameter('vio_pose_topic').get_parameter_value().string_value
+        vio_pose_topic = self.node.get_parameter('pose.vio.topic').get_parameter_value().string_value
         if self.enable_vio:
             self.pub_vio_pose = self.node.create_publisher(
                 PoseStamped,
@@ -563,7 +564,7 @@ class FrontCamObjectDetectorNode():
         applied_settings = []
         for parameter_name, setting in self.ZED_RUNTIME_CAMERA_SETTINGS:
             value = None
-            if parameter_name in {"zed_auto_exposure_gain", "zed_auto_whitebalance"}:
+            if parameter_name in {"Zed.image.auto_exposure_gain", "zed.image.auto_whitebalance"}:
                 value = int(self.node.get_parameter(parameter_name).get_parameter_value().bool_value)
             else:
                 value = self.node.get_parameter(parameter_name).get_parameter_value().integer_value
@@ -576,10 +577,10 @@ class FrontCamObjectDetectorNode():
                 )
             applied_settings.append(f"{parameter_name}={value}")
 
-        if not self.node.get_parameter('zed_auto_exposure_gain').get_parameter_value().bool_value:
+        if not self.node.get_parameter('zed.image.auto_exposure_gain').get_parameter_value().bool_value:
             for parameter_name, setting in (
-                ("zed_gain", sl.VIDEO_SETTINGS.GAIN),
-                ("zed_exposure", sl.VIDEO_SETTINGS.EXPOSURE),
+                ("zed.image.gain", sl.VIDEO_SETTINGS.GAIN),
+                ("zed.image.exposure", sl.VIDEO_SETTINGS.EXPOSURE),
             ):
                 value = self.node.get_parameter(parameter_name).get_parameter_value().integer_value
                 err = self.zed.set_camera_settings(setting, value)
@@ -590,9 +591,9 @@ class FrontCamObjectDetectorNode():
                     )
                 applied_settings.append(f"{parameter_name}={value}")
 
-        if not self.node.get_parameter('zed_auto_whitebalance').get_parameter_value().bool_value:
+        if not self.node.get_parameter('zed.image.auto_whitebalance').get_parameter_value().bool_value:
             value = self.node.get_parameter(
-                'zed_whitebalance_temperature'
+                'zed.image.whitebalance_temperature'
             ).get_parameter_value().integer_value
             err = self.zed.set_camera_settings(
                 sl.VIDEO_SETTINGS.WHITEBALANCE_TEMPERATURE,
@@ -601,9 +602,9 @@ class FrontCamObjectDetectorNode():
             if err != sl.ERROR_CODE.SUCCESS:
                 self.zed.close()
                 raise RuntimeError(
-                    f"Failed to set zed_whitebalance_temperature={value} on the ZED camera: {err}"
+                    f"Failed to set zed.image.whitebalance_temperature={value} on the ZED camera: {err}"
                 )
-            applied_settings.append(f"zed_whitebalance_temperature={value}")
+            applied_settings.append(f"zed.image.whitebalance_temperature={value}")
 
         controls_suffix = f" | controls: {', '.join(applied_settings)}" if applied_settings else ""
         self.node.get_logger().info(

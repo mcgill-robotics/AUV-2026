@@ -58,7 +58,7 @@ def generate_launch_description():
     
     front_model_arg = DeclareLaunchArgument(
         "front_model_relative_path",
-        default_value=default_config["front_cam_object_detection"]["ros__parameters"]["model_relative_path"],
+        default_value=default_config["front_cam_object_detection"]["ros__parameters"]["model"]["relative_path"],
         description="Path to the front camera object detection model file."
     )
     
@@ -83,7 +83,7 @@ def generate_launch_description():
 
     
     compressed_launch_config = LaunchConfiguration("compressed")
-    front_cam_topic = get_compressed_topic(default_config["front_cam_object_detection"]["ros__parameters"]["image_topic"], compressed_launch_config)
+    front_cam_topic = get_compressed_topic(default_config["front_cam_object_detection"]["ros__parameters"]["topics"]["image"], compressed_launch_config)
     down_cam_topic = get_compressed_topic(default_config["down_cam_object_detection"]["ros__parameters"]["image_topic"], compressed_launch_config)
     front_enhanced_topic = get_compressed_topic(default_config["front_image_enhancement"]["ros__parameters"]["output_topic"], compressed_launch_config)
     down_enhanced_topic = get_compressed_topic(default_config["down_image_enhancement"]["ros__parameters"]["output_topic"], compressed_launch_config)
@@ -152,9 +152,9 @@ def generate_launch_description():
         parameters=[
             config_path,
             {
-                "image_topic": front_cam_topic,
-                'model_path': PathJoinSubstitution([vision_dir, LaunchConfiguration("front_model_relative_path")]),
-                'zed_camera_flip_mode': normalize_flip_mode(default_config["front_cam_object_detection"]["ros__parameters"]["zed_camera_flip_mode"]),                
+                "topics.image": front_cam_topic,
+                'model.path': PathJoinSubstitution([vision_dir, LaunchConfiguration("front_model_relative_path")]),
+                'zed.flip_mode': normalize_flip_mode(default_config["front_cam_object_detection"]["ros__parameters"]["zed"]["flip_mode"]),                
                 'use_sim_time': LaunchConfiguration("sim"),
                 "sim": LaunchConfiguration("sim"),
                 'compressed': LaunchConfiguration("compressed"),
@@ -172,14 +172,14 @@ def generate_launch_description():
         executable="static_transform_publisher",
         name="auv_to_zed_camera_center_tf",
         arguments=[
-            "--x", str(default_config["front_cam_object_detection"]["ros__parameters"]["auv_to_camera_center_xyz"][0]),
-            "--y", str(default_config["front_cam_object_detection"]["ros__parameters"]["auv_to_camera_center_xyz"][1]),
-            "--z", str(default_config["front_cam_object_detection"]["ros__parameters"]["auv_to_camera_center_xyz"][2]),
-            "--roll", str(default_config["front_cam_object_detection"]["ros__parameters"]["auv_to_camera_center_rpy"][0]),
-            "--pitch", str(default_config["front_cam_object_detection"]["ros__parameters"]["auv_to_camera_center_rpy"][1]),
-            "--yaw", str(default_config["front_cam_object_detection"]["ros__parameters"]["auv_to_camera_center_rpy"][2]),
-            "--frame-id", default_config["front_cam_object_detection"]["ros__parameters"]["auv_frame_id"],
-            "--child-frame-id", default_config["front_cam_object_detection"]["ros__parameters"]["camera_center_frame_id"],
+            "--x", str(default_config["front_cam_object_detection"]["ros__parameters"]["extrinsics"]["auv_to_camera_center"]["xyz"][0]),
+            "--y", str(default_config["front_cam_object_detection"]["ros__parameters"]["extrinsics"]["auv_to_camera_center"]["xyz"][1]),
+            "--z", str(default_config["front_cam_object_detection"]["ros__parameters"]["extrinsics"]["auv_to_camera_center"]["xyz"][2]),
+            "--roll", str(default_config["front_cam_object_detection"]["ros__parameters"]["extrinsics"]["auv_to_camera_center"]["rpy"][0]),
+            "--pitch", str(default_config["front_cam_object_detection"]["ros__parameters"]["extrinsics"]["auv_to_camera_center"]["rpy"][1]),
+            "--yaw", str(default_config["front_cam_object_detection"]["ros__parameters"]["extrinsics"]["auv_to_camera_center"]["rpy"][2]),
+            "--frame-id", default_config["front_cam_object_detection"]["ros__parameters"]["frame_id"]["auv"],
+            "--child-frame-id", default_config["front_cam_object_detection"]["ros__parameters"]["frame_id"]["camera_center"],
         ],
     )
     
@@ -190,14 +190,14 @@ def generate_launch_description():
         executable="static_transform_publisher",
         name="zed_camera_center_to_left_frame_tf",
         arguments=[
-            "--x", str(default_config["front_cam_object_detection"]["ros__parameters"]["camera_center_to_detection_xyz"][0]),
-            "--y", str(default_config["front_cam_object_detection"]["ros__parameters"]["camera_center_to_detection_xyz"][1]),
-            "--z", str(default_config["front_cam_object_detection"]["ros__parameters"]["camera_center_to_detection_xyz"][2]),
-            "--roll", str(default_config["front_cam_object_detection"]["ros__parameters"]["camera_center_to_detection_rpy"][0]),
-            "--pitch", str(default_config["front_cam_object_detection"]["ros__parameters"]["camera_center_to_detection_rpy"][1]),
-            "--yaw", str(default_config["front_cam_object_detection"]["ros__parameters"]["camera_center_to_detection_rpy"][2]),
-            "--frame-id", default_config["front_cam_object_detection"]["ros__parameters"]["camera_center_frame_id"],
-            "--child-frame-id", default_config["front_cam_object_detection"]["ros__parameters"]["detection_frame_id"],
+            "--x", str(default_config["front_cam_object_detection"]["ros__parameters"]["extrinsics"]["camera_center_to_detection"]["xyz"][0]),
+            "--y", str(default_config["front_cam_object_detection"]["ros__parameters"]["extrinsics"]["camera_center_to_detection"]["xyz"][1]),
+            "--z", str(default_config["front_cam_object_detection"]["ros__parameters"]["extrinsics"]["camera_center_to_detection"]["xyz"][2]),
+            "--roll", str(default_config["front_cam_object_detection"]["ros__parameters"]["extrinsics"]["camera_center_to_detection"]["rpy"][0]),
+            "--pitch", str(default_config["front_cam_object_detection"]["ros__parameters"]["extrinsics"]["camera_center_to_detection"]["rpy"][1]),
+            "--yaw", str(default_config["front_cam_object_detection"]["ros__parameters"]["extrinsics"]["camera_center_to_detection"]["rpy"][2]),
+            "--frame-id", default_config["front_cam_object_detection"]["ros__parameters"]["frame_id"]["camera_center"],
+            "--child-frame-id", default_config["front_cam_object_detection"]["ros__parameters"]["frame_id"]["detection"],
         ],
     )
     
@@ -214,8 +214,8 @@ def generate_launch_description():
             "--roll", "-1.57079632679",
             "--pitch", "0.0",
             "--yaw", "-1.57079632679",
-            "--frame-id", default_config["front_cam_object_detection"]["ros__parameters"]["detection_frame_id"],
-            "--child-frame-id", default_config["front_cam_object_detection"]["ros__parameters"]["image_frame_id"],
+            "--frame-id", default_config["front_cam_object_detection"]["ros__parameters"]["frame_id"]["detection"],
+            "--child-frame-id", default_config["front_cam_object_detection"]["ros__parameters"]["frame_id"]["image"],
         ],
     )
     
@@ -244,7 +244,7 @@ def generate_launch_description():
         parameters=[
             config_path,
             {
-                "front_cam_detection_frame_topic": default_config["front_cam_object_detection"]["ros__parameters"]["detection_frame_topic"],
+                "front_cam_detection_frame_topic": default_config["front_cam_object_detection"]["ros__parameters"]["topics"]["detection_frame"],
                 "down_cam_detection_frame_topic": default_config["down_cam_object_detection"]["ros__parameters"]["detection_topic"],
                 "max_per_class_labels": list(default_config["object_map"]["ros__parameters"]["max_per_class"].keys()),
                 "max_per_class_values": list(default_config["object_map"]["ros__parameters"]["max_per_class"].values()),
@@ -272,7 +272,7 @@ def generate_launch_description():
     # launch_description.add_action(front_cam_enhancement_node)
     # launch_description.add_action(down_cam_enhancement_node)
     launch_description.add_action(front_detection_node)
-    launch_description.add_action(down_detection_node)
+    # launch_description.add_action(down_detection_node)
     launch_description.add_action(object_map_node)
 
     return launch_description
