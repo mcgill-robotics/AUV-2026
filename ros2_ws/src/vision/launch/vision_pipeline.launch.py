@@ -64,7 +64,7 @@ def generate_launch_description():
     
     down_model_arg = DeclareLaunchArgument(
         "down_model_relative_path",
-        default_value=default_config["down_cam_object_detection"]["ros__parameters"]["model_relative_path"],
+        default_value=default_config["down_cam_object_detection"]["ros__parameters"]["model"]["relative_path"],
         description="Path to the down camera object detection model file."
     )
 
@@ -84,7 +84,7 @@ def generate_launch_description():
     
     compressed_launch_config = LaunchConfiguration("compressed")
     front_cam_topic = get_compressed_topic(default_config["front_cam_object_detection"]["ros__parameters"]["topics"]["image"], compressed_launch_config)
-    down_cam_topic = get_compressed_topic(default_config["down_cam_object_detection"]["ros__parameters"]["image_topic"], compressed_launch_config)
+    down_cam_topic = get_compressed_topic(default_config["down_cam_object_detection"]["ros__parameters"]["topics"]["image"], compressed_launch_config)
     front_enhanced_topic = get_compressed_topic(default_config["front_image_enhancement"]["ros__parameters"]["output_topic"], compressed_launch_config)
     down_enhanced_topic = get_compressed_topic(default_config["down_image_enhancement"]["ros__parameters"]["output_topic"], compressed_launch_config)
     
@@ -226,8 +226,8 @@ def generate_launch_description():
         parameters=[
             config_path,
             {
-                "image_topic": down_cam_topic,
-                'model_path': PathJoinSubstitution([vision_dir, LaunchConfiguration("down_model_relative_path")]),
+                "topics.image": down_cam_topic,
+                'model.path': PathJoinSubstitution([vision_dir, LaunchConfiguration("down_model_relative_path")]),
                 'compressed': LaunchConfiguration("compressed"),
                 "sim": LaunchConfiguration("sim"),                
                 'use_sim_time': LaunchConfiguration("sim"),
@@ -245,7 +245,7 @@ def generate_launch_description():
             config_path,
             {
                 "front_cam_detection_frame_topic": default_config["front_cam_object_detection"]["ros__parameters"]["topics"]["detection_frame"],
-                "down_cam_detection_frame_topic": default_config["down_cam_object_detection"]["ros__parameters"]["detection_topic"],
+                "down_cam_detection_frame_topic": default_config["down_cam_object_detection"]["ros__parameters"]["topics"]["detection"],
                 "max_per_class_labels": list(default_config["object_map"]["ros__parameters"]["max_per_class"].keys()),
                 "max_per_class_values": list(default_config["object_map"]["ros__parameters"]["max_per_class"].values()),
                 "sim": LaunchConfiguration("sim"),
@@ -271,7 +271,7 @@ def generate_launch_description():
     launch_description.add_action(detection_to_optical_tf)
     # launch_description.add_action(front_cam_enhancement_node)
     # launch_description.add_action(down_cam_enhancement_node)
-    launch_description.add_action(front_detection_node)
+    # launch_description.add_action(front_detection_node)
     launch_description.add_action(down_detection_node)
     launch_description.add_action(object_map_node)
 

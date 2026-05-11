@@ -143,76 +143,83 @@ front_cam_object_detection:
 
 down_cam_object_detection:
   ros__parameters:
-    image_topic: /down_cam/image_raw # this will be the input topic if sim=true, this will be set to &down_enhanced_topic if enhance_images is set to true
+    enable_object_detection: true
+    topics: 
+      image: /down_cam/image_raw # this will be the input topic if sim=true, this will be set to down_image_enhancement.ros__parameters.output_topic if enhance_images is set to true
+      detection: /vision/down_cam/detections
+
+    frame_id:
+      camera: "sensors/down_cam"
+
     # Camera hardware (direct capture via cv2.VideoCapture, no usb_cam_node needed)
     # ELP-USB500W02M-AF60 (5MP OV5640, autofocus, 60° FOV)
     # Available MJPEG modes:   640x480@30  800x600@30  1024x768@30  1280x720@30  1280x1024@15  1600x1200@15  1920x1080@15  2592x1944@15
     # Available YUY2 modes:    640x480@30  800x600@30  1024x768@15  1280x720@7.5 1280x1024@7.5 1600x1200@3   1920x1080@3   2592x1944@3
-    video_device: "/dev/down_cam"
-    image_width: 640
-    image_height: 480
-    camera_fps: 30
-    camera_frame_id: "sensors/down_cam"
-
-    # V4L2 image controls (ELP OV5640)
-    # Run `v4l2-ctl -d /dev/videoX --all` on the Jetson with the camera plugged in to verify ranges
-    # v4l2-ctl --list-devices 
-    # v4l2-ctl -d /dev/video2 --all
-    # v4l2-ctl -d /dev/video2 --list-formats-ext
-
-    brightness: 8              # [0..15]    default 8
-    contrast: 8                # [0..15]    default 8
-    saturation: 7              # [0..15]    default 7
-    hue: 0                     # [-10..10]  default 0
-    sharpness: 6               # [0..15]    default 6
-    gamma: 7                   # [1..10]    default 7
-    backlight_compensation: 0  # [0..1]     default 0
-    power_line_frequency: 2    # 0=disabled 1=50Hz 2=60Hz; default 2
-
-    # White balance
-    auto_white_balance: false            # default true; when true, white_balance_temperature is ignored
-    white_balance_temperature: 4500      # [2800..6500] step 1; only used when auto_white_balance is false
-
-    # Exposure & focus
-    auto_exposure: 1                     # 1=Manual 3=Aperture Priority (auto); default 3
-    exposure_time_absolute: 40           # [4..5000]  only used when auto_exposure is 1 (Manual); default 625
-    auto_focus: false                    # default true; when true, focus_absolute is ignored
-    focus_absolute: 7                    # [0..21]    only used when auto_focus is false; default 16
-
-    enable_object_detection: true
-    detection_topic: /vision/down_cam/detections
-    model_detection_threshold: 0.40
-    # relative to src directory
-    model_relative_path: models/local_rfdetr_onnx_test # inference-models package directory (TODO: create this package)
-    # WARNING: These class names MUST be manually maintained when changing models to have new classes. 
-    # You must also update the `class_names.txt` file in the model package.
-    # A mismatch here can crash the vision node.
-    class_names:
-      - "gate"
-      - "lane_marker"
-      - "red_pipe"
-      - "white_pipe"
-      - "octagon"
-      - "table"
-      - "bin"
-      - "board"
-      - "survey_repair"
-      - "search_rescue"
-      - "compass"
-      - "tools"
-      - "lifebuoy"
-      - "sos"
-      - "ambulance"
-      - "firetruck"
-      - "blood"
-      - "fire"
-      - "bin_structure"
-    queue_size: 10
-    publish_annotated_image: true
-    publish_annotated_every_n_frames: 1
-    collection_dir: down_cam_collection
-    collection_interval_seconds: 2.0
-    collection_file_extension: ".png"
+    V4L2:
+      video_device: "/dev/down_cam"
+      fps: 30
+      # V4L2 image controls (ELP OV5640)
+      # Run `v4l2-ctl -d /dev/videoX --all` on the Jetson with the camera plugged in to verify ranges
+      # v4l2-ctl --list-devices 
+      # v4l2-ctl -d /dev/video2 --all
+      # v4l2-ctl -d /dev/video2 --list-formats-ext
+      image:
+        width: 640
+        height: 480
+        brightness: 8              # [0..15]    default 8
+        contrast: 8                # [0..15]    default 8
+        saturation: 7              # [0..15]    default 7
+        hue: 0                     # [-10..10]  default 0
+        sharpness: 6               # [0..15]    default 6
+        gamma: 7                   # [1..10]    default 7
+        backlight_compensation: 0  # [0..1]     default 0
+        power_line_frequency: 2    # 0=disabled 1=50Hz 2=60Hz; default 2
+        white_balance:
+          auto: false            # default true; when true, white_balance_temperature is ignored
+          temperature: 4500      # [2800..6500] step 1; only used when auto_white_balance is false
+        exposure:
+          auto: 1                     # 1=Manual 3=Aperture Priority (auto); default 3
+          time_absolute: 40           # [4..5000]  only used when auto_exposure is 1 (Manual); default 625
+        focus:
+          auto: false                    # default true; when true, focus_absolute is ignored
+          absolute: 7                    # [0..21]    only used when auto_focus is false; default 16
+    
+    model:
+      relative_path: models/local_rfdetr_onnx_test
+      detection_threshold: 0.40
+      # WARNING: These class names MUST be manually maintained when changing models to have new classes. 
+      # You must also update the `class_names.txt` file in the model package.
+      # A mismatch here can crash the vision node.
+      class_names:
+        - "gate"
+        - "lane_marker"
+        - "red_pipe"
+        - "white_pipe"
+        - "octagon"
+        - "table"
+        - "bin"
+        - "board"
+        - "survey_repair"
+        - "search_rescue"
+        - "compass"
+        - "tools"
+        - "lifebuoy"
+        - "sos"
+        - "ambulance"
+        - "firetruck"
+        - "blood"
+        - "fire"
+        - "bin_structure"
+    qos:
+      queue_size: 10
+    debug_publish:
+      annotated:
+        enable: true
+        frequency: 1
+    collection:
+      dir: down_cam_collection
+      interval_seconds: 2.0
+      file_extension: ".png"
     log_level: debug
 
 object_map:
