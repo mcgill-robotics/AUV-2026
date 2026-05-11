@@ -105,11 +105,13 @@ front_cam_object_detection:
 
     # Detection-time filters / heuristics
     filters:
-      gate_top_crop: true # Removes bottom X% of bounding box for gate to ignore legs/pool floor noise
-      gate_top_crop_ratio: 0.50 # The ratio (0.0 to 1.0) of the gate bounding box to keep from the top edge
-      border_exclusion: false
-      border_exclusion_margin_px: 20
-      border_exclusion_labels: ["gate"]
+      gate_top_crop: # Removes bottom X% of bounding box for gate to ignore legs/pool floor noise
+        enable: true
+        ratio: 0.50 # The ratio (0.0 to 1.0) of the gate bounding box to keep from the top edge
+      border_exclusion: # Excludes objects that are too close to the border
+        enable: false
+        margin_px: 20 # The number of pixels to exclude from the border
+        labels: ["gate"] # List of labels to apply border exclusion to
 
     debug:
       publish:
