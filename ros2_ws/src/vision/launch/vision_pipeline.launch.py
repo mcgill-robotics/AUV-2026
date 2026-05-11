@@ -246,6 +246,7 @@ def generate_launch_description():
             {
                 "front_cam_detection_frame_topic": default_config["front_cam_object_detection"]["ros__parameters"]["topics"]["detection_frame"],
                 "down_cam_detection_frame_topic": default_config["down_cam_object_detection"]["ros__parameters"]["topics"]["detection"],
+                "frame_id.auv": default_config["front_cam_object_detection"]["ros__parameters"]["frame_id"]["auv"],
                 "max_per_class_labels": list(default_config["object_map"]["ros__parameters"]["max_per_class"].keys()),
                 "max_per_class_values": list(default_config["object_map"]["ros__parameters"]["max_per_class"].values()),
                 "sim": LaunchConfiguration("sim"),
@@ -271,7 +272,7 @@ def generate_launch_description():
     launch_description.add_action(detection_to_optical_tf)
     # launch_description.add_action(front_cam_enhancement_node)
     # launch_description.add_action(down_cam_enhancement_node)
-    # launch_description.add_action(front_detection_node)
+    launch_description.add_action(front_detection_node)
     launch_description.add_action(down_detection_node)
     launch_description.add_action(object_map_node)
 

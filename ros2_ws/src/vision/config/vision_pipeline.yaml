@@ -224,36 +224,39 @@ down_cam_object_detection:
 
 object_map:
   ros__parameters:
-    object_map_topic: /vision/object_map
-    new_object_min_distance_threshold: 0.5 # distance in meters between a new detection and existing tracks to be considered a new object and start a new track
-    large_structure_labels: ["gate", "table", "board", "bin_structure"]
-    pipe_labels: ["red_pipe", "white_pipe"]
-    min_large_structure_separation_m: 2.0 # minimum XY spacing required before placing gate/table/board/bin_structure near another confirmed large structure
-    min_large_structure_pipe_separation_m: 1.0 # minimum XY spacing required before placing gate/table/board/bin_structure near a confirmed pipe
+    # detection topics set in launch file as they are copies of front_cam_detection and down_cam_detection output
+    topics:
+      object_map: /vision/object_map
 
-    # Feature Toggles (Game-Specific Constraints)
-    enable_z_axis_locking: true # Forces specific unique objects to snap to pool floor/surface Z coordinates
-    enable_gate_midpoint_refinement: true # Uses search_rescue/survey_repair panel detections to refine the gate pose
-    enable_board_icon_refinement: true # Uses board icons to refine the board pose and make yaw face the AUV
-    refinement_plausibility_radius: 5.0 # Max distance in meters for a refinement to be considered plausible
-    # table_octagon_refinement_mode: 
-    #   - none: no refinement
-    #   - table_primary: publish octagon at table XY
-    #   - octagon_primary: publish table at octagon XY
-    #   - midpoint: publish both at shared midpoint XY
-    table_octagon_refinement_mode: "midpoint" 
-    max_pipe_distance: 7.0 # Truncates tracking of red/white pipes beyond this distance to reduce noise in map
-    enable_pipe_distance_truncation: true # toggle the above truncation logic
-    enable_lane_boundary: false # discard world-frame detections outside the competition lane AABB
-    lane_x_min: -3.0 # back boundary (meters, world frame)
-    lane_x_max: 25.0  # front boundary
-    lane_y_min: -7.5 # right boundary
-    lane_y_max: 7.5  # left boundary
-    pool_floor_z: -2.1
-    pool_surface_z: 0.0
-    unique_objects: ["gate", "bin_structure", "table", "board", "octagon"]
-    floor_objects: ["bin_structure", "table", "lane_marker", "board"]
-    surface_objects: ["gate", "octagon"]
+    frame_id:
+      object_map: "map"
+
+    object_attributes:
+
+      large_structure:
+        - "gate"
+        - "table" 
+        - "board"
+        - "bin_structure"
+
+      pipe:
+        - "red_pipe"
+        - "white_pipe"
+
+      unique: 
+        - "gate"
+        - "bin_structure"
+        - "table"
+        - "board"
+        - "octagon"
+      floor: 
+        - "bin_structure"
+        - "table"
+        - "lane_marker"
+        - "board"
+      surface: 
+        - "gate"
+        - "octagon"
 
     max_per_class:
       gate: 1
@@ -276,30 +279,69 @@ object_map:
       blood: 1
       fire: 1
 
-    # Tracker Parameters
-    # relatively strict
-    gating_threshold: 3.5 # Mahalanobis distance threshold (~3 sigma) for associating detections to tracks
-    min_hits: 20 # Consecutive frames a detection must be matched to confirm a new track
-    max_age: 8 # Number of frames to keep a lost track alive before deleting it
-    max_position_jump: 2.0 # Maximum allowed distance (meters) between predictions and measurements
-    conf_to_tent_threshold: 5 # Number of consecutive missed frames before a CONFIRMED track degrades to TENTATIVE
-    tent_init_buffer: 5 # Extra frames allowed for a new TENTATIVE track to initialize before being deleted if unmatched
-    
-    # loose parameters
-    # gating_threshold: 5.0
-    # min_hits: 5
-    # max_age: 15
-    # max_position_jump: 4.0
-    # conf_to_tent_threshold: 10
-    # tent_init_buffer: 10
+    # Object Map Filters
+    map_filters:
+      large_structure_separation: # assume large structures near each other are the same structure
+        min_distance_m: 2.0  # minimum XY spacing required
+      pipe_distance_truncation:
+        enable: true # Truncates tracking of red/white pipes beyond some distance to reduce noise in map     
+        max_distance_m: 7.0 #  distance used for distance_truncation
+      large_structure_pipe_separation:
+        min_distance_m: 0.5 # distance in meters between a new detection and existing tracks to be considered a new object and start a new track
+      lane_boundary:
+        enable: false # discard world-frame detections outside the competition lane AABB
+        x_min: -3.0 # back boundary (meters, world frame)
+        x_max: 25.0  # front boundary
+        y_min: -7.5 # right boundary
+        y_max: 7.5  # left boundary
 
-    # raw detection parameters
-    # gating_threshold: 99.0
-    # min_hits: 1
-    # max_age: 1
-    # max_position_jump: 99.0
-    # conf_to_tent_threshold: 1
-    # tent_init_buffer: 1
+    # Refinement: make use of other detections to improve tracking of certain objects
+    map_refinement:
+      gate_midpoint: true # Uses search_rescue/survey_repair panel detections to refine the gate pose
+      board_icon: true # Uses board icons to refine the board pose and make yaw face the AUV
+      plausibility_radius: 5.0 # Max distance in meters for a refinement to be considered plausible
+    
+      z_axis_locking: 
+        enable: true # Forces specific unique objects to snap to pool floor/surface Z coordinates
+        pool_floor_z: -2.1 # pool depth
+        pool_surface_z: 0.0 # pool frame points downward
+
+      # table_octagon_mode: 
+      #   - none: no refinement
+      #   - table_primary: publish octagon at table XY
+      #   - octagon_primary: publish table at octagon XY
+      #   - midpoint: publish both at shared midpoint XY
+      table_octagon_mode: "midpoint" 
+
+
+        
+    # Object Tracker Parameters
+    tracker:
+      new_object_min_distance_threshold: 0.5 # distance in meters between a new detection and existing tracks to be considered a new object and start a new track
+
+      # relatively strict parameters
+      gating_threshold: 3.5 # Mahalanobis distance threshold (~3 sigma) for associating detections to tracks
+      min_hits: 20 # Consecutive frames a detection must be matched to confirm a new track
+      max_age: 8 # Number of frames to keep a lost track alive before deleting it
+      max_position_jump: 2.0 # Maximum allowed distance (meters) between predictions and measurements
+      conf_to_tent_threshold: 5 # Number of consecutive missed frames before a CONFIRMED track degrades to TENTATIVE
+      tent_init_buffer: 5 # Extra frames allowed for a new TENTATIVE track to initialize before being deleted if unmatched
+    
+      # loose parameters
+      # gating_threshold: 5.0
+      # min_hits: 5
+      # max_age: 15
+      # max_position_jump: 4.0
+      # conf_to_tent_threshold: 10
+      # tent_init_buffer: 10
+
+      # raw detection parameters
+      # gating_threshold: 99.0
+      # min_hits: 1
+      # max_age: 1
+      # max_position_jump: 99.0
+      # conf_to_tent_threshold: 1
+      # tent_init_buffer: 1
 
     # Debug
     log_level: warn
