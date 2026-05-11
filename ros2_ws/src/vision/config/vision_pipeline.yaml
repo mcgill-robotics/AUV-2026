@@ -1,10 +1,10 @@
 front_cam_object_detection:
   ros__parameters:
-    # inpuit / output topics
-    topics:
-      image: /zed/zed_node/rgb/color/rect/image # this will be the input topic if sim=true and no zed sdk is available, this will be set to &front_enhanced_topic if enhance_images is set to true
-      detection_frame: /vision/front_cam/detection_frame # synchronized camera-frame detections + A
     enable_object_detection: true
+    # input / output topics
+    topics:
+      image: /zed/zed_node/rgb/color/rect/image # this will be the input topic if sim=true and no zed sdk is available, this will be set to front_image_enhancement.ros__parameters.output_topic if enhance_images is set to true
+      detection_frame: /vision/front_cam/detection_frame # synchronized camera-frame detections + A
     has_zed_sdk: true
     model:
       relative_path: models/local_rfdetr_onnx_test # inference-models package directory
@@ -68,11 +68,13 @@ front_cam_object_detection:
         saturation: 4 # wrapper-aligned common stereo starting point [0..8]
         sharpness: 4 # wrapper-aligned common stereo starting point [0..8]
         gamma: 8 # wrapper-aligned common stereo starting point [1..9]
-        auto_exposure_gain: false # wrapper-aligned default; when true the manual gain/exposure values are ignored
-        exposure: 25 # wrapper-aligned common stereo starting point [0..100] when auto exposure/gain is disabled
-        gain: 80 # wrapper-aligned common stereo starting point [0..100] when auto exposure/gain is disabled
-        auto_whitebalance: true # wrapper-aligned default; when true the manual white balance temperature is ignored
-        whitebalance_temperature: 2800 # Affected value should be between 2800 and 6500 with a step of 100. 
+        gain: 80 # wrapper-aligned common stereo starting point [0..100] when exposure.auto is false
+        exposure:
+          auto: false # wrapper-aligned default; when true the manual gain/exposure values are ignored
+          value: 25 # wrapper-aligned common stereo starting point [0..100] when exposure.auto is false
+        white_balance:
+          auto: true # wrapper-aligned default; when true the manual white balance temperature is ignored
+          temperature: 2800 # Affected value should be between 2800 and 6500 with a step of 100. 
                                        # Setting a value will automatically set WHITEBALANCE_AUTO to 0. 
         led_status: -1 # -1 leaves the SDK/camera default
 
@@ -113,16 +115,15 @@ front_cam_object_detection:
         margin_px: 20 # The number of pixels to exclude from the border
         labels: ["gate"] # List of labels to apply border exclusion to
 
-    debug:
-      publish:
-        camera_info: true # publish CameraInfo for the front camera feed using ZED left-camera intrinsics
-        annotated:
-          enable: true # publishes the front camera feed topic at detection_frame_topic + /annotated, toggled raw/annotated at runtime via service
-          frequency: 1 # publish annotated image every N detection frames
-        depth:
-          enable: false # publish raw 32FC1 depth map image
-          compressed: false # publish depth map as compressed 16-bit PNG
-          frequency: 5 # publish depth image every N frames
+    debug_publish:
+      camera_info: true # publish CameraInfo for the front camera feed using ZED left-camera intrinsics
+      annotated:
+        enable: true # publishes the front camera feed topic at detection_frame_topic + /annotated, toggled raw/annotated at runtime via service
+        frequency: 1 # publish annotated image every N detection frames
+      depth:
+        enable: false # publish raw 32FC1 depth map image
+        compressed: false # publish depth map as compressed 16-bit PNG
+        frequency: 5 # publish depth image every N frames
     stream_ip: "127.0.1.1" # may be used by ZED ROS Wrapper or ZED SDK directly
     stream_port: 30000
 

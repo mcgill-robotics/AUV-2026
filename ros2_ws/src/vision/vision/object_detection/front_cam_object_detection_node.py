@@ -54,8 +54,9 @@ class FrontCamObjectDetectorNode():
             ("zed.image.saturation", sl.VIDEO_SETTINGS.SATURATION),
             ("zed.image.sharpness", sl.VIDEO_SETTINGS.SHARPNESS),
             ("zed.image.gamma", sl.VIDEO_SETTINGS.GAMMA),
-            ("zed.image.auto_exposure_gain", sl.VIDEO_SETTINGS.AEC_AGC),
-            ("zed.image.auto_whitebalance", sl.VIDEO_SETTINGS.WHITEBALANCE_AUTO),
+            ("zed.image.gain", sl.VIDEO_SETTINGS.GAIN),
+            ("zed.image.exposure.auto", sl.VIDEO_SETTINGS.AEC_AGC),
+            ("zed.image.white_balance.auto", sl.VIDEO_SETTINGS.WHITEBALANCE_AUTO),
             ("zed.image.led_status", sl.VIDEO_SETTINGS.LED_STATUS),
         )
     else:
@@ -78,12 +79,12 @@ class FrontCamObjectDetectorNode():
         self.node.declare_parameter('model.class_names', Parameter.Type.STRING_ARRAY)
         self.node.declare_parameter('model.path', Parameter.Type.STRING)
         self.node.declare_parameter('qos.queue_size', Parameter.Type.INTEGER)
-        self.node.declare_parameter('debug.publish.annotated.enable', Parameter.Type.BOOL)
-        self.node.declare_parameter('debug.publish.annotated.frequency', Parameter.Type.INTEGER)
-        self.node.declare_parameter('debug.publish.camera_info', Parameter.Type.BOOL)
-        self.node.declare_parameter('debug.publish.depth.enable', Parameter.Type.BOOL)
-        self.node.declare_parameter('debug.publish.depth.compressed', Parameter.Type.BOOL)
-        self.node.declare_parameter('debug.publish.depth.frequency', Parameter.Type.INTEGER)
+        self.node.declare_parameter('debug_publish.annotated.enable', Parameter.Type.BOOL)
+        self.node.declare_parameter('debug_publish.annotated.frequency', Parameter.Type.INTEGER)
+        self.node.declare_parameter('debug_publish.camera_info', Parameter.Type.BOOL)
+        self.node.declare_parameter('debug_publish.depth.enable', Parameter.Type.BOOL)
+        self.node.declare_parameter('debug_publish.depth.compressed', Parameter.Type.BOOL)
+        self.node.declare_parameter('debug_publish.depth.frequency', Parameter.Type.INTEGER)
         self.node.declare_parameter('collection.depth.enable', Parameter.Type.BOOL)
         self.node.declare_parameter('collection.depth.dir', Parameter.Type.STRING)
         self.node.declare_parameter("compressed", Parameter.Type.BOOL)
@@ -124,11 +125,11 @@ class FrontCamObjectDetectorNode():
         self.node.declare_parameter("zed.image.saturation", Parameter.Type.INTEGER)
         self.node.declare_parameter("zed.image.sharpness", Parameter.Type.INTEGER)
         self.node.declare_parameter("zed.image.gamma", Parameter.Type.INTEGER)
+        self.node.declare_parameter("zed.image.exposure.auto", Parameter.Type.BOOL)
+        self.node.declare_parameter("zed.image.exposure.value", Parameter.Type.INTEGER)
         self.node.declare_parameter("zed.image.gain", Parameter.Type.INTEGER)
-        self.node.declare_parameter("zed.image.exposure", Parameter.Type.INTEGER)
-        self.node.declare_parameter("zed.image.auto_exposure_gain", Parameter.Type.BOOL)
-        self.node.declare_parameter("zed.image.auto_whitebalance", Parameter.Type.BOOL)
-        self.node.declare_parameter("zed.image.whitebalance_temperature", Parameter.Type.INTEGER)
+        self.node.declare_parameter("zed.image.white_balance.auto", Parameter.Type.BOOL)
+        self.node.declare_parameter("zed.image.white_balance.temperature", Parameter.Type.INTEGER)
         self.node.declare_parameter("zed.image.led_status", Parameter.Type.INTEGER)
 
         # we consume stream_ip and sim properties for zed sdk configuration
@@ -194,14 +195,14 @@ class FrontCamObjectDetectorNode():
             self.node.get_parameter('topics.detection_frame').get_parameter_value().string_value
         )
         queue_size = self.node.get_parameter('qos.queue_size').get_parameter_value().integer_value
-        self.publish_annotated_image = self.node.get_parameter('debug.publish.annotated.enable').get_parameter_value().bool_value
+        self.publish_annotated_image = self.node.get_parameter('debug_publish.annotated.enable').get_parameter_value().bool_value
         self.annotated_image_enabled = self.publish_annotated_image
-        self.publish_annotated_every_n_frames = self.node.get_parameter('debug.publish.annotated.frequency').get_parameter_value().integer_value
-        self.publish_camera_info = self.node.get_parameter('debug.publish.camera_info').get_parameter_value().bool_value
-        self.publish_depth_image = self.node.get_parameter('debug.publish.depth.enable').get_parameter_value().bool_value
-        self.publish_depth_compressed = self.node.get_parameter('debug.publish.depth.compressed').get_parameter_value().bool_value
+        self.publish_annotated_every_n_frames = self.node.get_parameter('debug_publish.annotated.frequency').get_parameter_value().integer_value
+        self.publish_camera_info = self.node.get_parameter('debug_publish.camera_info').get_parameter_value().bool_value
+        self.publish_depth_image = self.node.get_parameter('debug_publish.depth.enable').get_parameter_value().bool_value
+        self.publish_depth_compressed = self.node.get_parameter('debug_publish.depth.compressed').get_parameter_value().bool_value
         self.broadcast_vio_tf = self.node.get_parameter('pose.vio.broadcast_tf').get_parameter_value().bool_value
-        self.publish_depth_every_n_frames = self.node.get_parameter('debug.publish.depth.frequency').get_parameter_value().integer_value
+        self.publish_depth_every_n_frames = self.node.get_parameter('debug_publish.depth.frequency').get_parameter_value().integer_value
         self.collect_depth_image = self.node.get_parameter('collection.depth.enable').get_parameter_value().bool_value
         self.compressed = self.node.get_parameter('compressed').get_parameter_value().bool_value
         self.enable_object_detection = self.node.get_parameter('enable_object_detection').get_parameter_value().bool_value
@@ -564,7 +565,7 @@ class FrontCamObjectDetectorNode():
         applied_settings = []
         for parameter_name, setting in self.ZED_RUNTIME_CAMERA_SETTINGS:
             value = None
-            if parameter_name in {"Zed.image.auto_exposure_gain", "zed.image.auto_whitebalance"}:
+            if parameter_name in {"Zed.image.exposure.auto", "zed.image.white_balance.auto"}:
                 value = int(self.node.get_parameter(parameter_name).get_parameter_value().bool_value)
             else:
                 value = self.node.get_parameter(parameter_name).get_parameter_value().integer_value
@@ -577,10 +578,10 @@ class FrontCamObjectDetectorNode():
                 )
             applied_settings.append(f"{parameter_name}={value}")
 
-        if not self.node.get_parameter('zed.image.auto_exposure_gain').get_parameter_value().bool_value:
+        if not self.node.get_parameter('zed.image.exposure.auto').get_parameter_value().bool_value:
             for parameter_name, setting in (
                 ("zed.image.gain", sl.VIDEO_SETTINGS.GAIN),
-                ("zed.image.exposure", sl.VIDEO_SETTINGS.EXPOSURE),
+                ("zed.image.exposure.value", sl.VIDEO_SETTINGS.EXPOSURE),
             ):
                 value = self.node.get_parameter(parameter_name).get_parameter_value().integer_value
                 err = self.zed.set_camera_settings(setting, value)
@@ -591,9 +592,9 @@ class FrontCamObjectDetectorNode():
                     )
                 applied_settings.append(f"{parameter_name}={value}")
 
-        if not self.node.get_parameter('zed.image.auto_whitebalance').get_parameter_value().bool_value:
+        if not self.node.get_parameter('zed.image.white_balance.auto').get_parameter_value().bool_value:
             value = self.node.get_parameter(
-                'zed.image.whitebalance_temperature'
+                'zed.image.white_balance.temperature'
             ).get_parameter_value().integer_value
             err = self.zed.set_camera_settings(
                 sl.VIDEO_SETTINGS.WHITEBALANCE_TEMPERATURE,
@@ -602,9 +603,9 @@ class FrontCamObjectDetectorNode():
             if err != sl.ERROR_CODE.SUCCESS:
                 self.zed.close()
                 raise RuntimeError(
-                    f"Failed to set zed.image.whitebalance_temperature={value} on the ZED camera: {err}"
+                    f"Failed to set zed.image.white_balance.temperature={value} on the ZED camera: {err}"
                 )
-            applied_settings.append(f"zed.image.whitebalance_temperature={value}")
+            applied_settings.append(f"zed.image.white_balance.temperature={value}")
 
         controls_suffix = f" | controls: {', '.join(applied_settings)}" if applied_settings else ""
         self.node.get_logger().info(
