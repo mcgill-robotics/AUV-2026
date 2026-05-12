@@ -15,21 +15,39 @@
     "first": "Tab!images",
     "second": {
       "first": {
-        "first": "CallService!startCollection",
+        "first": {
+          "first": "CallService!startCollection",
+          "second": "CallService!aprxzk",
+          "direction": "row"
+        },
         "second": {
-          "first": "CallService!stopCollection",
-          "second": "CallService!2mchwjt",
-          "direction": "column"
+          "first": {
+            "first": "CallService!stopCollection",
+            "second": "CallService!1nbfksc",
+            "direction": "row"
+          },
+          "second": {
+            "first": "CallService!2mchwjt",
+            "second": "CallService!2aw7m5n",
+            "direction": "row"
+          },
+          "direction": "column",
+          "splitPercentage": 46.63790004720733
         },
         "direction": "column",
-        "splitPercentage": 38.41498205210002
+        "splitPercentage": 33.9622642276062
       },
-      "second": "RawMessages!3im8qvp",
+      "second": {
+        "first": "Publish!3wvumo2",
+        "second": "RawMessages!3im8qvp",
+        "direction": "column",
+        "splitPercentage": 44.918435919519034
+      },
       "direction": "column",
-      "splitPercentage": 72.74904380623666
+      "splitPercentage": 66.62897063144871
     },
     "direction": "row",
-    "splitPercentage": 82.38123973304306
+    "splitPercentage": 79.28786359077232
   },
   "configById": {
     "Image!yolo": {
@@ -245,7 +263,6 @@
       "imageMode": {
         "imageTopic": "/vision/front_cam/detection_frame/annotated/compressed",
         "rectifyImage": true,
-        "calibrationTopic": "/vision/front_cam/detection_frame/camera_info",
         "flipHorizontal": false,
         "flipVertical": false,
         "rotation": 0
@@ -302,7 +319,7 @@
         "poseEstimateThetaDeviation": 0.26179939
       },
       "imageMode": {
-        "imageTopic": "/vision/front_cam/detection_frame/depth",
+        "imageTopic": "/vision/down_cam/detections/annotated/compressed",
         "gradient": [
           "#ffffffff",
           "#000000ff"
@@ -315,13 +332,13 @@
     "3D!38qyra4": {
       "cameraState": {
         "perspective": true,
-        "distance": 8.362406704382456,
-        "phi": 61.92678072483178,
-        "thetaOffset": 92.80921199002096,
+        "distance": 15.475618749996581,
+        "phi": 49.51945968270573,
+        "thetaOffset": 87.34153659675235,
         "targetOffset": [
-          0.0008408316044428841,
-          0.00513500234329066,
-          -1.1553842364460539e-18
+          6.383285642656123,
+          0.8007567831598266,
+          -7.146753147924151e-10
         ],
         "target": [
           0,
@@ -346,11 +363,14 @@
         "enableStats": false,
         "labelScaleFactor": 1.4,
         "ignoreColladaUpAxis": false,
-        "meshUpAxis": "y_up"
+        "meshUpAxis": "y_up",
+        "transforms": {
+          "showLabel": false
+        }
       },
       "transforms": {
         "frame:world": {
-          "visible": false
+          "visible": true
         },
         "frame:zed_right_camera_frame_optical": {
           "visible": false
@@ -359,16 +379,16 @@
           "visible": false
         },
         "frame:zed_left_camera_frame_optical": {
-          "visible": false
+          "visible": true
         },
         "frame:zed_camera_link": {
           "visible": false
         },
         "frame:zed_camera_center": {
-          "visible": false
+          "visible": true
         },
         "frame:zed_left_camera_frame": {
-          "visible": false
+          "visible": true
         },
         "frame:map": {
           "visible": true
@@ -545,12 +565,26 @@
       "editingMode": true,
       "foxglovePanelTitle": ""
     },
+    "CallService!aprxzk": {
+      "requestPayload": "{ \"data\": true , \"time_interval\": 1}",
+      "layout": "vertical",
+      "timeoutSeconds": 10,
+      "serviceName": "/vision/down_cam/toggle_collection",
+      "buttonText": "Start Collection"
+    },
     "CallService!stopCollection": {
-      "serviceName": "/image_collection/toggle_front_collection",
-      "requestPayload": "{ \"data\": false , \"time_interval\": 1}",
+      "serviceName": "/vision/front_cam/toggle_collection",
+      "requestPayload": "{\n  \"data\": false,\n  \"time_interval\": 1\n}",
       "buttonText": "Stop Collection",
       "layout": "vertical",
       "timeoutSeconds": 10
+    },
+    "CallService!1nbfksc": {
+      "requestPayload": "{\n  \"data\": false,\n  \"time_interval\": 1\n}",
+      "layout": "vertical",
+      "timeoutSeconds": 10,
+      "serviceName": "/vision/down_cam/toggle_collection",
+      "buttonText": "Stop Collection"
     },
     "CallService!2mchwjt": {
       "requestPayload": "{}",
@@ -559,6 +593,19 @@
       "serviceName": "/vision/front_cam/toggle_annotated_image",
       "foxglovePanelTitle": "Call service /vision/front_cam/toggle_annotated_image",
       "buttonText": "Toggle annotation on front feed"
+    },
+    "CallService!2aw7m5n": {
+      "requestPayload": "{}",
+      "layout": "vertical",
+      "timeoutSeconds": 10,
+      "serviceName": "/vision/down_cam/toggle_annotated_image",
+      "buttonText": "Toggle annotation on down feed",
+      "editingMode": true
+    },
+    "Publish!3wvumo2": {
+      "topicName": "/mission_selector",
+      "datatype": "std_msgs/Int32",
+      "value": "{\n  \"data\": 8\n}"
     },
     "RawMessages!3im8qvp": {
       "topicPath": "/power/batteries/voltage",

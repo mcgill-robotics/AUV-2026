@@ -58,6 +58,8 @@ public:
         float max_position_jump = 2.0,
         int conf_to_tent_threshold = 5,
         int tent_init_buffer = 5,
+        const std::vector<std::string>& semi_persistent_labels = {},
+        int semi_persistent_conf_to_tent_threshold = 300,
         bool enable_gate_midpoint_refinement = true,
         bool enable_board_icon_refinement = true,
         float refinement_plausibility_radius = 5.0
@@ -160,5 +162,8 @@ private:
     std::unordered_map<std::string, int> max_per_class;
     std::unordered_set<std::string> large_structure_labels;
     std::unordered_set<std::string> pipe_labels;
+
+    std::unordered_set<std::string> semi_persistent_labels;
+    int semi_persistent_conf_to_tent_threshold;
 
 };

@@ -1,0 +1,80 @@
+# Python dependencies
+import math
+
+# ROS dependencies
+import py_trees
+import py_trees_ros
+import rclpy
+from rclpy.node import Node
+
+# AUV dependencies
+from controls import navigation_client
+from controls.goal_helpers import set_depth, set_global_yaw, move_global
+
+# Planner dependencies
+from ..mission_behaviour_components import BasicActionBehaviour, TimerBehaviour
+
+
+class RectangleQualificationMission(py_trees.composites.Sequence):
+    """
+    This PyTrees Sequence is the root of the rectangle pre-qualification mission
+    """
+    def __init__(self, yaw_tolerance: float, position_tolerance: float, hold_time: float, timeout: float):
+        super().__init__("RectanglePrequalification", memory=True)
+
+
+
+        # 1 Wait for 10 seconds before starting the mission
+        timer = TimerBehaviour(timer_duration=10.0, name="Orbit Prequal Timer")
+
+        # Build the full mission sequence
+        # 2. Dive to -1.5m
+        dive_leaf = BasicActionBehaviour("Dive", set_depth(z=-1.5, tolerance=position_tolerance, hold_time=hold_time, timeout=timeout))
+        
+        # 3. Go to point where square begins (split this into three segments to accomodate for mcgill pool slant) 
+        go_square_start_leaf = BasicActionBehaviour("Move to rectangle start point", move_global(x=11.5, y=0.0, do_z=False, tolerance=position_tolerance, hold_time=hold_time, timeout=timeout))
+
+        # 3.5 (Add a vision check? no rotation unless object in frame)
+
+        ## Steps 3-7 are to move in a box around the marker for prequal
+        # 4. Move right by a meter 
+        square_bottom_left_leaf = BasicActionBehaviour("Square: Bottom Left corner", move_global(x=11.5, y=-1.0, do_z=False, tolerance=position_tolerance, hold_time=hold_time, timeout=timeout))
+        
+        # 5. Move up by 3 meters and rotate 90 deg
+        square_top_left_leaf = BasicActionBehaviour("Square: Top Left corner", move_global(x=14.5, y=-1.0, yaw=math.pi/2, do_z=False, tolerance=position_tolerance, yaw_tolerance=yaw_tolerance,hold_time=hold_time, timeout=timeout))
+        
+        # 6. Move left by 2 meters and rotate 90 deg
+        square_top_right_leaf = BasicActionBehaviour("Square: Top Right corner", move_global(x=14.5, y=1.0, yaw=math.pi, do_z=False, tolerance=position_tolerance, yaw_tolerance=yaw_tolerance,hold_time=hold_time, timeout=timeout))
+        
+        # 7. Move down by 3 meters and rotate 90 deg
+        square_bottom_right_leaf = BasicActionBehaviour("Square: Bottom Right corner", move_global(x=11.5, y=1.0, yaw=math.pi * 3/2, do_z=False, tolerance=position_tolerance, yaw_tolerance=yaw_tolerance,hold_time=hold_time, timeout=timeout))
+
+        # 8. Move right by a meter and rotate 90 deg
+        # Same as 2 (cant re-use a child).
+        go_square_start_leaf_2 = BasicActionBehaviour("Move back to rectangle start point", move_global(x=11.5, y=0.0, yaw=0.0, do_z=False, tolerance=position_tolerance, yaw_tolerance=yaw_tolerance,hold_time=hold_time, timeout=timeout))
+
+        
+        # 9. Turn 180 degrees to look at the gate
+        turn_leaf = BasicActionBehaviour("Turn 180", set_global_yaw(yaw_rad=math.pi, tolerance=yaw_tolerance, hold_time=hold_time, timeout=timeout))
+        
+        # 10. Return to origin (X=0, Y=0) at the current depth
+        return_leaf = BasicActionBehaviour("Return to Origin", move_global(x=0.0, y=0.0, do_z=False, tolerance=position_tolerance,hold_time=hold_time, timeout=timeout))
+        
+        # 11. Ascend to surface
+        ascend_leaf = BasicActionBehaviour("Ascend to Surface", set_depth(z=0.0, tolerance=position_tolerance, hold_time=hold_time, timeout=timeout))
+        
+
+
+        self.add_children([
+            timer,
+            dive_leaf, 
+            go_square_start_leaf, 
+            square_bottom_left_leaf,
+            square_top_left_leaf, 
+            square_top_right_leaf, 
+            square_bottom_right_leaf,
+            go_square_start_leaf_2,
+            turn_leaf,
+            return_leaf,
+            ascend_leaf
+            ])

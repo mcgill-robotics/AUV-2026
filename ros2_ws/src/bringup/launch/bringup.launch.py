@@ -46,16 +46,31 @@ def generate_launch_description():
         description="Launch propulsion nodes",
     )
 
+    telemetry_condition = DeclareLaunchArgument(
+        "telemetry", 
+        default_value="true", 
+        description="Launch the telemetry dashboard"
+    )
+
+    planner_condition = DeclareLaunchArgument(
+        "planner", 
+        default_value="false", 
+        description="Launch the behaviour tree planner"
+    )
+
     vision = LaunchConfiguration("vision")
     enable_object_detection = LaunchConfiguration("enable_object_detection")
     controls = LaunchConfiguration("controls")
     sensors = LaunchConfiguration("sensors")
     propulsion = LaunchConfiguration("propulsion")
+    telemetry = LaunchConfiguration("telemetry")
+    planner = LaunchConfiguration("planner")
 
     sensors_pkg_path = get_package_share_directory("sensors")
     propulsion_pkg_path = get_package_share_directory("propulsion")
     controls_pkg_path = get_package_share_directory("controls")
     vision_pkg_path = get_package_share_directory("vision")
+    planner_pkg_path = get_package_share_directory("planner")
     ros_tcp_endpoint_pkg_path = get_package_share_directory("ros_tcp_endpoint")
     telemetry_pkg_path = get_package_share_directory("telemetry")
 
@@ -63,6 +78,7 @@ def generate_launch_description():
     propulsion_pkg_file = os.path.join(propulsion_pkg_path, "launch", "propulsion.launch.py")
     controls_launch_file = os.path.join(controls_pkg_path, "launch", "controls.launch.py")
     vision_launch_file = os.path.join(vision_pkg_path, "launch", "vision_pipeline.launch.py")
+    planner_launch_file = os.path.join(planner_pkg_path, "launch", "planner.launch.py")
     ros_tcp_endpoint_launch_file = os.path.join(ros_tcp_endpoint_pkg_path, "launch", "endpoint.py")
     telemetry_launch_file = os.path.join(telemetry_pkg_path, "launch", "dashboard.launch.py")
 
@@ -96,6 +112,15 @@ def generate_launch_description():
         ],
     )
 
+    launch_telemetry = GroupAction(
+        condition=IfCondition(telemetry),
+        actions=[
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(telemetry_launch_file)
+            )
+        ],
+    )
+
     launch_vision = GroupAction(
         condition=IfCondition(vision),
         actions=[
@@ -109,8 +134,15 @@ def generate_launch_description():
         ],
     )
 
-    launch_telemetry = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(telemetry_launch_file)
+
+    launch_planner = GroupAction(
+        condition=IfCondition(planner),
+        actions=[
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(planner_launch_file),
+                launch_arguments={"sim": sim}.items(),
+            )
+        ],
     )
 
     sim_group = GroupAction(
@@ -129,10 +161,13 @@ def generate_launch_description():
         controls_condition,
         sensors_condition,
         propulsion_condition,
+        telemetry_condition,
+        planner_condition,
         launch_sensors,
         launch_propulsion,
         launch_controls,
         launch_vision,
         launch_telemetry,
+        launch_planner,
         sim_group,
     ])
