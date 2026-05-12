@@ -370,6 +370,8 @@ def generate_launch_description():
                 "max_position_jump": default_config["object_map"]["max_position_jump"],
                 "conf_to_tent_threshold": default_config["object_map"]["conf_to_tent_threshold"],
                 "tent_init_buffer": default_config["object_map"]["tent_init_buffer"],
+                "semi_persistent_labels": default_config["object_map"]["semi_persistent_labels"],
+                "semi_persistent_conf_to_tent_threshold": default_config["object_map"]["semi_persistent_conf_to_tent_threshold"],
                 "sim": LaunchConfiguration("sim"),
                 "use_sim_time": LaunchConfiguration("sim"),
             },

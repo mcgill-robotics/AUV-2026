@@ -24,6 +24,7 @@ find_package(message_filters REQUIRED)
 find_package(eigen3_cmake_module REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(sensors REQUIRED)
+find_package(auv_msgs REQUIRED)
 
 add_executable(attitude_controller
   src/attitude_controller.cpp)
@@ -79,6 +80,7 @@ install(DIRECTORY params/
 install(PROGRAMS
   scripts/depth_controller.py
   scripts/planar_controller.py
+  scripts/navigation_server.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

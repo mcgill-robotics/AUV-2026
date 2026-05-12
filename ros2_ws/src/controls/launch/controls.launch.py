@@ -27,6 +27,10 @@ def generate_launch_description():
         FindPackageShare("controls"), "launch", "planar_controller.launch.py"
     ])
 
+    default_navigation = PathJoinSubstitution([
+        FindPackageShare("controls"), "launch", "navigation_server.launch.py"
+    ])
+
     declare_attitude = DeclareLaunchArgument(
         "attitude_controller_launch_file",
         default_value=default_attitude,
@@ -42,11 +46,15 @@ def generate_launch_description():
         default_value=default_superimposer,
         description="Path to the superimposer launch file",
     )
-
     declare_planar_controller = DeclareLaunchArgument(
         "planar_controller_launch_file",
         default_value=default_planar_controller,
         description="Path to the planar controller launch file",
+    )
+    declare_navigation = DeclareLaunchArgument(
+        "navigation_server_launch_file",
+        default_value=default_navigation,
+        description="Path to the navigation server launch file",
     )
 
     attitude_controller_launch = IncludeLaunchDescription(
@@ -76,14 +84,22 @@ def generate_launch_description():
         )
     )
 
+    navigation_server_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            LaunchConfiguration("navigation_server_launch_file")
+        )
+    )
+
     return LaunchDescription([
         declare_sim,
         declare_attitude,
         declare_depth,
         declare_superimposer,
         declare_planar_controller,
+        declare_navigation,
         attitude_controller_launch,
         depth_controller_launch,
         superimposer_launch,
         planar_controller_launch,
+        navigation_server_launch,
     ])

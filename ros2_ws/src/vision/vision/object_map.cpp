@@ -61,6 +61,12 @@ public:
             this->declare_parameter<std::vector<std::string>>("large_structure_labels");
         std::vector<std::string> pipe_labels =
             this->declare_parameter<std::vector<std::string>>("pipe_labels");
+            
+        std::vector<std::string> semi_persistent_labels =
+            this->declare_parameter<std::vector<std::string>>("semi_persistent_labels", {});
+        int semi_persistent_conf_to_tent_threshold =
+            this->declare_parameter<int>("semi_persistent_conf_to_tent_threshold", 300);
+
         std::vector<std::string> max_per_class_labels =
             this->declare_parameter<std::vector<std::string>>("max_per_class_labels");
         std::vector<int64_t> max_per_class_values =
@@ -84,6 +90,8 @@ public:
             max_position_jump,
             conf_to_tent_threshold,
             tent_init_buffer,
+            semi_persistent_labels,
+            semi_persistent_conf_to_tent_threshold,
             enable_gate_midpoint_refinement,
             enable_board_icon_refinement,
             refinement_plausibility_radius
@@ -528,6 +536,12 @@ private:
         }
 
         object_map_publisher->publish(object_map_msg);
+        rclcpp::Time pipeline_end_time = this->now();
+        rclcpp::Duration time_diff = pipeline_end_time - frame_collection_time;
+        RCLCPP_DEBUG(
+            this->get_logger(),
+            "Object map pipeline latency: %.9f seconds",
+            time_diff.seconds());
     }
 
     std::map<std::string, Track> persistent_objects;

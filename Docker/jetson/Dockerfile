@@ -213,6 +213,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-$ROS_DISTRO-eigen3-cmake-module \
     ros-$ROS_DISTRO-nav-msgs \
     ros-$ROS_DISTRO-tf2-geometry-msgs \
+    # Planner packages
+    ros-$ROS_DISTRO-py-trees \
+    ros-$ROS_DISTRO-py-trees-ros-interfaces \
+    ros-$ROS_DISTRO-py-trees-ros \
+    ros-$ROS_DISTRO-py-trees-ros-tutorials \
+    ros-$ROS_DISTRO-py-trees-ros-viewer \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
