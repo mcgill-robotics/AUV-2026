@@ -185,7 +185,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libglew-dev \
     libjpeg-dev \
     libpng-dev \
-    libserialport-dev \
     libswscale-dev \
     libwayland-dev \
     libxkbcommon-dev \
