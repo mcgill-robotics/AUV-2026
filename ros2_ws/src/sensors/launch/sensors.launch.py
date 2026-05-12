@@ -4,7 +4,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.conditions import UnlessCondition
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, AndSubstitution, NotSubstitution
 from launch_ros.actions import Node
 
 
@@ -20,7 +20,11 @@ def generate_launch_description():
         "sim", default_value="false", description="Launch sensors in simulation mode"
     )
     sim = LaunchConfiguration("sim")
-
+    
+    dvl_condition = DeclareLaunchArgument(
+        "dvl", default_value="false", description="Launch DVL drivers. THis is disabled by default as DVL might overheat if sensors is launched above water"
+    )
+    
     # Find other launch files to launch
     xsens_launch_file = os.path.join(
         xsens_pkg_path, "launch", "xsens_mti_node.launch.py"
@@ -35,7 +39,10 @@ def generate_launch_description():
     )
     launch_dvl_a50_serial =  IncludeLaunchDescription(
         PythonLaunchDescriptionSource(dvl_a50_launch_file),
-        condition=UnlessCondition(LaunchConfiguration("sim")),
+        condition=AndSubstitution(
+            NotSubstitution(LaunchConfiguration("sim")), 
+            LaunchConfiguration("dvl")
+        )
     )
 
     # Serial connection group
@@ -91,6 +98,7 @@ def generate_launch_description():
     return LaunchDescription(
         [
             sim_condition,
+            dvl_condition,
             state_aggregator,
             serial_group,
             launch_Xsens_Driver,
