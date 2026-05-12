@@ -11,6 +11,7 @@ from launch_ros.actions import Node
 def generate_launch_description():
     # Get dynamic paths to packages
     xsens_pkg_path = get_package_share_directory("xsens_mti_ros2_driver")
+    dvl_a50_pkg_path = get_package_share_directory("dvl_a50_serial")
     sensors_pkg_path = get_package_share_directory("sensors")
     params = os.path.join(sensors_pkg_path, "params", "sensors_frames.yaml")
 
@@ -26,6 +27,14 @@ def generate_launch_description():
     )
     launch_Xsens_Driver = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(xsens_launch_file),
+        condition=UnlessCondition(LaunchConfiguration("sim")),
+    )
+    
+    dvl_a50_launch_file = os.path.join(
+        dvl_a50_pkg_path, "launch", "dvl_a50_serial.launch.py"
+    )
+    launch_dvl_a50_serial =  IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(dvl_a50_launch_file),
         condition=UnlessCondition(LaunchConfiguration("sim")),
     )
 
@@ -85,6 +94,7 @@ def generate_launch_description():
             state_aggregator,
             serial_group,
             launch_Xsens_Driver,
+            launch_dvl_a50_serial,
             depth_processor,
             imu_processor,
             dvl_processor,
