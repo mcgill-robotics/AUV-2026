@@ -23,6 +23,8 @@ These processed sensor streams are used downstream by the **EKF**, **controller*
     - [**1. Position Transformation Logic**](#1-position-transformation-logic)
     - [**2. Velocity Transformation Logic**](#2-velocity-transformation-logic)
   - [Usage](#usage)
+  - [Sensor driver configuration](#sensor-driver-configuration)
+    - [Waterlinked DVL-a50](#waterlinked-dvl-a50)
   - [Nodes](#nodes)
     - [Published Topics](#published-topics)
     - [Subscribed Topics](#subscribed-topics)
@@ -269,7 +271,43 @@ A good exercise would be re-applying the equation at the beginning of this secti
 
 This package is not used directly by operators. It runs alongside the sensor drivers and publishes processed data for the estimation stack.
 
----
+To launch the package, build the workspace and run the `sensors.launch.py` launch file:
+
+```bash
+source install/setup.bash
+ros2 launch sensors sensors.launch.py
+```
+** Note that be default, the DVL driver is not launched with the sensors package to avoid overheating the DVL when testing above water. To launch the DVL driver alongside the sensors package, set the `dvl` argument to `true` when launching:**
+
+```bash
+ros2 launch sensors sensors.launch.py dvl:=true
+```
+
+
+## Sensor driver configuration
+The sensors package interacts directly with the sensors drivers, so its configuration and output is closely tied to the specific hardware used, notably:
+- IMU: The `xsens_mti_ros2_driver` provided by the [Xsens MTi ROS Driver and Ntrip Client repository](https://github.com/mcgill-robotics/Xsens_MTi_ROS_Driver_and_Ntrip_Client/tree/3271d806070fc13834bb85e67e34a951c7559e77)
+- Depth Sensing: Pressure data directly from embedded code on the [AUV Embedded 2026 repository](https://github.com/mcgill-robotics/auv-embedded-2026), provided to us via the `micro_ros_agent` package.
+- DVL: [dvl_a50_serial](https://github.com/mcgill-robotics/dvl_a50_serial) parses the DVL's serial output.
+
+Configuration and setup for each of these drivers is detailed in the README's of the specific repositories, IMU and DVL repository pinned to submodules in the parent workspace of this package, whereas Depth sensor information can be found in the embedded repository. 
+
+Below is a brief overview of how the sensors package interacts with each of these drivers, and any specific configuration details relevant to the sensors package.
+
+### Waterlinked DVL-a50
+
+There are two drivers available for the DVL-a50, [dvl_a50_serial](https://github.com/mcgill-robotics/dvl_a50_serial) and [dvl_a50](https://github.com/mcgill-robotics/dvl_a50), designed to work with the Waterlinked [serial](https://docs.waterlinked.com/dvl/dvl-protocol/#serial-protocol) and [ethernet JSON](https://docs.waterlinked.com/dvl/dvl-protocol/#json-protocol-tcp) protocols provided by Waterlinked. The tradeoffs between these drivers are outlined in [PR #99](https://github.com/mcgill-robotics/AUV-2026/pull/99).
+
+**The overall decision has been made to use the `dvl_a50_serial` driver for our main DVL interface** The `dvl_a50` ethernet driver will be kept as a backup and for testing purposes (a limited simulation of the JSON protocol is provided in a dev branch of [AUV Unity Simulation](https://github.com/mcgill-robotics/auv-sim-unity/tree/dev/DVLTCPServer)).
+
+The run the `dvl_a50_serial` driver, build the package and launch the driver separately with:
+
+```bash
+# assuming you are at the root of the repository
+./build.sh -p dvl_a50_serial
+source ros2_ws/install/setup.bash
+ros2 launch dvl_a50_serial dvl_a50_serial.launch.py
+```
 
 ## Nodes
 
@@ -300,7 +338,8 @@ The package provides a single ROS node: `sensor_node`.
 |-------|---------|-------------|
 | `imu/data` | Vendor IMU message | Data in imu's body frame. Specific force  |
 | `/sensors/depth/z` | Pressure sensor message | Depth of sensor probe |
-| `/raw/dvl` | Vendor DVL message | TBD |
+| `/dvl/velocity` | Vendor DVL velocity message | DVL velocity in its body frame |
+| `/dvl/dead_reckoning` | Vendor DVL position message | DVL position in its body frame |
 
 ---
 
@@ -314,6 +353,7 @@ The package provides a single ROS node: `sensor_node`.
 - sensor_msgs
 - geometry_msgs
 - message_filters
+- dvl_msgs (submodule in the parent workspace)
 
 ---
 
