@@ -207,3 +207,119 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
             if hasattr(self, 'navigation_client') and self.navigation_client:
                 self.navigation_client.reset_action_client()
 
+
+class ScanBehaviour(py_trees.behaviour.Behaviour):
+    """
+    Performs a ±scan_angle sweep from the current heading to populate
+    the vision object map with nearby objects on both sides.
+
+    Sequence: rotate left → pause → center → pause → right → pause → center → pause → SUCCESS
+    """
+    def __init__(self, scan_angle_deg: float = 30.0, pause_time: float = 1.0, name="Scan Pipes"):
+        super().__init__(name)
+        self.scan_angle_rad = math.radians(scan_angle_deg)
+        self.pause_time = pause_time
+
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+
+        # State tracking
+        self.center_yaw = None
+        self.current_phase = 0
+        self.action_status = ActionStatus.NOT_SENT
+        self.sent_goal = False
+        self.is_pausing = False
+        self.pause_start_time = 0.0
+
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.navigation_client = kwargs['shared_nav_client']
+        self.navigation_client.client_wait_for_server(timeout_sec=5.0)
+        self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
+
+    def initialise(self):
+        self.center_yaw = None
+        self.current_phase = 0
+        self.action_status = ActionStatus.NOT_SENT
+        self.sent_goal = False
+        self.is_pausing = False
+
+    def _scan_offsets(self):
+        """Returns the sequence of yaw offsets from center to execute."""
+        return [
+            -self.scan_angle_rad,   # rotate left
+            0.0,                     # rotate back to center
+            +self.scan_angle_rad,   # rotate right
+            0.0,                     # rotate back to center
+        ]
+
+    def update(self):
+        # Capture center yaw on first tick
+        if self.center_yaw is None:
+            if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.pose is None:
+                self.node.get_logger().warn(f"[{self.name}] Waiting for /sensors/pose.")
+                return py_trees.common.Status.RUNNING
+            current_quat = self.blackboard.sensors.pose.pose.orientation
+            self.center_yaw = yaw_from_quaternion(current_quat)
+
+        offsets = self._scan_offsets()
+
+        # All phases complete
+        if self.current_phase >= len(offsets):
+            return py_trees.common.Status.SUCCESS
+
+        # Handle pause after a completed rotation
+        if self.is_pausing:
+            elapsed = (self.node.get_clock().now().nanoseconds / 1e9) - self.pause_start_time
+            if elapsed >= self.pause_time:
+                self.is_pausing = False
+                self.current_phase += 1
+                self.action_status = ActionStatus.NOT_SENT
+                self.sent_goal = False
+            return py_trees.common.Status.RUNNING
+
+        # Rotation completed → start pause
+        if self.action_status == ActionStatus.SUCCEEDED:
+            self.is_pausing = True
+            self.pause_start_time = self.node.get_clock().now().nanoseconds / 1e9
+            self.node.get_logger().info(f"[{self.name}] Rotation complete, pausing {self.pause_time}s for vision.")
+            return py_trees.common.Status.RUNNING
+
+        if self.action_status == ActionStatus.FAILED:
+            self.node.get_logger().error(f"[{self.name}] Rotation failed.")
+            return py_trees.common.Status.FAILURE
+
+        if self.action_status == ActionStatus.PENDING:
+            return py_trees.common.Status.RUNNING
+
+        # Send rotation goal
+        if self.action_status == ActionStatus.NOT_SENT:
+            offset = offsets[self.current_phase]
+            target_yaw = normalize_angle(self.center_yaw + offset)
+            direction = "left" if offset < 0 else ("right" if offset > 0 else "center")
+            self.node.get_logger().info(
+                f"[{self.name}] Rotating {direction} to {math.degrees(target_yaw):.1f}° "
+                f"(phase {self.current_phase + 1}/{len(offsets)})"
+            )
+            goal = set_global_yaw(yaw_rad=target_yaw, hold_time=0.1, tolerance=0.175 * 3, timeout=30.0)
+            self.navigation_client.send_navigation_goal(
+                goal, self.name, self._on_goal_response, self._on_goal_result
+            )
+            self.action_status = ActionStatus.PENDING
+            self.sent_goal = True
+            return py_trees.common.Status.RUNNING
+
+    def _on_goal_response(self, goal_response: bool):
+        if not goal_response:
+            self.action_status = ActionStatus.FAILED
+
+    def _on_goal_result(self, goal_success: bool):
+        self.action_status = ActionStatus.SUCCEEDED if goal_success else ActionStatus.FAILED
+
+    def terminate(self, new_status):
+        if new_status == py_trees.common.Status.INVALID:
+            if hasattr(self, 'navigation_client') and self.navigation_client:
+                self.navigation_client.reset_action_client()
+
+
+
+
