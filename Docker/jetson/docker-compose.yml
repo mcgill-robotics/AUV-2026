@@ -1,6 +1,6 @@
 services:
   douglas:
-    image: "mcgillrobotics/auv_2026:ros2"
+    image: "mcgillrobotics/auv_2026:ros2-testing"
     runtime: nvidia
     privileged: true
     network_mode: host

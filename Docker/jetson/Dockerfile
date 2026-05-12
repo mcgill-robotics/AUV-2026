@@ -1,51 +1,19 @@
-# Define the L4T_VERSION argument
-ARG L4T_VERSION=l4t-r36.4.0
-ARG IMAGE_NAME=dustynv/ros:humble-desktop-l4t-r36.4.0
-
-FROM ${IMAGE_NAME}
-
-# Get uv
-COPY --from=ghcr.io/astral-sh/uv:0.11.9 /uv /uvx /bin/
-
-ARG ZED_SDK_MAJOR=5
-ARG ZED_SDK_MINOR=1
-ARG ZED_SDK_PATCH=1
-ARG L4T_MAJOR=36
-ARG L4T_MINOR=4
-# Optional: Override ZED SDK URL
-ARG CUSTOM_ZED_SDK_URL=""
-
-# ZED SDK link
-ENV ZED_SDK_URL=${CUSTOM_ZED_SDK_URL:-"https://download.stereolabs.com/zedsdk/${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}.${ZED_SDK_PATCH}/l4t${L4T_MAJOR}.${L4T_MINOR}/jetsons"}
-ARG ZED_SDK_RUN="ZED_SDK_installer.run"
+# Stage 2: Application Dockerfile
+# =============================================================================
+# Extends the base image which caches: OpenCV CUDA, PyTorch, ZED SDK,
+# cuSPARSELt, cuDSS, and numpy. This stage handles workspace-specific
+# setup for fast iteration.
+#
+# Build the base image first:
+#   docker build -f Dockerfile.base -t mcgillrobotics/auv_2026:isaac-ros-base ../../
+# =============================================================================
+ARG BASE_IMAGE=mcgillrobotics/auv_2026:isaac-ros-base
+FROM ${BASE_IMAGE}
 
 # ROS2 distribution
 ARG ROS2_DIST=humble
 
-# UBUNTU Versions
-ARG UBUNTU_RELEASE=22
-ARG UBUNTU_MINOR_RELEASE=04
-
-# ZED ROS2 Wrapper dependencies version
-ARG XACRO_VERSION=2.0.8
-ARG DIAGNOSTICS_VERSION=4.0.0
-ARG AMENT_LINT_VERSION=0.12.11
-ARG ROBOT_LOCALIZATION_VERSION=3.5.3
-ARG ZED_MSGS_VERSION=5.0.0
-ARG NMEA_MSGS_VERSION=2.0.0
-ARG ANGLES_VERSION=1.15.0
-ARG GEOGRAPHIC_INFO_VERSION=1.0.6
-ARG POINTCLOUD_TRANSPORT_VERSION=1.0.18
-ARG POINTCLOUD_TRANSPORT_PLUGINS_VERSION=1.0.11
-ARG RMW_CYCLONEDDS_VERSION=1.3.4
-ARG BACKWARD_ROS_VERSION=1.0.7
-ARG RQT_GUI_VERSION=1.1.7
-ARG ROBOT_STATE_PUBLISHER_VERSION=3.5.2
-ARG USB_CAM_VERSION=0.8.1
-ARG IMAGE_COMMON_VERSION=3.1.12
-ARG MAVROS_VERSION=2.10.1
 # CI has a different runner than the jetson (notably git permissions are different and there is no GPU)
-# Unlike the nvidia dev container, we cannot just install stubs to satisfy the linker, so we just forego installing the zed sdk in CI for the jetson, which is fine since we should test it locally anyways
 ARG CI
 RUN if [ "$CI" = "true" ]; then \
         echo "Building container for CI"; \
@@ -55,40 +23,16 @@ RUN if [ "$CI" = "true" ]; then \
 # set it as env var so build scripts can see it
 ENV CI=${CI}
 
-# Make pip work
-ENV PYPI_URL=https://pypi.jetson-ai-lab.io/jp6/cu126
-ENV PIP_INDEX_URL=https://pypi.jetson-ai-lab.io/jp6/cu126 
-ENV PIP_TRUSTED_HOST=pypi.jetson-ai-lab.io
+# Set up environment
+ENV TZ=Europe/Paris \
+    ROS_DISTRO=${ROS2_DIST} \
+    # assume anything trying to build this container is for jetson, whether CI or physical jetson hardware
+    IS_JETSON=true \
+    UV_SYSTEM_PYTHON=1
 
-# protobuf is a pip package needed by zed sdk, for some reason nvidias pip server killed protobuf in its available packages so you need 
-# the default non nvidia pip index just to download protobuf
-ENV PIP_INDEX_FOR_NON_NVIDIA=https://pypi.python.org/simple
-
-# Set up environment (we in paris because official docs are in paris)
-ENV LANG=C.UTF-8
-ENV LC_ALL=C.UTF-8
-ENV DEBIAN_FRONTEND=noninteractive
-ENV TZ=Europe/Paris 
-ENV ROS_DISTRO=${ROS2_DIST}
-# assume anything trying to build this container is for jetson, whether CI or physical jetson hardware
-ENV IS_JETSON=true
-# Standard Jetson CUDA paths
-ENV CUDA_ROOT=/usr/local/cuda
-ENV PATH=${CUDA_ROOT}/bin:${PATH}
-ENV CUDA_INC_DIR=${CUDA_ROOT}/include
-ENV LD_LIBRARY_PATH=${CUDA_ROOT}/lib64:${LD_LIBRARY_PATH}
-
-# Set UV to system mode and use Jetpack index
-ENV UV_SYSTEM_PYTHON=1 \
-    UV_EXTRA_INDEX_URL=${PIP_INDEX_FOR_NON_NVIDIA}
-
-# Check that this SDK URL exists
-RUN if [ "$(curl -L -I "${ZED_SDK_URL}" -o /dev/null -s -w '%{http_code}\n' | head -n 1)" = "200" ]; then \
-    echo "The URL points to something."; \
-    else \
-    echo "The URL does not point to a .run file or the file does not exist."; \
-    exit 1; \
-    fi
+# =============================================================================
+# 1. System Packages
+# =============================================================================
 
 # Disable apt-get warnings
 RUN curl -fsSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg && \
@@ -96,58 +40,9 @@ RUN curl -fsSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o
     rm -rf /var/lib/apt/lists/* && \
     apt-get clean
 
-# Install SSH server and set up SSH access
-# Hardcoding a password is not secure but eh
-RUN apt-get update && apt-get install -y \
-    openssh-server \
-    xauth \
-    && mkdir /var/run/sshd \
-    && mkdir /root/.ssh \
-    && chmod 700 /root/.ssh \
-    && echo "Port 222" >> /etc/ssh/sshd_config \
-    && echo "PermitRootLogin yes" >> /etc/ssh/sshd_config \
-    && echo 'root:jetson' | chpasswd \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
-
-
-RUN echo "# R${L4T_MAJOR} (release), REVISION: ${L4T_MINOR}" > /etc/nv_tegra_release && \
-    apt-get update -y || true && apt-get install -y --no-install-recommends \
-    build-essential \
-    cmake \
-    curl \
-    gnupg2 \
-    less \
-    libdraco-dev \
-    libgeographic-dev \
-    libusb-1.0-0-dev \
-    python3 \
-    python3-dev \
-    python3-pip \
-    python3-setuptools \
-    wget \
-    zlib1g-dev \
-    zstd && \
-    export PIP_INDEX_URL="${PIP_INDEX_FOR_NON_NVIDIA}" && \
-    pip install  --no-cache-dir protobuf && \
-    rm -rf /var/lib/apt/lists/* && \
-    apt-get clean
-
-RUN cd /tmp && \
-    wget -q --no-check-certificate -O ${ZED_SDK_RUN} \
-    ${ZED_SDK_URL} && \
-    chmod +x ${ZED_SDK_RUN} && \
-    ./${ZED_SDK_RUN} silent skip_python skip_cuda && \
-    # since the installer installs to /usr/local/zed we need to set permissions for lib access
-    # a for all user r for read and X for conditional execute (only allow executing if it is an actual executable)
-    chmod -R a+rX /usr/local/zed && \
-    # Update library cache
-    ldconfig && \
-    rm -rf ${ZED_SDK_RUN} && \
-    ldconfig
-# Install other common development tools
+# Install common development tools
 # Keep these in alphabetical
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone && \ 
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone && \
     apt-get update && apt-get install -y --no-install-recommends \
     git \
     git-lfs \
@@ -171,7 +66,7 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone &
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-#Install graphics, video, c++ dev libraries
+# Install graphics, video, c++ dev libraries
 RUN apt-get update && apt-get install -y --no-install-recommends \
     g++ \
     libc++-dev \
@@ -193,9 +88,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
+# =============================================================================
+# 2. ZED Config
+# =============================================================================
 # copy our configs for zed2i
 COPY Docker/jetson/SN33688213.conf /usr/local/zed/settings/
 
+# =============================================================================
+# 3. ROS 2 Packages
+# =============================================================================
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-$ROS_DISTRO-foxglove-msgs \
     ros-$ROS_DISTRO-joy \
@@ -212,6 +113,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-$ROS_DISTRO-eigen3-cmake-module \
     ros-$ROS_DISTRO-nav-msgs \
     ros-$ROS_DISTRO-tf2-geometry-msgs \
+    ros-$ROS_DISTRO-ament-index-cpp \
     # Planner packages
     ros-$ROS_DISTRO-py-trees \
     ros-$ROS_DISTRO-py-trees-ros-interfaces \
@@ -221,12 +123,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# install micro-ROS
+# =============================================================================
+# 4. micro-ROS
+# =============================================================================
 WORKDIR /opt/ros/micro_ros_ws
-# add repository and 
 RUN git clone -b $ROS_DISTRO https://github.com/micro-ROS/micro_ros_setup.git src/micro_ros_setup
-# build micro-ROS package and agent
-RUN . /opt/ros/$ROS_DISTRO/install/setup.bash && \
+# Source the standard Debian-installed ROS 2 (not /opt/ros/humble/install/ from dustynv)
+RUN . /opt/ros/$ROS_DISTRO/setup.bash && \
     colcon build \
         --parallel-workers $(nproc) \
         --merge-install \
@@ -247,9 +150,9 @@ RUN . /opt/ros/$ROS_DISTRO/install/setup.bash && \
             "--no-warn-unused-cli" && \
     rm -rf build src log
 
-# ----------------------------------------------------------
-# Install Foxglove Bridge from source
-# ----------------------------------------------------------
+# =============================================================================
+# 5. Foxglove Bridge
+# =============================================================================
 WORKDIR /opt/ros/foxglove_ws
 RUN git clone --depth 1 --branch sdk/v0.21.0 https://github.com/foxglove/foxglove-sdk.git src/foxglove-sdk && \
     apt-get update && \
@@ -262,53 +165,37 @@ RUN git clone --depth 1 --branch sdk/v0.21.0 https://github.com/foxglove/foxglov
     --cmake-args -DCMAKE_BUILD_TYPE=Release && \
     rm -rf build log src /var/lib/apt/lists/*
 
-# Get CUDA dependencies to install torch and torchvision
+# =============================================================================
+# 6. Python Dependencies
+# =============================================================================
 WORKDIR /root
-RUN CUSPARSE_LIBRARY_NAME="cusparselt-local-tegra-repo-ubuntu${UBUNTU_RELEASE}${UBUNTU_MINOR_RELEASE}-0.8.1_0.8.1-1_arm64.deb" && \
-    wget https://developer.download.nvidia.com/compute/cusparselt/0.8.1/local_installers/${CUSPARSE_LIBRARY_NAME} && \
-    dpkg -i ${CUSPARSE_LIBRARY_NAME} && \
-    cp /var/cusparselt-local-tegra-repo-ubuntu${UBUNTU_RELEASE}${UBUNTU_MINOR_RELEASE}-0.8.1/cusparselt-*-keyring.gpg /usr/share/keyrings/ && \
-    apt-get update && \
-    apt-get -y install cusparselt-cuda-12 && \
-    rm -rf ${CUSPARSE_LIBRARY_NAME} && \
-    rm -rf /var/lib/apt/lists/* && \
-    apt-get clean
-
-ARG CUSPARSE_SOLVER_NAME="libcudss-linux-sbsa-0.6.0.5_cuda12-archive"
-RUN mkdir -p tmp_cudss && cd tmp_cudss && \
-    curl -L -O https://developer.download.nvidia.com/compute/cudss/redist/libcudss/linux-sbsa/${CUSPARSE_SOLVER_NAME}.tar.xz && \
-    tar xf ${CUSPARSE_SOLVER_NAME}.tar.xz && \
-    cp -a ${CUSPARSE_SOLVER_NAME}/include/* /usr/local/cuda/include/ && \
-    cp -a ${CUSPARSE_SOLVER_NAME}/lib/* /usr/local/cuda/lib64/ && \
-    rm -rf ${CUSPARSE_SOLVER_NAME} ${CUSPARSE_SOLVER_NAME}.tar.xz
 
 # Copy dependency lists
 COPY Docker/jetson/requirements.txt Docker/jetson/constraints.txt /tmp/
 
-# Install everything in one clean step
-# --no-build-isolation helps with some Jetson-specific wheels
+# Install Python packages. torch/torchvision/torchaudio and opencv are already
+# in the base image - uv will see them as satisfied and skip them.
 RUN uv pip install \
-    -v \ 
+    -v \
     --index-strategy unsafe-best-match \
-    --no-cache \ 
+    --no-cache \
     --no-build-isolation \
+    --system \
     --extra-index-url https://pypi.jetson-ai-lab.io/jp6/cu126 \
-    -r /tmp/requirements.txt \  
+    -r /tmp/requirements.txt \
     -c /tmp/constraints.txt
 
 RUN uv pip install \
     -v \
-    --extra-index-url https://pypi.jetson-ai-lab.io/jp6/cu126 \ 
+    --extra-index-url https://pypi.jetson-ai-lab.io/jp6/cu126 \
     --index-strategy unsafe-best-match \
     --no-deps \
+    --system \
     "inference-models[torch-jp6-cu126,onnx-jp6-cu126]" 
 
-# Install ZED (still separate as it's a local build from git)
-RUN git clone -b v${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}.${ZED_SDK_PATCH} https://github.com/stereolabs/zed-python-api.git  /tmp/zed-python-api && \
-    uv pip install -v --no-deps --no-build-isolation /tmp/zed-python-api/src && \
-    rm -rf /tmp/zed-python-api
-
-# Environment Setup
+# =============================================================================
+# 7. User Setup
+# =============================================================================
 ARG USERNAME=douglas
 ARG USER_UID=1000
 ARG USER_GID=$USER_UID
@@ -323,7 +210,7 @@ RUN if getent group $USER_GID; then \
     && useradd --uid $USER_UID --gid $USER_GID -m -s /bin/bash $USERNAME \
     && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
     && chmod 0440 /etc/sudoers.d/$USERNAME \
-    && usermod -aG video,render,dialout -s /bin/bash $USERNAME 
+    && usermod -aG video,render,dialout -s /bin/bash $USERNAME
 
 # Install fixuid for dynamic UID/GID remapping at runtime
 ARG FIXUID_VERSION=0.6.0
@@ -351,13 +238,10 @@ RUN mkdir -p /home/$USERNAME/.config/Ultralytics
 
 WORKDIR /home/$USERNAME/AUV-2026
 
-# Source env variables
-# We use /opt/dependencies_ws which is readable by all
-# RUN echo "source /opt/ros/humble/setup.bash && source /opt/dependencies_ws/install/local_setup.bash && source /opt/ros/micro_ros_ws/install/local_setup.bash && source /opt/ros/foxglove_ws/install/local_setup.bash && source /home/$USERNAME/AUV-2026/ros2_ws/install/setup.bash" >> ~/.bashrc 
-RUN echo "source /opt/ros/humble/setup.bash && source /opt/ros/micro_ros_ws/install/local_setup.bash && source /opt/ros/foxglove_ws/install/local_setup.bash && source /home/$USERNAME/AUV-2026/ros2_ws/install/setup.bash" >> ~/.bashrc 
-RUN echo 'AMENT_PREFIX_PATH=$(echo $AMENT_PREFIX_PATH | sed -E "s|/opt/ros/humble/install:/opt/ros/humble$|/opt/ros/humble:/opt/ros/humble/install|")' >> ~/.bashrc
+# Source env variables - standard Debian path, NO sed hack needed
+RUN echo "source /opt/ros/humble/setup.bash && source /opt/ros/micro_ros_ws/install/local_setup.bash && source /opt/ros/foxglove_ws/install/local_setup.bash && source /home/$USERNAME/AUV-2026/ros2_ws/install/setup.bash" >> ~/.bashrc
 
-# Entrypoint to fix Group IDs to allow GPU access 
+# Entrypoint to fix Group IDs to allow GPU access
 ENTRYPOINT ["entrypoint.sh"]
 
 CMD ["bash"]
