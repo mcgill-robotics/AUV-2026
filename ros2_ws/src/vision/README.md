@@ -339,6 +339,11 @@ Parameters related to header frame IDs, used in TF lookup and message headers, a
 
 Parameters related to the static extrinsic TF chain from `auv_link` to the camera frames, all prefixed with `extrinsics`.
 
+
+#### Filters
+
+See [filters](#filters) for the various filters applied in the front camera node. All parameters are prefixed with `filters`.
+
 #### Debug publishing
 
 Optional debug publishing parameters, all prefixed with `debug_publish`.
@@ -346,6 +351,44 @@ Optional debug publishing parameters, all prefixed with `debug_publish`.
 #### Stream
 
 In simulation mode, if ZED SDK is available, the front camera node can grab frames directly from the ZED Unity Sim stream. The `stream` parameters configure the IP and port for that stream, which defaults to `127.0.1.1:30000`.
+
+#### Collection
+
+Options for timed image collection for dataset capture, all prefixed with `collection`.
+
+
+### Down Camera detection
+
+Almost all parameters are the same as with front camera object detection except with a different camera.
+
+#### V4L2
+
+Parameters related to the V4L2 USB camera interface, all prefixed with `v4l2`.
+
+### Object Map
+
+#### Object Attributes
+
+Qualifiers attributed to objects in the map:
+- `large_structure`: for objects that are part of large structures like gate and table, which should not be mapped near other large structure or near pipes
+- `pipe` : red and white pipes in slalom task
+- `unique`: for objects that should only have one instance in the map, e.g. octagon and table
+- `semi_persistent`: for objects that should be kept in the map longer without detections so their position can be determined during a search sweep
+- `floor` or `surface`: for objects that should be locked to the floor or surface Z height
+- `max_per_class`: for objects that should only have a maximum number of instances in the map, e.g. 4 bins
+
+#### Map filters
+
+See [filters](#filters) for the various filters applied in the object map node. All parameters are prefixed with `map_filters`.
+
+#### Map refinement
+Makes use of other detections and domain knowledge to improve tracking of certain objects. All parameters are prefixed with `map_refinement`.
+
+#### Tracker parameters
+Parameters related to the tracking logic and data association, all prefixed with `tracker`. Three broads tracker setupsare provided in the config:
+- "strict paramters" that prioritize precision and stable tracks
+- "loose parameters" that prioritize recall and more detections at the cost of potentially more unstable tracks
+- "raw detections" that performs no tracking or filtering at the tracker level, which should be used for debugging
 
 The `table_octagon_refinement_mode` parameter controls how table and octagon objects are published:
 - `none`: no refinement, both are published independently
@@ -359,7 +402,7 @@ For the current front-camera pipeline, these controls are intentionally limited 
 - `VisionDetectionFrame` uses `zed_left_camera_frame`
 - `CameraInfo` describes the left rectified camera
 
-#### 
+
 ## Package Scope
 
 This repository package is currently a mixed runtime + model-development package:
