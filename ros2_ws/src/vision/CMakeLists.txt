@@ -58,9 +58,9 @@ ament_target_dependencies(object_map_lib ${CPP_LIBS})
 # ---ROS2 nodes---
 # C++ nodes
 add_executable(object_map 
-    ${PROJECT_NAME}/object_map/object_map_node.cpp
-    include/${PROJECT_NAME}/object_map_node.hpp
-    ${PROJECT_NAME}/object_map.cpp
+    ${PROJECT_NAME}/object_map/object_map.cpp
+    include/${PROJECT_NAME}/object_map.hpp
+    ${PROJECT_NAME}/object_map_main.cpp
 )
 
 

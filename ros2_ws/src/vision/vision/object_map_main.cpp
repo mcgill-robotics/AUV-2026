@@ -1,4 +1,4 @@
-#include "vision/object_map_node.hpp"
+#include "vision/object_map.hpp"
 
 int main(int argc, char** argv)
 {

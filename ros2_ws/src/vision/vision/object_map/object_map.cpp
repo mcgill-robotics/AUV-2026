@@ -1,4 +1,4 @@
-#include "vision/object_map_node.hpp"
+#include "vision/object_map.hpp"
 
 using namespace std;
 
