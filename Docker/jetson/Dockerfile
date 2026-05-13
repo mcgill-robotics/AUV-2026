@@ -201,6 +201,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-$ROS_DISTRO-joy \
     ros-$ROS_DISTRO-joy-teleop \
     ros-$ROS_DISTRO-rosidl-default-generators \
+    ros-$ROS_DISTRO-rclcpp-lifecycle \
     ros-$ROS_DISTRO-vision-msgs \
     ros-$ROS_DISTRO-tf-transformations \
     ros-$ROS_DISTRO-tf2-ros \
