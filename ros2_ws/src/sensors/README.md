@@ -137,9 +137,9 @@ $$
  
  Our goal is to use this reading to calculate the z-position of the vehicle frame, $[r_i^{vi}]_z$. They are related as follows:
 
- $$
+$$
 [r_i^{vi}]_z = [r_i^{si}]_z + [r_i^{vs}]_{z}
- $$
+$$
  
  Where $[r_i^{vs}]_{z}$ is the translation vector from the sensor frame to the vehicle frame, expressed in the inertial frame. 
  
@@ -300,9 +300,13 @@ ros2 launch dvl_a50_serial dvl_a50_serial.launch.py
 
 ## Nodes
 
-The package provides a single ROS node: `sensor_node`.
+The package provides 4 main nodes:
+- `imu_processor`: processes raw IMU data and publishes free acceleration, angular velocity, and orientation in the `auv` frame.
+- `depth_processor`: processes raw depth sensor data and publishes the AUV's depth in the `pool` frame.
+- `dvl_processor`: processes raw DVL data and publishes the AUV's position and velocity in the `pool` frame.
+- `state_aggregator`: aggregates all processed sensor data and publishes the AUV's overall state (pose, velocity, etc.) in the `pool` frame for use by the EKF and other downstream nodes.
 
-- Input: subscribes to all raw sensor data topics. TBD on how DVL data will be read
+- Input: subscribes to all raw sensor data topics.
 
 - Outputs: publishes all processed data to their respective topics
 
@@ -314,7 +318,8 @@ The package provides a single ROS node: `sensor_node`.
 |-------|---------|-------------|
 | `auv_frame/imu` | Imu | Processed imu data in `auv` frame. Free acceleration |
 | `auv_frame/depth` | Float64 | AUV's depth in `pool` frame |
-| `/sensors/dvl` | TBD | TBD |
+| `auv_frame/dvl/position` | PointStamped | AUV's position in `pool` frame |
+| `auv_frame/dvl/velocity` | TwistStamped | AUV's velocity in `pool` frame |
 | `state/pose` | PoseStamped | Aggregated pose of the AUV in `pool` frame | 
 
 **Note on TF Publishing:** The `state_aggregator` node can optionally publish a TF transform (`publish_pose_tf` parameter in `sensors_frames.yaml`) from the global frame (`pool_link`) to the AUV frame (`auv_link`). This is primarily used for Foxglove visualization and provides an easier ROS-native way to transform poses from the global frame to the AUV frame. This is disabled by default for actual missions to save computation.
