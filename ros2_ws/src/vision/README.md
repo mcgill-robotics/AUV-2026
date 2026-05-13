@@ -288,110 +288,46 @@ All parameters and brief descriptions can be found in [config/vision_pipeline.ya
 
 ### Front Camera Parameters
 
-#### Model
-
-Parameters related to the detection model and preprocessing, all prefixed with `model`.
-
-| Parameter             | Description                                                                          |
-| --------------------- | ------------------------------------------------------------------------------------ |
-| `relative_path`       | Relative path to the front camera model configuration (relative to the package root) |
-|                       |
-| `class_names`         | List of class names corresponding to the model output indices                        |
-| `detection_threshold` | Confidence threshold for filtering model detections                                  |
-
-#### Quality of Service
-Parameters related to ROS QoS settings for subscriptions and publications, all prefix with `qos`.
-| Parameter    | Description                                              |
-| ------------ | -------------------------------------------------------- |
-| `queue_size` | Size of the message queue for publishers and subscribers |
-
-#### ZED
-
-Parameters specific to the ZED camera, see [vision_pipeline.yaml](config/vision_pipeline.yaml) for the full list, all prefixed with `zed`. Some especially important ones:
-
-- `resolution.sim` and `resolution.real`: ZED SDK resolution settings for simulation and real hardware. The current defaults are 
+- `zed_resolution.sim` and `zed_resolution.real`: ZED SDK resolution settings for simulation and real hardware. The current defaults are 
   - `SVGA` at `30 FPS` for the sim (to match the Unity ZED X Sim stream resolution) 
   - `VGA` at `30 FPS` for real.
-- `optional_opencv_calibration_file`: path to an optional OpenCV calibration file that can be loaded instead of the factory calibration. Underwater environments may require custom calibration to be performed, and this parameter allows loading that calibration without modifying the code.
-- `depth.mode` algorithm to use for ZED depth retrieval, defaults to `NEURAL` for neural network based depth estimation
+- `zed_optional_opencv_calibration_file`: path to an optional OpenCV calibration file that can be loaded instead of the factory calibration. Underwater environments may require custom calibration to be performed, and this parameter allows loading that calibration without modifying the code.
+- `zed_depth_mode` algorithm to use for ZED depth retrieval, defaults to `NEURAL` for neural network based depth estimation
 
-#### Image 
-
-Image processing parameters, all prefixed with `image`.
-
-#### Pose
-
-Parameters related to pose sources, all prefixed with `pose_source`.
 
 `front_cam_object_detection` still supports two pose modes:
-- `pose.pose_source: auv_pose`
-- `pose.pose_source: zed_vio`
+- `pose_source: auv_pose`
+- `pose_source: zed_vio`
 
 Current recommended setup:
-- `pose.vio.enable: false`
-- `pose.pose_source: auv_pose`
+- `enable_vio_pose: false`
+- `pose_source: auv_pose`
 - use `state/pose` from `sensors`
 
-If VIO is enabled:
-- the node can publish `/vision/vio_pose`
+If `enable_vio_pose` is true, the node can publish `/vision/vio_pose`
 - it can optionally publish `pool_link -> auv_vio_link`
 
-If `pose.vio.enable` is false, the node skips ZED positional tracking entirely.
-
-#### Frame IDs
-
-Parameters related to header frame IDs, used in TF lookup and message headers, all prefixed with `frame_id`.
-
-#### Extrinsics
-
-Parameters related to the static extrinsic TF chain from `auv_link` to the camera frames, all prefixed with `extrinsics`.
-
-
-#### Filters
-
-See [the mapping and tracking logic section](#2026-tracking--mapping-logic) for the various filters applied in the front camera node. All parameters are prefixed with `filters`.
-
-#### Debug publishing
-
-Optional debug publishing parameters, all prefixed with `debug_publish`.
-
-#### Stream
+If `enable_vio_pose` is false, the node skips ZED positional tracking entirely.
 
 In simulation mode, if ZED SDK is available, the front camera node can grab frames directly from the ZED Unity Sim stream. The `stream` parameters configure the IP and port for that stream, which defaults to `127.0.1.1:30000`.
 
-#### Collection
-
-Options for timed image collection for dataset capture, all prefixed with `collection`.
-
-
-### Down Camera detection
-
-Almost all parameters are the same as with front camera object detection except with a different camera.
-
-#### V4L2
-
-Parameters related to the V4L2 USB camera interface, all prefixed with `v4l2`.
 
 ### Object Map
 
-#### Object Attributes
 
 Qualifiers attributed to objects in the map:
-- `large_structure`: for objects that are part of large structures like gate and table, which should not be mapped near other large structure or near pipes
-- `pipe` : red and white pipes in slalom task
-- `unique`: for objects that should only have one instance in the map, e.g. octagon and table
-- `semi_persistent`: for objects that should be kept in the map longer without detections so their position can be determined during a search sweep
-- `floor` or `surface`: for objects that should be locked to the floor or surface Z height
+- `large_structures`: for objects that are part of large structures like gate and table, which should not be mapped near other large structure or near pipes
+- `pipes`: red and white pipes in slalom task
+- `unique_objects`: for objects that should only have one instance in the map, e.g. octagon and table
+- `semi_persistent_objects`: for objects that should be kept in the map longer without detections so their position can be determined during a search sweep
+- `floor_objects`: for objects that should be locked to the floor Z height
+- `surface_objects`: for objects that should be locked to the surface Z height
 - `max_per_class`: for objects that should only have a maximum number of instances in the map, e.g. 4 bins
 
-#### Map filters
-
-See [the mapping and tracking logic section](#2026-tracking--mapping-logic) for the various filters applied in the object map node. All parameters are prefixed with `map_filters`.
-
-#### Map refinement
+**Map refinement**
 Makes use of other detections and domain knowledge to improve tracking of certain objects. All parameters are prefixed with `map_refinement`. An important parameter to keep in mind is the `plausibility_radius` used in gate and board midpoint refinement, which determines how close the midpoint needs to be to the original detection to be applied, to prevent refining with midpoints from other detections.
 
-#### Tracker parameters
+**Tracker parameters**
 Parameters related to the tracking logic and data association, all prefixed with `tracker`. Three broads tracker setupsare provided in the config:
 - "strict paramters" that prioritize precision and stable tracks
 - "loose parameters" that prioritize recall and more detections at the cost of potentially more unstable tracks
