@@ -134,8 +134,8 @@ class FrontCamObjectDetectorNode():
 
         # we consume stream_ip and sim properties for zed sdk configuration
         self.node.declare_parameter('sim', Parameter.Type.BOOL)
-        self.node.declare_parameter('stream_ip', Parameter.Type.STRING)
-        self.node.declare_parameter('stream_port', Parameter.Type.INTEGER)
+        self.node.declare_parameter('stream.ip', Parameter.Type.STRING)
+        self.node.declare_parameter('stream.port', Parameter.Type.INTEGER)
         self.node.declare_parameter('pose.vio.enable', Parameter.Type.BOOL)
         self.node.declare_parameter('pose.vio.topic', Parameter.Type.STRING)
         self.node.declare_parameter('pose.source', Parameter.Type.STRING)
@@ -281,7 +281,7 @@ class FrontCamObjectDetectorNode():
         self.zed_optional_opencv_calibration_file = self.node.get_parameter(
             'zed.optional_opencv_calibration_file'
         ).get_parameter_value().string_value
-        stream_port = self.node.get_parameter('stream_port').get_parameter_value().integer_value
+        stream_port = self.node.get_parameter('stream.port').get_parameter_value().integer_value
         self.enable_vio = self.node.get_parameter('pose.vio.enable').get_parameter_value().bool_value
         if not self.has_zed_sdk and self.enable_vio:
             self.enable_vio = False
@@ -399,7 +399,7 @@ class FrontCamObjectDetectorNode():
             init_params.input = sl.InputType()
 
             if sim:
-                stream_ip = self.node.get_parameter('stream_ip').get_parameter_value().string_value
+                stream_ip = self.node.get_parameter('stream.ip').get_parameter_value().string_value
                 init_params.set_from_stream(stream_ip, stream_port)
 
             self.image_buffer = sl.Mat()
