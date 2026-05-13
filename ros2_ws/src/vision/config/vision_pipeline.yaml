@@ -5,7 +5,7 @@ front_cam_object_detection:
     image_topic: /zed/zed_node/rgb/color/rect/image # this will be the input topic if sim=true and no zed sdk is available, this will be set to front_image_enhancement.ros__parameters.output_topic if enhance_images is set to true
     detection_frame_topic: /vision/front_cam/detection_frame # synchronized camera-frame detections + A
     has_zed_sdk: true
-    model_relative_path: models/local_rfdetr_onnx_test # inference-models package directory
+    model_relative_path: models/rfdetr_onnx # inference-models package directory
     # WARNING: These class names MUST be manually maintained when changing models to have new classes. 
     # You must also update the `class_names.txt` file in the model package.
     # A mismatch here can crash the vision node.
@@ -158,7 +158,7 @@ down_cam_object_detection:
     auto_focus: false                    # default true; when true, focus_absolute is ignored
     focus_absolute: 7                    # [0..21]    only used when auto_focus is false; default 16
     
-    model_relative_path: models/local_rfdetr_onnx_test
+    model_relative_path: models/rfdetr_onnx
     model_detection_threshold: 0.40
     # WARNING: These class names MUST be manually maintained when changing models to have new classes. 
     # You must also update the `class_names.txt` file in the model package.

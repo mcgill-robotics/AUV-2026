@@ -25,7 +25,7 @@ Configuration is loaded from [config/vision_pipeline.yaml](config/vision_pipelin
 | `sim` | `bool` | `false` | Use simulation mode (sim topics, sim camera settings) |
 | `compressed` | `bool` | `true` | Append `/compressed` to image topic names |
 | `enhance_images` | `bool` | `false` | Enable image enhancement nodes; detection nodes subscribe to enhanced topics when true |
-| `front_model_relative_path` | `string` | `models/local_rfdetr_onnx_test` | Path to front camera model package relative to vision package |
+| `front_model_relative_path` | `string` | `models/rfdetr_onnx` | Path to front camera model package relative to vision package |
 | `down_model_relative_path` | `string` | `models/template_yolo` | Path to down camera model package relative to vision package |
 | `enable_object_detection` | `bool` | `true` | Enable object detection inference globally |
 | `has_zed_sdk` | `bool` | `true` | Whether the ZED SDK is available (set `false` for non-ZED hardware) |
@@ -35,7 +35,7 @@ Example overrides:
 ```bash
 ros2 launch vision vision_pipeline.launch.py sim:=true
 ros2 launch vision vision_pipeline.launch.py compressed:=false
-ros2 launch vision vision_pipeline.launch.py front_model_relative_path:=models/local_rfdetr_onnx_test
+ros2 launch vision vision_pipeline.launch.py front_model_relative_path:=models/rfdetr_onnx
 ```
 
 ## Architecture
