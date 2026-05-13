@@ -256,28 +256,35 @@ That layout is what Foxglove expects for correct camera visualization.
 
 ### Front-Camera Filters
 
-- `enable_border_exclusion` is a simple filter applied before ZED ingestion. For configured labels such as `gate`, any 2D detection touching the image border within `border_exclusion_margin_px` is dropped. This helps reject partial detections at the left/right image edges that often produce unstable depth or incorrect clipped 3D positions.
-
-
+- `gate_top_crop` is a bounding box filter applied to gate detections before ZED ingestion. The lower portion (half by default) of the gate box is cropped off since it is mostly made up of the background, which may lead to poor depth estimation.
+- `border_exclusion` is a simple filter applied before ZED ingestion. For configured labels such as `gate`, any 2D detection touching the image border within `border_exclusion_margin_px` is dropped. This helps reject partial detections at the left/right image edges that often produce unstable depth or incorrect clipped 3D positions.
+  
 ### Object Map Filters
 
-### Tracker
+- `large_structure_separation`: enforces a minimum separation distance between large-structure objects (e.g. gate, table) and other large-structure objects or pipes. This helps prevent false positives and unstable tracks caused by cluttered detections on large structures and pipes.
+- `large_structure_pipe_separation`: because pipe detections are often noisy and can cluster around large structures, this filter enforces a minimum separation distance between pipe detections and large-structure tracks to prevent false positives and unstable tracks.
+- `pipe_distance_truncation`: pipes being very thin structures, depth estimation can be very noisy and produce outliers when the pipe lies far from the camera. This filter truncates pipe detections to a maximum distance from the camera to reject those outliers.
+- `lane_boundary`: Since missions and competitions runs are done in a single lane of a pool, lanes adjacent to the competition lane can be a source of false positives that should be filtered out. This filter discards detections outside a configurable AABB around the competition lane.
 
-The tracker has several 2026-specific constraints:
-- gate refinement from `search_rescue` and `survey_repair`
-- board refinement from `ambulance`, `firetruck`, `fire`, and `blood`
-- observer-facing yaw chosen using the current AUV position
-- large-structure spawn filtering near pipes and other large structures
-- configurable table/octagon refinement mode
-- floor/surface Z locking for selected classes
+### Object Map Refinement
 
-The main tuning and counts are configured in:
-- [config/vision_pipeline.yaml](config/vision_pipeline.yaml)
+- `gate_midpoint`: gates have images of both `search_rescue` and `survey_repair` classes on either entrance. Because depth estimation of the gate can be unrelibable due to bounding box mostly being background, this refinement uses the known physical layout of the gate to refine the gate position by taking the midpoint between the two classes.
+- `board_icon`: similar idea to `gate_midpoint`, the board has two classes `ambulance` and `firetruck` that can be used to refine the board position by using the known physical layout of the board and taking the midpoint between the two classes.
+- `z_axis_locking`: the bins table lane marker and board are known to stick to the floor of the pool. The gate and octagon are known to be floating at the surface. We can use this information to determine the Z position of these objects more reliably by locking them to the known floor or surface Z height.
+- `table_octagon_mode`: the octagon is a structure that will always be placed directly above the table, this information can be used to lock the XY position of either object. This refinement is split into 4 modes:
+  - `none`: no refinement applied
+  - `table_primary`: octagon position is locked to the table position in XY
+  - `octagon_primary`: table position is locked to the octagon position in XY
+  - `midpoint`: both table and octagon positions are locked to the midpoint between their detections in XY
 
-## Front Camera Pose Modes
+### Tracker Filters
 
+- `new_object_min_distance_threshold`: minimum distance in meters between a new detection and existing tracks to be considered a new object and start a new track.
+- `semi_persistent_conf_to_tent_threshold`: how long to keep a semi-persistent object in the map without detections before deleting it. Semi-persistent objects are those with labels that should be kept CONFIRMED for longer, so they survive sweep scans and can be re-matched when they re-enter the FOV
 
 ## Configuration
+
+All parameters and brief descriptions can be found in [config/vision_pipeline.yaml](config/vision_pipeline.yaml). Below is a more detailed breakdown of the most important parameters by category.
 
 ### Front Camera Parameters
 
@@ -342,7 +349,7 @@ Parameters related to the static extrinsic TF chain from `auv_link` to the camer
 
 #### Filters
 
-See [filters](#filters) for the various filters applied in the front camera node. All parameters are prefixed with `filters`.
+See [the mapping and tracking logic section](#2026-tracking--mapping-logic) for the various filters applied in the front camera node. All parameters are prefixed with `filters`.
 
 #### Debug publishing
 
@@ -379,29 +386,16 @@ Qualifiers attributed to objects in the map:
 
 #### Map filters
 
-See [filters](#filters) for the various filters applied in the object map node. All parameters are prefixed with `map_filters`.
+See [the mapping and tracking logic section](#2026-tracking--mapping-logic) for the various filters applied in the object map node. All parameters are prefixed with `map_filters`.
 
 #### Map refinement
-Makes use of other detections and domain knowledge to improve tracking of certain objects. All parameters are prefixed with `map_refinement`.
+Makes use of other detections and domain knowledge to improve tracking of certain objects. All parameters are prefixed with `map_refinement`. An important parameter to keep in mind is the `plausibility_radius` used in gate and board midpoint refinement, which determines how close the midpoint needs to be to the original detection to be applied, to prevent refining with midpoints from other detections.
 
 #### Tracker parameters
 Parameters related to the tracking logic and data association, all prefixed with `tracker`. Three broads tracker setupsare provided in the config:
 - "strict paramters" that prioritize precision and stable tracks
 - "loose parameters" that prioritize recall and more detections at the cost of potentially more unstable tracks
 - "raw detections" that performs no tracking or filtering at the tracker level, which should be used for debugging
-
-The `table_octagon_refinement_mode` parameter controls how table and octagon objects are published:
-- `none`: no refinement, both are published independently
-- `table_primary`: publish the octagon at the table XY
-- `octagon_primary`: publish the table at the octagon XY
-- `midpoint`: publish both at the shared midpoint XY; if only one is seen, use that XY for both
-
-These modes only change the published `VisionObjectArray`. They do not modify the underlying `ObjectTracker` state for table or octagon.
-For the current front-camera pipeline, these controls are intentionally limited to settings that keep the left rectified camera model intact. The node still assumes:
-- detections come from the left camera
-- `VisionDetectionFrame` uses `zed_left_camera_frame`
-- `CameraInfo` describes the left rectified camera
-
 
 ## Package Scope
 
