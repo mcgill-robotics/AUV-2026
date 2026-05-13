@@ -1,0 +1,5 @@
+# Request
+bool open           # true = open gripper, false = close gripper
+---
+# Response
+bool success

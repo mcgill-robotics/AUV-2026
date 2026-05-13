@@ -95,6 +95,8 @@ ObjectTracker::ObjectTracker(
     float max_position_jump,
     int conf_to_tent_threshold,
     int tent_init_buffer,
+    const std::vector<std::string>& semi_persistent_labels,
+    int semi_persistent_conf_to_tent_threshold,
     bool enable_gate_midpoint_refinement,
     bool enable_board_icon_refinement,
     float refinement_plausibility_radius
@@ -121,6 +123,8 @@ ObjectTracker::ObjectTracker(
     this->enable_gate_midpoint_refinement = enable_gate_midpoint_refinement;
     this->enable_board_icon_refinement = enable_board_icon_refinement;
     this->refinement_plausibility_radius = refinement_plausibility_radius;
+    this->semi_persistent_labels = std::unordered_set<std::string>(semi_persistent_labels.begin(), semi_persistent_labels.end());
+    this->semi_persistent_conf_to_tent_threshold = semi_persistent_conf_to_tent_threshold;
 }
 
 // destructor implicitly defined
@@ -427,7 +431,11 @@ void ObjectTracker::handle_unmatched_tracks(const std::vector<size_t>& unmatched
         track.consecutive_hits = 0; 
         
         // Downgrade confirmed tracks that lost detection
-        if (track.state == TrackState::CONFIRMED && track.age > conf_to_tent_threshold) {
+        int effective_threshold = (semi_persistent_labels.count(track.label) > 0)
+            ? semi_persistent_conf_to_tent_threshold
+            : conf_to_tent_threshold;
+
+        if (track.state == TrackState::CONFIRMED && track.age > effective_threshold) {
              track.state = TrackState::TENTATIVE;
         }
     }
@@ -438,11 +446,6 @@ void ObjectTracker::delete_dead_tracks() {
     while (it != tracks.end()) {
         bool delete_track = false;
 
-        // time exceeded
-        if (it->age > max_age) {
-            delete_track = true;
-        }
-        
         // tentative for too long 
         if (it->state == TrackState::TENTATIVE && it->total_updates - it->hits > tent_init_buffer) {
             delete_track = true;

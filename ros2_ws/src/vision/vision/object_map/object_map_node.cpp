@@ -37,6 +37,10 @@ ObjectMapNode::ObjectMapNode() : Node("object_map_node")
         this->declare_parameter<std::vector<std::string>>("object_attributes.large_structure");
     std::vector<std::string> pipe_labels =
         this->declare_parameter<std::vector<std::string>>("object_attributes.pipe");
+    std::vector<std::string> semi_persistent_objects = 
+        this->declare_parameter<std::vector<std::string>>("object_attributes.semi_persistent");
+    int semi_persistent_conf_to_tent_threshold =
+            this->declare_parameter<int>("tracker.semi_persistent_conf_to_tent_threshold", 300);
     std::vector<std::string> max_per_class_labels =
         this->declare_parameter<std::vector<std::string>>("max_per_class_labels");
     std::vector<int64_t> max_per_class_values =
@@ -62,6 +66,8 @@ ObjectMapNode::ObjectMapNode() : Node("object_map_node")
         max_position_jump,
         conf_to_tent_threshold,
         tent_init_buffer,
+        semi_persistent_objects,
+        semi_persistent_conf_to_tent_threshold,
         enable_gate_midpoint_refinement,
         enable_board_icon_refinement,
         refinement_plausibility_radius
@@ -503,5 +509,11 @@ void ObjectMapNode::publish_object_map(const std::vector<Track>& tracks)
     }
 
     object_map_publisher->publish(object_map_msg);
+    rclcpp::Time pipeline_end_time = this->now();
+        rclcpp::Duration time_diff = pipeline_end_time - frame_collection_time;
+        RCLCPP_DEBUG(
+            this->get_logger(),
+            "Object map pipeline latency: %.9f seconds",
+            time_diff.seconds());
 }
 

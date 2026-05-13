@@ -249,6 +249,13 @@ object_map:
         - "table"
         - "board"
         - "octagon"
+        - "search_rescue"
+        - "survey_repair"
+
+      semi_persistent:
+        - "red_pipe"
+        - "white_pipe"
+
       floor: 
         - "bin_structure"
         - "table"
@@ -320,11 +327,15 @@ object_map:
     # Object Tracker Parameters
     tracker:
       new_object_min_distance_threshold: 0.5 # distance in meters between a new detection and existing tracks to be considered a new object and start a new track
+      # Semi-persistent tracking: keeps tracks for these labels CONFIRMED for longer, 
+      # so they survive sweep scans and can be re-matched when they re-enter the FOV. 
+      # Value is in frames (e.g. 300 = 10s at 30fps).
+      semi_persistent_conf_to_tent_threshold: 300
 
       # relatively strict parameters
       gating_threshold: 3.5 # Mahalanobis distance threshold (~3 sigma) for associating detections to tracks
       min_hits: 20 # Consecutive frames a detection must be matched to confirm a new track
-      max_age: 8 # Number of frames to keep a lost track alive before deleting it
+      max_age: 8 # Number of frames to keep a lost track alive before deleting it [CURRENTLY UNUSED]      
       max_position_jump: 2.0 # Maximum allowed distance (meters) between predictions and measurements
       conf_to_tent_threshold: 5 # Number of consecutive missed frames before a CONFIRMED track degrades to TENTATIVE
       tent_init_buffer: 5 # Extra frames allowed for a new TENTATIVE track to initialize before being deleted if unmatched
@@ -346,7 +357,7 @@ object_map:
       # tent_init_buffer: 1
 
     # Debug
-    log_level: warn
+    log_level: info
 
       
 

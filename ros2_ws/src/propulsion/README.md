@@ -20,7 +20,7 @@ This process occurs in two stages:
     - [Dependencies](#dependencies)
     - [Building](#building)
     - [Running](#running)
-    - [License](#license)
+  - [License](#license)
 
 ## Overview
 The [wrench](https://docs.ros.org/en/noetic/api/geometry_msgs/html/msg/Wrench.html) consists of forces AND torques on the X,Y,Z axes. These are distributed to the thrusters using the following allocation matrix:
@@ -57,7 +57,7 @@ The propulsion package is not for direct use, it is used through publishing effo
 Publishing a `geometry_msgs/Wrench` message onto `/controls/total_effort` topic:
 
 
-        ros2 topic pub /controls/effort geometry_msgs/msg/Wrench "{force: {x: 1.0, y: 0.0, z: 0.0}, torque: {x: 0.0, y: 0.0, z: 0.0}}" 
+        ros2 topic pub /controls/total_effort geometry_msgs/msg/Wrench "{force: {x: 1.0, y: 0.0, z: 0.0}, torque: {x: 0.0, y: 0.0, z: 0.0}}" 
 
 
 ## Nodes
@@ -116,6 +116,6 @@ Launch all package nodes
 | :--- | :--- | :--- | 
 | `sim` | `false` | Run in simulation mode
 
-### License
+## License
 
 The source code is released under a GPLv3 license.

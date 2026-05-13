@@ -28,11 +28,12 @@ set(msg_files
 set(srv_files
 	"srv/SetInt32.srv"
 	"srv/AutomaticCapture.srv"
+	"srv/ShootTorpedo.srv"
+	"srv/SetGripper.srv"
 )
 
 set(action_files
-	"action/Effort.action"
-	"action/StateQuaternion.action"
+	"action/AUVNavigate.action"
 )
 
 # find dependencies
