@@ -2,272 +2,244 @@ front_cam_object_detection:
   ros__parameters:
     enable_object_detection: true
     # input / output topics
-    topics:
-      image: /zed/zed_node/rgb/color/rect/image # this will be the input topic if sim=true and no zed sdk is available, this will be set to front_image_enhancement.ros__parameters.output_topic if enhance_images is set to true
-      detection_frame: /vision/front_cam/detection_frame # synchronized camera-frame detections + A
+    image_topic: /zed/zed_node/rgb/color/rect/image # this will be the input topic if sim=true and no zed sdk is available, this will be set to front_image_enhancement.ros__parameters.output_topic if enhance_images is set to true
+    detection_frame_topic: /vision/front_cam/detection_frame # synchronized camera-frame detections + A
     has_zed_sdk: true
-    model:
-      relative_path: models/local_rfdetr_onnx_test # inference-models package directory
-      # WARNING: These class names MUST be manually maintained when changing models to have new classes. 
-      # You must also update the `class_names.txt` file in the model package.
-      # A mismatch here can crash the vision node.
-      class_names:
-        - "gate"
-        - "lane_marker"
-        - "red_pipe"
-        - "white_pipe"
-        - "octagon"
-        - "table"
-        - "bin"
-        - "board"
-        - "survey_repair"
-        - "search_rescue"
-        - "compass"
-        - "tools"
-        - "lifebuoy"
-        - "sos"
-        - "ambulance"
-        - "firetruck"
-        - "blood"
-        - "fire"
-        - "bin_structure"
-      detection_threshold: 0.40
-    qos:
-      queue_size: 10
+    model_relative_path: models/local_rfdetr_onnx_test # inference-models package directory
+    # WARNING: These class names MUST be manually maintained when changing models to have new classes. 
+    # You must also update the `class_names.txt` file in the model package.
+    # A mismatch here can crash the vision node.
+    model_class_names:
+      - "gate"
+      - "lane_marker"
+      - "red_pipe"
+      - "white_pipe"
+      - "octagon"
+      - "table"
+      - "bin"
+      - "board"
+      - "survey_repair"
+      - "search_rescue"
+      - "compass"
+      - "tools"
+      - "lifebuoy"
+      - "sos"
+      - "ambulance"
+      - "firetruck"
+      - "blood"
+      - "fire"
+      - "bin_structure"
+    model_detection_threshold: 0.40
+    queue_size: 10
     # ZED SDK parameters
-    zed:
-      resolution:
-        sim: SVGA # resolution for Unity/stream input
-        real: VGA # wrapper-aligned starting point for the real ZED 2i
-      fps:
-        sim: 30 # FPS for Unity/stream input
-        real: 30 # FPS for the real ZED 2i
-      flip_mode: 'OFF' # OFF, ON, or AUTO
-      self_calib: false # wrapper-aligned default
-      enable_right_side_measure: false # keep left-aligned processing only
-      sdk_verbose: 1 # wrapper-aligned SDK verbosity
-      sdk_gpu_id: -1 # let the SDK choose the GPU
-      enable_image_enhancement: true # wrapper-aligned enhanced contrast setting
-      open_timeout_sec: 5.0 # wrapper-aligned open timeout
-      async_grab_camera_recovery: false # keep grab() blocking until communication is restored
-      grab_compute_capping_fps: 0.0 # wrapper-aligned compute cap; 0 disables capping
-      enable_image_validity_check: false # wrapper-aligned frame corruption check
-      optional_opencv_calibration_file: '' # optional OpenCV override for factory calibration
-      depth:
-        stabilization: 30 # init-time ZED depth stabilization; forced to 0 when enable_vio is false to avoid implicit tracking enablement
-        mode: NEURAL # NEURAL or NEURAL_PLUS
-        minimum_distance: 0.2 # minimum depth range in meters used by the ZED SDK
-        maximum_distance: 20.0 # maximum depth range in meters used by the ZED SDK
-        confidence_threshold: 95 # ZED SDK confidence threshold for depth measurements (0-100)
-        positional_tracking_min_range: 0.3 # minimum range in meters used by ZED positional tracking
-      # ZED runtime image / ISP controls
-      image:
-        brightness: 4 # wrapper-aligned ZED 2i starting point [0..8]
-        contrast: 4 # wrapper-aligned ZED 2i starting point [0..8]
-        hue: 0 # wrapper-aligned ZED 2i starting point [0..11]
-        saturation: 4 # wrapper-aligned common stereo starting point [0..8]
-        sharpness: 4 # wrapper-aligned common stereo starting point [0..8]
-        gamma: 8 # wrapper-aligned common stereo starting point [1..9]
-        gain: 80 # wrapper-aligned common stereo starting point [0..100] when exposure.auto is false
-        exposure:
-          auto: false # wrapper-aligned default; when true the manual gain/exposure values are ignored
-          value: 25 # wrapper-aligned common stereo starting point [0..100] when exposure.auto is false
-        white_balance:
-          auto: true # wrapper-aligned default; when true the manual white balance temperature is ignored
-          temperature: 2800 # Affected value should be between 2800 and 6500 with a step of 100. 
-                                       # Setting a value will automatically set WHITEBALANCE_AUTO to 0. 
-        led_status: -1 # -1 leaves the SDK/camera default
+    zed_resolution:
+      sim: SVGA # resolution for Unity/stream input
+      real: VGA # wrapper-aligned starting point for the real ZED 2i
+    zed_fps:
+      sim: 30 # FPS for Unity/stream input
+      real: 30 # FPS for the real ZED 2i
+    zed_flip_mode: 'OFF' # OFF, ON, or AUTO
+    zed_self_calib: false # wrapper-aligned default
+    zed_enable_right_side_measure: false # keep left-aligned processing only
+    zed_sdk_verbose: 1 # wrapper-aligned SDK verbosity
+    zed_sdk_gpu_id: -1 # let the SDK choose the GPU
+    zed_enable_image_enhancement: true # wrapper-aligned enhanced contrast setting
+    zed_open_timeout_sec: 5.0 # wrapper-aligned open timeout
+    zed_async_grab_camera_recovery: false # keep grab() blocking until communication is restored
+    zed_grab_compute_capping_fps: 0.0 # wrapper-aligned compute cap; 0 disables capping
+    zed_enable_image_validity_check: false # wrapper-aligned frame corruption check
+    zed_optional_opencv_calibration_file: '' # optional OpenCV override for factory calibration
+    zed_depth_stabilization: 30 # init-time ZED depth stabilization; forced to 0 when enable_vio is false to avoid implicit tracking enablement
+    zed_depth_mode: NEURAL # NEURAL or NEURAL_PLUS
+    zed_depth_minimum_distance: 0.2 # minimum depth range in meters used by the ZED SDK
+    zed_depth_maximum_distance: 20.0 # maximum depth range in meters used by the ZED SDK
+    zed_depth_confidence_threshold: 95 # ZED SDK confidence threshold for depth measurements (0-100)
+    zed_depth_positional_tracking_min_range: 0.3 # minimum range in meters used by ZED positional tracking
+    zed_image_brightness: 4 # wrapper-aligned ZED 2i starting point [0..8]
+    zed_image_contrast: 4 # wrapper-aligned ZED 2i starting point [0..8]
+    zed_image_hue: 0 # wrapper-aligned ZED 2i starting point [0..11]
+    zed_image_saturation: 4 # wrapper-aligned common stereo starting point [0..8]
+    zed_image_sharpness: 4 # wrapper-aligned common stereo starting point [0..8]
+    zed_image_gamma: 8 # wrapper-aligned common stereo starting point [1..9]
+    zed_image_gain: 80 # wrapper-aligned common stereo starting point [0..100] when exposure.auto is false
+    zed_image_auto_exposure: false # wrapper-aligned default; when true the manual gain/exposure values are ignored
+    zed_image_exposure: 25 # wrapper-aligned common stereo starting point [0..100] when exposure.auto is false
+    zed_image_auto_white_balance: true # wrapper-aligned default; when true the manual white balance temperature is ignored
+    zed_image_white_balance_temperature: 2800 # Affected value should be between 2800 and 6500 with a step of 100. # Setting a value will automatically set WHITEBALANCE_AUTO to 0. 
+    zed_led_status: -1 # -1 leaves the SDK/camera default
 
     # Positional tracking and pose publication parameters
-    pose:
-      source: auv_pose # auv_pose uses state/pose for synchronized detection frames; zed_vio uses the front ZED VIO estimate
-      auv:
-        topic: state/pose # official aggregated AUV pose used for synchronized detection frames when pose_source=auv_pose
-      vio:
-        enable: false # if false, skip ZED positional tracking and do not publish vision VIO pose/TF
-        topic: /vision/vio_pose # optional topic for publishing the ZED VIO pose estimate; only used if pose.vio.enable is true
-        broadcast_tf: true # if true and pose.vio.enable is true, publish pool_link -> auv_vio_link TF for visualization/debugging
+    pose_source: auv_pose # auv_pose uses state/pose for synchronized detection frames; zed_vio uses the front ZED VIO estimate
+    auv_pose_topic: state/pose # official aggregated AUV pose used for synchronized detection frames when pose_source=auv_pose
+    enable_vio_pose: false # if false, skip ZED positional tracking and do not publish vision VIO pose/TF
+    vio_pose_topic: /vision/vio_pose # optional topic for publishing the ZED VIO pose estimate; only used if pose.vio.enable is true
+    broadcast_vio_tf: true # if true and pose.vio.enable is true, publish pool_link -> auv_vio_link TF for visualization/debugging
 
     # Frame names
-    frame_id:
-      global: pool_link # world frame for synchronized AUV poses and mapped objects
-      auv: auv_link # official body frame; sensors/state estimation should own pool_link -> auv_link
-      vio: auv_vio_link # debug-only VIO child frame published by vision when enabled
-      camera_center: zed_camera_center # static camera mount frame under auv_link
-      detection: zed_left_camera_frame # 3D detection frame used inside VisionDetectionFrame
-      image: zed_left_camera_frame_optical # optical frame for image-like topics such as CameraInfo and debug feeds
+    global_frame_id: pool_link # world frame for synchronized AUV poses and mapped objects
+    auv_frame_id: auv_link # official body frame; sensors/state estimation should own pool_link -> auv_link
+    vio_frame_id: auv_vio_link # debug-only VIO child frame published by vision when enabled
+    camera_center_frame_id: zed_camera_center # static camera mount frame under auv_link
+    detection_frame_id: zed_left_camera_frame # 3D detection frame used inside VisionDetectionFrame
+    image_frame_id: zed_left_camera_frame_optical # optical frame for image-like topics such as CameraInfo and debug feeds
 
-    extrinsics:
-      auv_to_camera_center:
-        xyz: [0.148, 0.0, 0.0]
-        rpy: [0.0, 0.0, 0.0]
-      camera_center_to_detection:
-        xyz: [0.0, 0.06, 0.0]
-        rpy: [0.0, 0.0, 0.0]
-
+    # Extrinsics
+    auv_to_camera_center:
+      xyz: [0.148, 0.0, 0.0]
+      rpy: [0.0, 0.0, 0.0]
+    camera_center_to_detection:
+      xyz: [0.0, 0.06, 0.0]
+      rpy: [0.0, 0.0, 0.0]
+    
     # Detection-time filters / heuristics
-    filters:
-      gate_top_crop: # Removes bottom X% of bounding box for gate to ignore legs/pool floor noise
-        enable: true
-        ratio: 0.50 # The ratio (0.0 to 1.0) of the gate bounding box to keep from the top edge
-      border_exclusion: # Excludes objects that are too close to the border
-        enable: false
-        margin_px: 20 # The number of pixels to exclude from the border
-        labels: ["gate"] # List of labels to apply border exclusion to
+    gate_top_crop: # Removes bottom X% of bounding box for gate to ignore legs/pool floor noise
+      enable: true
+      ratio: 0.50 # The ratio (0.0 to 1.0) of the gate bounding box to keep from the top edge
+    border_exclusion: # Excludes objects that are too close to the border
+      enable: false
+      margin_px: 20 # The number of pixels to exclude from the border
+      labels: ["gate"] # List of labels to apply border exclusion to
 
-    debug_publish:
-      camera_info: true # publish CameraInfo for the front camera feed using ZED left-camera intrinsics
-      annotated:
-        enable: true # publishes the front camera feed topic at detection_frame_topic + /annotated, toggled raw/annotated at runtime via service
-        frequency: 1 # publish annotated image every N detection frames
-      depth:
-        enable: false # publish raw 32FC1 depth map image
-        compressed: false # publish depth map as compressed 16-bit PNG
-        frequency: 5 # publish depth image every N frames
+    publish_camera_info: true # publish CameraInfo for the front camera feed using ZED left-camera intrinsics
+    publish_annotated: true # publishes the front camera feed topic at detection_frame_topic + /annotated, toggled raw/annotated at runtime via service
+    publish_annotated_rate: 1 # publish annotated image every N detection frames
+    publish_depth: true # publish raw 32FC1 depth map image
+    publish_depth_compressed: false # publish depth map as compressed 16-bit PNG
+    publish_depth_rate: 5 # publish depth image every N frames
+    stream_ip: "127.0.1.1" # may be used by ZED ROS Wrapper or ZED SDK directly
+    stream_port: 30000 # may be used by ZED ROS Wrapper or ZED SDK directly
+
+
+
     stream: # may be used by ZED ROS Wrapper or ZED SDK directly
       ip: "127.0.1.1" # may be used by ZED ROS Wrapper or ZED SDK directly
       port: 30000
-
     # Dataset collection
-    collection:
-      interval_seconds: 2.0 # seconds between saved frames when collection is active
-      file_extension: ".png"
-      image: 
-        dir: front_cam_collection # directory for direct-to-disk RGB image saving (toggled via service)
-      depth: 
-        enable: true # flag to enable/disable depth saving
-        dir: depth_collection # directory for direct-to-disk 16-bit millimeter depth saving
-      enable_depth_collection: true # flag to enable/disable depth saving
-    # Logging
+    collection_interval_seconds: 2.0 # seconds between saved frames when collection is active
+    collection_file_extension: ".png"
+    collection_image_dir: front_cam_collection # directory for direct-to-disk RGB image saving (toggled via service)
+    enable_depth_collection: true
+    collection_depth_dir: depth_collection # directory for direct-to-disk depth image saving (toggled via service)    # Logging
     log_level: debug
 
 
 down_cam_object_detection:
   ros__parameters:
     enable_object_detection: true
-    topics: 
-      image: /down_cam/image_raw # this will be the input topic if sim=true, this will be set to down_image_enhancement.ros__parameters.output_topic if enhance_images is set to true
-      detection: /vision/down_cam/detections
-
-    frame_id:
-      camera: "sensors/down_cam"
+    image_topic: /down_cam/image_raw # this will be the input topic if sim=true, this will be set to down_image_enhancement.ros__parameters.output_topic if enhance_images is set to true
+    detection_topic: /vision/down_cam/detections
+    camera_frame_id: "sensors/down_cam"
 
     # Camera hardware (direct capture via cv2.VideoCapture, no usb_cam_node needed)
     # ELP-USB500W02M-AF60 (5MP OV5640, autofocus, 60° FOV)
     # Available MJPEG modes:   640x480@30  800x600@30  1024x768@30  1280x720@30  1280x1024@15  1600x1200@15  1920x1080@15  2592x1944@15
     # Available YUY2 modes:    640x480@30  800x600@30  1024x768@15  1280x720@7.5 1280x1024@7.5 1600x1200@3   1920x1080@3   2592x1944@3
-    V4L2:
-      video_device: "/dev/down_cam"
-      fps: 30
-      # V4L2 image controls (ELP OV5640)
-      # Run `v4l2-ctl -d /dev/videoX --all` on the Jetson with the camera plugged in to verify ranges
-      # v4l2-ctl --list-devices 
-      # v4l2-ctl -d /dev/video2 --all
-      # v4l2-ctl -d /dev/video2 --list-formats-ext
-      image:
-        width: 640
-        height: 480
-        brightness: 8              # [0..15]    default 8
-        contrast: 8                # [0..15]    default 8
-        saturation: 7              # [0..15]    default 7
-        hue: 0                     # [-10..10]  default 0
-        sharpness: 6               # [0..15]    default 6
-        gamma: 7                   # [1..10]    default 7
-        backlight_compensation: 0  # [0..1]     default 0
-        power_line_frequency: 2    # 0=disabled 1=50Hz 2=60Hz; default 2
-        white_balance:
-          auto: false            # default true; when true, white_balance_temperature is ignored
-          temperature: 4500      # [2800..6500] step 1; only used when auto_white_balance is false
-        exposure:
-          auto: 1                     # 1=Manual 3=Aperture Priority (auto); default 3
-          time_absolute: 40           # [4..5000]  only used when auto_exposure is 1 (Manual); default 625
-        focus:
-          auto: false                    # default true; when true, focus_absolute is ignored
-          absolute: 7                    # [0..21]    only used when auto_focus is false; default 16
+    video_device: "/dev/down_cam"
+    fps: 30
+    # V4L2 image controls (ELP OV5640)
+    # Run `v4l2-ctl -d /dev/videoX --all` on the Jetson with the camera plugged in to verify ranges
+    # v4l2-ctl --list-devices 
+    # v4l2-ctl -d /dev/video2 --all
+    # v4l2-ctl -d /dev/video2 --list-formats-ext
+    width: 640
+    height: 480
+    brightness: 8              # [0..15]    default 8
+    contrast: 8                # [0..15]    default 8
+    saturation: 7              # [0..15]    default 7
+    hue: 0                     # [-10..10]  default 0
+    sharpness: 6               # [0..15]    default 6
+    gamma: 7                   # [1..10]    default 7
+    backlight_compensation: 0  # [0..1]     default 0
+    power_line_frequency: 2    # 0=disabled 1=50Hz 2=60Hz; default 2
+    auto_white_balance: false            # default true; when true, white_balance_temperature is ignored
+    white_balance_temperature: 4500      # [2800..6500] step 1; only used when auto_white_balance is false
+    auto_exposure: 1                     # 1=Manual 3=Aperture Priority (auto); default 3
+    exposure_time_absolute: 40           # [4..5000]  only used when auto_exposure is 1 (Manual); default 625
+    auto_focus: false                    # default true; when true, focus_absolute is ignored
+    focus_absolute: 7                    # [0..21]    only used when auto_focus is false; default 16
     
-    model:
-      relative_path: models/local_rfdetr_onnx_test
-      detection_threshold: 0.40
-      # WARNING: These class names MUST be manually maintained when changing models to have new classes. 
-      # You must also update the `class_names.txt` file in the model package.
-      # A mismatch here can crash the vision node.
-      class_names:
-        - "gate"
-        - "lane_marker"
-        - "red_pipe"
-        - "white_pipe"
-        - "octagon"
-        - "table"
-        - "bin"
-        - "board"
-        - "survey_repair"
-        - "search_rescue"
-        - "compass"
-        - "tools"
-        - "lifebuoy"
-        - "sos"
-        - "ambulance"
-        - "firetruck"
-        - "blood"
-        - "fire"
-        - "bin_structure"
-    qos:
-      queue_size: 10
-    debug_publish:
-      annotated:
-        enable: true
-        frequency: 1
-    collection:
-      dir: down_cam_collection
-      interval_seconds: 2.0
-      file_extension: ".png"
+    model_relative_path: models/local_rfdetr_onnx_test
+    model_detection_threshold: 0.40
+    # WARNING: These class names MUST be manually maintained when changing models to have new classes. 
+    # You must also update the `class_names.txt` file in the model package.
+    # A mismatch here can crash the vision node.
+    model_class_names:
+      - "gate"
+      - "lane_marker"
+      - "red_pipe"
+      - "white_pipe"
+      - "octagon"
+      - "table"
+      - "bin"
+      - "board"
+      - "survey_repair"
+      - "search_rescue"
+      - "compass"
+      - "tools"
+      - "lifebuoy"
+      - "sos"
+      - "ambulance"
+      - "firetruck"
+      - "blood"
+      - "fire"
+      - "bin_structure"
+    queue_size: 10
+    
+    publish_annotated: true
+    publish_annotated_rate: 1
+    publish_depth: true
+    publish_depth_compressed: false
+    publish_depth_rate: 5
+    
+    collection_dir: down_cam_collection
+    collection_interval_seconds: 2.0
+    collection_file_extension: ".png"
     log_level: debug
 
 object_map:
   ros__parameters:
     # detection topics set in launch file as they are copies of front_cam_detection and down_cam_detection output
-    topics:
-      object_map: /vision/object_map
+    object_map_topic: /vision/object_map
 
-    frame_id:
-      object_map: "map"
+    large_structures:
+      - "gate"
+      - "table" 
+      - "board"
+      - "bin_structure"
 
-    object_attributes:
+    pipes:
+      - "red_pipe"
+      - "white_pipe"
 
-      large_structure:
-        - "gate"
-        - "table" 
-        - "board"
-        - "bin_structure"
+    unique_objects: 
+      - "gate"
+      - "bin_structure"
+      - "table"
+      - "board"
+      - "octagon"
+      - "search_rescue"
+      - "survey_repair"
 
-      pipe:
-        - "red_pipe"
-        - "white_pipe"
+    # Semi-persistent tracking: keeps tracks for these labels CONFIRMED for longer, 
+    # so they survive sweep scans and can be re-matched when they re-enter the FOV. 
+    # see tracker.semi_persistent_conf_to_tent_threshold for how long they stay CONFIRMED without detections before degrading to TENTATIVE and eventually being deleted.
+    semi_persistent_objects:
+      - "red_pipe"
+      - "white_pipe"
 
-      unique: 
-        - "gate"
-        - "bin_structure"
-        - "table"
-        - "board"
-        - "octagon"
-        - "search_rescue"
-        - "survey_repair"
+    # how long to keep a semi-persistent object in the map without detections before deleting it
+    # Value is in frames (e.g. 300 = 10s at 30fps).
+    semi_persistent_conf_to_tent_threshold: 300
 
-      # Semi-persistent tracking: keeps tracks for these labels CONFIRMED for longer, 
-      # so they survive sweep scans and can be re-matched when they re-enter the FOV. 
-      # see tracker.semi_persistent_conf_to_tent_threshold for how long they stay CONFIRMED without detections before degrading to TENTATIVE and eventually being deleted.
-      semi_persistent:
-        - "red_pipe"
-        - "white_pipe"
 
-      floor: 
-        - "bin_structure"
-        - "table"
-        - "lane_marker"
-        - "board"
-      surface: 
-        - "gate"
-        - "octagon"
+    floor_objects: 
+      - "bin_structure"
+      - "table"
+      - "lane_marker"
+      - "board"
+    surface_objects: 
+      - "gate"
+      - "octagon"
 
     max_per_class:
       gate: 1
@@ -291,73 +263,67 @@ object_map:
       fire: 1
 
     # Object Map Filters
-    map_filters:
-      large_structure_separation: # assume large structures near each other are the same structure
-        enable: true
-        min_distance_m: 2.0  # minimum XY spacing required
-      large_structure_pipe_separation:
-        enable: true
-        min_distance_m: 0.5 # distance in meters between a new detection and existing tracks to be considered a new object and start a new track
-      pipe_distance_truncation:
-        enable: true # Truncates tracking of red/white pipes beyond some distance to reduce noise in map     
-        max_distance_m: 7.0 #  distance used for distance_truncation
-      lane_boundary:
-        enable: false # discard world-frame detections outside the competition lane AABB
-        x_min: -3.0 # back boundary (meters, world frame)
-        x_max: 25.0  # front boundary
-        y_min: -7.5 # right boundary
-        y_max: 7.5  # left boundary
+    large_structure_separation: # assume large structures near each other are the same structure
+      enable: true
+      min_distance_m: 2.0  # minimum XY spacing required
+    large_structure_pipe_separation:
+      enable: true
+      min_distance_m: 0.5 # distance in meters between a new detection and existing tracks to be considered a new object and start a new track
+    pipe_distance_truncation:
+      enable: true # Truncates tracking of red/white pipes beyond some distance to reduce noise in map     
+      max_distance_m: 7.0 #  distance used for distance_truncation
+    lane_boundary:
+      enable: false # discard world-frame detections outside the competition lane AABB
+      x_min: -3.0 # back boundary (meters, world frame)
+      x_max: 25.0  # front boundary
+      y_min: -7.5 # right boundary
+      y_max: 7.5  # left boundary
 
     # Refinement: make use of other detections to improve tracking of certain objects
-    map_refinement:
-      gate_midpoint: true # Uses search_rescue/survey_repair panel detections to refine the gate pose
-      board_icon: true # Uses board icons to refine the board pose and make yaw face the AUV
-      plausibility_radius: 5.0 # Max distance in meters for a refinement to be considered plausible
-    
-      z_axis_locking: 
-        enable: true # Forces specific unique objects to snap to pool floor/surface Z coordinates
-        pool_floor_z: -2.1 # pool depth
-        pool_surface_z: 0.0 # pool frame points downward
+    gate_midpoint: true # Uses search_rescue/survey_repair panel detections to refine the gate pose
+    board_icon: true # Uses board icons to refine the board pose and make yaw face the AUV
+    refinement_plausibility_radius: 5.0 # Max distance in meters for a refinement to be considered plausible
+  
+    z_axis_locking: 
+      enable: true # Forces specific unique objects to snap to pool floor/surface Z coordinates
+      pool_floor_z: -2.1 # pool depth
+      pool_surface_z: 0.0 # pool frame points downward
 
-      # table_octagon_mode: 
-      #   - none: no refinement
-      #   - table_primary: publish octagon at table XY
-      #   - octagon_primary: publish table at octagon XY
-      #   - midpoint: publish both at shared midpoint XY
-      table_octagon_mode: "midpoint" 
+    # table_octagon_mode: 
+    #   - none: no refinement
+    #   - table_primary: publish octagon at table XY
+    #   - octagon_primary: publish table at octagon XY
+    #   - midpoint: publish both at shared midpoint XY
+    table_octagon_mode: "midpoint" 
 
 
         
     # Object Tracker Parameters
-    tracker:
-      new_object_min_distance_threshold: 0.5 # distance in meters between a new detection and existing tracks to be considered a new object and start a new track
-      # how long to keep a semi-persistent object in the map without detections before deleting it
-      # Value is in frames (e.g. 300 = 10s at 30fps).
-      semi_persistent_conf_to_tent_threshold: 300
+    new_object_min_distance_threshold: 0.5 # distance in meters between a new detection and existing tracks to be considered a new object and start a new track
 
-      # relatively strict parameters
-      gating_threshold: 3.5 # Mahalanobis distance threshold (~3 sigma) for associating detections to tracks
-      min_hits: 20 # Consecutive frames a detection must be matched to confirm a new track
-      max_age: 8 # Number of frames to keep a lost track alive before deleting it [CURRENTLY UNUSED]      
-      max_position_jump: 2.0 # Maximum allowed distance (meters) between predictions and measurements
-      conf_to_tent_threshold: 5 # Number of consecutive missed frames before a CONFIRMED track degrades to TENTATIVE
-      tent_init_buffer: 5 # Extra frames allowed for a new TENTATIVE track to initialize before being deleted if unmatched
-    
-      # loose parameters
-      # gating_threshold: 5.0
-      # min_hits: 5
-      # max_age: 15
-      # max_position_jump: 4.0
-      # conf_to_tent_threshold: 10
-      # tent_init_buffer: 10
+    # relatively strict parameters
+    gating_threshold: 3.5 # Mahalanobis distance threshold (~3 sigma) for associating detections to tracks
+    min_hits: 20 # Consecutive frames a detection must be matched to confirm a new track
+    max_age: 8 # Number of frames to keep a lost track alive before deleting it [CURRENTLY UNUSED]      
+    max_position_jump: 2.0 # Maximum allowed distance (meters) between predictions and measurements
+    conf_to_tent_threshold: 5 # Number of consecutive missed frames before a CONFIRMED track degrades to TENTATIVE
+    tent_init_buffer: 5 # Extra frames allowed for a new TENTATIVE track to initialize before being deleted if unmatched
+  
+    # loose parameters
+    # gating_threshold: 5.0
+    # min_hits: 5
+    # max_age: 15
+    # max_position_jump: 4.0
+    # conf_to_tent_threshold: 10
+    # tent_init_buffer: 10
 
-      # raw detection parameters
-      # gating_threshold: 99.0
-      # min_hits: 1
-      # max_age: 1
-      # max_position_jump: 99.0
-      # conf_to_tent_threshold: 1
-      # tent_init_buffer: 1
+    # raw detection parameters
+    # gating_threshold: 99.0
+    # min_hits: 1
+    # max_age: 1
+    # max_position_jump: 99.0
+    # conf_to_tent_threshold: 1
+    # tent_init_buffer: 1
 
     # Debug
     log_level: info

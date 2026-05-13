@@ -36,85 +36,85 @@ class DownCamObjectDetectorNode():
         self.node = node
 
         # ── Model / detection parameters ─────────────────────────
-        self.node.declare_parameter('model.class_names', Parameter.Type.STRING_ARRAY)
-        self.node.declare_parameter('model.path', Parameter.Type.STRING)
-        self.node.declare_parameter('topics.detection', Parameter.Type.STRING)
-        self.node.declare_parameter('qos.queue_size', Parameter.Type.INTEGER)
-        self.node.declare_parameter('debug_publish.annotated.enable', Parameter.Type.BOOL)
-        self.node.declare_parameter('debug_publish.annotated.frequency', Parameter.Type.INTEGER)
-        self.node.declare_parameter("model.detection_threshold", Parameter.Type.DOUBLE)
+        self.node.declare_parameter('model_class_names', Parameter.Type.STRING_ARRAY)
+        self.node.declare_parameter('model_path', Parameter.Type.STRING)
+        self.node.declare_parameter('detection_topic', Parameter.Type.STRING)
+        self.node.declare_parameter('queue_size', Parameter.Type.INTEGER)
+        self.node.declare_parameter('publish_annotated', Parameter.Type.BOOL)
+        self.node.declare_parameter('publish_annotated_rate', Parameter.Type.INTEGER)
+        self.node.declare_parameter("model_detection_threshold", Parameter.Type.DOUBLE)
         self.node.declare_parameter('compressed', Parameter.Type.BOOL)
         self.node.declare_parameter("enable_object_detection", Parameter.Type.BOOL)
         self.node.declare_parameter('sim', Parameter.Type.BOOL)
-        self.node.declare_parameter('topics.image', Parameter.Type.STRING)
+        self.node.declare_parameter('image_topic', Parameter.Type.STRING)
 
         # ── Camera hardware parameters ───────────────────────────
-        self.node.declare_parameter('V4L2.video_device', Parameter.Type.STRING)
-        self.node.declare_parameter('V4L2.image.width', Parameter.Type.INTEGER)
-        self.node.declare_parameter('V4L2.image.height', Parameter.Type.INTEGER)
-        self.node.declare_parameter('V4L2.fps', Parameter.Type.INTEGER)
-        self.node.declare_parameter('frame_id.camera', Parameter.Type.STRING)
+        self.node.declare_parameter('video_device', Parameter.Type.STRING)
+        self.node.declare_parameter('width', Parameter.Type.INTEGER)
+        self.node.declare_parameter('height', Parameter.Type.INTEGER)
+        self.node.declare_parameter('fps', Parameter.Type.INTEGER)
+        self.node.declare_parameter('camera_frame_id', Parameter.Type.STRING)
 
         # ── V4L2 image controls (HD USB Camera) ──────────────────
-        self.node.declare_parameter('V4L2.image.brightness', Parameter.Type.INTEGER)
-        self.node.declare_parameter('V4L2.image.contrast', Parameter.Type.INTEGER)
-        self.node.declare_parameter('V4L2.image.saturation', Parameter.Type.INTEGER)
-        self.node.declare_parameter('V4L2.image.hue', Parameter.Type.INTEGER)
-        self.node.declare_parameter('V4L2.image.sharpness', Parameter.Type.INTEGER)
-        self.node.declare_parameter('V4L2.image.gamma', Parameter.Type.INTEGER)
-        self.node.declare_parameter('V4L2.image.backlight_compensation', Parameter.Type.INTEGER)
-        self.node.declare_parameter('V4L2.image.power_line_frequency', Parameter.Type.INTEGER)
-        self.node.declare_parameter('V4L2.image.white_balance.auto', Parameter.Type.BOOL)
-        self.node.declare_parameter('V4L2.image.white_balance.temperature', Parameter.Type.INTEGER)
-        self.node.declare_parameter('V4L2.image.exposure.auto', Parameter.Type.INTEGER)
-        self.node.declare_parameter('V4L2.image.exposure.time_absolute', Parameter.Type.INTEGER)
-        self.node.declare_parameter('V4L2.image.focus.auto', Parameter.Type.BOOL)
-        self.node.declare_parameter('V4L2.image.focus.absolute', Parameter.Type.INTEGER)
+        self.node.declare_parameter('brightness', Parameter.Type.INTEGER)
+        self.node.declare_parameter('contrast', Parameter.Type.INTEGER)
+        self.node.declare_parameter('saturation', Parameter.Type.INTEGER)
+        self.node.declare_parameter('hue', Parameter.Type.INTEGER)
+        self.node.declare_parameter('sharpness', Parameter.Type.INTEGER)
+        self.node.declare_parameter('gamma', Parameter.Type.INTEGER)
+        self.node.declare_parameter('backlight_compensation', Parameter.Type.INTEGER)
+        self.node.declare_parameter('power_line_frequency', Parameter.Type.INTEGER)
+        self.node.declare_parameter('auto_white_balance', Parameter.Type.BOOL)
+        self.node.declare_parameter('white_balance_temperature', Parameter.Type.INTEGER)
+        self.node.declare_parameter('auto_exposure', Parameter.Type.INTEGER)
+        self.node.declare_parameter('exposure_time_absolute', Parameter.Type.INTEGER)
+        self.node.declare_parameter('auto_focus', Parameter.Type.BOOL)
+        self.node.declare_parameter('focus_absolute', Parameter.Type.INTEGER)
 
         # ── Collection parameters ────────────────────────────────
-        self.node.declare_parameter('collection.dir', Parameter.Type.STRING)
-        self.node.declare_parameter('collection.interval_seconds', Parameter.Type.DOUBLE)
-        self.node.declare_parameter('collection.file_extension', Parameter.Type.STRING)
+        self.node.declare_parameter('collection_dir', Parameter.Type.STRING)
+        self.node.declare_parameter('collection_interval_seconds', Parameter.Type.DOUBLE)
+        self.node.declare_parameter('collection_file_extension', Parameter.Type.STRING)
 
         # ── Read parameters ──────────────────────────────────────
         self.class_names = list(
-            self.node.get_parameter('model.class_names').get_parameter_value().string_array_value
+            self.node.get_parameter('model_class_names').get_parameter_value().string_array_value
         )
         self.node.get_logger().info(f"Class names: {self.class_names}")
 
-        model_path = self.node.get_parameter('model.path').get_parameter_value().string_value
-        detection_topic = self.node.get_parameter('topics.detection').get_parameter_value().string_value
-        queue_size = self.node.get_parameter('qos.queue_size').get_parameter_value().integer_value
+        model_path = self.node.get_parameter('model_path').get_parameter_value().string_value
+        detection_topic = self.node.get_parameter('detection_topic').get_parameter_value().string_value
+        queue_size = self.node.get_parameter('queue_size').get_parameter_value().integer_value
         self.publish_annotated_image = (
-            self.node.get_parameter('debug_publish.annotated.enable').get_parameter_value().bool_value
+            self.node.get_parameter('publish_annotated').get_parameter_value().bool_value
         )
         self.annotated_image_enabled = self.publish_annotated_image
         self.publish_annotated_every_n_frames = (
-            self.node.get_parameter('debug_publish.annotated.frequency').get_parameter_value().integer_value
+            self.node.get_parameter('publish_annotated_rate').get_parameter_value().integer_value
         )
         self.conf_threshold = (
-            self.node.get_parameter('model.detection_threshold').get_parameter_value().double_value
+            self.node.get_parameter('model_detection_threshold').get_parameter_value().double_value
         )
         self.enable_object_detection = (
             self.node.get_parameter('enable_object_detection').get_parameter_value().bool_value
         )
         self.sim = self.node.get_parameter('sim').get_parameter_value().bool_value
-        self.image_topic = self.node.get_parameter('topics.image').get_parameter_value().string_value
+        self.image_topic = self.node.get_parameter('image_topic').get_parameter_value().string_value
 
         # Camera hardware
-        self.video_device = self.node.get_parameter('V4L2.video_device').get_parameter_value().string_value
-        self.image_width = self.node.get_parameter('V4L2.image.width').get_parameter_value().integer_value
-        self.image_height = self.node.get_parameter('V4L2.image.height').get_parameter_value().integer_value
-        self.camera_fps = self.node.get_parameter('V4L2.fps').get_parameter_value().integer_value
-        self.camera_frame_id = self.node.get_parameter('frame_id.camera').get_parameter_value().string_value
+        self.video_device = self.node.get_parameter('video_device').get_parameter_value().string_value
+        self.image_width = self.node.get_parameter('width').get_parameter_value().integer_value
+        self.image_height = self.node.get_parameter('height').get_parameter_value().integer_value
+        self.camera_fps = self.node.get_parameter('fps').get_parameter_value().integer_value
+        self.camera_frame_id = self.node.get_parameter('camera_frame_id').get_parameter_value().string_value
 
         # Collection
         self._collecting = False
         self._last_collection_time = 0.0
         self._frame_counter = 0
-        self.collection_dir = self.node.get_parameter('collection.dir').get_parameter_value().string_value
-        self.collection_interval = self.node.get_parameter('collection.interval_seconds').get_parameter_value().double_value
-        self.collection_extension = self.node.get_parameter('collection.file_extension').get_parameter_value().string_value
+        self.collection_dir = self.node.get_parameter('collection_dir').get_parameter_value().string_value
+        self.collection_interval = self.node.get_parameter('collection_interval_seconds').get_parameter_value().double_value
+        self.collection_extension = self.node.get_parameter('collection_file_extension').get_parameter_value().string_value
 
         self.node.create_service(
             AutomaticCapture,
@@ -187,18 +187,18 @@ class DownCamObjectDetectorNode():
     # Controls with a direct OpenCV constant are applied via cap.set();
     # the rest are applied via v4l2-ctl subprocess.
     V4L2_OPENCV_CONTROLS = (
-        ("V4L2.image.brightness",               cv2.CAP_PROP_BRIGHTNESS),
-        ("V4L2.image.contrast",                 cv2.CAP_PROP_CONTRAST),
-        ("V4L2.image.saturation",               cv2.CAP_PROP_SATURATION),
-        ("V4L2.image.hue",                      cv2.CAP_PROP_HUE),
-        ("V4L2.image.sharpness",                cv2.CAP_PROP_SHARPNESS),
-        ("V4L2.image.gamma",                    cv2.CAP_PROP_GAMMA),
-        ("V4L2.image.white_balance.auto",       cv2.CAP_PROP_AUTO_WB),
-        ("V4L2.image.white_balance.temperature", cv2.CAP_PROP_WB_TEMPERATURE),
-        ("V4L2.image.focus.auto",               cv2.CAP_PROP_AUTOFOCUS),
-        ("V4L2.image.focus.absolute",           cv2.CAP_PROP_FOCUS),
-        ("V4L2.image.exposure.auto",            cv2.CAP_PROP_AUTO_EXPOSURE),
-        ("V4L2.image.exposure.time_absolute",   cv2.CAP_PROP_EXPOSURE),
+        ("brightness",               cv2.CAP_PROP_BRIGHTNESS),
+        ("contrast",                 cv2.CAP_PROP_CONTRAST),
+        ("saturation",               cv2.CAP_PROP_SATURATION),
+        ("hue",                      cv2.CAP_PROP_HUE),
+        ("sharpness",                cv2.CAP_PROP_SHARPNESS),
+        ("gamma",                    cv2.CAP_PROP_GAMMA),
+        ("auto_white_balance",       cv2.CAP_PROP_AUTO_WB),
+        ("white_balance_temperature", cv2.CAP_PROP_WB_TEMPERATURE),
+        ("auto_focus",               cv2.CAP_PROP_AUTOFOCUS),
+        ("focus_absolute",           cv2.CAP_PROP_FOCUS),
+        ("auto_exposure",            cv2.CAP_PROP_AUTO_EXPOSURE),
+        ("exposure_time_absolute",   cv2.CAP_PROP_EXPOSURE),
     )
 
     def _open_camera(self) -> cv2.VideoCapture:

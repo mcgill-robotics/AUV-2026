@@ -8,39 +8,39 @@ ObjectMapNode::ObjectMapNode() : Node("object_map_node")
 
     string front_cam_detection_frame_topic =
         this->declare_parameter<string>("front_cam_detection_frame_topic");
-    string object_map_topic = this->declare_parameter<string>("topics.object_map");
-    auv_frame_id = this->declare_parameter<string>("frame_id.auv");
+    string object_map_topic = this->declare_parameter<string>("object_map_topic");
+    auv_frame_id = this->declare_parameter<string>("frame_id_auv");
 
     float new_object_min_distance_threshold =
-        this->declare_parameter<float>("tracker.new_object_min_distance_threshold");
-    bool large_structure_separation_enabled = this->declare_parameter<bool>("map_filters.large_structure_separation.enable");
+        this->declare_parameter<float>("new_object_min_distance_threshold");
+    bool large_structure_separation_enabled = this->declare_parameter<bool>("large_structure_separation.enable");
     float min_large_structure_separation =
-        this->declare_parameter<float>("map_filters.large_structure_separation.min_distance_m");
-    bool large_structure_pipe_separation_enabled = this->declare_parameter<bool>("map_filters.large_structure_pipe_separation.enable");
+        this->declare_parameter<float>("large_structure_separation.min_distance_m");
+    bool large_structure_pipe_separation_enabled = this->declare_parameter<bool>("large_structure_pipe_separation.enable");
     float min_large_structure_pipe_separation =
-        this->declare_parameter<float>("map_filters.large_structure_pipe_separation.min_distance_m");
-    double gating_threshold = this->declare_parameter<double>("tracker.gating_threshold");
-    int min_hits = this->declare_parameter<int>("tracker.min_hits");
-    int max_age = this->declare_parameter<int>("tracker.max_age");
-    double max_position_jump = this->declare_parameter<double>("tracker.max_position_jump");
-    int conf_to_tent_threshold = this->declare_parameter<int>("tracker.conf_to_tent_threshold");
-    int tent_init_buffer = this->declare_parameter<int>("tracker.tent_init_buffer");
+        this->declare_parameter<float>("large_structure_pipe_separation.min_distance_m");
+    double gating_threshold = this->declare_parameter<double>("gating_threshold");
+    int min_hits = this->declare_parameter<int>("min_hits");
+    int max_age = this->declare_parameter<int>("max_age");
+    double max_position_jump = this->declare_parameter<double>("max_position_jump");
+    int conf_to_tent_threshold = this->declare_parameter<int>("conf_to_tent_threshold");
+    int tent_init_buffer = this->declare_parameter<int>("tent_init_buffer");
 
     bool enable_gate_midpoint_refinement =
-        this->declare_parameter<bool>("map_refinement.gate_midpoint");
+        this->declare_parameter<bool>("gate_midpoint");
     bool enable_board_icon_refinement =
-        this->declare_parameter<bool>("map_refinement.board_icon");
+        this->declare_parameter<bool>("board_icon");
     float refinement_plausibility_radius =
-        this->declare_parameter<float>("map_refinement.plausibility_radius");
+        this->declare_parameter<float>("refinement_plausibility_radius");
 
     std::vector<std::string> large_structure_labels =
-        this->declare_parameter<std::vector<std::string>>("object_attributes.large_structure");
+        this->declare_parameter<std::vector<std::string>>("large_structures");
     std::vector<std::string> pipe_labels =
-        this->declare_parameter<std::vector<std::string>>("object_attributes.pipe");
+        this->declare_parameter<std::vector<std::string>>("pipes");
     std::vector<std::string> semi_persistent_objects = 
-        this->declare_parameter<std::vector<std::string>>("object_attributes.semi_persistent");
+        this->declare_parameter<std::vector<std::string>>("semi_persistent_objects");
     int semi_persistent_conf_to_tent_threshold =
-            this->declare_parameter<int>("tracker.semi_persistent_conf_to_tent_threshold", 300);
+            this->declare_parameter<int>("semi_persistent_conf_to_tent_threshold");
     std::vector<std::string> max_per_class_labels =
         this->declare_parameter<std::vector<std::string>>("max_per_class_labels");
     std::vector<int64_t> max_per_class_values =
@@ -73,20 +73,20 @@ ObjectMapNode::ObjectMapNode() : Node("object_map_node")
         refinement_plausibility_radius
     );
 
-    enable_z_axis_locking = this->declare_parameter<bool>("map_refinement.z_axis_locking.enable");
-    pool_floor_z = this->declare_parameter<double>("map_refinement.z_axis_locking.pool_floor_z");
-    pool_surface_z = this->declare_parameter<double>("map_refinement.z_axis_locking.pool_surface_z");
-    table_octagon_refinement_mode = this->declare_parameter<std::string>("map_refinement.table_octagon_mode");
-    unique_objects = this->declare_parameter<std::vector<std::string>>("object_attributes.unique");
-    floor_objects = this->declare_parameter<std::vector<std::string>>("object_attributes.floor");
-    surface_objects = this->declare_parameter<std::vector<std::string>>("object_attributes.surface");
-    enable_pipe_distance_truncation = this->declare_parameter<bool>("map_filters.pipe_distance_truncation.enable");
-    max_pipe_distance = this->declare_parameter<double>("map_filters.pipe_distance_truncation.max_distance_m");
-    enable_lane_boundary = this->declare_parameter<bool>("map_filters.enable_lane_boundary", false);
-    lane_x_min = this->declare_parameter<double>("map_filters.lane.x_min", -100.0);
-    lane_x_max = this->declare_parameter<double>("map_filters.lane.x_max", 100.0);
-    lane_y_min = this->declare_parameter<double>("map_filters.lane.y_min", -100.0);
-    lane_y_max = this->declare_parameter<double>("map_filters.lane.y_max", 100.0);
+    enable_z_axis_locking = this->declare_parameter<bool>("z_axis_locking.enable");
+    pool_floor_z = this->declare_parameter<double>("z_axis_locking.pool_floor_z");
+    pool_surface_z = this->declare_parameter<double>("z_axis_locking.pool_surface_z");
+    table_octagon_refinement_mode = this->declare_parameter<std::string>("table_octagon_mode");
+    unique_objects = this->declare_parameter<std::vector<std::string>>("unique_objects");
+    floor_objects = this->declare_parameter<std::vector<std::string>>("floor_objects");
+    surface_objects = this->declare_parameter<std::vector<std::string>>("surface_objects");
+    enable_pipe_distance_truncation = this->declare_parameter<bool>("pipe_distance_truncation.enable");
+    max_pipe_distance = this->declare_parameter<double>("pipe_distance_truncation.max_distance_m");
+    enable_lane_boundary = this->declare_parameter<bool>("lane_boundary.enable", false);
+    lane_x_min = this->declare_parameter<double>("lane_boundary.x_min", -100.0);
+    lane_x_max = this->declare_parameter<double>("lane_boundary.x_max", 100.0);
+    lane_y_min = this->declare_parameter<double>("lane_boundary.y_min", -100.0);
+    lane_y_max = this->declare_parameter<double>("lane_boundary.y_max", 100.0);
 
     if (enable_lane_boundary) {
         RCLCPP_INFO(
