@@ -86,23 +86,28 @@ jobs:
       - name: Set Docker Tags
         id: docker_tags
         run: |
-          # 1. Determine the base tag (manual input or default 'dev')
-          BASE_TAG="${{ github.event.inputs.tag_name }}"
-          TAG_NAME="${BASE_TAG:-dev}"
+          # 1. Determine the base tag
+          # If manual input exists, use it. Otherwise, use branch name slug.
+          if [ -n "${{ github.event.inputs.tag_name }}" ]; then
+            TAG_NAME="${{ github.event.inputs.tag_name }}"
+          else
+            # Extract branch name and slugify it (replace / with -)
+            BRANCH_NAME="${{ github.ref_name }}"
+            TAG_NAME="${BRANCH_NAME//\//-}"
+          fi
           
           # 2. Define the image name
           IMAGE="mcgillrobotics/auv_2026"
           
-          # 3. Create the primary tag string (used for verification)
+          # 3. Create the primary tag string
           PRIMARY_TAG="$IMAGE:$TAG_NAME-${{ matrix.suffix }}"
           
           # 4. Create the list of tags to push
-          # Start with the primary tag
-          TAGS="$PRIMARY_TAG"
-          
-          # If this is a push to main, append the 'latest' tag
+          # For main branch, we only use 'latest'. For others, we use the branch/manual tag.
           if [[ "${{ github.ref }}" == "refs/heads/main" && "${{ github.event_name }}" == "push" ]]; then
-            TAGS="$TAGS,$IMAGE:latest-${{ matrix.suffix }}"
+            TAGS="$IMAGE:latest-${{ matrix.suffix }}"
+          else
+            TAGS="$PRIMARY_TAG"
           fi
           
           echo "PRIMARY_TAG=$PRIMARY_TAG" >> $GITHUB_ENV

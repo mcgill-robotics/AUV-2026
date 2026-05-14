@@ -15,43 +15,57 @@ ARG ROS2_DIST=humble
 
 # CI has a different runner than the jetson (notably git permissions are different and there is no GPU)
 ARG CI
-RUN if [ "$CI" = "true" ]; then \
-        echo "Building container for CI"; \
-    else \
-        echo "Building container locally"; \
-    fi
-# set it as env var so build scripts can see it
-ENV CI=${CI}
 
 # Set up environment
-ENV TZ=Europe/Paris \
+ENV CI=${CI} \
+    TZ=Europe/Paris \
     ROS_DISTRO=${ROS2_DIST} \
     # assume anything trying to build this container is for jetson, whether CI or physical jetson hardware
     IS_JETSON=true \
     UV_SYSTEM_PYTHON=1
 
 # =============================================================================
-# 1. System Packages
+# 1. ZED Config
+# =============================================================================
+# copy our configs for zed2i
+COPY Docker/jetson/SN33688213.conf /usr/local/zed/settings/
+
+# =============================================================================
+# 2. System Packages
 # =============================================================================
 
-# Disable apt-get warnings
+# Disable apt-get warnings and install common development tools
+# Install graphics, video, c++ dev libraries
+# Keep packages in alphabetical order within each group
 RUN curl -fsSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg && \
-    apt-get update || true && apt-get install -y --no-install-recommends apt-utils dialog && \
-    rm -rf /var/lib/apt/lists/* && \
-    apt-get clean
-
-# Install common development tools
-# Keep these in alphabetical
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone && \
+    ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone && \
     apt-get update && apt-get install -y --no-install-recommends \
+    apt-utils \
+    dialog \
+    g++ \
     git \
     git-lfs \
     iproute2 \
     iputils-ping \
     jq \
+    libavcodec-dev \
+    libavdevice-dev \
+    libavformat-dev \
+    libavutil-dev \
+    libc++-dev \
+    libegl1-mesa-dev \
+    libepoxy-dev \
+    libgl1-mesa-dev \
+    libglew-dev \
+    libjpeg-dev \
+    libpng-dev \
     libpq-dev \
+    libswscale-dev \
+    libwayland-dev \
+    libxkbcommon-dev \
     lsb-release \
     nano \
+    ninja-build \
     python3-colcon-common-extensions \
     python3-rosdep \
     python3-vcstool \
@@ -63,74 +77,42 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone &
     usbutils \
     v4l-utils \
     vim \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
-
-# Install graphics, video, c++ dev libraries
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    g++ \
-    libc++-dev \
-    libavcodec-dev \
-    libavdevice-dev \
-    libavformat-dev \
-    libavutil-dev \
-    libegl1-mesa-dev \
-    libepoxy-dev \
-    libgl1-mesa-dev \
-    libglew-dev \
-    libjpeg-dev \
-    libpng-dev \
-    libswscale-dev \
-    libwayland-dev \
-    libxkbcommon-dev \
-    ninja-build \
-    v4l-utils \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
-
-# =============================================================================
-# 2. ZED Config
-# =============================================================================
-# copy our configs for zed2i
-COPY Docker/jetson/SN33688213.conf /usr/local/zed/settings/
+    && rm -rf /var/lib/apt/lists/* && apt-get clean
 
 # =============================================================================
 # 3. ROS 2 Packages
 # =============================================================================
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    ros-$ROS_DISTRO-actionlib-msgs \
+    ros-$ROS_DISTRO-ament-index-cpp \
+    ros-$ROS_DISTRO-diagnostic-msgs \
+    ros-$ROS_DISTRO-eigen3-cmake-module \
     ros-$ROS_DISTRO-foxglove-msgs \
     ros-$ROS_DISTRO-joy \
     ros-$ROS_DISTRO-joy-teleop \
-    ros-$ROS_DISTRO-rosidl-default-generators \
-    ros-$ROS_DISTRO-rclcpp-lifecycle \
-    ros-$ROS_DISTRO-vision-msgs \
-    ros-$ROS_DISTRO-tf-transformations \
-    ros-$ROS_DISTRO-tf2-ros \
-    ros-$ROS_DISTRO-nmea-msgs \
     ros-$ROS_DISTRO-mavros-msgs \
-    ros-$ROS_DISTRO-actionlib-msgs \
-    ros-$ROS_DISTRO-diagnostic-msgs \
     ros-$ROS_DISTRO-message-filters \
-    ros-$ROS_DISTRO-eigen3-cmake-module \
     ros-$ROS_DISTRO-nav-msgs \
-    ros-$ROS_DISTRO-tf2-geometry-msgs \
-    ros-$ROS_DISTRO-ament-index-cpp \
-    # Planner packages
+    ros-$ROS_DISTRO-nmea-msgs \
     ros-$ROS_DISTRO-py-trees \
-    ros-$ROS_DISTRO-py-trees-ros-interfaces \
     ros-$ROS_DISTRO-py-trees-ros \
+    ros-$ROS_DISTRO-py-trees-ros-interfaces \
     ros-$ROS_DISTRO-py-trees-ros-tutorials \
     ros-$ROS_DISTRO-py-trees-ros-viewer \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+    ros-$ROS_DISTRO-rclcpp-lifecycle \
+    ros-$ROS_DISTRO-rosidl-default-generators \
+    ros-$ROS_DISTRO-tf-transformations \
+    ros-$ROS_DISTRO-tf2-geometry-msgs \
+    ros-$ROS_DISTRO-tf2-ros \
+    ros-$ROS_DISTRO-vision-msgs \
+    && rm -rf /var/lib/apt/lists/* && apt-get clean
 
 # =============================================================================
-# 4. micro-ROS
+# 4. micro-ROS (clone + build in single layer)
 # =============================================================================
 WORKDIR /opt/ros/micro_ros_ws
-RUN git clone -b $ROS_DISTRO https://github.com/micro-ROS/micro_ros_setup.git src/micro_ros_setup
-# Source the standard Debian-installed ROS 2 (not /opt/ros/humble/install/ from dustynv)
-RUN . /opt/ros/$ROS_DISTRO/setup.bash && \
+RUN git clone -b $ROS_DISTRO https://github.com/micro-ROS/micro_ros_setup.git src/micro_ros_setup && \
+    . /opt/ros/$ROS_DISTRO/setup.bash && \
     colcon build \
         --parallel-workers $(nproc) \
         --merge-install \
@@ -167,7 +149,7 @@ RUN git clone --depth 1 --branch sdk/v0.21.0 https://github.com/foxglove/foxglov
     rm -rf build log src /var/lib/apt/lists/*
 
 # =============================================================================
-# 6. Python Dependencies
+# 6. Python Dependencies (single layer for both installs)
 # =============================================================================
 WORKDIR /root
 
@@ -184,49 +166,44 @@ RUN uv pip install \
     --system \
     --extra-index-url https://pypi.jetson-ai-lab.io/jp6/cu126 \
     -r /tmp/requirements.txt \
-    -c /tmp/constraints.txt
-
-RUN uv pip install \
+    -c /tmp/constraints.txt && \
+    uv pip install \
     -v \
     --extra-index-url https://pypi.jetson-ai-lab.io/jp6/cu126 \
     --index-strategy unsafe-best-match \
     --no-deps \
     --system \
-    "inference-models[torch-jp6-cu126,onnx-jp6-cu126]" 
+    "inference-models[torch-jp6-cu126,onnx-jp6-cu126]"
 
 # =============================================================================
-# 7. User Setup
+# 7. User Setup + Entrypoint (consolidated to reduce layers)
 # =============================================================================
 ARG USERNAME=douglas
 ARG USER_UID=1000
 ARG USER_GID=$USER_UID
-
-# 1. Create or rename the group
-RUN if getent group $USER_GID; then \
-    groupmod -n $USERNAME $(getent group $USER_GID | cut -d: -f1); \
-    else \
-    groupadd --gid $USER_GID $USERNAME; \
-    fi \
-    # 2. Create the user, dialout is IMU driver permissions
-    && useradd --uid $USER_UID --gid $USER_GID -m -s /bin/bash $USERNAME \
-    && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
-    && chmod 0440 /etc/sudoers.d/$USERNAME \
-    && usermod -aG video,render,dialout -s /bin/bash $USERNAME
-
-# Install fixuid for dynamic UID/GID remapping at runtime
 ARG FIXUID_VERSION=0.6.0
-RUN ARCH="$(dpkg --print-architecture)" && \
+
+# Create user, install fixuid, and set up entrypoint in a single layer
+RUN if getent group $USER_GID; then \
+        groupmod -n $USERNAME $(getent group $USER_GID | cut -d: -f1); \
+    else \
+        groupadd --gid $USER_GID $USERNAME; \
+    fi && \
+    useradd --uid $USER_UID --gid $USER_GID -m -s /bin/bash $USERNAME && \
+    echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME && \
+    chmod 0440 /etc/sudoers.d/$USERNAME && \
+    usermod -aG video,render,dialout -s /bin/bash $USERNAME && \
+    ARCH="$(dpkg --print-architecture)" && \
     curl -fsSL "https://github.com/boxboat/fixuid/releases/download/v${FIXUID_VERSION}/fixuid-${FIXUID_VERSION}-linux-${ARCH}.tar.gz" | tar -C /usr/local/bin -xzf - && \
     chown root:root /usr/local/bin/fixuid && \
     chmod 4755 /usr/local/bin/fixuid && \
     mkdir -p /etc/fixuid && \
     printf "user: $USERNAME\ngroup: $USERNAME\n" > /etc/fixuid/config.yml
 
-# Copy entrypoint
-COPY Docker/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+# copy entrypoint script and set permissions
+COPY --chmod=755 Docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 
-# Switch to the User and configure the environment
+# Switch to the user and configure the environment
 USER $USERNAME
 
 # set colcon home after adding user
@@ -234,13 +211,10 @@ ENV COLCON_HOME=/home/$USERNAME/.colcon
 # move repo defaults.yaml to container, CI is run from Docker/jetson so need to go up 2 levels
 COPY .colcon ${COLCON_HOME}/
 
-# add ultralytics config dir to avoid storing settings in temp
-RUN mkdir -p /home/$USERNAME/.config/Ultralytics
-
+# Create ultralytics config dir and set up bashrc in one layer
 WORKDIR /home/$USERNAME/AUV-2026
-
-# Source env variables - standard Debian path, NO sed hack needed
-RUN echo "source /opt/ros/humble/setup.bash && source /opt/ros/micro_ros_ws/install/local_setup.bash && source /opt/ros/foxglove_ws/install/local_setup.bash && source /home/$USERNAME/AUV-2026/ros2_ws/install/setup.bash" >> ~/.bashrc
+RUN mkdir -p /home/$USERNAME/.config/Ultralytics && \
+    echo "source /opt/ros/humble/setup.bash && source /opt/ros/micro_ros_ws/install/local_setup.bash && source /opt/ros/foxglove_ws/install/local_setup.bash && source /home/$USERNAME/AUV-2026/ros2_ws/install/setup.bash" >> ~/.bashrc
 
 # Entrypoint to fix Group IDs to allow GPU access
 ENTRYPOINT ["entrypoint.sh"]
