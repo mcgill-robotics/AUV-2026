@@ -1,0 +1,28 @@
+# Build Tools
+sympy
+cython
+setuptools<70
+typing_extensions
+
+torch 
+torchvision
+
+# Main Libraries
+ultralytics
+roboflow
+albumentations
+pandas
+rfdetr
+supervision
+pytorch_lightning
+pycocotools
+faster-coco-eval
+onnx
+onnxruntime-gpu
+transforms3d
+
+# random inference-models dependencies not automatically installed
+backoff
+scikit-image
+lazy-loader
+pycuda

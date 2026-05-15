@@ -5,8 +5,10 @@
 #include <geometry_msgs/msg/vector3_stamped.hpp>
 #include <geometry_msgs/msg/point_stamped.hpp>
 #include <geometry_msgs/msg/twist_stamped.hpp>
+#include <geometry_msgs/msg/transform_stamped.hpp>
 #include <message_filters/subscriber.h>
 #include <geometry_msgs/msg/pose_stamped.hpp>
+#include <tf2_ros/transform_broadcaster.h>
 
 #include <memory>
 #include <vector>
@@ -30,6 +32,7 @@ namespace sensors
  
                 rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pose_pub_;
                 rclcpp::TimerBase::SharedPtr publish_timer_;
+                std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 
 
                 rclcpp::Subscription<imu_msg>::SharedPtr imu_sub_;
@@ -54,6 +57,7 @@ namespace sensors
 
                 std::string frame_id_auv_;
 		std::string frame_id_global_;			
+                bool publish_pose_tf_;
 
         };
         

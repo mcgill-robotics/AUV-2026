@@ -1,0 +1,7 @@
+string label
+float64 confidence
+geometry_msgs/PoseWithCovariance pose_camera
+float64 bbox_center_x
+float64 bbox_center_y
+float64 bbox_size_x
+float64 bbox_size_y

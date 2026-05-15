@@ -19,6 +19,8 @@ set(msg_files
 	"msg/ThrusterMicroseconds.msg"
 	"msg/UnityState.msg"
 	"msg/VelocityReport.msg"
+	"msg/VisionDetection.msg"
+	"msg/VisionDetectionFrame.msg"
 	"msg/VisionObject.msg"
 	"msg/VisionObjectArray.msg"
 )
@@ -26,11 +28,12 @@ set(msg_files
 set(srv_files
 	"srv/SetInt32.srv"
 	"srv/AutomaticCapture.srv"
+	"srv/ShootTorpedo.srv"
+	"srv/SetGripper.srv"
 )
 
 set(action_files
-	"action/Effort.action"
-	"action/StateQuaternion.action"
+	"action/AUVNavigate.action"
 )
 
 # find dependencies

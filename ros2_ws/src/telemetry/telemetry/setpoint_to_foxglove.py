@@ -9,7 +9,7 @@ class SetpointToFoxgloveNode(Node):
     def __init__(self):
         super().__init__('setpoint_to_foxglove_node')
         
-        self.declare_parameter('frame_id', 'pool')
+        self.declare_parameter('frame_id', 'pool_link')
         self.frame_id = self.get_parameter('frame_id').get_parameter_value().string_value
         
         # Internal state
