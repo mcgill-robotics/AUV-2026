@@ -118,7 +118,7 @@ jobs:
             # Build specified packages
             echo 'Building packages: ${{ steps.packages.outputs.packages }}'
             colcon build \
-              --packages-up-to ${{ steps.packages.outputs.packages }} \
+              --packages-up-to ${{ matrix.package }} \
               --event-handlers console_direct+ \
               --parallel-workers \$(nproc)
             
