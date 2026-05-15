@@ -44,7 +44,6 @@ ARG ROBOT_STATE_PUBLISHER_VERSION=3.5.2
 ARG USB_CAM_VERSION=0.8.1
 ARG IMAGE_COMMON_VERSION=3.1.12
 ARG MAVROS_VERSION=2.10.1
-ARG MARINE_ACOUSTIC_MSGS_VERSION=2.1.0
 # CI has a different runner than the jetson (notably git permissions are different and there is no GPU)
 # Unlike the nvidia dev container, we cannot just install stubs to satisfy the linker, so we just forego installing the zed sdk in CI for the jetson, which is fine since we should test it locally anyways
 ARG CI
@@ -186,7 +185,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libglew-dev \
     libjpeg-dev \
     libpng-dev \
-    libserialport-dev \
     libswscale-dev \
     libwayland-dev \
     libxkbcommon-dev \
@@ -203,6 +201,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-$ROS_DISTRO-joy \
     ros-$ROS_DISTRO-joy-teleop \
     ros-$ROS_DISTRO-rosidl-default-generators \
+    ros-$ROS_DISTRO-rclcpp-lifecycle \
     ros-$ROS_DISTRO-vision-msgs \
     ros-$ROS_DISTRO-tf-transformations \
     ros-$ROS_DISTRO-tf2-ros \
