@@ -21,6 +21,14 @@
 **/build/
 **/log/
 
+# PyTorch models
+*.pt
+*.pth
+# onnx models
+*.onnx
+# TensorRT engine files
+*.engine
+
+
 #xsens ros2 driver lib 
 ros2_ws/src/xsens_mti_ros2_driver/lib/**
-

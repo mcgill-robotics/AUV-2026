@@ -20,7 +20,8 @@ These processed sensor streams are used downstream by the **EKF**, **controller*
     - [**3. Orientation**](#3-orientation)
   - [Depth Sensor Processing](#depth-sensor-processing)
   - [DVL Processing](#dvl-processing)
-    - [**1.Transformation Logic**](#1transformation-logic)
+    - [**1. Position Transformation Logic**](#1-position-transformation-logic)
+    - [**2. Velocity Transformation Logic**](#2-velocity-transformation-logic)
   - [Usage](#usage)
   - [Nodes](#nodes)
     - [Published Topics](#published-topics)
@@ -288,6 +289,8 @@ The package provides a single ROS node: `sensor_node`.
 | `auv_frame/depth` | Float64 | AUV's depth in `pool` frame |
 | `/sensors/dvl` | TBD | TBD |
 | `state/pose` | PoseStamped | Aggregated pose of the AUV in `pool` frame | 
+
+**Note on TF Publishing:** The `state_aggregator` node can optionally publish a TF transform (`publish_pose_tf` parameter in `sensors_frames.yaml`) from the global frame (`pool_link`) to the AUV frame (`auv_link`). This is primarily used for Foxglove visualization and provides an easier ROS-native way to transform poses from the global frame to the AUV frame. This is disabled by default for actual missions to save computation.
 
 ---
 

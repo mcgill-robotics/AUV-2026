@@ -1,0 +1,18 @@
+planner_root_tree:
+  ros__parameters:
+    tick_rate       : 3.0
+    sim             : false
+    use_ground_truth: false
+
+    pre_qual:
+      yaw_tolerance: 0.5
+      positional_tolerance: 0.2
+      hold_time: 1.0
+      timeout: 20.0
+
+      orbit:
+        yaw_tolerance_scale: 0.5
+        positional_tolerance_scale: 0.5
+        hold_time_initial: 1.0
+        hold_time_segments: 0.2
+        timeout: 30.0

@@ -1,0 +1,26 @@
+# ── goal ──
+geometry_msgs/Pose target_pose       # Target position + orientation (yaw extracted from quaternion)
+
+bool do_x                            # Control X position
+bool do_y                            # Control Y position
+bool do_z                            # Control Z (depth)
+bool do_yaw                          # Control yaw heading
+
+bool is_relative                     # If true, target is relative to current pose
+bool is_local_frame                  # If true AND is_relative, offsets are in body frame (forward/sway/heave)
+
+float64 position_tolerance           # Meters - convergence threshold for position
+float64 yaw_tolerance                # Radians - convergence threshold for yaw
+float64 hold_time                    # Seconds to stay within tolerance before returning SUCCESS
+float64 timeout                      # Seconds before returning FAILURE (0 = no timeout)
+---
+# ── result ──
+bool success
+string message
+---
+# ── feedback ──
+geometry_msgs/Pose current_pose      # Current AUV pose in pool frame
+geometry_msgs/Vector3 position_error_3d # Vector of positional errors (x, y, z) in meters
+float64 position_error               # Magnitude distance from target (meters)
+float64 yaw_error                    # Yaw error (radians)
+float64 time_in_tolerance            # How long within tolerance so far (seconds)

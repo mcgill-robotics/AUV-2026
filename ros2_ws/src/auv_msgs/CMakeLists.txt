@@ -19,13 +19,21 @@ set(msg_files
 	"msg/FlipCommand.msg"
 	"msg/UnityState.msg"
 	"msg/VelocityReport.msg"
+	"msg/VisionDetection.msg"
+	"msg/VisionDetectionFrame.msg"
 	"msg/VisionObject.msg"
 	"msg/VisionObjectArray.msg"
 )
 
+set(srv_files
+	"srv/SetInt32.srv"
+	"srv/AutomaticCapture.srv"
+	"srv/ShootTorpedo.srv"
+	"srv/SetGripper.srv"
+)
+
 set(action_files
-	"action/Effort.action"
-	"action/StateQuaternion.action"
+	"action/AUVNavigate.action"
 )
 
 # find dependencies
@@ -38,6 +46,7 @@ endforeach()
 
 rosidl_generate_interfaces(${PROJECT_NAME}
 	${msg_files}
+	${srv_files}
 	${action_files}
 	DEPENDENCIES ${MSG_DEP_SET}
 )

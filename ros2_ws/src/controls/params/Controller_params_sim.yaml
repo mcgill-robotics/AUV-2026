@@ -20,29 +20,29 @@ attitude_controller:
     enabled: false
 
 depth_controller:
-  ros__parameters:
-    control_loop_hz: 10.0
-    KP: 10.0
-    KD: 50.0
-    KI: 0.0
-    I_MAX: 10.0
-    net_buoyancy: 9.03 # Newtons
-    enabled: false
+    ros__parameters:
+        control_loop_hz: 10.0
+        KP: 10.0
+        KD: 50.0
+        KI: 0.0
+        I_MAX: 10.0
+        net_buoyancy: 9.03 # Newtons
+        enabled: true
 
 x_controller:
-  ros__parameters:
-    control_loop_hz: 10.0
-    KP: 15.0
-    KD: 50.0
-    KI: 0.0
-    I_MAX: 10.0
-    enabled: false
+    ros__parameters:
+        control_loop_hz: 10.0
+        KP: 15.0
+        KD: 50.0
+        KI: 0.0
+        I_MAX: 10.0
+        enabled: true
 
 y_controller:
-  ros__parameters:
-    control_loop_hz: 10.0
-    KP: 15.0
-    KD: 50.0
-    KI: 0.0
-    I_MAX: 10.0
-    enabled: false
+    ros__parameters:
+        control_loop_hz: 10.0
+        KP: 15.0
+        KD: 50.0
+        KI: 0.0
+        I_MAX: 10.0
+        enabled: true

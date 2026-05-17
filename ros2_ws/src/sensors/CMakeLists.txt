@@ -19,11 +19,12 @@ find_package(message_filters REQUIRED)
 find_package(eigen3_cmake_module REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(nav_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
 
 # Executables
 
 add_executable(state_aggregator src/State_aggregator.cpp)
-ament_target_dependencies(state_aggregator rclcpp std_msgs std_srvs geometry_msgs sensor_msgs message_filters nav_msgs)
+ament_target_dependencies(state_aggregator rclcpp std_msgs std_srvs geometry_msgs sensor_msgs message_filters nav_msgs tf2_ros)
 target_link_libraries(state_aggregator Eigen3::Eigen)
 target_include_directories(state_aggregator PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

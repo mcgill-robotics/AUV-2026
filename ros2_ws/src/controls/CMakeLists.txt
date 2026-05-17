@@ -100,6 +100,7 @@ install(DIRECTORY params/
 install(PROGRAMS
   scripts/depth_controller.py
   scripts/planar_controller.py
+  scripts/navigation_server.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

@@ -20,7 +20,7 @@ This process occurs in two stages:
     - [Dependencies](#dependencies)
     - [Building](#building)
     - [Running](#running)
-    - [License](#license)
+  - [License](#license)
 
 ## Overview
 The [wrench](https://docs.ros.org/en/noetic/api/geometry_msgs/html/msg/Wrench.html) consists of forces AND torques on the X,Y,Z axes. These are distributed to the thrusters using the following allocation matrix:
@@ -116,6 +116,6 @@ Launch all package nodes
 | :--- | :--- | :--- | 
 | `sim` | `false` | Run in simulation mode
 
-### License
+## License
 
 The source code is released under a GPLv3 license.
