@@ -34,16 +34,28 @@ namespace controls
                 rclcpp::Publisher<wrench_msg>::SharedPtr pub_effort_; 
                 
         private:
-                // PID gains
-                double P_ex_;
-                double P_ey_;
-                double P_ez_;
-                double P_wx_;
-                double P_wy_;
-                double P_wz_;
+                double P_ex_large_;
+                double P_ey_large_;
+                double P_ez_large_;
+                double P_wx_large_;
+                double P_wy_large_;
+                double P_wz_large_;
 
-                Mat3 P_e_;
-                Mat3 P_w_;
+                double P_ex_sas_;
+                double P_ey_sas_;
+                double P_ez_sas_;
+                double P_wx_sas_;
+                double P_wy_sas_;
+                double P_wz_sas_;
+
+                double sas_switch_deg_;
+                double sas_switch_;
+
+                Mat3 P_e_large_;
+                Mat3 P_w_large_;
+
+                Mat3 P_e_sas_;
+                Mat3 P_w_sas_;
 
                 // Control Loop Frequency
                 double control_loop_hz_;
@@ -62,6 +74,7 @@ namespace controls
 
                 //Target state variables
                 quatd q_iv2_; 
+
 
 
 

@@ -1,6 +1,6 @@
 # Controls
 
-The **controls** package provides the AUV control loops for depth and attitude. It computes control efforts as `geometry_msgs/Wrench` messages and combines them into a single effort for downstream actuation.
+The **controls** package provides the AUV a trajectory planner for flips and control loops for position and attitude. It computes control efforts as `geometry_msgs/Wrench` messages and combines them into a single effort for downstream actuation.
 
 This process occurs in three stages:
 
@@ -76,8 +76,12 @@ Publishing an attitude setpoint onto `/controls/quaternion_setpoint`:
         ros2 topic pub /controls/quaternion_setpoint geometry_msgs/msg/Quaternion "{x: 0, y: 0, z: 0.7071, w: 0.7071}"
 
 
+Publishing a flip command onto `/controls/flip_command`:
+        
+        ros2 topic pub --once /controls/flip_command auv_msgs/msg/FlipCommand "{axis: 0, count: 1, direction: 1, flip_duration: 5.0}"
+
 ## Nodes
-The package provides five ROS nodes: `depth_controller`, `attitude_controller`, `x_controller`, `y_controller` and `superimposer`.
+The package provides six ROS nodes: `depth_controller`, `attitude_controller`, `x_controller`, `y_controller`, `superimposer`, and `trajectory_planner`.
 
 - `depth_controller` input: `/auv_frame/depth`, `/controls/depth_setpoint`
 
@@ -94,6 +98,8 @@ The package provides five ROS nodes: `depth_controller`, `attitude_controller`, 
 - `superimposer` input: `/controls/depth_effort`, `/controls/attitude_effort`, `/controls/x_effort`, `/controls/y_effort`, `processed/imu`
 
 - `superimposer` output: `/controls/combined_effort`
+- `trajectory_planner` input: `controls/FlipCommand`
+- `trajectory_planner` output: `controls/quaternion_setpoint`
 
 
 ### Published Topics
@@ -105,6 +111,7 @@ The package provides five ROS nodes: `depth_controller`, `attitude_controller`, 
 | `/controls/y_effort` | `geometry_msgs/Wrench` | Y-axis controller effort in the **pool frame** |
 | `/controls/attitude_effort` | `geometry_msgs/Wrench` | Attitude controller effort (torques) in the **body frame** |
 | `/controls/total_effort` | `geometry_msgs/Wrench` | Sum of depth and attitude efforts with optional biases in the **body frame** |
+| `/controls/quaternion_setpoint` | `geometry_msgs/Quaternion` | Desired vehicle orientation |
 
 
 ### Subscribed Topics
@@ -122,6 +129,7 @@ The package provides five ROS nodes: `depth_controller`, `attitude_controller`, 
 | `/controls/attitude_effort` | `geometry_msgs/Wrench` | Attitude effort input to superimposer |
 | `/controls/x_effort` | `geometry_msgs/Wrench` | X-axis effort input to superimposer |
 | `/controls/y_effort` | `geometry_msgs/Wrench` | Y-axis effort input to superimposer |
+| `/controls/flip_command` | `auv_msgs/FlipCommand` | Flip Commands that specifies axis, count, direction, and period per flip | 
 
 ## Installation
 

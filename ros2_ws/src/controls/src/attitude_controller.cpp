@@ -5,39 +5,71 @@ namespace controls
 {
     AttitudeController::AttitudeController(): Node("attitude_controller")
     {
-        this->declare_parameter<double>("P_ex", 1.0);
-        this->declare_parameter<double>("P_ey", 1.0);
-        this->declare_parameter<double>("P_ez", 1.0);
-        this->declare_parameter<double>("P_wx", 1.0);
-        this->declare_parameter<double>("P_wy", 1.0);
-        this->declare_parameter<double>("P_wz", 1.0);
-        this->declare_parameter<double>("buoyancy", 278.0); // Newtons
-        this->declare_parameter<std::vector<double>>("r_bv_v", {0.0, 0.0, 0.023}); // [m] From CAD Model
-        this->declare_parameter<double>("control_loop_hz", 25.0); // Control loop frequency
+        // Large-error attitude controller gains
+        this->declare_parameter<double>("P_ex_large", 1.0);
+        this->declare_parameter<double>("P_ey_large", 1.0);
+        this->declare_parameter<double>("P_ez_large", 1.0);
+        this->declare_parameter<double>("P_wx_large", 1.0);
+        this->declare_parameter<double>("P_wy_large", 1.0);
+        this->declare_parameter<double>("P_wz_large", 1.0);
+
+        // SAS / small-error attitude hold gains
+        this->declare_parameter<double>("P_ex_sas", 0.5);
+        this->declare_parameter<double>("P_ey_sas", 0.5);
+        this->declare_parameter<double>("P_ez_sas", 0.5);
+        this->declare_parameter<double>("P_wx_sas", 2.0);
+        this->declare_parameter<double>("P_wy_sas", 2.0);
+        this->declare_parameter<double>("P_wz_sas", 2.0);
+
+        this->declare_parameter<double>("buoyancy", 278.0); // [N]
+        this->declare_parameter<std::vector<double>>("r_bv_v", {0.0, 0.0, 0.023}); // [m] From CAD model
+        this->declare_parameter<double>("control_loop_hz", 100.0); //Control loop frequency
+
+        this->declare_parameter<double>("sas_switch_deg", 5.0);
+
         this->declare_parameter<bool>("enabled", false);
 
-        this->get_parameter("P_ex", P_ex_);
-        this->get_parameter("P_ey", P_ey_);
-        this->get_parameter("P_ez", P_ez_);
-        this->get_parameter("P_wx", P_wx_);
-        this->get_parameter("P_wy", P_wy_);
-        this->get_parameter("P_wz", P_wz_);
-        this->get_parameter("buoyancy", buoyancy_);
+        this->get_parameter("P_ex_large", P_ex_large_);
+        this->get_parameter("P_ey_large", P_ey_large_);
+        this->get_parameter("P_ez_large", P_ez_large_);
+        this->get_parameter("P_wx_large", P_wx_large_);
+        this->get_parameter("P_wy_large", P_wy_large_);
+        this->get_parameter("P_wz_large", P_wz_large_);
+
+        this->get_parameter("P_ex_sas", P_ex_sas_);
+        this->get_parameter("P_ey_sas", P_ey_sas_);
+        this->get_parameter("P_ez_sas", P_ez_sas_);
+        this->get_parameter("P_wx_sas", P_wx_sas_);
+        this->get_parameter("P_wy_sas", P_wy_sas_);
+        this->get_parameter("P_wz_sas", P_wz_sas_);
+
+        this->get_parameter("buoyancy", buoyancy_); 
         this->get_parameter("r_bv_v", r_bv_v_);
         this->get_parameter("control_loop_hz", control_loop_hz_);
+        this->get_parameter("sas_switch_deg", sas_switch_deg_);
         this->get_parameter("enabled", enabled_);
+
+        sas_switch_ = sas_switch_deg_ * M_PI / 180.0;
 
         q_iv_ = quatd::Identity(); // Initial orientation: identity quaternion
         w_iv_ = Vec3::Zero(); // Initial angular velocity: zero vector
         q_iv2_ = quatd::Identity(); // Initial target orientation: identity quaternion
 
-        P_e_ << P_ex_, 0, 0,
-                0, P_ey_, 0,
-                0, 0, P_ez_;
-        
-        P_w_ << P_wx_, 0, 0,
-                0, P_wy_, 0,
-                0, 0, P_wz_;
+        P_e_large_ << P_ex_large_, 0, 0,
+                    0, P_ey_large_, 0,
+                    0, 0, P_ez_large_;
+
+        P_w_large_ << P_wx_large_, 0, 0,
+                    0, P_wy_large_, 0,
+                    0, 0, P_wz_large_;
+
+        P_e_sas_ << P_ex_sas_, 0, 0,
+                    0, P_ey_sas_, 0,
+                    0, 0, P_ez_sas_;
+
+        P_w_sas_ << P_wx_sas_, 0, 0,
+                    0, P_wy_sas_, 0,
+                    0, 0, P_wz_sas_;
 
 
         pub_effort_ = this->create_publisher<wrench_msg>("/controls/attitude_effort", rclcpp::SensorDataQoS().keep_last(1));
@@ -94,8 +126,23 @@ namespace controls
     {
         quatd q_error = q_iv_.conjugate() * q_iv2;
         q_error = sensors::math::canonicalizeShortest(q_error);
+        double q_w = std::clamp(q_error.w(), -1.0, 1.0);
+        double angle_error = 2.0 * std::acos(q_w);;
+        Vec3 feedback = Vec3::Zero();
+
+        if (angle_error < sas_switch_)
+        {
+            // Small error: use SAS
+            Vec3 error_vector = Vec3(q_error.x(), q_error.y(), q_error.z());
+            feedback = P_e_sas_ * error_vector - P_w_sas_ * w_iv_;
+        }
+        else
+        {
+        // Large error: use attitude control
         Vec3 error_vector = Vec3(q_error.x(), q_error.y(), q_error.z());
-        Vec3 feedback = P_e_ * error_vector - P_w_ * w_iv_;
+       feedback = P_e_large_ * error_vector - P_w_large_ * w_iv_;
+        }
+
         return feedback;
     }
 

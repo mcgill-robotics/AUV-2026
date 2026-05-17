@@ -1,14 +1,22 @@
 attitude_controller:
   ros__parameters:
     control_loop_rate: 10.0
-    P_ex: 6.0
-    P_ey: 6.0
-    P_ez: 6.0
-    P_wx: 1.0
-    P_wy: 1.0
-    P_wz: 1.0
+    P_ex_large: 6.0
+    P_ey_large: 6.0
+    P_ez_large: 6.0
+    P_wx_large: 1.0
+    P_wy_large: 1.0
+    P_wz_large: 1.0
+
+    P_ex_sas: 6.0
+    P_ey_sas: 6.0
+    P_ez_sas: 6.0
+    P_wx_sas: 1.0
+    P_wy_sas: 1.0
+    P_wz_sas: 1.0
+
     buoyancy: 264.09 # [N]
-    r_bv_v: [0.0, 0.0, 0.0] # [m] From CAD Model    
+    r_bv_v: [0.0, 0.0, 0.023] # [m] From CAD Model    
     enabled: false
 
 depth_controller:

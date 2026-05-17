@@ -189,6 +189,8 @@ class ThrusterMapper(Node):
             self.get_logger().warn(f"Thrust allocator failed: {ex}")
             self.shutdown_thrusters()
             return
+        if alpha < 0.99:
+            self.get_logger().warn(f"Thrust allocation alpha is below 1: {alpha:.3f} (method: {method})")
 
         tf_msg = ThrusterForces()
         tf_msg.back_right = float(thrust_forces[0])
