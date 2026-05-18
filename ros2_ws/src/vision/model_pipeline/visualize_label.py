@@ -7,6 +7,7 @@ Load random images from a folder, run inference (YOLO or RF-DETR), and display r
 Usage:
     python3 visualize_label.py --folder data/processed/test/images
     python3 visualize_label.py --folder /path/to/images --model-type rfdetr --model best_rf_detr_small_model.pth
+    python3 visualize_label.py --folder data/raw_import/images --from-label
 
 Controls:
     - Press any key to load the next random image
@@ -48,7 +49,7 @@ def load_classes() -> list[str]:
     if not classes_path.exists():
         return []
     with open(classes_path, 'r') as f:
-        data = yaml.safe_load(f)
+        data = yaml.safe_load(f) or {}
         return data.get("names", [])
 
 
@@ -147,46 +148,53 @@ def main():
                     label_path = parent_sibling
 
             if label_path is None:
-                print(f"No label file found for image {img_path.name}, skipping.")
-                continue
-
-            # parse YOLO label file (class x_center y_center width height) normalized
-            h, w = img.shape[:2]
-            boxes = []
-            confidences = []
-            class_ids = []
-            with open(label_path, 'r', encoding='utf-8') as lf:
-                for line in lf:
-                    parts = line.strip().split()
-                    if not parts:
-                        continue
-                    try:
-                        cls = int(parts[0])
-                        x_c = float(parts[1]) * w
-                        y_c = float(parts[2]) * h
-                        bw = float(parts[3]) * w
-                        bh = float(parts[4]) * h
-                    except Exception:
-                        print(f"Skipping invalid label line in {label_path}: {line.strip()}")
-                        continue
-
-                    x1 = x_c - bw / 2.0
-                    y1 = y_c - bh / 2.0
-                    x2 = x_c + bw / 2.0
-                    y2 = y_c + bh / 2.0
-                    boxes.append([x1, y1, x2, y2])
-                    confidences.append(1.0)
-                    class_ids.append(cls)
-
-            if boxes:
+                print(f"No label file found for image {img_path.name}, assuming empty background.")
                 detections = sv.Detections(
-                    xyxy=np.array(boxes),
-                    confidence=np.array(confidences),
-                    class_id=np.array(class_ids, dtype=int),
+                    xyxy=np.empty((0, 4)),
+                    confidence=np.empty((0,)),
+                    class_id=np.empty((0,), dtype=int)
                 )
             else:
-                print(f"No valid boxes in {label_path}, skipping.")
-                continue
+                # parse YOLO label file (class x_center y_center width height) normalized
+                h, w = img.shape[:2]
+                boxes = []
+                confidences = []
+                class_ids = []
+                with open(label_path, 'r', encoding='utf-8') as lf:
+                    for line in lf:
+                        parts = line.strip().split()
+                        if not parts:
+                            continue
+                        try:
+                            cls = int(parts[0])
+                            x_c = float(parts[1]) * w
+                            y_c = float(parts[2]) * h
+                            bw = float(parts[3]) * w
+                            bh = float(parts[4]) * h
+                        except Exception:
+                            print(f"Skipping invalid label line in {label_path}: {line.strip()}")
+                            continue
+
+                        x1 = x_c - bw / 2.0
+                        y1 = y_c - bh / 2.0
+                        x2 = x_c + bw / 2.0
+                        y2 = y_c + bh / 2.0
+                        boxes.append([x1, y1, x2, y2])
+                        confidences.append(1.0)
+                        class_ids.append(cls)
+
+                if boxes:
+                    detections = sv.Detections(
+                        xyxy=np.array(boxes),
+                        confidence=np.array(confidences),
+                        class_id=np.array(class_ids, dtype=int),
+                    )
+                else:
+                    detections = sv.Detections(
+                        xyxy=np.empty((0, 4)),
+                        confidence=np.empty((0,)),
+                        class_id=np.empty((0,), dtype=int)
+                    )
         else:
             if args.model_type == 'rfdetr':
                 detections = model.predict(img, threshold=args.conf)

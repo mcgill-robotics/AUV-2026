@@ -1,32 +1,60 @@
 #!/usr/bin/env python3
+"""
+Label Remapper
+
+Remaps label class ids using classes.yaml as the target, and reads the 
+current class names directly from the dataset's data.yaml file.
+Useful when a dataset source (like Roboflow) reorders or omits classes,
+ensuring the class indices match the target model's expected order.
+
+Usage:
+    python3 fix_labels.py --data-dir data/raw_import
+"""
 from pathlib import Path
 import argparse
 import yaml
 
+SCRIPT_DIR = Path(__file__).parent.resolve()
+CLASSES_YAML = SCRIPT_DIR / "classes.yaml"
+
 DEFAULT_LABEL_DIR = Path("data/raw_import/labels")
 DEFAULT_DATA_YAML = Path("data/raw_import/data.yaml")
-DEFAULT_DATA_DIR = Path("data/raw_import")
 
 
-def load_class_names(path: Path) -> list[str]:
-    if not path.exists():
-        raise FileNotFoundError(f"Class names file not found: {path}")
+def get_target_class_names() -> list[str]:
+    if not CLASSES_YAML.exists():
+        raise FileNotFoundError(f"Target classes file not found: {CLASSES_YAML}")
 
-    with path.open("r", encoding="utf-8") as f:
-        lines = [line.strip() for line in f if line.strip()]
+    with CLASSES_YAML.open("r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+        return data.get("names", [])
 
-    return lines
+
+def get_current_class_names(data_yaml: Path) -> list[str]:
+    if not data_yaml.exists():
+        raise FileNotFoundError(f"Current data.yaml not found: {data_yaml}")
+
+    with data_yaml.open("r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+        names = data.get("names", [])
+        
+        # YOLO format can sometimes be a dict {0: 'class1', 1: 'class2'}
+        if isinstance(names, dict):
+            names = [names[k] for k in sorted(names.keys())]
+            
+        return names
 
 
 def build_class_map(target_names: list[str], current_names: list[str]) -> dict[int, int]:
-    if len(target_names) != len(current_names):
-        print(
-            f"Warning: target has {len(target_names)} classes, current has {len(current_names)} classes."
-            " Only the shared line positions will be mapped."
-        )
+    class_map = {}
+    for current_idx, name in enumerate(current_names):
+        try:
+            target_idx = target_names.index(name)
+            class_map[current_idx] = target_idx
+        except ValueError:
+            print(f"Warning: class '{name}' in current_names not found in target_names. Its labels will be removed.")
 
-    mapping_size = min(len(target_names), len(current_names))
-    return {index: index for index in range(mapping_size)}
+    return class_map
 
 
 def remap_label_file(label_path: Path, class_map: dict[int, int]) -> None:
@@ -50,9 +78,11 @@ def remap_label_file(label_path: Path, class_map: dict[int, int]) -> None:
             parts[0] = str(class_map[old_class])
             new_lines.append(" ".join(parts))
 
-    if new_lines:
-        with label_path.open("w", encoding="utf-8") as f:
+    with label_path.open("w", encoding="utf-8") as f:
+        if new_lines:
             f.write("\n".join(new_lines) + "\n")
+        else:
+            f.write("")
 
 
 def update_data_yaml(data_yaml: Path, target_names: list[str]) -> None:
@@ -64,6 +94,7 @@ def update_data_yaml(data_yaml: Path, target_names: list[str]) -> None:
         data = yaml.safe_load(f) or {}
 
     data["nc"] = len(target_names)
+    # Ensure it's a list even if it was a dict before
     data["names"] = target_names
 
     with data_yaml.open("w", encoding="utf-8") as f:
@@ -76,22 +107,9 @@ def find_label_dirs(data_dir: Path) -> list[Path]:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Remap label class ids using target and current class_names.txt files."
+        description="Remap label class ids using classes.yaml and the dataset's data.yaml."
     )
 
-    # positional arguments
-    parser.add_argument(
-        "target_class_names",
-        type=Path,
-        help="Path to the target class_names.txt file",
-    )
-    parser.add_argument(
-        "current_class_names",
-        type=Path,
-        help="Path to the current class_names.txt file",
-    )
-
-    # flags
     parser.add_argument(
         "--data-dir",
         type=Path,
@@ -122,9 +140,15 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
-    target_names = load_class_names(args.target_class_names)
-    current_names = load_class_names(args.current_class_names)
-    class_map = build_class_map(target_names, current_names)
+    try:
+        target_names = get_target_class_names()
+    except FileNotFoundError as e:
+        print(e)
+        return
+
+    if not target_names:
+        print(f"No target classes found in {CLASSES_YAML}.")
+        return
 
     if args.data_dir is not None:
         if not args.data_dir.exists():
@@ -140,6 +164,14 @@ def main() -> None:
         data_yaml = args.data_yaml
         label_dirs = [args.label_dir]
 
+    try:
+        current_names = get_current_class_names(data_yaml)
+    except FileNotFoundError as e:
+        print(e)
+        return
+
+    class_map = build_class_map(target_names, current_names)
+
     label_files = []
     for label_dir in label_dirs:
         label_files.extend(sorted(label_dir.glob("*.txt")))
@@ -154,11 +186,9 @@ def main() -> None:
     if not args.skip_yaml:
         update_data_yaml(data_yaml, target_names)
 
-    print(f"Remapped labels using {args.current_class_names} -> {args.target_class_names}.")
+    print(f"Remapped labels successfully. Mapped {len(current_names)} current classes to {len(target_names)} target classes.")
     print(f"Updated {len(label_files)} label files.")
-    print(f"Target classes: {len(target_names)}")
 
 
 if __name__ == "__main__":
     main()
-
