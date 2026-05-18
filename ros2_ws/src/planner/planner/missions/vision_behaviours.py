@@ -207,3 +207,28 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
             if hasattr(self, 'navigation_client') and self.navigation_client:
                 self.navigation_client.reset_action_client()
 
+class GoNearObject(py_trees.behaviour.Behaviour):
+    def __init__(self, target_class: str):
+        super().__init__(f"GoNear{target_class}")
+        self.target_class = target_class
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+        self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
+
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.navigation_client = kwargs['shared_nav_client']
+        self.navigation_client.client_wait_for_server(timeout_sec=5.0) 
+
+        # Find the target in object map
+        if hasattr(self.blackboard, 'vision') and self.blackboard.vision.object_map is not None:
+            target_obj = None
+            for obj in self.blackboard.vision.object_map.array:
+                if obj.label == self.target_class:
+                    target_obj = obj
+                    break
+            
+            if target_obj is not None:
+                self.node.get_logger().info(f"[{self.name}] Found target '{self.target_class}' in vision! Moving near it.")
+
+    def update(self):
