@@ -10,7 +10,7 @@ Parameters:  a, b, c, d, e, dx, dy (m), alpha (deg), thruster force and PWM limi
 """
 
 import math
-import time
+
 import numpy as np
 import rclpy
 from rclpy.node import Node
@@ -65,6 +65,8 @@ class ThrusterMapper(Node):
 
         self.declare_parameter('thruster_PWM_lower_limit', 1100)
         self.declare_parameter('thruster_PWM_upper_limit', 1900)
+        self.declare_parameter('watchdog_timeout_sec', 1.0)  # Reset thrusters if no wrench received for this long
+        self.declare_parameter('arming_delay_sec', 1.0)  # Seconds to wait before accepting wrench commands
 
 
         # Geometric parameters of the thruster positions
@@ -145,15 +147,23 @@ class ThrusterMapper(Node):
             np.array(self.thruster_min_force, dtype=float)
         )
 
-        self.sub_cmd = self.create_subscription(
-            Wrench,
-            'controls/total_effort',
-            self.wrench_to_thrust,
-            qos
-        )
+        # QoS profile stored for deferred subscription creation
+        self._wrench_qos = qos
 
-        self._arming_timer = self.create_timer(1.0, self._do_arming_once)
-        self._arming_done = False
+        # Watchdog: reset thrusters if no wrench msg received within timeout
+        self._watchdog_timeout = self.get_parameter('watchdog_timeout_sec').value
+        self._last_wrench_time = None
+        self._watchdog_timer = self.create_timer(0.1, self._watchdog_callback)
+
+        # Arming: send neutral PWM first, then create the wrench subscription
+        # after the arming delay. No wrench messages can interfere during arming
+        # because the subscription does not exist yet.
+        arming_delay = self.get_parameter('arming_delay_sec').value
+        self.sub_cmd = None
+        self.re_arm()
+        self._arming_timer = self.create_timer(
+            arming_delay, self._activate_after_arming
+        )
 
     def _get_float(self, name: str) -> float:
         p: Parameter = self.get_parameter(name)
@@ -166,14 +176,35 @@ class ThrusterMapper(Node):
             return v
         raise ValueError(f'Parameter {name} is not a number (got {type(v)})')
 
-    def _do_arming_once(self):
-        if self._arming_done:
-            return
-        self._arming_done = True
+    def _activate_after_arming(self):
+        """Called once after the arming delay. Creates the wrench subscription
+        so that thruster commands can now flow through."""
         self._arming_timer.cancel()
-        self.re_arm()
+        self.sub_cmd = self.create_subscription(
+            Wrench,
+            'controls/total_effort',
+            self.wrench_to_thrust,
+            self._wrench_qos
+        )
+        self.get_logger().info('Arming complete - wrench subscription active.')
+
+    def _watchdog_callback(self):
+        """Resets thrusters to neutral if no wrench message has been received
+        within the watchdog timeout. Prevents the AUV from drifting on stale
+        Teensy PWM values."""
+        if self._last_wrench_time is None:
+            return
+        elapsed = (self.get_clock().now() - self._last_wrench_time).nanoseconds / 1e9
+        if elapsed > self._watchdog_timeout:
+            self.get_logger().warn(
+                f'Watchdog: no wrench received for {elapsed:.2f}s - resetting thrusters.'
+            )
+            self.shutdown_thrusters()
+            self._last_wrench_time = None
 
     def wrench_to_thrust(self, wrench_msg: Wrench):
+        self._last_wrench_time = self.get_clock().now()
+
         wrench_vec = np.array([
             wrench_msg.force.x,
             wrench_msg.force.y,
@@ -215,13 +246,10 @@ class ThrusterMapper(Node):
         self.pub_us.publish(pwm_msg)
 
     def re_arm(self):
-        msg1 = Int16MultiArray(data=[1500] * 8)
-        msg2 = Int16MultiArray(data=[1540] * 8)
-        self.pub_us.publish(msg1)
-        time.sleep(0.5)
-        self.pub_us.publish(msg2)
-        time.sleep(3.0)
-        self.pub_us.publish(msg1)
+        """Send neutral PWM to initialize thrusters."""
+        msg = Int16MultiArray(data=[1500] * 8)
+        self.pub_us.publish(msg)
+        self.get_logger().info('Sent arming signal (1500µs).')
 
     def shutdown_thrusters(self):
         msg = Int16MultiArray(data=[1500] * 8)

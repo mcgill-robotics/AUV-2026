@@ -24,6 +24,10 @@ thrust_mapper:
     thruster_PWM_lower_limit: 1100
     thruster_PWM_upper_limit: 1900
 
+    # Safety
+    watchdog_timeout_sec: 2.0   # Reset thrusters if no wrench received for this long
+    arming_delay_sec: 1.0       # Seconds to wait before accepting wrench commands
+
     # Geometric parameters for thruster positions (in meters). Consult README for details.
     a: 0.064399       # [m]
     b: 0.216983       # [m]
