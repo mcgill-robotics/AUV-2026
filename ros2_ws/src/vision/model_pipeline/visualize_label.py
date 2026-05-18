@@ -20,6 +20,7 @@ from pathlib import Path
 import cv2
 import yaml
 from ultralytics import YOLO
+import numpy as np
 
 import supervision as sv
 from rfdetr import RFDETRSmall
@@ -78,15 +79,30 @@ def main():
         default=0.5,
         help="Confidence threshold (default: 0.5)"
     )
+    parser.add_argument(
+        "--from-label",
+        action="store_true",
+        help="Use YOLO label files to annotate images instead of running a model",
+    )
+    parser.add_argument(
+        "--labels-dir",
+        type=str,
+        default=None,
+        help="Directory containing YOLO label files (optional). If omitted, the script will look next to each image or in sibling 'labels' folders.",
+    )
     args = parser.parse_args()
 
-    # Load model
-    if args.model_type == 'rfdetr':
-        model = RFDETRSmall(pretrain_weights=args.model)
+    # Load model or class names depending on mode
+    if args.from_label:
+        model = None
         class_names = load_classes()
     else:
-        model = YOLO(args.model)
-        class_names = list(model.names.values())
+        if args.model_type == 'rfdetr':
+            model = RFDETRSmall(pretrain_weights=args.model)
+            class_names = load_classes()
+        else:
+            model = YOLO(args.model)
+            class_names = list(model.names.values())
         
     box_annotator = sv.BoxAnnotator(thickness=2)
     label_annotator = sv.LabelAnnotator(smart_position=True, text_thickness=1, text_scale=0.3, text_padding=5)
@@ -110,11 +126,73 @@ def main():
         # Load and run inference
         img = cv2.imread(str(img_path))
         
-        if args.model_type == 'rfdetr':
-            detections = model.predict(img, threshold=args.conf)
+        if args.from_label:
+            # locate corresponding label file
+            label_path = None
+            stem_txt = img_path.with_suffix('.txt')
+            if args.labels_dir:
+                candidate = Path(args.labels_dir) / (img_path.stem + '.txt')
+                if candidate.exists():
+                    label_path = candidate
+            if label_path is None and stem_txt.exists():
+                label_path = stem_txt
+            # check common sibling 'labels' folders
+            if label_path is None:
+                sibling = img_path.parent / 'labels' / (img_path.stem + '.txt')
+                if sibling.exists():
+                    label_path = sibling
+            if label_path is None:
+                parent_sibling = img_path.parent.parent / 'labels' / (img_path.stem + '.txt')
+                if parent_sibling.exists():
+                    label_path = parent_sibling
+
+            if label_path is None:
+                print(f"No label file found for image {img_path.name}, skipping.")
+                continue
+
+            # parse YOLO label file (class x_center y_center width height) normalized
+            h, w = img.shape[:2]
+            boxes = []
+            confidences = []
+            class_ids = []
+            with open(label_path, 'r', encoding='utf-8') as lf:
+                for line in lf:
+                    parts = line.strip().split()
+                    if not parts:
+                        continue
+                    try:
+                        cls = int(parts[0])
+                        x_c = float(parts[1]) * w
+                        y_c = float(parts[2]) * h
+                        bw = float(parts[3]) * w
+                        bh = float(parts[4]) * h
+                    except Exception:
+                        print(f"Skipping invalid label line in {label_path}: {line.strip()}")
+                        continue
+
+                    x1 = x_c - bw / 2.0
+                    y1 = y_c - bh / 2.0
+                    x2 = x_c + bw / 2.0
+                    y2 = y_c + bh / 2.0
+                    boxes.append([x1, y1, x2, y2])
+                    confidences.append(1.0)
+                    class_ids.append(cls)
+
+            if boxes:
+                detections = sv.Detections(
+                    xyxy=np.array(boxes),
+                    confidence=np.array(confidences),
+                    class_id=np.array(class_ids, dtype=int),
+                )
+            else:
+                print(f"No valid boxes in {label_path}, skipping.")
+                continue
         else:
-            results = model.predict(img, verbose=False, conf=args.conf)
-            detections = sv.Detections.from_ultralytics(results[0])
+            if args.model_type == 'rfdetr':
+                detections = model.predict(img, threshold=args.conf)
+            else:
+                results = model.predict(img, verbose=False, conf=args.conf)
+                detections = sv.Detections.from_ultralytics(results[0])
 
         annotated = img.copy()
         labels = [

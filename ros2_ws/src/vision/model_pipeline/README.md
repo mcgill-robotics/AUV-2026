@@ -67,7 +67,6 @@ Note: this assumes data is in `data/raw_import`. To override this, see [example 
    ```
 
 
-
 ## 2. Pre-labeling for Roboflow
 
 You can use the `export_labels.py` script to run inference on a folder of raw images and automatically export `.txt` YOLO-format bounding box annotations perfectly matched to your dataset. This allows you to bulk upload pre-annotated data directly into Roboflow for manual refinement!
@@ -97,6 +96,10 @@ After running the command, simply drag the generated `my_raw_images_prelabeled` 
 4. **Download Dataset to Machine**
     1. Select export format **YOLOv11** (even if using RF-DETR, because our script organizes everything automatically!).
     2. Download the zip and extract its contents (`images/`, `labels/`, `data.yaml`) into `AUV-2026/ros2_ws/src/vision/model_pipeline/data/raw_import/`.
+5. **Undo Roboflow Shenanigans**
+    1. Roboflow sometimes re-orders the labels in alphabetical order. To undo this, look in the data.yaml given by roboflow. If the order of the labels already matches your `class_names.txt` in the model package (`models/local_rfdetr_test`), you don't need to do anything. If not, continue following these steps.
+    2. Paste the labels in roboflow's `data.yaml` into a new file called `class_names.txt` inside `model_pipeline` and format it the same way as the model package `class_names.txt` (one class per line, nothing else)
+    3. Run `fix_labels.py ../models/local_rfdetr_onnx_test/class_names.txt class_names.txt --data-dir data/raw_import`
 5. **Run the Pre-processing Script**
     1. For **YOLO**: `python3 organize_dataset.py --input data/raw_import --output data/processed`
     2. For **RF-DETR**: `python3 organize_dataset.py --input data/raw_import --output data/processed_coco --format coco`
@@ -247,6 +250,15 @@ The default parameters for the underlying scripts are set to values that we foun
 |  | `--dataset-dir` | COCO dataset path (RF-DETR only) | `data/processed` |
 |  | `--grad-accum-steps` | Gradient accumulation steps (RF-DETR only) | `4` |
 
+- Undoing roboflow shenanigans (handled by `fix_labels.py`)
+
+| Flag | Description | Default Value |
+| --- | --- | --- |
+| `--data-dir` | Root directory containing `data.yaml` and any subfolders named `labels` | `None` |
+| `--label-dir` | Directory containing label .txt files to remap | `data/raw_import/labels` or folder named `labels` inside `--data-dir` path if specified |
+| `--data-yaml` | Path to `data.yaml` to update with target class names | `data/raw_import/data.taml` or file named `data.yaml` inside `--data-dir` path if specified |
+| `--skip-yaml` | Do not update the `data.yaml` file | `False` |
+
 ## 5. Visualize Predictions
 
 You can view inference results on random images from your dataset using `visualize_label.py` to verify the model predictions before deployment:
@@ -259,4 +271,9 @@ python3 visualize_label.py --folder data/processed/test/images --model-type yolo
 **For RF-DETR:**
 ```bash
 python3 visualize_label.py --folder data/processed_coco/test/images --model-type rfdetr --model best_rf_detr_small_model.pth
+```
+
+**Visualize from existing label**
+```bash
+python3 visualize_label.py --folder data/raw_import/images --from-label
 ```
