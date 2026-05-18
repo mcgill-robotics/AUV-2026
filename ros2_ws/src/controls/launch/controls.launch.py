@@ -58,6 +58,8 @@ def generate_launch_description():
         "trajectory_planner_launch_file",
         default_value=default_trajectory_planner,
         description="Path to the trajectory planner launch file",
+    )
+    
     declare_navigation = DeclareLaunchArgument(
         "navigation_server_launch_file",
         default_value=default_navigation,
@@ -96,6 +98,8 @@ def generate_launch_description():
             LaunchConfiguration("trajectory_planner_launch_file")
         ),
         launch_arguments={"sim": sim}.items(),
+    )
+
     navigation_server_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             LaunchConfiguration("navigation_server_launch_file")

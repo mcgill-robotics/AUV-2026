@@ -73,7 +73,7 @@ The package provides a single ROS node: `thrust_mapper`.
  Topic | Message | Description |
 | ------ | ------- | ---------- |
 | `/propulsion/forces` | `ThrusterForces` | Array of thruster forces (N) for each thruster  |
-| `/propulsion/microseconds` | `ThrusterMicroseconds` | Array of PWM signals (µs) sent to each thrusterr |
+| `/propulsion/microseconds` | `Int16MultiArray` | Array of PWM signals (µs) sent to each thruster |
 
 
 
@@ -92,7 +92,7 @@ The package provides a single ROS node: `thrust_mapper`.
 
 - `geometry_msgs` – for `Wrench` messages
 
-- `auv_msgs` – custom AUV message definitions (`ThrusterForces`, `ThrusterMicroseconds`)
+- `auv_msgs` – custom AUV message definitions (`ThrusterForces`)
 
 - `numpy` – for matrix math
 

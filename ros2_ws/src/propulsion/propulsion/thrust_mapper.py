@@ -3,8 +3,8 @@
 Description: Thrust mapper node subscribes to the effort topic, converts the wrench readings to thruster forces,
 and then converts the forces to PWM signals and publishes them.
 
-Subscribes:  /controls/effort (geometry_msgs/msg/Wrench)
-Publishes:   /propulsion/microseconds (auv_msgs/msg/ThrusterMicroseconds)
+Subscribes:  /controls/total_effort (geometry_msgs/msg/Wrench)
+Publishes:   /propulsion/microseconds (std_msgs/msg/Int16MultiArray)
              /propulsion/forces      (auv_msgs/msg/ThrusterForces)
 Parameters:  a, b, c, d, e, dx, dy (m), alpha (deg), thruster force and PWM limits. 
 """

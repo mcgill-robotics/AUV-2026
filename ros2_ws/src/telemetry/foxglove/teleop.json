@@ -82,14 +82,14 @@
                         ]
                 },
                 "Publish!wrench": {
-                        "topicName": "/controls/effort",
+                        "topicName": "/controls/total_effort",
                         "datatype": "geometry_msgs/msg/Wrench",
                         "buttonText": "Publish Wrench",
                         "value": "{\n  \"force\": { \"x\": 0.0, \"y\": 0.0, \"z\": 0.0 },\n  \"torque\": { \"x\": 0.0, \"y\": 0.0, \"z\": 0.0 }\n}"
                 },
                 "Publish!thrusters": {
                         "topicName": "/propulsion/microseconds",
-                        "datatype": "auv_msgs/msg/ThrusterMicroseconds",
+                        "datatype": "std_msgs/msg/Int16MultiArray",
                         "buttonText": "Publish PWM",
                         "value": "{\n  \"thruster_1\": 1500,\n  \"thruster_2\": 1500,\n  \"thruster_3\": 1500,\n  \"thruster_4\": 1500,\n  \"thruster_5\": 1500,\n  \"thruster_6\": 1500,\n  \"thruster_7\": 1500,\n  \"thruster_8\": 1500\n}"
                 },

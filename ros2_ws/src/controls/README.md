@@ -101,7 +101,7 @@ Publishing a flip command onto `/controls/flip_command`:
         ros2 topic pub --once /controls/flip_command auv_msgs/msg/FlipCommand "{axis: 0, count: 1, direction: 1, flip_duration: 5.0}"
 
 ## Nodes
-The package provides six ROS nodes: `depth_controller`, `attitude_controller`, `x_controller`, `y_controller`, `superimposer`, `trajecotry_planner`, and `navigation_server`.
+The package provides six ROS nodes: `depth_controller`, `attitude_controller`, `x_controller`, `y_controller`, `superimposer`, `trajectory_planner`, and `navigation_server`.
 
 - `depth_controller` input: `/auv_frame/depth`, `/controls/depth_setpoint`
 

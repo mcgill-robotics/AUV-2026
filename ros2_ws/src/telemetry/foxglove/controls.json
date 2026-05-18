@@ -50,7 +50,7 @@
                         "diffEnabled": false
                 },
                 "Publish!effort": {
-                        "topicName": "/controls/effort",
+                        "topicName": "/controls/total_effort",
                         "datatype": "geometry_msgs/msg/Wrench",
                         "advancedView": true
                 },

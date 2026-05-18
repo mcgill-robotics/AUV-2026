@@ -45,7 +45,7 @@ controls:
   combined_effort: /controls/combined_effort
   
   # Direct control input (for teleop - TBD)
-  effort: /controls/effort
+  total_effort: /controls/total_effort
 
 # =============================================================================
 # PROPULSION

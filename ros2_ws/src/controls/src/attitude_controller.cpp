@@ -127,7 +127,7 @@ namespace controls
         quatd q_error = q_iv_.conjugate() * q_iv2;
         q_error = sensors::math::canonicalizeShortest(q_error);
         double q_w = std::clamp(q_error.w(), -1.0, 1.0);
-        double angle_error = 2.0 * std::acos(q_w);;
+        double angle_error = 2.0 * std::acos(q_w);
         Vec3 feedback = Vec3::Zero();
 
         if (angle_error < sas_switch_)
@@ -138,9 +138,9 @@ namespace controls
         }
         else
         {
-        // Large error: use attitude control
-        Vec3 error_vector = Vec3(q_error.x(), q_error.y(), q_error.z());
-       feedback = P_e_large_ * error_vector - P_w_large_ * w_iv_;
+            // Large error: use attitude control
+            Vec3 error_vector = Vec3(q_error.x(), q_error.y(), q_error.z());
+            feedback = P_e_large_ * error_vector - P_w_large_ * w_iv_;
         }
 
         return feedback;
