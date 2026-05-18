@@ -99,14 +99,14 @@ After running the command, simply drag the generated `my_raw_images_prelabeled` 
 5. **Undo Roboflow Shenanigans**
     1. Roboflow sometimes re-orders the labels in alphabetical order. To undo this and perfectly map everything to the correct targets (as defined in `classes.yaml`), simply run the `fix_labels.py` script.
     2. Run `python3 fix_labels.py --data-dir data/raw_import`. The script will automatically read the target labels from `classes.yaml` and the current labels from your Roboflow `data.yaml`, then correctly remap your dataset indices
-5. **Run the Pre-processing Script**
+6. **Run the Pre-processing Script**
     1. For **YOLO**: `python3 organize_dataset.py --input data/raw_import --output data/processed`
     2. For **RF-DETR**: `python3 organize_dataset.py --input data/raw_import --output data/processed_coco --format coco`
-6. **Execute Fine-tuning Process**
+7. **Execute Fine-tuning Process**
     1. Download or locate your previously trained synthetic baseline model (`.pt` or `.pth`) and place it inside `model_pipeline`.
     2. For **YOLO**: Run `./training.sh <your_synthetic_model>.pt` inside the Docker container.
     3. For **RF-DETR**: Run `./training.sh <your_synthetic_model>.pth --model-type rfdetr` inside the Docker container.
-7. **Locate Your Fine-Tuned Weights**
+8. **Locate Your Fine-Tuned Weights**
     1. YOLO outputs generally save to: `runs/detect/yolo11s/weights/best.pt`
     2. RF-DETR outputs generally save to: `runs/rfdetr/best_rf_detr_small_model.pth`
 
