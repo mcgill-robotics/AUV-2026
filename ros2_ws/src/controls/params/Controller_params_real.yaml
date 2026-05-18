@@ -16,8 +16,8 @@ attitude_controller:
     P_wz_sas: 2.0
 
     sas_switch_deg: 5.0
-    buoyancy: 275.4 # [N]
-    r_bv_v: [0.0, 0.0, 0.0] # [m] Tuned in pool tests.    
+    buoyancy: 265.17 # [N]
+    r_bv_v: [0.0, 0.0, 0.005523] # [m] From CAD Model    
     enabled: false
 
 depth_controller:

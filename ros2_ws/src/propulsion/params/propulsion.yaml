@@ -20,13 +20,16 @@ thrust_mapper:
     min_thrust_t7: -20.0
     min_thrust_t8: -20.0
 
+    # Thruster PWM limits in microseconds
+    thruster_PWM_lower_limit: 1100
+    thruster_PWM_upper_limit: 1900
+
     # Geometric parameters for thruster positions (in meters). Consult README for details.
-    # TODO: Update these values based on new thruster bracket.
-    a: 0.080619       # [m]
-    b: 0.226341       # [m]
-    c: 0.202572       # [m]
-    d: 0.228205       # [m]
-    e: 0.004945       # [m]
+    a: 0.064399       # [m]
+    b: 0.216983       # [m]
+    c: 0.155022       # [m]
+    d: 0.262459       # [m]
+    e: -0.001603      # [m]
     alpha: 45.0       # [deg]
-    dx: 0.0           # [m]
-    dy: 0.0           # [m]
+    dx: -0.001732     # [m]
+    dy: 0.004523      # [m]

@@ -63,8 +63,8 @@ class ThrusterMapper(Node):
         self.declare_parameter('min_thrust_t7', -40.0)
         self.declare_parameter('min_thrust_t8', -40.0)
 
-        self.declare_parameter('thruster_PWM_lower_limit', 1228)
-        self.declare_parameter('thruster_PWM_upper_limit', 1768)
+        self.declare_parameter('thruster_PWM_lower_limit', 1100)
+        self.declare_parameter('thruster_PWM_upper_limit', 1900)
 
 
         # Geometric parameters of the thruster positions
