@@ -12,6 +12,8 @@ ultralytics
 roboflow
 albumentations
 pandas
+scipy
+osqp
 rfdetr
 supervision
 pytorch_lightning

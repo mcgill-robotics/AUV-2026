@@ -18,7 +18,7 @@ setup(
 
         (os.path.join('share', package_name, 'params'), glob('params/*.yaml')),
     ],
-    install_requires=['setuptools', 'numpy'],
+    install_requires=['setuptools', 'numpy', 'osqp', 'scipy'],
     zip_safe=True,
     maintainer='McGill Robotics',
     maintainer_email='dev@mcgillrobotics.com',
