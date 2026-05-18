@@ -5,7 +5,7 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Int16MultiArray
 from geometry_msgs.msg import Wrench
-from propulsion.thrust_mapper_utils import force_to_pwm_thruster
+from propulsion.force_to_pwm_converter import force_to_pwm_thruster
 import rclpy.duration
 from std_srvs.srv import Trigger
 from auv_msgs.srv import SetInt32
@@ -163,13 +163,8 @@ class DryTestNode(Node):
         response.success = True
         response.message = "Re-arming thrusters..."
 
-        arming_msg = ([1540] * 8)
-
         self.publish_thruster(reset_msg)
         self.get_clock().sleep_for(rclpy.duration.Duration(seconds=1.0))
-        self.publish_thruster(arming_msg)
-        self.get_clock().sleep_for(rclpy.duration.Duration(seconds=1.0))
-        self.publish_thruster(reset_msg)
 
         return response
 
