@@ -141,13 +141,6 @@ class BasicActionBehaviour(py_trees.behaviour.Behaviour):
             else:
                 self.action_status = ActionStatus.FAILED
 
-        def terminate(self, new_status: py_trees.common.Status):
-            """Called if the tree aborts this branch or if it naturally finishes."""
-            if new_status == py_trees.common.Status.INVALID:
-                if hasattr(self, 'node') and self.node:
-                    self.node.get_logger().warn(f"[{self.name}] Aborted branch. Canceling active goal.")
-                if hasattr(self, 'navigation_client') and self.navigation_client:
-                    self.navigation_client.reset_action_client()
 
 
 class BasicTriggerServiceBehaviour(py_trees.behaviour.Behaviour):

@@ -291,7 +291,7 @@ class NavigateToGapBehaviour(py_trees.behaviour.Behaviour):
     def _on_goal_result(self, goal_success: bool):
         self.action_status = ActionStatus.SUCCEEDED if goal_success else ActionStatus.FAILED
 
-    def terminate(self, new_status):
-        if new_status == py_trees.common.Status.INVALID:
-            if hasattr(self, 'navigation_client') and self.navigation_client:
-                self.navigation_client.reset_action_client()
+
+
+
+class SlalomLayer(py_trees.composites.Selector):

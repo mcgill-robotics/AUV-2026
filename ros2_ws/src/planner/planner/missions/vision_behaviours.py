@@ -71,10 +71,7 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
                     if obj.label == self.target_class:
                         self.node.get_logger().info(f"[{self.name}] Found target '{self.target_class}' in vision!")
                         
-                        # Cancel any active sweep turn
-                        if self.action_status == ActionStatus.PENDING:
-                            self.navigation_client.reset_action_client()
-                        
+
                         if self.look_at_on_success:
                             self.node.get_logger().info(f"[{self.name}] Transitioning to final alignment with {self.target_class}.")
                             self.is_looking_at_target = True
@@ -200,12 +197,7 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
         else:
             self.action_status = ActionStatus.FAILED
 
-    def terminate(self, new_status):
-        if new_status == py_trees.common.Status.INVALID:
-            if hasattr(self, 'node') and self.node:
-                self.node.get_logger().warn(f"[{self.name}] Aborted. Canceling sweep turn.")
-            if hasattr(self, 'navigation_client') and self.navigation_client:
-                self.navigation_client.reset_action_client()
+
 
 
 class ScanBehaviour(py_trees.behaviour.Behaviour):
@@ -315,10 +307,8 @@ class ScanBehaviour(py_trees.behaviour.Behaviour):
     def _on_goal_result(self, goal_success: bool):
         self.action_status = ActionStatus.SUCCEEDED if goal_success else ActionStatus.FAILED
 
-    def terminate(self, new_status):
-        if new_status == py_trees.common.Status.INVALID:
-            if hasattr(self, 'navigation_client') and self.navigation_client:
-                self.navigation_client.reset_action_client()
+
+
 
 
 
