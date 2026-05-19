@@ -245,8 +245,7 @@ def generate_launch_description():
             config_path,
             {
                 "front_cam_detection_frame_topic": default_config["front_cam_object_detection"]["ros__parameters"]["detection_frame_topic"],
-                "down_cam_detection_frame_topic": default_config["down_cam_object_detection"]["ros__parameters"]["detection_topic"],
-                "auv_frame_id": default_config["front_cam_object_detection"]["ros__parameters"]["auv_frame_id"],
+                "frame_id_auv": default_config["front_cam_object_detection"]["ros__parameters"]["auv_frame_id"],
                 "max_per_class_labels": list(default_config["object_map"]["ros__parameters"]["max_per_class"].keys()),
                 "max_per_class_values": list(default_config["object_map"]["ros__parameters"]["max_per_class"].values()),
                 "sim": LaunchConfiguration("sim"),
