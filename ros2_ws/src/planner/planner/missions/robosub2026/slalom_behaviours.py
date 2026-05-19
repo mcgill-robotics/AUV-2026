@@ -1,8 +1,11 @@
 import math
 import py_trees
-from controls.goal_helpers import move_global
+from py_trees.decorators import Retry
+from controls.goal_helpers import move_global, translate_field_centric
 from controls.utils import yaw_from_quaternion, normalize_angle
 from ..action_status_enum import ActionStatus
+from ..mission_behaviour_components import BasicActionBehaviour
+from ..vision_behaviours import ScanBehaviour
 
 
 class MatchPipesBehaviour(py_trees.behaviour.Behaviour):
@@ -12,6 +15,10 @@ class MatchPipesBehaviour(py_trees.behaviour.Behaviour):
 
     Writes the computed navigation target (midpoint + perpendicular yaw) to the
     blackboard for the downstream NavigateToGap behaviour to consume.
+
+    The gate_side parameter is a fallback default. At runtime, the behaviour
+    reads /gate/side from the blackboard (written by GateTask). If present,
+    the blackboard value overrides the config default.
 
     This is a one-shot computation that completes in a single tick.
     """
@@ -33,12 +40,23 @@ class MatchPipesBehaviour(py_trees.behaviour.Behaviour):
         self.node = kwargs['node']
         self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/gate/side", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/slalom/target_x", access=py_trees.common.Access.WRITE)
         self.blackboard.register_key(key="/slalom/target_y", access=py_trees.common.Access.WRITE)
         self.blackboard.register_key(key="/slalom/target_z", access=py_trees.common.Access.WRITE)
         self.blackboard.register_key(key="/slalom/target_yaw", access=py_trees.common.Access.WRITE)
 
     def update(self):
+        # --- Resolve gate_side: blackboard (from GateTask) takes priority over config default ---
+        gate_side = self.gate_side  # config default
+        try:
+            bb_side = self.blackboard.gate.side
+            if bb_side in ("left", "right"):
+                gate_side = bb_side
+                self.node.get_logger().info(f"[{self.name}] Using gate_side='{gate_side}' from blackboard.")
+        except (AttributeError, KeyError):
+            self.node.get_logger().info(f"[{self.name}] No /gate/side on blackboard, using config default '{gate_side}'.")
+
         # --- Get AUV pose ---
         if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.pose is None:
             self.node.get_logger().warn(f"[{self.name}] Waiting for /sensors/pose.")
@@ -181,7 +199,7 @@ class MatchPipesBehaviour(py_trees.behaviour.Behaviour):
         )
 
         # --- Compute midpoint and depth based on gate side ---
-        if self.gate_side == "left":
+        if gate_side == "left":
             target_x = (red_x + left_x) / 2.0
             target_y = (red_y + left_y) / 2.0
             target_z = (closest_red.pose.position.z + left_z) / 2.0
@@ -216,7 +234,7 @@ class MatchPipesBehaviour(py_trees.behaviour.Behaviour):
 
         self.node.get_logger().info(
             f"[{self.name}] Target: ({target_x:.2f}, {target_y:.2f}, z={target_z:.2f}) "
-            f"yaw={math.degrees(target_yaw):.1f}° (gate_side={self.gate_side})"
+            f"yaw={math.degrees(target_yaw):.1f}° (gate_side={gate_side})"
         )
         return py_trees.common.Status.SUCCESS
 
@@ -226,9 +244,21 @@ class NavigateToGapBehaviour(py_trees.behaviour.Behaviour):
     Reads the slalom navigation target from the blackboard and drives the AUV
     to the computed gap midpoint with the perpendicular orientation.
     """
-    def __init__(self, adjust_depth: bool = False, name="Navigate To Gap"):
+    def __init__(
+        self,
+        adjust_depth: bool = False,
+        position_tolerance: float = 0.3,
+        yaw_tolerance_rad: float = 0.3,
+        hold_time: float = 0.5,
+        timeout: float = 45.0,
+        name="Navigate To Gap",
+    ):
         super().__init__(name)
         self.adjust_depth = adjust_depth
+        self.position_tolerance = position_tolerance
+        self.yaw_tolerance_rad = yaw_tolerance_rad
+        self.hold_time = hold_time
+        self.timeout = timeout
         self.blackboard = self.attach_blackboard_client(name=self.name)
 
         self.action_status = ActionStatus.NOT_SENT
@@ -274,8 +304,11 @@ class NavigateToGapBehaviour(py_trees.behaviour.Behaviour):
             y=target_y, 
             z=target_z if self.adjust_depth else 0.0,
             yaw=target_yaw, 
-            do_z=self.adjust_depth, 
-            timeout=60.0
+            do_z=self.adjust_depth,
+            tolerance=self.position_tolerance,
+            yaw_tolerance=self.yaw_tolerance_rad,
+            hold_time=self.hold_time,
+            timeout=self.timeout,
         )
         self.navigation_client.send_navigation_goal(
             goal, self.name, self._on_goal_response, self._on_goal_result
@@ -295,3 +328,73 @@ class NavigateToGapBehaviour(py_trees.behaviour.Behaviour):
 
 
 class SlalomLayer(py_trees.composites.Selector):
+    """
+    Handles a single slalom layer with a nominal execution and a fallback failsafe.
+    If the nominal execution fails (e.g., pipes not matched), it falls back to driving
+    forward by the layer distance to clear the layer blindly.
+    """
+    def __init__(
+        self,
+        layer_num: int,
+        gate_side: str,
+        scan_angle_deg: float,
+        scan_pause_time: float,
+        collinearity_threshold: float,
+        min_forward_dist: float,
+        layer_distance: float,
+        adjust_depth: bool,
+        position_tolerance: float = 0.3,
+        yaw_tolerance_rad: float = 0.3,
+        hold_time: float = 0.5,
+        timeout: float = 45.0,
+        scan_yaw_tolerance_rad: float = math.radians(30.0),
+        scan_hold_time: float = 0.1,
+        scan_timeout: float = 30.0,
+    ):
+        super().__init__(f"Slalom Layer {layer_num} Strategy", memory=True)
+
+        nominal = py_trees.composites.Sequence(f"Layer {layer_num} Nominal", memory=True)
+        match_behavior = MatchPipesBehaviour(
+            gate_side=gate_side,
+            collinearity_threshold=collinearity_threshold,
+            min_forward_dist=min_forward_dist,
+            name=f"Match Pipes L{layer_num}",
+        )
+
+        retry_match = Retry(
+            name=f"Retry Match L{layer_num}",
+            child=match_behavior,
+            num_failures=30  # 1 seconds grace period for object map at 30Hz
+        )
+
+        nominal.add_children([
+            ScanBehaviour(
+                scan_angle_deg=scan_angle_deg,
+                pause_time=scan_pause_time,
+                yaw_tolerance_rad=scan_yaw_tolerance_rad,
+                turn_hold_time_s=scan_hold_time,
+                turn_timeout_s=scan_timeout,
+                name=f"Scan Pipes L{layer_num}",
+            ),
+            retry_match,
+            NavigateToGapBehaviour(
+                adjust_depth=adjust_depth,
+                position_tolerance=position_tolerance,
+                yaw_tolerance_rad=yaw_tolerance_rad,
+                hold_time=hold_time,
+                timeout=timeout,
+                name=f"Navigate To Gap L{layer_num}",
+            ),
+        ])
+
+        failsafe = BasicActionBehaviour(
+            name=f"Layer {layer_num} Failsafe (Drive Forward Field-X)",
+            goal=translate_field_centric(
+                dx=layer_distance, 
+                tolerance=position_tolerance,
+                hold_time=hold_time,
+                timeout=timeout
+            ),
+        )
+
+        self.add_children([nominal, failsafe])

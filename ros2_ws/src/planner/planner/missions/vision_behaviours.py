@@ -11,7 +11,19 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
     If it completes `max_attempts` full 360-degree sweeps without finding `target_class`, it fails.
     If the object is seen at any point, it returns SUCCESS immediately.
     """
-    def __init__(self, target_class: str, num_steps: int = 5, max_attempts: int = 2, step_timeout: float = 2.0, clockwise: bool = False, look_at_on_success: bool = True, name="SearchSweep"):
+    def __init__(
+        self,
+        target_class: str,
+        num_steps: int = 5,
+        max_attempts: int = 2,
+        step_timeout: float = 2.0,
+        clockwise: bool = False,
+        look_at_on_success: bool = True,
+        yaw_tolerance_rad: float = math.radians(30.0),  # (rad) yaw convergence threshold per turn step
+        turn_hold_time_s: float = 0.1,                   # (s) hold time before turn step SUCCESS
+        turn_timeout_s: float = 30.0,                    # (s) timeout before turn step FAILURE
+        name="SearchSweep",
+    ):
         super().__init__(name)
         self.target_class = target_class
         self.num_steps = num_steps
@@ -19,6 +31,9 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
         self.step_timeout = step_timeout
         self.clockwise = clockwise
         self.look_at_on_success = look_at_on_success
+        self.yaw_tolerance_rad = yaw_tolerance_rad
+        self.turn_hold_time_s = turn_hold_time_s
+        self.turn_timeout_s = turn_timeout_s
         
         # Calculate how much to turn per step (in radians)
         self.sweep_angle_rad = (2 * math.pi) / float(num_steps)
@@ -107,7 +122,9 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
                     target_y=self.target_found_pos[1],
                     current_x=auv_x,
                     current_y=auv_y,
-                    hold_time=self.step_timeout # Hold a bit to let vision settle on target
+                    tolerance=self.yaw_tolerance_rad,   # (rad)
+                    hold_time=self.step_timeout,        # (s) hold to let vision settle on target
+                    timeout=self.turn_timeout_s,        # (s)
                 )
                 
                 self.navigation_client.send_navigation_goal(goal, self.name, self.on_server_goal_response, self.on_server_goal_result)
@@ -174,7 +191,12 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
             
             # Send the absolute yaw turn (with a large timeout to ensure it has time to physically turn)
             # We use a tiny hold_time because the behavior itself handles the stabilization pause.
-            goal = set_global_yaw(yaw_rad=target_yaw, hold_time=0.1, tolerance=0.175*3, timeout=30.0)
+            goal = set_global_yaw(
+                yaw_rad=target_yaw,
+                tolerance=self.yaw_tolerance_rad,  # (rad)
+                hold_time=self.turn_hold_time_s,   # (s)
+                timeout=self.turn_timeout_s,       # (s)
+            )
             
             self.navigation_client.send_navigation_goal(
                 goal, 
@@ -205,12 +227,23 @@ class ScanBehaviour(py_trees.behaviour.Behaviour):
     Performs a ±scan_angle sweep from the current heading to populate
     the vision object map with nearby objects on both sides.
 
-    Sequence: rotate left → pause → center → pause → right → pause → center → pause → SUCCESS
+    Sequence: left -> right -> center -> SUCCESS
     """
-    def __init__(self, scan_angle_deg: float = 30.0, pause_time: float = 1.0, name="Scan Pipes"):
+    def __init__(
+        self,
+        scan_angle_deg: float = 30.0,
+        pause_time: float = 1.0,
+        yaw_tolerance_rad: float = math.radians(30.0),  # (rad) yaw convergence threshold per turn
+        turn_hold_time_s: float = 0.1,                   # (s) hold time before turn SUCCESS
+        turn_timeout_s: float = 30.0,                    # (s) timeout before turn FAILURE
+        name="Scan Pipes",
+    ):
         super().__init__(name)
         self.scan_angle_rad = math.radians(scan_angle_deg)
         self.pause_time = pause_time
+        self.yaw_tolerance_rad = yaw_tolerance_rad
+        self.turn_hold_time_s = turn_hold_time_s
+        self.turn_timeout_s = turn_timeout_s
 
         self.blackboard = self.attach_blackboard_client(name=self.name)
 
@@ -236,11 +269,13 @@ class ScanBehaviour(py_trees.behaviour.Behaviour):
         self.is_pausing = False
 
     def _scan_offsets(self):
-        """Returns the sequence of yaw offsets from center to execute."""
+        """Returns the sequence of yaw offsets from center to execute.
+        Pattern: left -> right -> center (3 moves covering the full scan range).
+        Convention: +yaw = counterclockwise (left), -yaw = clockwise (right).
+        """
         return [
-            -self.scan_angle_rad,   # rotate left
-            0.0,                     # rotate back to center
-            +self.scan_angle_rad,   # rotate right
+            +self.scan_angle_rad,   # rotate left (counterclockwise)
+            -self.scan_angle_rad,   # rotate right (sweeps through center)
             0.0,                     # rotate back to center
         ]
 
@@ -292,7 +327,12 @@ class ScanBehaviour(py_trees.behaviour.Behaviour):
                 f"[{self.name}] Rotating {direction} to {math.degrees(target_yaw):.1f}° "
                 f"(phase {self.current_phase + 1}/{len(offsets)})"
             )
-            goal = set_global_yaw(yaw_rad=target_yaw, hold_time=0.1, tolerance=0.175 * 3, timeout=30.0)
+            goal = set_global_yaw(
+                yaw_rad=target_yaw,
+                tolerance=self.yaw_tolerance_rad,  # (rad)
+                hold_time=self.turn_hold_time_s,   # (s)
+                timeout=self.turn_timeout_s,       # (s)
+            )
             self.navigation_client.send_navigation_goal(
                 goal, self.name, self._on_goal_response, self._on_goal_result
             )
