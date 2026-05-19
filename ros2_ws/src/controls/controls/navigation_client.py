@@ -7,7 +7,19 @@ from . import goal_helpers
 from std_msgs.msg import String
 
 class NavigationClient(Node):
-        """ A client for interacting with the navigation action server. """
+        """ A client for interacting with the navigation action server.
+        
+        All behavior tree nodes share a single instance of this client. Goal preemption
+        is handled automatically by send_navigation_goal(), which cancels any active goal
+        before sending a new one.
+
+        WARNING: Do NOT call reset_action_client() from py_trees Behaviour.terminate().
+        When PyTrees switches branches (e.g. Selector failover), terminate() on the old
+        branch fires AFTER the new branch has already sent its goal. Because all behaviors
+        share this client, the old branch's terminate() will cancel the NEW branch's goal,
+        causing it to fail immediately. reset_action_client() should only be called from
+        the tree's shutdown hook in root_tree.py.
+        """
 
         def __init__(self, name="navigation_client", debug=False) -> None:
                 """ Initializes the navigation client node. """
@@ -84,7 +96,8 @@ class NavigationClient(Node):
 
                 # Perform the custom goal result, if provided by the user
                 if custom_goal_result != None:
-                        custom_goal_result(goal_success=result)
+                        # Extract the actual success boolean from the AUVNavigate.Result message
+                        custom_goal_result(goal_success=result.result.success)
                 # Clear the current goal handle since the goal is completed
                 self.current_goal_handle = None
         
@@ -113,10 +126,15 @@ class NavigationClient(Node):
 
         def reset_action_client(self) -> None:
                 """ Resets the action client by canceling active goal and clearing the current goal handle.
-                Also sets the on restult callback to the default get_result_callback method. 
 
-                Args: None
-                Outputs: None, but will log the reset action. """
+                WARNING: Only call this from the tree-level shutdown hook (root_tree.py finally block).
+                Do NOT call from individual Behaviour.terminate() methods — see class docstring
+                for the cross-talk bug this causes.
+
+                Note: This only cancels action server goal tracking. It does NOT stop the PID
+                controllers or zero the thrusters. The propulsion watchdog handles motor shutoff
+                when command topics go stale after ROS node shutdown.
+                """
 
                 if self.current_goal_handle is not None:
                         if self.debug: self.get_logger().info("Reset action client: Cancelling active navigation goal.")
