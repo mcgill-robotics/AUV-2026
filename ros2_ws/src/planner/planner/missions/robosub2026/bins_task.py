@@ -2,7 +2,7 @@ import math
 import py_trees
 import planner.missions.vision_behaviours as vision_behaviours
 import planner.missions.mission_behaviour_components as basic_behaviours
-from controls.goal_helpers import move_global
+from controls.goal_helpers import move_global, set_depth
 
 class BinsTask(py_trees.composites.Sequence):
     """
@@ -23,7 +23,6 @@ class BinsTask(py_trees.composites.Sequence):
             step_timeout=0.5)
         
         # 2. Go to bin structure
-        go_near_bin_structure
 
         # 2. Find the closest bin
         search_for_bins = vision_behaviours.SearchSweepBehaviour(
@@ -89,3 +88,74 @@ class GoAboveClosestBin(py_trees.behaviour.Behaviour):
         
         
         return py_trees.common.Status.FAILURE
+    
+class GoNearBinStructure(py_trees.composites.Sequence):
+    def __init__(self):
+        super().__init__("GoNearBinStructure")
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+
+        go_3m_away_node = vision_behaviours.GoDistanceFromObject(
+            target_class="bin_structure",
+            target_distance=3.0)
+        
+        # Find the height of the bin structure
+        if hasattr(self.blackboard, 'vision') and self.blackboard.vision.object_map is not None:
+            bin_structure = None
+            for obj in self.blackboard.vision.object_map.array:
+                if obj.label == "bin_structure":
+                    bin_structure = obj
+                    break
+            
+            if bin_structure is None:
+                return py_trees.common.Status.FAILURE
+            
+            self.bin_structure_height = bin_structure.pose.position.z
+
+        go_to_height_goal = set_depth(self.bin_structure_height + 0.5)
+        go_to_height_node = basic_behaviours.BasicActionBehaviour(name="GoToBinStructureHeight", goal=go_to_height_goal)
+        
+        # Go distance away incrementally since the object position will update in object map
+        go_2m_away_node = vision_behaviours.GoDistanceFromObject(
+            target_class="bin_structure",
+            target_distance=2.0
+        )
+
+        go_1_5m_away_node = vision_behaviours.GoDistanceFromObject(
+            target_class="bin_structure",
+            target_distance=1.5
+        )
+        go_1m_away_node = vision_behaviours.GoDistanceFromObject(
+            target_class="bin_structure",
+            target_distance=1.0
+        )
+
+        self.add_children([
+            go_3m_away_node,
+            go_to_height_node,
+            go_2m_away_node,
+            go_1_5m_away_node,
+            go_1m_away_node
+        ])
+
+class GoToObjectHeight(py_trees.behaviour.Behaviour):
+    def __init__(self, target_class: str):
+        super().__init__("GoToObjectHeight")
+        self.target_class = target_class
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+
+    def setup(self, **kwargs):
+        self.navigation_client = kwargs['navigation_client']
+        if hasattr(self.blackboard, 'vision') and self.blackboard.vision.object_map is not None:
+            target_object = None
+            for obj in self.blackboard.vision.object_map.array:
+                if obj.label == self.target_class:
+                    target_object = obj
+                    break
+            
+            if target_object is None:
+                return py_trees.common.Status.FAILURE
+            
+            target_height = target_object.position.z
+            self.goal_node = set_depth(target_height + 0.5)
+        else:
+            return py_trees.common.Status.FAILURE

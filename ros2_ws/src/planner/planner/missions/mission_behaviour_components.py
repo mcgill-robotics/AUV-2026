@@ -125,7 +125,7 @@ class BasicActionBehaviour(py_trees.behaviour.Behaviour):
             if not goal_response:
                 self.action_status = ActionStatus.FAILED
 
-        def on_server_goal_result(self, goal_success) -> None:
+        def on_server_goal_result(self, goal_success: bool) -> None:
             """
             Description: This function provides customized logic to be executed when
             the goal is finished. In this case, the custom implementation updates the status of the mission

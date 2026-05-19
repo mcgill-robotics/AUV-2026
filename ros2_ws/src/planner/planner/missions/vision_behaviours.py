@@ -1,6 +1,6 @@
 import math
 import py_trees
-from controls.goal_helpers import set_global_yaw, look_at
+from controls.goal_helpers import set_global_yaw, look_at, move_global
 from controls.utils import yaw_from_quaternion, normalize_angle
 from .action_status_enum import ActionStatus
 
@@ -82,6 +82,7 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
                             self.action_status = ActionStatus.NOT_SENT
                             self.sent_goal = False
                             # Continue update() to send the look_at goal immediately
+
                         else:
                             return py_trees.common.Status.SUCCESS
         
@@ -207,10 +208,11 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
             if hasattr(self, 'navigation_client') and self.navigation_client:
                 self.navigation_client.reset_action_client()
 
-class GoNearObject(py_trees.behaviour.Behaviour):
-    def __init__(self, target_class: str):
-        super().__init__(f"GoNear{target_class}")
+class GoDistanceFromObject(py_trees.composites.Sequence):
+    def __init__(self, target_class: str, target_distance: float):
+        super().__init__(f"GoDistanceFrom{target_class}")
         self.target_class = target_class
+        self.target_distance = target_distance
         self.blackboard = self.attach_blackboard_client(name=self.name)
         self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
@@ -228,7 +230,45 @@ class GoNearObject(py_trees.behaviour.Behaviour):
                     target_obj = obj
                     break
             
-            if target_obj is not None:
-                self.node.get_logger().info(f"[{self.name}] Found target '{self.target_class}' in vision! Moving near it.")
+            if target_obj is None:
+                self.node.get_logger().error(f"[{self.name}] Target '{self.target_class}' not found in vision during setup!")
+                return py_trees.common.Status.FAILURE
+            
+            target_x = target_obj.pose.position.x
+            target_y = target_obj.pose.position.y
 
+            current_pose = self.blackboard.sensors.pose.pose.position
+
+            direction_vector = (target_x - current_pose.x, target_y - current_pose.y)
+            magnitude = math.sqrt(direction_vector[0]**2 + direction_vector[1]**2)
+
+            if magnitude <= self.target_distance:
+                self.node.get_logger().info(f"[{self.name}] Already within target distance of {self.target_class}. No movement needed.")
+                return py_trees.common.Status.SUCCESS
+            
+            normalized_direction = (direction_vector[0]/magnitude, direction_vector[1]/magnitude)
+
+            goal_x = target_x - normalized_direction[0] * self.target_distance
+            goal_y = target_y - normalized_direction[1] * self.target_distance
+
+            goal = move_global(goal_x, goal_y)
+            self.navigation_client.reset_action_client()
+            self.navigation_client.send_navigation_goal(goal, self.name)
+
+            return py_trees.common.Status.RUNNING
+
+        else: return py_trees.common.Status.FAILURE
+
+    def on_server_goal_response(self, goal_response: bool):
+        if not goal_response:
+            return py_trees.common.Status.FAILURE
+    
+    def on_server_goal_result(self, goal_success: bool):
+        if goal_success:
+            return py_trees.common.Status.SUCCEEDED
+        else:
+            return py_trees.common.Status.FAILURE
+        
     def update(self):
+        # This behavior is essentially fire-and-forget. The result of the goal determines the status.
+        return py_trees.common.Status.RUNNING
