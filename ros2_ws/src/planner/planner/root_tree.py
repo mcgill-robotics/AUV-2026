@@ -1,4 +1,5 @@
 # Python dependencies
+import math
 import py_trees
 import threading
 
@@ -47,6 +48,41 @@ def main():
     orbit_pre_qual_positional_tolerance_scale = node.get_parameter("pre_qual.orbit.positional_tolerance_scale").get_parameter_value().double_value
     orbit_pre_qual_hold_time_initial = node.get_parameter("pre_qual.orbit.hold_time_initial").get_parameter_value().double_value
     orbit_pre_qual_hold_time_segments = node.get_parameter("pre_qual.orbit.hold_time_segments").get_parameter_value().double_value
+
+    # Slalom task parameters
+    node.declare_parameter("slalom.num_layers", 3)
+    node.declare_parameter("slalom.gate_side", "right")
+    node.declare_parameter("slalom.scan_angle_deg", 60.0)
+    node.declare_parameter("slalom.scan_pause_time", 1.0)
+    node.declare_parameter("slalom.collinearity_threshold", 0.5)
+    node.declare_parameter("slalom.min_forward_dist", 0.5)
+    node.declare_parameter("slalom.layer_distance", 2.0)
+    node.declare_parameter("slalom.initial_depth", -1.0)
+    node.declare_parameter("slalom.position_tolerance", 0.3)
+    node.declare_parameter("slalom.yaw_tolerance_deg", 17.0)
+    node.declare_parameter("slalom.hold_time", 0.5)
+    node.declare_parameter("slalom.timeout", 45.0)
+    node.declare_parameter("slalom.scan_yaw_tolerance_deg", 30.0)
+    node.declare_parameter("slalom.scan_hold_time", 0.1)
+    node.declare_parameter("slalom.scan_timeout", 30.0)
+
+    slalom_params = {
+        "num_layers": node.get_parameter("slalom.num_layers").get_parameter_value().integer_value,
+        "gate_side": node.get_parameter("slalom.gate_side").get_parameter_value().string_value,
+        "scan_angle_deg": node.get_parameter("slalom.scan_angle_deg").get_parameter_value().double_value,
+        "scan_pause_time": node.get_parameter("slalom.scan_pause_time").get_parameter_value().double_value,
+        "collinearity_threshold": node.get_parameter("slalom.collinearity_threshold").get_parameter_value().double_value,
+        "min_forward_dist": node.get_parameter("slalom.min_forward_dist").get_parameter_value().double_value,
+        "layer_distance": node.get_parameter("slalom.layer_distance").get_parameter_value().double_value,
+        "initial_depth": node.get_parameter("slalom.initial_depth").get_parameter_value().double_value,
+        "position_tolerance": node.get_parameter("slalom.position_tolerance").get_parameter_value().double_value,
+        "yaw_tolerance_rad": math.radians(node.get_parameter("slalom.yaw_tolerance_deg").get_parameter_value().double_value),  # deg -> rad
+        "hold_time": node.get_parameter("slalom.hold_time").get_parameter_value().double_value,
+        "timeout": node.get_parameter("slalom.timeout").get_parameter_value().double_value,
+        "scan_yaw_tolerance_rad": math.radians(node.get_parameter("slalom.scan_yaw_tolerance_deg").get_parameter_value().double_value),  # deg -> rad
+        "scan_hold_time": node.get_parameter("slalom.scan_hold_time").get_parameter_value().double_value,
+        "scan_timeout": node.get_parameter("slalom.scan_timeout").get_parameter_value().double_value,
+    }
 
     # Set the root of the tree
     root = py_trees.composites.Parallel("Root", policy=py_trees.common.ParallelPolicy.SuccessOnAll(synchronise=False))
@@ -116,7 +152,8 @@ def main():
         orbit_pre_qual_yaw_tolerance_scale=orbit_pre_qual_yaw_tolerance_scale,
         orbit_pre_qual_positional_tolerance_scale=orbit_pre_qual_positional_tolerance_scale,
         orbit_pre_qual_hold_time_initial=orbit_pre_qual_hold_time_initial,
-        orbit_pre_qual_hold_time_segments=orbit_pre_qual_hold_time_segments
+        orbit_pre_qual_hold_time_segments=orbit_pre_qual_hold_time_segments,
+        slalom_params=slalom_params,
     )
 
     # Add children to root
