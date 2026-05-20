@@ -99,6 +99,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-$ROS_DISTRO-py-trees-ros-interfaces \
     ros-$ROS_DISTRO-py-trees-ros-tutorials \
     ros-$ROS_DISTRO-py-trees-ros-viewer \
+    ros-$ROS_DISTRO-rclcpp \
     ros-$ROS_DISTRO-rclcpp-lifecycle \
     ros-$ROS_DISTRO-rosidl-default-generators \
     ros-$ROS_DISTRO-tf-transformations \
