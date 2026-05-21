@@ -71,6 +71,7 @@ jobs:
           proc_trace_table_show: false
 
       - name: Checkout
+        # Using actions/checkout@v6 explicitly to ensure updated Node/npm environment and eliminate associated CI/CD deprecation warnings.
         uses: actions/checkout@v6
         with:
           fetch-tags: true

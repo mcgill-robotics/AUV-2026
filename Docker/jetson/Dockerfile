@@ -16,9 +16,12 @@ ARG ROS2_DIST=humble
 # CI has a different runner than the jetson (notably git permissions are different and there is no GPU)
 ARG CI
 
+# Set up pip index as a build argument so it can be updated easily
+ARG JETSON_PIP_INDEX=https://pypi.jetson-ai-lab.io/jp6/cu126
+
 # Set up environment
 ENV CI=${CI} \
-    TZ=Europe/Paris \
+    TZ=America/Montreal \
     ROS_DISTRO=${ROS2_DIST} \
     # assume anything trying to build this container is for jetson, whether CI or physical jetson hardware
     IS_JETSON=true \
@@ -44,7 +47,6 @@ RUN curl -fsSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o
     btop \
     dialog \
     g++ \
-    git \
     git-lfs \
     iproute2 \
     iputils-ping \
@@ -166,12 +168,12 @@ RUN uv pip install \
     --no-cache \
     --no-build-isolation \
     --system \
-    --extra-index-url https://pypi.jetson-ai-lab.io/jp6/cu126 \
+    --extra-index-url ${JETSON_PIP_INDEX} \
     -r /tmp/requirements.txt \
     -c /tmp/constraints.txt && \
     uv pip install \
     -v \
-    --extra-index-url https://pypi.jetson-ai-lab.io/jp6/cu126 \
+    --extra-index-url ${JETSON_PIP_INDEX} \
     --index-strategy unsafe-best-match \
     --no-deps \
     --system \
@@ -216,7 +218,13 @@ COPY .colcon ${COLCON_HOME}/
 # Create ultralytics config dir and set up bashrc in one layer
 WORKDIR /home/$USERNAME/AUV-2026
 RUN mkdir -p /home/$USERNAME/.config/Ultralytics && \
-    echo "source /opt/ros/humble/setup.bash && source /opt/ros/micro_ros_ws/install/local_setup.bash && source /opt/ros/foxglove_ws/install/local_setup.bash && source /home/$USERNAME/AUV-2026/ros2_ws/install/setup.bash" >> ~/.bashrc
+    { \
+        echo "source /opt/ros/humble/setup.bash"; \
+        echo "source /opt/ros/micro_ros_ws/install/local_setup.bash"; \
+        echo "source /opt/ros/foxglove_ws/install/local_setup.bash"; \
+        echo "source /opt/ros/vision_opencv_ws/install/local_setup.bash"; \
+        echo "source /home/$USERNAME/AUV-2026/ros2_ws/install/setup.bash"; \
+    } >> ~/.bashrc
 
 # Entrypoint to fix Group IDs to allow GPU access
 ENTRYPOINT ["entrypoint.sh"]
