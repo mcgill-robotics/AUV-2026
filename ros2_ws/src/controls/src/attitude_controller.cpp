@@ -52,7 +52,7 @@ namespace controls
         sas_switch_ = sas_switch_deg_ * M_PI / 180.0;
 
         q_iv_ = quatd::Identity(); // Initial orientation: identity quaternion
-        w_iv_ = Vec3::Zero(); // Initial angular velocity: zero vector
+        w_iv_v = Vec3::Zero(); // Initial angular velocity: zero vector
         q_iv2_ = quatd::Identity(); // Initial target orientation: identity quaternion
 
         P_e_large_ << P_ex_large_, 0, 0,
@@ -78,10 +78,10 @@ namespace controls
             rclcpp::SensorDataQoS().keep_last(1),
             std::bind(&AttitudeController::imu_callback, this, std::placeholders::_1)
         );
-        sub_target_orientation_ = this->create_subscription<geometry_msgs::msg::Quaternion>(
-            "/controls/quaternion_setpoint",
+        sub_attitude_reference_ = this->create_subscription<auv_msgs::msg::AttitudeReference>(
+            "/controls/attitude_reference",
             1,
-            std::bind(&AttitudeController::target_orientation_callback, this, std::placeholders::_1)
+            std::bind(&AttitudeController::target_attitude_callback, this, std::placeholders::_1)
         );
         parameter_callback_handle_ = this->add_on_set_parameters_callback(
             std::bind(&AttitudeController::parameters_callback, this, std::placeholders::_1)
@@ -104,45 +104,50 @@ namespace controls
         );
 
         // Extract angular velocity vector from IMU message
-        w_iv_ = Vec3(
+        w_iv_v = Vec3(
             msg->angular_velocity.x,
             msg->angular_velocity.y,
             msg->angular_velocity.z
         );
     }
 
-    void AttitudeController::target_orientation_callback(const geometry_msgs::msg::Quaternion::SharedPtr msg)
+    void AttitudeController::target_attitude_callback(const auv_msgs::msg::AttitudeReference::SharedPtr msg)
     {
         q_iv2_ = quatd(
-            msg->w,
-            msg->x,
-            msg->y,
-            msg->z
+            msg->orientation.w,
+            msg->orientation.x,
+            msg->orientation.y,
+            msg->orientation.z
+        );
+        w_ref_v = Vec3(
+            msg->angular_velocity.x,
+            msg->angular_velocity.y,
+            msg->angular_velocity.z
         );
     }
 
 
-    Vec3 AttitudeController::feedback_effort(const quatd& q_iv2)
+    Vec3 AttitudeController::feedback_effort(const quatd& q_error, const ControlMode& mode)
     {
-        quatd q_error = q_iv_.conjugate() * q_iv2;
-        q_error = sensors::math::canonicalizeShortest(q_error);
-        double q_w = std::clamp(q_error.w(), -1.0, 1.0);
-        double angle_error = 2.0 * std::acos(q_w);
+
         Vec3 feedback = Vec3::Zero();
 
-        if (angle_error < sas_switch_)
+        switch(mode)
         {
-            // Small error: use SAS
-            Vec3 error_vector = Vec3(q_error.x(), q_error.y(), q_error.z());
-            feedback = P_e_sas_ * error_vector - P_w_sas_ * w_iv_;
+            case ControlMode::LARGE_ERROR:
+            {
+                double theta = 2.0 * std::acos(std::clamp(q_error.w(), -1.0, 1.0));
+                Vec3 axis_error = q_error.vec().normalized();
+                Vec3 error_vec = theta * axis_error;
+                feedback = P_e_large_ * error_vec - P_w_large_ * (w_iv_v - w_ref_v);
+                break;
+            }
+            case ControlMode::SAS:
+            {
+                feedback = P_e_sas_ * Vec3(q_error.x(), q_error.y(), q_error.z()) - P_w_sas_ * w_iv_v; // Small-angle approximation: use vector part of quaternion error directly
+                break;
+            }
         }
-        else
-        {
-            // Large error: use attitude control
-            Vec3 error_vector = Vec3(q_error.x(), q_error.y(), q_error.z());
-            feedback = P_e_large_ * error_vector - P_w_large_ * w_iv_;
-        }
-
         return feedback;
     }
 
@@ -158,7 +163,22 @@ namespace controls
 
     wrench_msg AttitudeController::compute_control_effort()
     {
-        Vec3 feedback = feedback_effort(q_iv2_);
+        quatd q_error = q_iv_.conjugate() * q_iv2_;
+        q_error = sensors::math::canonicalizeShortest(q_error);
+        double q_w = std::clamp(q_error.w(), -1.0, 1.0);
+        double angle_error = 2.0 * std::acos(q_w);
+        ControlMode mode;
+
+        if (angle_error < sas_switch_)
+        {
+            mode = ControlMode::SAS;
+        }
+        else
+        {
+            mode = ControlMode::LARGE_ERROR;
+        }
+
+        Vec3 feedback = feedback_effort(q_error, mode);
         Vec3 feedforward = feedforward_effort();
         Vec3 total_torque = feedback + feedforward;
 

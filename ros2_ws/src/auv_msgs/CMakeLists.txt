@@ -17,6 +17,7 @@ set(msg_files
 	"msg/PingerTimeDifference.msg"
 	"msg/ThrusterForces.msg"
 	"msg/FlipCommand.msg"
+	"msg/AttitudeReference.msg"
 	"msg/UnityState.msg"
 	"msg/VelocityReport.msg"
 	"msg/VisionDetection.msg"

@@ -10,14 +10,14 @@ namespace controls
                         1,
                         std::bind(&TrajectoryPlanner::flip_command_callback, this, std::placeholders::_1)
                 );
-                sub_target_orientation_ = this->create_subscription<geometry_msgs::msg::Quaternion>(
-                        "/controls/quaternion_setpoint",
+                sub_reference_attitude_ = this->create_subscription<auv_msgs::msg::AttitudeReference>(
+                        "/controls/attitude_reference",
                         1,
-                        std::bind(&TrajectoryPlanner::target_orientation_callback, this, std::placeholders::_1)
+                        std::bind(&TrajectoryPlanner::reference_attitude_callback, this, std::placeholders::_1)
                 );
 
-                pub_target_orientation_ = this->create_publisher<geometry_msgs::msg::Quaternion>(
-                        "/controls/quaternion_setpoint",
+                pub_reference_attitude_ = this->create_publisher<auv_msgs::msg::AttitudeReference>(
+                        "/controls/attitude_reference",
                         1
                 );
 
@@ -27,16 +27,16 @@ namespace controls
                 );
         }
 
-        void TrajectoryPlanner::target_orientation_callback(const geometry_msgs::msg::Quaternion::SharedPtr msg)
+        void TrajectoryPlanner::reference_attitude_callback(const auv_msgs::msg::AttitudeReference::SharedPtr msg)
         {
                 if (!flip_in_progress_)
                 {
                         // Update initial orientation for flip if not currently flipping
                         q_start_ = quatd(
-                                msg->w,
-                                msg->x,
-                                msg->y,
-                                msg->z
+                                msg->orientation.w,
+                                msg->orientation.x,
+                                msg->orientation.y,
+                                msg->orientation.z
                         );
                 }
         }
@@ -97,25 +97,36 @@ namespace controls
                         q_v1v2.vec() = flip_axis_ * std::sin(theta / 2.0);
 
                         quatd q_target = q_start_ * q_v1v2;
-                        publish_quaternion(q_target);      
+
+                        float s_dot = minimum_jerk_derivative(u);
+                        Vec3 w_ref_v = s_dot * flip_axis_ * total_angle_rad_/ total_duration_;
+
+                        publish_attitude_reference(q_target, w_ref_v);
                 }
         }
 
-        void TrajectoryPlanner::publish_quaternion(const quatd& q) const
+        void TrajectoryPlanner::publish_attitude_reference(const quatd& q, const Vec3& w_ref_v) const
         {
-                geometry_msgs::msg::Quaternion msg;
-                msg.w = q.w();
-                msg.x = q.x();
-                msg.y = q.y();
-                msg.z = q.z();
-
-                pub_target_orientation_->publish(msg);
+                auv_msgs::msg::AttitudeReference msg;
+                msg.orientation.w = q.w();
+                msg.orientation.x = q.x();
+                msg.orientation.y = q.y();
+                msg.orientation.z = q.z();
+                msg.angular_velocity.x = w_ref_v.x();
+                msg.angular_velocity.y = w_ref_v.y();
+                msg.angular_velocity.z = w_ref_v.z();
+                pub_reference_attitude_->publish(msg);
         }
 
         float TrajectoryPlanner::minimum_jerk(const float u) const
         {
 
                 return 10 * std::pow(u, 3) - 15 * std::pow(u, 4) + 6 * std::pow(u, 5);
+        }
+
+        float TrajectoryPlanner::minimum_jerk_derivative(const float u) const
+        {
+                return 30 * std::pow(u, 2) - 60 * std::pow(u, 3) + 30 * std::pow(u, 4);
         }
 }
 

@@ -1,14 +1,14 @@
 thrust_mapper:
   ros__parameters:
     # Maximum thrust values that can be commanded for each thruster (in Newtons)
-    max_thrust_t1: 40.0
-    max_thrust_t2: 40.0
-    max_thrust_t3: 40.0
-    max_thrust_t4: 40.0
-    max_thrust_t5: 40.0
-    max_thrust_t6: 40.0
-    max_thrust_t7: 40.0
-    max_thrust_t8: 40.0
+    max_thrust_t1: 28.45
+    max_thrust_t2: 28.45
+    max_thrust_t3: 28.45
+    max_thrust_t4: 28.45
+    max_thrust_t5: 28.45
+    max_thrust_t6: 28.45
+    max_thrust_t7: 28.45
+    max_thrust_t8: 28.45
 
     # Minimum thrust values that can be commanded for each thruster (in Newtons)
     min_thrust_t1: -20.0
@@ -21,8 +21,8 @@ thrust_mapper:
     min_thrust_t8: -20.0
 
     # Thruster PWM limits in microseconds
-    thruster_PWM_lower_limit: 1100
-    thruster_PWM_upper_limit: 1900
+    thruster_PWM_lower_limit: 1196
+    thruster_PWM_upper_limit: 1804
 
     # Safety
     watchdog_timeout_sec: 2.0   # Reset thrusters if no wrench received for this long

@@ -45,7 +45,7 @@ namespace controls
        this->declare_parameter<double>("effort_bias_torque_x", 0.0);
        this->declare_parameter<double>("effort_bias_torque_y", 0.0);
        this->declare_parameter<double>("effort_bias_torque_z", 0.0);
-       this->declare_parameter<double>("publish_hz", 30.0); // publish frequency
+       this->declare_parameter<double>("publish_hz", 50.0); // publish frequency
        this->declare_parameter<double>("max_planar_effort", 0.0); // 0 = no limit
        effort_bias_force_x = this->get_parameter("effort_bias_force_x").as_double();
        effort_bias_force_y = this->get_parameter("effort_bias_force_y").as_double();

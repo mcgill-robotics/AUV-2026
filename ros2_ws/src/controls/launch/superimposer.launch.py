@@ -16,7 +16,7 @@ def generate_launch_description():
                         'effort_bias_torque_x': 0.0,
                         'effort_bias_torque_y': 0.0,
                         'effort_bias_torque_z': 0.0,
-                        'publish_hz': 40.0,
+                        'publish_hz': 50.0,
                         'max_planar_effort': 20.0
                 }]
         )

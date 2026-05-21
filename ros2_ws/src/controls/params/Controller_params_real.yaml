@@ -1,6 +1,6 @@
 attitude_controller:
   ros__parameters:
-    control_loop_hz: 100.0
+    control_loop_hz: 50.0
     P_ex_large: 6.0
     P_ey_large: 6.0
     P_ez_large: 6.0

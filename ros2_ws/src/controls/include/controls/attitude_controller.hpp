@@ -7,6 +7,7 @@
 #include <geometry_msgs/msg/vector3_stamped.hpp>
 #include <geometry_msgs/msg/wrench.hpp>
 #include <message_filters/subscriber.h>
+#include <auv_msgs/msg/attitude_reference.hpp>
 
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
@@ -57,6 +58,12 @@ namespace controls
                 Mat3 P_e_sas_;
                 Mat3 P_w_sas_;
 
+                enum class ControlMode
+                {
+                    LARGE_ERROR,
+                    SAS
+                };
+
                 // Control Loop Frequency
                 double control_loop_hz_;
 
@@ -66,14 +73,15 @@ namespace controls
 
 
                 rclcpp::Subscription<imu_msg>::SharedPtr sub_imu_;
-                rclcpp::Subscription<geometry_msgs::msg::Quaternion>::SharedPtr sub_target_orientation_;
+                rclcpp::Subscription<auv_msgs::msg::AttitudeReference>::SharedPtr sub_attitude_reference_;
 
                 // State variables
                 quatd q_iv_;
-                Vec3 w_iv_;
+                Vec3 w_iv_v; // Vehicle angular velocity vector in the inertial frame, expressed in the vehicle frame
 
                 //Target state variables
                 quatd q_iv2_; 
+                Vec3 w_ref_v; // Target (reference) angular velocity vector in the inertial frame, expressed in the body frame
 
 
 
@@ -83,8 +91,8 @@ namespace controls
                 bool enabled_;
 
                 void imu_callback(const imu_msg::SharedPtr msg);
-                void target_orientation_callback(const geometry_msgs::msg::Quaternion::SharedPtr msg);
-                Vec3 feedback_effort(const quatd& q_iv2);
+                void target_attitude_callback(const auv_msgs::msg::AttitudeReference::SharedPtr msg);
+                Vec3 feedback_effort(const quatd& q_iv2, const ControlMode& mode);
                 Vec3 feedforward_effort();
                 void control_loop_callback();
                 rcl_interfaces::msg::SetParametersResult parameters_callback(

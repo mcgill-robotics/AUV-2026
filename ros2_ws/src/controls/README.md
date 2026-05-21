@@ -71,7 +71,7 @@ Publishing a depth setpoint onto `/controls/y_setpoint`:
 
 Publishing an attitude setpoint onto `/controls/quaternion_setpoint`:
 
-        ros2 topic pub /controls/quaternion_setpoint geometry_msgs/msg/Quaternion "{x: 0, y: 0, z: 0.7071, w: 0.7071}"
+        ros2 topic pub /controls/attitude_reference auv_msgs/msg/AttitudeReference "{orientation: {x: 0.0, y: 0.0, z: 0.7071, w: 0.7071}, angular_velocity: {x: 0.0, y: 0.0, z: 0.0}}"
 
 ### Navigation Server (Action Client)
 To send a test 3D goal to the Navigation Server via the ROS 2 Action CLI:

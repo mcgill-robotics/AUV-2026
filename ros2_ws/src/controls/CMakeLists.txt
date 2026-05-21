@@ -58,7 +58,8 @@ ament_target_dependencies(attitude_controller
   nav_msgs
   message_filters
   Eigen3
-  sensors)
+  sensors
+  auv_msgs)
 
 ament_target_dependencies(superimposer
   rclcpp
