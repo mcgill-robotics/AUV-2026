@@ -157,7 +157,7 @@ def main():
     )
 
     # Add children to root
-    root.add_children([pose_subscriber, twist_subscriber, object_map_subscriber, missions])
+    root.add_children([pose_subscriber, twist_subscriber, object_map_subscriber, down_cam_subscriber, missions])
 
     # Create the behaviour tree and setup
     tree = py_trees_ros.trees.BehaviourTree(root=root, unicode_tree_debug=True)

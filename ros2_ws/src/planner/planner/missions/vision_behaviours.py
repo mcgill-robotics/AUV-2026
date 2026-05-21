@@ -348,15 +348,9 @@ class ScanBehaviour(py_trees.behaviour.Behaviour):
     def _on_goal_result(self, goal_success: bool):
         self.action_status = ActionStatus.SUCCEEDED if goal_success else ActionStatus.FAILED
 
-
-
-
-
-
-
 class GoDistanceFromObject(py_trees.composites.Sequence):
     def __init__(self, target_class: str, target_distance: float):
-        super().__init__(f"GoDistanceFrom{target_class}")
+        super().__init__(f"GoDistanceFrom{target_class}", memory=True)
         self.target_class = target_class
         self.target_distance = target_distance
         self.blackboard = self.attach_blackboard_client(name=self.name)
@@ -368,6 +362,7 @@ class GoDistanceFromObject(py_trees.composites.Sequence):
         self.navigation_client = kwargs['shared_nav_client']
         self.navigation_client.client_wait_for_server(timeout_sec=5.0) 
 
+    def initialise(self):
         # Find the target in object map
         if hasattr(self.blackboard, 'vision') and self.blackboard.vision.object_map is not None:
             target_obj = None
