@@ -85,7 +85,9 @@ ObjectTracker::ObjectTracker(
     const std::vector<std::string>& large_structure_labels,
     const std::vector<std::string>& pipe_labels,
     float min_new_track_distance,
+    bool large_structure_separation_enabled,
     float min_large_structure_separation,
+    bool large_structure_pipe_separation_enabled,
     float min_large_structure_pipe_separation,
     float gating_threshold,
     int min_hits,
@@ -108,7 +110,9 @@ ObjectTracker::ObjectTracker(
         std::unordered_set<std::string>(pipe_labels.begin(), pipe_labels.end());
  
     this->min_new_track_distance = min_new_track_distance;
+    this->large_structure_separation_enabled = large_structure_separation_enabled;
     this->min_large_structure_separation = min_large_structure_separation;
+    this->large_structure_pipe_separation_enabled = large_structure_pipe_separation_enabled;
     this->min_large_structure_pipe_separation = min_large_structure_pipe_separation;
     this->gating_threshold = gating_threshold;
     this->min_hits = min_hits;
@@ -505,13 +509,13 @@ void ObjectTracker::create_new_tracks(
                 const Eigen::Vector3d existing_pos = existing_track.kf.state();
                 const double dist_xy = xy_distance(new_pos, existing_pos);
                 // check if new large structure is too close to existing pipe
-                if (pipe_labels.count(existing_track.label) > 0 &&
+                if (large_structure_pipe_separation_enabled && pipe_labels.count(existing_track.label) > 0 &&
                     dist_xy < min_large_structure_pipe_separation) {
                     too_close = true;
                     break;
                 }
                 // check if new large structure is too close to existing large structure of different class
-                if (large_structure_labels.count(existing_track.label) > 0 &&
+                if (large_structure_separation_enabled && large_structure_labels.count(existing_track.label) > 0 &&
                     existing_track.label != label &&
                     dist_xy < min_large_structure_separation) {
                     too_close = true;
@@ -525,12 +529,12 @@ void ObjectTracker::create_new_tracks(
         if (!too_close && is_large_structure) {
             for (const auto& [persistent_label, persistent_pos] : persistent_positions) {
                 const double dist_xy = xy_distance(new_pos, persistent_pos);
-                if (pipe_labels.count(persistent_label) > 0 &&
+                if (large_structure_pipe_separation_enabled && pipe_labels.count(persistent_label) > 0 &&
                     dist_xy < min_large_structure_pipe_separation) {
                     too_close = true;
                     break;
                 }
-                if (large_structure_labels.count(persistent_label) > 0 &&
+                if (large_structure_separation_enabled && large_structure_labels.count(persistent_label) > 0 &&
                     persistent_label != label &&
                     dist_xy < min_large_structure_separation) {
                     too_close = true;
