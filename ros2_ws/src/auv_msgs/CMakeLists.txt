@@ -22,6 +22,8 @@ set(msg_files
 	"msg/VisionDetection.msg"
 	"msg/VisionDetectionFrame.msg"
 	"msg/VisionObject.msg"
+	"msg/FoxgloveObject.msg"
+	"msg/FoxgloveObjectArray.msg"
 	"msg/VisionObjectArray.msg"
 )
 
