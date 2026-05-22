@@ -41,8 +41,8 @@ endforeach()
 # ---Object Map library---
 add_library(object_map_lib SHARED
     ${PROJECT_NAME}/object_map/object_tracker.cpp
-    ${PROJECT_NAME}/utils/hungarian.cpp
-    ${PROJECT_NAME}/utils/kalman.cpp
+    ${PROJECT_NAME}/external/hungarian.cpp
+    ${PROJECT_NAME}/external/kalman.cpp
 )
 
 
@@ -55,7 +55,11 @@ ament_target_dependencies(object_map_lib ${CPP_LIBS})
 
 # ---ROS2 nodes---
 # C++ nodes
-add_executable(object_map ${PROJECT_NAME}/object_map.cpp)
+add_executable(object_map 
+    ${PROJECT_NAME}/object_map/object_map.cpp
+    include/${PROJECT_NAME}/object_map.hpp
+    ${PROJECT_NAME}/object_map_main.cpp
+)
 
 target_include_directories(object_map PUBLIC
       $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -92,5 +96,8 @@ install(DIRECTORY launch DESTINATION share/${PROJECT_NAME}/)
 install(DIRECTORY config DESTINATION share/${PROJECT_NAME}/)
 # Model files
 install(DIRECTORY models DESTINATION share/${PROJECT_NAME}/)
+
+# Headers
+install(DIRECTORY include/ DESTINATION include)
 
 ament_package()
