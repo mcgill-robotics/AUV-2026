@@ -27,8 +27,8 @@ runs:
         AVAILABLE_MB=$(df -m / | awk 'NR==2 {print $4}')
         # allocate 40% of available disk space
         SWAP_MB=$(( AVAILABLE_MB * 40 / 100 ))
-        # cap swap at 4GB to avoid excessive disk usage
-        SWAP_MB=$(( SWAP_MB > 4096 ? 4096 : SWAP_MB ))
+        # cap swap at 8GB to avoid excessive disk usage
+        SWAP_MB=$(( SWAP_MB > 8192 ? 8192 : SWAP_MB ))
 
         echo ""
         echo "Disk available: ${AVAILABLE_MB}MB"
