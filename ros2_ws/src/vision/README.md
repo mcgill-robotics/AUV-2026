@@ -25,7 +25,7 @@ Configuration is loaded from [config/vision_pipeline.yaml](config/vision_pipelin
 | `sim` | `bool` | `false` | Use simulation mode (sim topics, sim camera settings) |
 | `compressed` | `bool` | `true` | Append `/compressed` to image topic names |
 | `enhance_images` | `bool` | `false` | Enable image enhancement nodes; detection nodes subscribe to enhanced topics when true |
-| `front_model_relative_path` | `string` | `models/local_rfdetr_onnx_test` | Path to front camera model package relative to vision package |
+| `front_model_relative_path` | `string` | `models/rfdetr_onnx` | Path to front camera model package relative to vision package |
 | `down_model_relative_path` | `string` | `models/template_yolo` | Path to down camera model package relative to vision package |
 | `enable_object_detection` | `bool` | `true` | Enable object detection inference globally |
 | `has_zed_sdk` | `bool` | `true` | Whether the ZED SDK is available (set `false` for non-ZED hardware) |
@@ -35,7 +35,7 @@ Example overrides:
 ```bash
 ros2 launch vision vision_pipeline.launch.py sim:=true
 ros2 launch vision vision_pipeline.launch.py compressed:=false
-ros2 launch vision vision_pipeline.launch.py front_model_relative_path:=models/local_rfdetr_onnx_test
+ros2 launch vision vision_pipeline.launch.py front_model_relative_path:=models/rfdetr_onnx
 ```
 
 ## Architecture
@@ -67,48 +67,71 @@ Node summary:
 - `debug / future fusion`: Carries the optional vision-only VIO pose output for debugging or later estimator fusion.
 
 ## Nodes
-
+### Small note on parameter nomenclature
+Parameters in [`vision_pipeline.yaml`](config/vision_pipeline.yaml) are named with a hierarchical convention, where the node name is the highest level for the given node, e.g.
+```yaml
+front_cam_object_detection:
+  ros__parameters:
+    zed:
+      resolution:
+          sim: SVGA
+```
+refers to the zed camera resolution in simulation. This allows all parameters to be loading directly into the node by ROS convention. The parameters for each node are further grouped by functionality, e.g. all ZED-related parameters are under the `zed` namespace. From here, each level in the hierarchy will be delimited by periods, e.g. the parameter above would be the `zed.resolution.sim` parameter in the `front_cam_object_detection` node.
 ### Front Camera Detection Node
 
 The front camera node is responsible for:
-- running model inference
-- ingesting 2D boxes into the ZED SDK
+- Taking in front camera input
+- running model inference to get 2D detections
 - recovering 3D detections in the camera frame
-- snapshotting one AUV pose per grabbed frame
-- publishing one synchronized detection-frame message
+- snapshotting one AUV pose per grabbed frame, which can either:
+  - come directly from `state/pose` if `pose_source: auv_pose`
+  - come from ZED positional tracking if `pose_source: zed_vio` and `enable_vio: true`
+- publishing one synchronized detection-frame message, which includes the 3D detections and the corresponding AUV pose snapshot
 - optionally publishing a front-camera debug feed, `CameraInfo`, depth images, and a VIO measurement/debug TF
 
-The synchronized message types live in `auv_msgs`:
+The synchronized message types is defined in `auv_msgs`:
 - [VisionDetection.msg](../auv_msgs/msg/VisionDetection.msg)
 - [VisionDetectionFrame.msg](../auv_msgs/msg/VisionDetectionFrame.msg)
 
 `VisionDetectionFrame` is the input to `object_map`. It carries:
 - `header.stamp`: frame timestamp
-- `header.frame_id`: 3D detection frame, currently `zed_left_camera_frame`
-- `auv_pose`: AUV pose snapshot for that frame, typically from `state/pose`
-- `detections`: camera-frame 3D detections plus the original model 2D bbox
+- `header.frame_id`: 3D detection frame, set in the parameter `frame_id.detection` as `zed_left_camera_frame`
+- `auv_pose`: AUV pose snapshot for that frame
+- `detections`: wrapper containing 3D detections: 
+  - camera-frame 3D detections plus the original model 2D bbox
+  - `label`: object class label
+  - `confidence`: detection confidence score from the model
+  - `bbox_2d`: original 2D bounding box from the model inference
+  - `pose_camera`: pose of the detected object in the camera frame
 
-#### How It Works
+
+#### Front detection workflow
 
 At a high level, the front camera node does this each frame:
-1. `grab()` one ZED frame
+1. `grab()` one ZED frame using the ZED SDK API
 2. snapshot one AUV pose for that same frame
 3. run detector inference on the RGB image
-4. optionally filter detections near image borders
-5. optionally crop the lower half of gate boxes before depth ingestion
-6. ingest the 2D boxes into the ZED SDK
-7. retrieve 3D detections in `zed_left_camera_frame`
-8. publish one `VisionDetectionFrame`
+   1. optionally filter detections near image borders
+   2. optionally crop the lower half of gate boxes before depth ingestion
+4. ingest the 2D boxes into the ZED SDK to retrieve 3D detections in `zed_left_camera_frame`
+5. publish one `VisionDetectionFrame`
 
-This keeps the expensive 2D-to-3D step close to the ZED SDK while still leaving world-frame conversion to `object_map`.
+Thus, detections are kept in the camera frame world-frame conversion to `object_map`.
+
+### Down Camera Detection Node
+
+The down camera node is currently a simpler 2D detection node without depth or pose synchronization. It:
+- subscribes to the down camera RGB feed
+- runs model inference to get 2D detections
+- Publishes a `vision_msgs/Detection2DArray`
 
 ### Object Map Node
 
 The object map node:
-- subscribes to `VisionDetectionFrame`
+- subscribes to the output of the detection nodes
 - resolves the TF chain from `auv_link` to `zed_left_camera_frame`
-- transforms detections from camera frame to world frame in C++
-- tracks objects over time with a Kalman + Hungarian pipeline
+- transforms detections from camera frame to world frame
+- tracks objects over time
 - publishes the persistent map as:
   - [VisionObject.msg](../auv_msgs/msg/VisionObject.msg)
   - [VisionObjectArray.msg](../auv_msgs/msg/VisionObjectArray.msg)
@@ -117,11 +140,19 @@ The object map node:
 
 At a high level, `object_map` does this for each `VisionDetectionFrame`:
 1. read the synchronized AUV pose from the message
-2. resolve `auv_link -> zed_left_camera_frame` from TF
+2. resolves the transform from `auv_link` to `zed_left_camera_frame` at the frame timestamp
 3. transform all camera-frame detections into `pool_link`
-4. filter and track them with `ObjectTracker`
+4. filter and track them with `ObjectTracker`, which
+   1. performs data association to match detections to existing tracks using the Hungarian algorithm and a gating threshold on Mahalanobis distance
+   2. Updates matched tracks with the new detections using a Kalman filter update step
+   3. Initializes new tracks for unmatched detections that are sufficiently far from existing tracks
+      - tracks are marked as TENTATIVE when first initialized, which can be deleted if they fail to initialize within some number of frames
+      - TENTATIVE tracks can be promoted to CONFIRMED after a configurable number of consecutive matches
+      - CONFIRMED tracks that lose detection matches degrade back to TENTATIVE
 5. apply game-specific constraints and refinements
 6. publish the persistent world-frame map as `VisionObjectArray`
+
+Down cam processing TBD, but it will likely subscribe to the down cam 2D detections and incorporate it into the object map.
 
 ### Sensors / Pose Ownership
 The official vehicle pose and TF should come from the `sensors` package:
@@ -189,16 +220,6 @@ This is intentionally separate from the official `auv_link` TF so Foxglove and d
   ros2 service call /vision/down_cam/toggle_annotated_image std_srvs/srv/Trigger
   ```
 
-## What The Main Launch Actually Starts
-
-The main launch currently focuses on the front-camera path:
-- optional front image enhancement
-- front camera object detection
-- static TF publishers for the front camera
-- object map
-
-The down-camera nodes still exist, but they are not part of the default runtime pipeline in `vision_pipeline.launch.py`.
-
 ## Front Camera Debug Feed
 
 The front debug feed intentionally uses one topic:
@@ -233,122 +254,84 @@ That layout is what Foxglove expects for correct camera visualization.
 
 ## 2026 Tracking / Mapping Logic
 
-The tracker has several 2026-specific constraints:
-- gate refinement from `search_rescue` and `survey_repair`
-- board refinement from `ambulance`, `firetruck`, `fire`, and `blood`
-- observer-facing yaw chosen using the current AUV position
-- large-structure spawn filtering near pipes and other large structures
-- configurable table/octagon refinement mode
-- floor/surface Z locking for selected classes
+### Front-Camera Filters
 
-The main tuning and counts are configured in:
-- [config/vision_pipeline.yaml](config/vision_pipeline.yaml)
+- `gate_top_crop` is a bounding box filter applied to gate detections before ZED ingestion. The lower portion (half by default) of the gate box is cropped off since it is mostly made up of the background, which may lead to poor depth estimation.
+- `border_exclusion` is a simple filter applied before ZED ingestion. For configured labels such as `gate`, any 2D detection touching the image border within `border_exclusion_margin_px` is dropped. This helps reject partial detections at the left/right image edges that often produce unstable depth or incorrect clipped 3D positions.
+  
+### Object Map Filters
 
-## Front Camera Pose Modes
+- `large_structure_separation`: enforces a minimum separation distance between large-structure objects (e.g. gate, table) and other large-structure objects or pipes. This helps prevent false positives and unstable tracks caused by cluttered detections on large structures and pipes.
+- `large_structure_pipe_separation`: because pipe detections are often noisy and can cluster around large structures, this filter enforces a minimum separation distance between pipe detections and large-structure tracks to prevent false positives and unstable tracks.
+- `pipe_distance_truncation`: pipes being very thin structures, depth estimation can be very noisy and produce outliers when the pipe lies far from the camera. This filter truncates pipe detections to a maximum distance from the camera to reject those outliers.
+- `lane_boundary`: Since missions and competitions runs are done in a single lane of a pool, lanes adjacent to the competition lane can be a source of false positives that should be filtered out. This filter discards detections outside a configurable AABB around the competition lane.
+
+### Object Map Refinement
+
+- `gate_midpoint`: gates have images of both `search_rescue` and `survey_repair` classes on either entrance. Because depth estimation of the gate can be unrelibable due to bounding box mostly being background, this refinement uses the known physical layout of the gate to refine the gate position by taking the midpoint between the two classes.
+- `board_icon`: similar idea to `gate_midpoint`, the board has two classes `ambulance` and `firetruck` that can be used to refine the board position by using the known physical layout of the board and taking the midpoint between the two classes.
+- `z_axis_locking`: the bins table lane marker and board are known to stick to the floor of the pool. The gate and octagon are known to be floating at the surface. We can use this information to determine the Z position of these objects more reliably by locking them to the known floor or surface Z height.
+- `table_octagon_mode`: the octagon is a structure that will always be placed directly above the table, this information can be used to lock the XY position of either object. This refinement is split into 4 modes:
+  - `none`: no refinement applied
+  - `table_primary`: octagon position is locked to the table position in XY
+  - `octagon_primary`: table position is locked to the octagon position in XY
+  - `midpoint`: both table and octagon positions are locked to the midpoint between their detections in XY
+
+### Tracker Filters
+
+- `new_object_min_distance_threshold`: minimum distance in meters between a new detection and existing tracks to be considered a new object and start a new track.
+- `semi_persistent_conf_to_tent_threshold`: how long to keep a semi-persistent object in the map without detections before deleting it. Semi-persistent objects are those with labels that should be kept CONFIRMED for longer, so they survive sweep scans and can be re-matched when they re-enter the FOV
+
+## Configuration
+
+All parameters and brief descriptions can be found in [config/vision_pipeline.yaml](config/vision_pipeline.yaml). Below is a more detailed breakdown of the most important parameters by category.
+
+### Front Camera Parameters
+
+- `zed_resolution.sim` and `zed_resolution.real`: ZED SDK resolution settings for simulation and real hardware. The current defaults are 
+  - `SVGA` at `30 FPS` for the sim (to match the Unity ZED X Sim stream resolution) 
+  - `VGA` at `30 FPS` for real.
+- `zed_optional_opencv_calibration_file`: path to an optional OpenCV calibration file that can be loaded instead of the factory calibration. Underwater environments may require custom calibration to be performed, and this parameter allows loading that calibration without modifying the code.
+- `zed_depth_mode` algorithm to use for ZED depth retrieval, defaults to `NEURAL` for neural network based depth estimation
+
 
 `front_cam_object_detection` still supports two pose modes:
 - `pose_source: auv_pose`
 - `pose_source: zed_vio`
 
 Current recommended setup:
-- `enable_vio: false`
+- `enable_vio_pose: false`
 - `pose_source: auv_pose`
 - use `state/pose` from `sensors`
 
-If VIO is enabled:
-- the node can publish `/vision/vio_pose`
+If `enable_vio_pose` is true, the node can publish `/vision/vio_pose`
 - it can optionally publish `pool_link -> auv_vio_link`
 
-If `enable_vio` is false, the node skips ZED positional tracking entirely.
+If `enable_vio_pose` is false, the node skips ZED positional tracking entirely.
 
-## Configuration Notes
+In simulation mode, if ZED SDK is available, the front camera node can grab frames directly from the ZED Unity Sim stream. The `stream` parameters configure the IP and port for that stream, which defaults to `127.0.1.1:30000`.
 
-Some especially important front-camera parameters are:
-- `model_detection_threshold`
-- `depth_confidence_threshold`
-- `zed_depth_maximum_distance`
-- `zed_depth_minimum_distance`
-- `zed_positional_tracking_depth_min_range`
-- `zed_depth_stabilization`
-- `zed_camera_resolution_sim`
-- `zed_camera_resolution_real`
-- `zed_camera_fps_sim`
-- `zed_camera_fps_real`
-- `zed_camera_flip_mode`
-- `zed_self_calib`
-- `zed_enable_right_side_measure`
-- `zed_sdk_verbose`
-- `zed_sdk_gpu_id`
-- `zed_enable_image_enhancement`
-- `zed_open_timeout_sec`
-- `zed_async_grab_camera_recovery`
-- `zed_grab_compute_capping_fps`
-- `zed_enable_image_validity_check`
-- `zed_optional_opencv_calibration_file`
-- `zed_brightness`
-- `zed_contrast`
-- `zed_hue`
-- `zed_saturation`
-- `zed_sharpness`
-- `zed_gamma`
-- `zed_gain`
-- `zed_exposure`
-- `zed_auto_exposure_gain`
-- `zed_auto_whitebalance`
-- `zed_whitebalance_temperature`
-- `zed_led_status`
-- `enable_gate_top_crop`
-- `gate_top_crop_ratio`
-- `enable_border_exclusion`
-- `border_exclusion_margin_px`
-- `border_exclusion_labels`
-- `publish_camera_info`
-- `publish_annotated_image`
-- `publish_depth_image`
-- `collection_interval_seconds`
-- `enable_vio`
-- `pose_source`
 
-`enable_border_exclusion` is a simple filter applied before ZED ingestion. For configured labels such as `gate`, any 2D detection touching the image border within `border_exclusion_margin_px` is dropped. This helps reject partial detections at the left/right image edges that often produce unstable depth or incorrect clipped 3D positions.
+### Object Map
 
-The ZED camera-control parameters are split into two groups:
-- init-time controls such as resolution, FPS, and flip mode
-- runtime ISP controls such as brightness, exposure, gain, gamma, white balance, and LED status
 
-The current defaults intentionally start close to the ZED ROS 2 wrapper defaults for a ZED 2i:
-- real camera: `VGA` at `15 FPS` (changed from HD1080 @ 15FPS)
-- common stereo video tuning: saturation `4`, sharpness `4`, gamma `8`
-- auto exposure/gain and auto white balance enabled by default
+Qualifiers attributed to objects in the map:
+- `large_structures`: for objects that are part of large structures like gate and table, which should not be mapped near other large structure or near pipes
+- `pipes`: red and white pipes in slalom task
+- `unique_objects`: for objects that should only have one instance in the map, e.g. octagon and table
+- `semi_persistent_objects`: for objects that should be kept in the map longer without detections so their position can be determined during a search sweep
+- `floor_objects`: for objects that should be locked to the floor Z height
+- `surface_objects`: for objects that should be locked to the surface Z height
+- `max_per_class`: for objects that should only have a maximum number of instances in the map, e.g. 4 bins
 
-For the current front-camera pipeline, these controls are intentionally limited to settings that keep the left rectified camera model intact. The node still assumes:
-- detections come from the left camera
-- `VisionDetectionFrame` uses `zed_left_camera_frame`
-- `CameraInfo` describes the left rectified camera
+**Map refinement**
+Makes use of other detections and domain knowledge to improve tracking of certain objects. All parameters are prefixed with `map_refinement`. An important parameter to keep in mind is the `plausibility_radius` used in gate and board midpoint refinement, which determines how close the midpoint needs to be to the original detection to be applied, to prevent refining with midpoints from other detections.
 
-Some especially important object-map parameters are:
-- `new_object_min_distance_threshold`
-- `large_structure_labels`
-- `pipe_labels`
-- `min_large_structure_separation_m`
-- `min_large_structure_pipe_separation_m`
-- `enable_gate_midpoint_refinement`
-- `enable_board_icon_refinement`
-- `refinement_plausibility_radius`
-- `table_octagon_refinement_mode`
-- `enable_pipe_distance_truncation`
-- `max_pipe_distance`
-- `unique_objects`
-- `floor_objects`
-- `surface_objects`
-- `max_per_class`
-
-The `table_octagon_refinement_mode` parameter controls how table and octagon objects are published:
-- `none`: no refinement, both are published independently
-- `table_primary`: publish the octagon at the table XY
-- `octagon_primary`: publish the table at the octagon XY
-- `midpoint`: publish both at the shared midpoint XY; if only one is seen, use that XY for both
-
-These modes only change the published `VisionObjectArray`. They do not modify the underlying `ObjectTracker` state for table or octagon.
+**Tracker parameters**
+Parameters related to the tracking logic and data association, all prefixed with `tracker`. Three broads tracker setupsare provided in the config:
+- "strict paramters" that prioritize precision and stable tracks
+- "loose parameters" that prioritize recall and more detections at the cost of potentially more unstable tracks
+- "raw detections" that performs no tracking or filtering at the tracker level, which should be used for debugging
 
 ## Package Scope
 

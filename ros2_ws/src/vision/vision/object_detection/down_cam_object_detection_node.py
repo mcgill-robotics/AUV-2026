@@ -36,49 +36,49 @@ class DownCamObjectDetectorNode():
         self.node = node
 
         # ── Model / detection parameters ─────────────────────────
-        self.node.declare_parameter('class_names', Parameter.Type.STRING_ARRAY)
+        self.node.declare_parameter('model_class_names', Parameter.Type.STRING_ARRAY)
         self.node.declare_parameter('model_path', Parameter.Type.STRING)
         self.node.declare_parameter('detection_topic', Parameter.Type.STRING)
         self.node.declare_parameter('queue_size', Parameter.Type.INTEGER)
-        self.node.declare_parameter('publish_annotated_image', False)
-        self.node.declare_parameter('publish_annotated_every_n_frames', 1)
-        self.node.declare_parameter("model_detection_threshold", 0.40)
-        self.node.declare_parameter('compressed', False)
-        self.node.declare_parameter("enable_object_detection", True)
-        self.node.declare_parameter('sim', False)
-        self.node.declare_parameter('image_topic', '')
+        self.node.declare_parameter('publish_annotated', Parameter.Type.BOOL)
+        self.node.declare_parameter('publish_annotated_rate', Parameter.Type.INTEGER)
+        self.node.declare_parameter("model_detection_threshold", Parameter.Type.DOUBLE)
+        self.node.declare_parameter('compressed', Parameter.Type.BOOL)
+        self.node.declare_parameter("enable_object_detection", Parameter.Type.BOOL)
+        self.node.declare_parameter('sim', Parameter.Type.BOOL)
+        self.node.declare_parameter('image_topic', Parameter.Type.STRING)
 
         # ── Camera hardware parameters ───────────────────────────
-        self.node.declare_parameter('video_device', '/dev/video0')
-        self.node.declare_parameter('image_width', 640)
-        self.node.declare_parameter('image_height', 480)
-        self.node.declare_parameter('camera_fps', 30)
-        self.node.declare_parameter('camera_frame_id', 'sensors/down_cam')
+        self.node.declare_parameter('video_device', Parameter.Type.STRING)
+        self.node.declare_parameter('width', Parameter.Type.INTEGER)
+        self.node.declare_parameter('height', Parameter.Type.INTEGER)
+        self.node.declare_parameter('fps', Parameter.Type.INTEGER)
+        self.node.declare_parameter('camera_frame_id', Parameter.Type.STRING)
 
         # ── V4L2 image controls (HD USB Camera) ──────────────────
-        self.node.declare_parameter('brightness', 8)
-        self.node.declare_parameter('contrast', 8)
-        self.node.declare_parameter('saturation', 7)
-        self.node.declare_parameter('hue', 0)
-        self.node.declare_parameter('sharpness', 6)
-        self.node.declare_parameter('gamma', 7)
-        self.node.declare_parameter('backlight_compensation', 0)
-        self.node.declare_parameter('power_line_frequency', 2)
-        self.node.declare_parameter('auto_white_balance', True)
-        self.node.declare_parameter('white_balance_temperature', 2800)
-        self.node.declare_parameter('auto_exposure', 3)
-        self.node.declare_parameter('exposure_time_absolute', 625)
-        self.node.declare_parameter('auto_focus', True)
-        self.node.declare_parameter('focus_absolute', 16)
+        self.node.declare_parameter('brightness', Parameter.Type.INTEGER)
+        self.node.declare_parameter('contrast', Parameter.Type.INTEGER)
+        self.node.declare_parameter('saturation', Parameter.Type.INTEGER)
+        self.node.declare_parameter('hue', Parameter.Type.INTEGER)
+        self.node.declare_parameter('sharpness', Parameter.Type.INTEGER)
+        self.node.declare_parameter('gamma', Parameter.Type.INTEGER)
+        self.node.declare_parameter('backlight_compensation', Parameter.Type.INTEGER)
+        self.node.declare_parameter('power_line_frequency', Parameter.Type.INTEGER)
+        self.node.declare_parameter('auto_white_balance', Parameter.Type.BOOL)
+        self.node.declare_parameter('white_balance_temperature', Parameter.Type.INTEGER)
+        self.node.declare_parameter('auto_exposure', Parameter.Type.INTEGER)
+        self.node.declare_parameter('exposure_time_absolute', Parameter.Type.INTEGER)
+        self.node.declare_parameter('auto_focus', Parameter.Type.BOOL)
+        self.node.declare_parameter('focus_absolute', Parameter.Type.INTEGER)
 
         # ── Collection parameters ────────────────────────────────
-        self.node.declare_parameter('collection_dir', '/tmp/down_cam_collection')
-        self.node.declare_parameter('collection_interval_seconds', 2.0)
-        self.node.declare_parameter('collection_file_extension', '.png')
+        self.node.declare_parameter('collection_dir', Parameter.Type.STRING)
+        self.node.declare_parameter('collection_interval_seconds', Parameter.Type.DOUBLE)
+        self.node.declare_parameter('collection_file_extension', Parameter.Type.STRING)
 
         # ── Read parameters ──────────────────────────────────────
         self.class_names = list(
-            self.node.get_parameter('class_names').get_parameter_value().string_array_value
+            self.node.get_parameter('model_class_names').get_parameter_value().string_array_value
         )
         self.node.get_logger().info(f"Class names: {self.class_names}")
 
@@ -86,11 +86,11 @@ class DownCamObjectDetectorNode():
         detection_topic = self.node.get_parameter('detection_topic').get_parameter_value().string_value
         queue_size = self.node.get_parameter('queue_size').get_parameter_value().integer_value
         self.publish_annotated_image = (
-            self.node.get_parameter('publish_annotated_image').get_parameter_value().bool_value
+            self.node.get_parameter('publish_annotated').get_parameter_value().bool_value
         )
         self.annotated_image_enabled = self.publish_annotated_image
         self.publish_annotated_every_n_frames = (
-            self.node.get_parameter('publish_annotated_every_n_frames').get_parameter_value().integer_value
+            self.node.get_parameter('publish_annotated_rate').get_parameter_value().integer_value
         )
         self.conf_threshold = (
             self.node.get_parameter('model_detection_threshold').get_parameter_value().double_value
@@ -103,9 +103,9 @@ class DownCamObjectDetectorNode():
 
         # Camera hardware
         self.video_device = self.node.get_parameter('video_device').get_parameter_value().string_value
-        self.image_width = self.node.get_parameter('image_width').get_parameter_value().integer_value
-        self.image_height = self.node.get_parameter('image_height').get_parameter_value().integer_value
-        self.camera_fps = self.node.get_parameter('camera_fps').get_parameter_value().integer_value
+        self.image_width = self.node.get_parameter('width').get_parameter_value().integer_value
+        self.image_height = self.node.get_parameter('height').get_parameter_value().integer_value
+        self.camera_fps = self.node.get_parameter('fps').get_parameter_value().integer_value
         self.camera_frame_id = self.node.get_parameter('camera_frame_id').get_parameter_value().string_value
 
         # Collection
