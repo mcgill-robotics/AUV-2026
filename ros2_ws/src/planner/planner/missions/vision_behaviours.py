@@ -348,14 +348,15 @@ class ScanBehaviour(py_trees.behaviour.Behaviour):
     def _on_goal_result(self, goal_success: bool):
         self.action_status = ActionStatus.SUCCEEDED if goal_success else ActionStatus.FAILED
 
-class GoDistanceFromObject(py_trees.composites.Sequence):
+class GoDistanceFromObject(py_trees.behaviour.Behaviour):
     def __init__(self, target_class: str, target_distance: float):
-        super().__init__(f"GoDistanceFrom{target_class}", memory=True)
+        super().__init__(f"GoDistanceFrom{target_class}")
         self.target_class = target_class
         self.target_distance = target_distance
         self.blackboard = self.attach_blackboard_client(name=self.name)
         self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
+        self.action_status = ActionStatus.NOT_SENT
 
     def setup(self, **kwargs):
         self.node = kwargs['node']
@@ -383,18 +384,19 @@ class GoDistanceFromObject(py_trees.composites.Sequence):
             direction_vector = (target_x - current_pose.x, target_y - current_pose.y)
             magnitude = math.sqrt(direction_vector[0]**2 + direction_vector[1]**2)
 
-            if magnitude <= self.target_distance:
-                self.node.get_logger().info(f"[{self.name}] Already within target distance of {self.target_class}. No movement needed.")
-                return py_trees.common.Status.SUCCESS
+            # if magnitude <= self.target_distance:
+            #     self.node.get_logger().info(f"[{self.name}] Already within target distance of {self.target_class}. No movement needed.")
+            #     return py_trees.common.Status.SUCCESS
             
             normalized_direction = (direction_vector[0]/magnitude, direction_vector[1]/magnitude)
 
             goal_x = target_x - normalized_direction[0] * self.target_distance
             goal_y = target_y - normalized_direction[1] * self.target_distance
 
-            goal = move_global(goal_x, goal_y)
-            self.navigation_client.reset_action_client()
-            self.navigation_client.send_navigation_goal(goal, self.name)
+            goal = move_global(goal_x, goal_y, do_z=False)
+            self.navigation_client.send_navigation_goal(goal, self.name, custom_goal_response=self.on_server_goal_response, custom_goal_result=self.on_server_goal_result)
+
+            self.action_status = ActionStatus.PENDING
 
             return py_trees.common.Status.RUNNING
 
@@ -402,14 +404,23 @@ class GoDistanceFromObject(py_trees.composites.Sequence):
 
     def on_server_goal_response(self, goal_response: bool):
         if not goal_response:
-            return py_trees.common.Status.FAILURE
+            self.node.get_logger().error(f"[{self.name}] Failed to send goal to navigation server.")
+            self.action_status = ActionStatus.FAILED
     
     def on_server_goal_result(self, goal_success: bool):
         if goal_success:
-            return py_trees.common.Status.SUCCEEDED
+            self.node.get_logger().info(f"[{self.name}] Reached target distance from {self.target_class}.")
+            self.action_status = ActionStatus.SUCCEEDED
         else:
-            return py_trees.common.Status.FAILURE
+            self.node.get_logger().error(f"[{self.name}] Failed to reach target distance from {self.target_class}.")
+            self.action_status = ActionStatus.FAILED
         
     def update(self):
-        # This behavior is essentially fire-and-forget. The result of the goal determines the status.
-        return py_trees.common.Status.RUNNING
+        if self.action_status == ActionStatus.SUCCEEDED:
+            self.node.get_logger().info(f"[{self.name}] Returning SUCCESS.")
+            return py_trees.common.Status.SUCCESS
+        elif self.action_status == ActionStatus.FAILED:
+            self.node.get_logger().info(f"[{self.name}] Returning FAILURE.")
+            return py_trees.common.Status.FAILURE
+        else:
+            return py_trees.common.Status.RUNNING

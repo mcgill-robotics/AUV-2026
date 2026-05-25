@@ -20,6 +20,8 @@ class GoAboveClosestBin(py_trees.behaviour.Behaviour):
         self.following_downcam_bin = False
         self.down_cam_bin_position = None
         self.down_cam_new_goal_timer = 0
+        # When you send a new goal, the old one fails, account for this
+        self.expected_failures = 0
     
     def setup(self, **kwargs):
         self.navigation_client = kwargs['shared_nav_client']
@@ -29,8 +31,10 @@ class GoAboveClosestBin(py_trees.behaviour.Behaviour):
         self.blackboard.register_key('/vision/down_cam/detections', access=py_trees.common.Access.READ)
         self.blackboard.register_key('/sensors/pose', access=py_trees.common.Access.READ)
         self.blackboard.register_key('/vision/object_map', access=py_trees.common.Access.READ)
+
+        self.node.get_logger().info("Starting GoAboveClosestBin behavior")
         
-    def initialize(self):
+    def initialise(self):
         if hasattr(self.blackboard, 'vision') and self.blackboard.vision.object_map is not None \
             and hasattr(self.blackboard, 'sensors') and self.blackboard.sensors.pose is not None:
             self.closest_bin = None
@@ -52,19 +56,21 @@ class GoAboveClosestBin(py_trees.behaviour.Behaviour):
                 return py_trees.common.Status.FAILURE
             
             target_position = self.closest_bin.pose.position
-            target_position.z += 0.5  # Go above the object by 0.5m
 
-            self.goal = move_global(target_position)
+            self.goal = move_global(target_position.x, target_position.y, target_position.z + 0.8)
         else:
             return py_trees.common.Status.FAILURE
         
-    def on_server_goal_response(self, goal_success: bool):
-        if not goal_success:
+    def on_server_goal_response(self, goal_response: bool):
+        if not goal_response:
+            self.node.get_logger().error(f"[{self.name}] Goal rejected by server.")
             self.action_status = ActionStatus.FAILED
 
     def on_server_goal_result(self, goal_success: bool) -> None:
         if goal_success:
             self.action_status = ActionStatus.SUCCEEDED
+        elif self.expected_failures > 0:
+            self.expected_failures -= 1
         else:
             self.action_status = ActionStatus.FAILED
 
@@ -82,11 +88,12 @@ class GoAboveClosestBin(py_trees.behaviour.Behaviour):
             
         # Completion check
         if self.action_status is ActionStatus.SUCCEEDED:
-            self.node.get_logger().info(f"[{self.name}] Completed goal.")
             # If succeeded, it means we got to the downcam goal before it was updated, meaning we're very close so this behavior is complete
             if self.following_downcam_bin:
+                self.node.get_logger().info(f"[{self.name}] Completed goal.")
                 return py_trees.common.Status.SUCCESS
             # If we succeeded but we're not following the downcam bin, it means we got to the original goal but now we should start following the downcam detections since we're close enough
+            self.node.get_logger().info(f"[{self.name}] Reached initial goal, now following downcam detections.")
             self.following_downcam_bin = True
             # Don't return so the rest of the update loop handles downcam following
         
@@ -107,7 +114,7 @@ class GoAboveClosestBin(py_trees.behaviour.Behaviour):
                     self.consecutive_bin_downcam_detections += 1
                     detected_bin = True
                     
-                    coordinates = (detection.bbox.center.x, detection.bbox.center.y)
+                    coordinates = (detection.bbox.center.position.x, detection.bbox.center.position.y)
                     # Coordinates are in pixel coordinates, add half camera dimensions to get coordiantes from center
                     # Y is also inverted (+y is down in pixel coordinates)
                     current_bin_position = (CAMERA_WIDTH / 2 + coordinates[0], CAMERA_HEIGHT / 2 - coordinates[1])
@@ -118,6 +125,8 @@ class GoAboveClosestBin(py_trees.behaviour.Behaviour):
                         (self.down_cam_bin_position[1] * PREV_WEIGHT + current_bin_position[1] * BIN_DOWNCAM_MOVING_AVERAGE_WEIGHT)
                     ) if self.down_cam_bin_position is not None else current_bin_position
                     break
+            
+            self.node.get_logger().info(f"Detected bin on downcam at {self.down_cam_bin_position} with consecutive detections: {self.consecutive_bin_downcam_detections}")
             
             if not detected_bin:
                 self.consecutive_bin_downcam_detections = 0
@@ -131,11 +140,15 @@ class GoAboveClosestBin(py_trees.behaviour.Behaviour):
             # Send new goal every 6 ticks (2 seconds) to avoid spamming controls and messing with the PIDs
             self.down_cam_new_goal_timer = 6
             # Get the angle based on fov and stuff
-            x_angle = math.radians(self.down_cam_bin_position[0] / CAMERA_WIDTH * DOWNCAM_FOV_HORIZONTAL)
-            y_angle = math.radians(self.down_cam_bin_position[1] / CAMERA_HEIGHT * DOWNCAM_FOV_VERTICAL)
+            x_angle = math.radians(self.down_cam_bin_position[1] / CAMERA_WIDTH * DOWNCAM_FOV_HORIZONTAL)
+            y_angle = math.radians(-self.down_cam_bin_position[0] / CAMERA_HEIGHT * DOWNCAM_FOV_VERTICAL)
+
+            self.node.get_logger().info(f"Sending new goal: x_angle: {x_angle}, y_angle: {y_angle}")
+
+            self.expected_failures += 1  # current goal will fail once, ignore that failure
 
             # We know the bin is 0.5m below us, so calculate the bin position
-            self.goal = move_robot_centric(forward=math.cos(y_angle), sway=math.sin(x_angle))
+            self.goal = move_robot_centric(forward=math.cos(y_angle) * 0.5, sway=math.sin(x_angle) * 0.5)
             self.action_status = ActionStatus.NOT_SENT  # Next tick, new goal will be sent automatically
 
         return py_trees.common.Status.RUNNING
@@ -145,33 +158,21 @@ class GoNearBinStructure(py_trees.composites.Sequence):
         super().__init__("GoNearBinStructure", memory=True)
         self.blackboard = self.attach_blackboard_client(name=self.name)
 
-        go_5m_away_node = vision_behaviours.GoDistanceFromObject(
+        go_4m_away_node = vision_behaviours.GoDistanceFromObject(
             target_class="bin_structure",
-            target_distance=5.0)
+            target_distance=4.0)
         
         go_to_height_node = GoToObjectHeight(target_class="bin_structure")
         
-        # Go distance away incrementally since the object position will update in object map
-        go_3m_away_node = vision_behaviours.GoDistanceFromObject(
-            target_class="bin_structure",
-            target_distance=3.0
-        )
-
         go_2m_away_node = vision_behaviours.GoDistanceFromObject(
             target_class="bin_structure",
             target_distance=2.0
         )
-        go_1_5m_away_node = vision_behaviours.GoDistanceFromObject(
-            target_class="bin_structure",
-            target_distance=1.5
-        )
 
         self.add_children([
-            go_5m_away_node,
+            go_4m_away_node,
             go_to_height_node,
-            go_3m_away_node,
             go_2m_away_node,
-            go_1_5m_away_node
         ])
 
 class GoToObjectHeight(py_trees.behaviour.Behaviour):
@@ -179,6 +180,8 @@ class GoToObjectHeight(py_trees.behaviour.Behaviour):
         super().__init__("GoToObjectHeight")
         self.target_class = target_class
         self.blackboard = self.attach_blackboard_client(name=self.name)
+        self.blackboard.register_key('/vision/object_map', access=py_trees.common.Access.READ)
+        self.blackboard.register_key('/sensors/pose', access=py_trees.common.Access.READ)
 
         self.action_status = ActionStatus.NOT_SENT
 
@@ -186,8 +189,10 @@ class GoToObjectHeight(py_trees.behaviour.Behaviour):
         self.navigation_client = kwargs['shared_nav_client']
         self.node = kwargs['node']
         self.navigation_client.client_wait_for_server(timeout_sec=5.0)
+
+        self.node.get_logger().info(f"Starting GoToObjectHeight behavior for target class {self.target_class}")
         
-    def initialize(self):
+    def initialise(self):
         if hasattr(self.blackboard, 'vision') and self.blackboard.vision.object_map is not None:
             target_object = None
             for obj in self.blackboard.vision.object_map.array:
@@ -198,8 +203,8 @@ class GoToObjectHeight(py_trees.behaviour.Behaviour):
             if target_object is None:
                 return py_trees.common.Status.FAILURE
             
-            target_height = target_object.position.z
-            self.goal = set_depth(target_height + 0.5)
+            target_height = target_object.pose.position.z
+            self.goal = set_depth(target_height + 0.6)
 
         else:
             return py_trees.common.Status.FAILURE
@@ -230,8 +235,8 @@ class GoToObjectHeight(py_trees.behaviour.Behaviour):
         self.action_status = ActionStatus.PENDING
         return py_trees.common.Status.RUNNING
         
-    def on_server_goal_response(self, goal_success: bool):
-        if not goal_success:
+    def on_server_goal_response(self, goal_response: bool):
+        if not goal_response:
             self.action_status = ActionStatus.FAILED
 
     def on_server_goal_result(self, goal_success: bool) -> None:

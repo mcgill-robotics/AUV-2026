@@ -19,7 +19,7 @@ class BinsTask(py_trees.composites.Sequence):
         # 0. For testing purposes, skip the first few tasks and go close enough to bin structure to detect it
         skip_to_bin_structure = basic_behaviours.BasicActionBehaviour(
             name="Skip to Bin Structure",
-            goal=move_global(5.0, 0.0, -1.0))
+            goal=move_global(8.0, -2.0, -1.0))
         # 1. Search for and locate 3D pipeline/bins structure
         search_for_bin_structure = vision_behaviours.SearchSweepBehaviour(
             target_class="bin_structure",
