@@ -9,9 +9,9 @@
 [submodule "ros2_ws/src/dvl_a50"]
 	path = ros2_ws/src/dvl_a50
 	url = https://github.com/mcgill-robotics/dvl_a50
-[submodule "ros2_ws/src/dvl_a50_serial"]
-	path = ros2_ws/src/dvl_a50_serial
-	url = https://github.com/mcgill-robotics/dvl_a50_serial
 [submodule "ros2_ws/src/dvl_msgs"]
 	path = ros2_ws/src/dvl_msgs
 	url = https://github.com/mcgill-robotics/dvl_msgs
+[submodule "ros2_ws/src/dvl_a50_serial_python"]
+	path = ros2_ws/src/dvl_a50_serial_python
+	url = https://github.com/mcgill-robotics/dvl_a50_serial_python
