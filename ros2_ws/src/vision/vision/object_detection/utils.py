@@ -8,6 +8,7 @@ from inference_models import AutoModel, BackendType
 from vision_msgs.msg import Detection2DArray, Detection2D, ObjectHypothesisWithPose
 from geometry_msgs.msg import PoseStamped, Quaternion
 from tf_transformations import euler_matrix, quaternion_from_matrix
+import torch
 
 # Enable CUDA Graphs globally (Native TRT only, ignored by ONNX)
 os.environ["ENABLE_AUTO_CUDA_GRAPHS_FOR_TRT_BACKEND"] = "True"
@@ -28,6 +29,9 @@ def load_model(model_path: str, logger):
         "trt_engine_cache_path": model_path,
         "trt_fp16_enable": True 
     })
+
+    torch.set_num_threads(1)
+    torch.set_num_interop_threads(1)
 
     try:
         # 2. Pass everything to the AutoModel loader

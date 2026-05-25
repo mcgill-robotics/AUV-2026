@@ -93,6 +93,9 @@ class FrontCamObjectDetectorNode():
         self.node.declare_parameter("has_zed_sdk", Parameter.Type.BOOL)
         self.node.declare_parameter("image_topic", Parameter.Type.STRING)
 
+        self.node.declare_parameter("depth_scale", 1.0)
+        self.node.declare_parameter("depth_offset", 0.0)
+
         self.node.declare_parameter("model_detection_threshold", Parameter.Type.DOUBLE)
         self.node.declare_parameter("zed_depth_confidence_threshold", Parameter.Type.INTEGER)
         self.node.declare_parameter("zed_depth_maximum_distance", Parameter.Type.DOUBLE)
@@ -861,7 +864,7 @@ class FrontCamObjectDetectorNode():
                 depth_path = os.path.join(self.depth_collection_dir, f'depth_{timestamp}.png')
                 cv2.imwrite(depth_path, depth_mm)
             
-            self.node.get_logger().debug(f"Collected dataset step: {timestamp}")
+            self.node.get_logger().info(f"Collected dataset step: {timestamp}")
         
         if self.publish_depth_image and depth is not None and self._frame_counter % self.publish_depth_every_n_frames == 0:
             if self.publish_depth_compressed:
@@ -956,6 +959,9 @@ class FrontCamObjectDetectorNode():
                 self.zed.retrieve_custom_objects(objects, self.obj_runtime_param)
 
                 # 3. Build synchronized camera-frame detections
+                depth_scale = self.node.get_parameter('depth_scale').get_parameter_value().double_value
+                depth_offset = self.node.get_parameter('depth_offset').get_parameter_value().double_value
+
                 for obj in objects.object_list:
                     pos_cam = obj.position
                     if np.isnan(pos_cam).any() or np.isinf(pos_cam).any():
@@ -964,6 +970,15 @@ class FrontCamObjectDetectorNode():
                         continue
 
                     cam_pos_vec = np.array([float(pos_cam[0]), float(pos_cam[1]), float(pos_cam[2])])
+
+                    raw_dist = np.linalg.norm(cam_pos_vec)
+                    scale_ratio = 1.0
+                    if raw_dist > 0:
+                        corrected_dist = raw_dist * depth_scale + depth_offset
+                        if corrected_dist < 0.01:
+                            corrected_dist = 0.01
+                        scale_ratio = corrected_dist / raw_dist
+                        cam_pos_vec = cam_pos_vec * scale_ratio
 
                     detection = VisionDetection()
                     detection.label = self.class_names[obj.raw_label]
@@ -979,6 +994,7 @@ class FrontCamObjectDetectorNode():
                         [float(cov[1]), float(cov[3]), float(cov[4])],
                         [float(cov[2]), float(cov[4]), float(cov[5])]
                     ])
+                    cov_cam = cov_cam * (scale_ratio ** 2)
 
                     ros_cov = np.zeros((6, 6), dtype=float)
                     ros_cov[:3, :3] = cov_cam

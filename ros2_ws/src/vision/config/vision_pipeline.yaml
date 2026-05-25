@@ -90,6 +90,10 @@ front_cam_object_detection:
     camera_center_to_detection:
       xyz: [0.0, 0.06, 0.0]
       rpy: [0.0, 0.0, 0.0]
+
+    # Distance correction parameters
+    depth_scale: 1.0
+    depth_offset: 0.0
     
     # Detection-time filters / heuristics
     gate_top_crop: # Removes bottom X% of bounding box for gate to ignore legs/pool floor noise
@@ -120,7 +124,7 @@ front_cam_object_detection:
     collection_image_dir: front_cam_collection # directory for direct-to-disk RGB image saving (toggled via service)
     enable_depth_collection: true
     collection_depth_dir: depth_collection # directory for direct-to-disk depth image saving (toggled via service)    # Logging
-    log_level: debug
+    log_level: info
 
 
 down_cam_object_detection:
@@ -232,14 +236,16 @@ object_map:
     semi_persistent_conf_to_tent_threshold: 300
 
 
-    floor_objects: 
-      - "bin_structure"
-      - "table"
-      - "lane_marker"
-      - "board"
-    surface_objects: 
-      - "gate"
-      - "octagon"
+    floor_objects:
+      - "placeholder"
+      # - "bin_structure"
+      # - "table"
+      # - "lane_marker"
+      # - "board"
+    surface_objects:
+      - "placeholder"
+      # - "gate"
+      # - "octagon"
 
     max_per_class:
       gate: 1
