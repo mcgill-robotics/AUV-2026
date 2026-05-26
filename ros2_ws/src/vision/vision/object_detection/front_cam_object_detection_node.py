@@ -191,7 +191,7 @@ class FrontCamObjectDetectorNode():
 
         self.node.create_service(AutomaticCapture, '/vision/front_cam/toggle_collection', partial(toggle_collection_callback_util, self))
         self.node.create_service(Trigger, '/vision/front_cam/toggle_annotated_image', self._toggle_annotated_image_callback)
- 
+        self.node.create_service(Trigger, '/vision/front_cam/reset_vio_pose', self._reset_vio_pose_callback)
         self.class_names = list(self.node.get_parameter('model_class_names').get_parameter_value().string_array_value)
         self.node.get_logger().info(f"Class names: {self.class_names}")
         model_path = self.node.get_parameter('model_path').get_parameter_value().string_value
@@ -463,6 +463,13 @@ class FrontCamObjectDetectorNode():
                 pos_param.enable_area_memory = False
                 pos_param.depth_min_range = self.zed_positional_tracking_depth_min_range
                 
+                # Set initial world transform to offset the camera from the AUV origin
+                self.zed_initial_transform = sl.Transform()
+                for r in range(4):
+                    for c in range(4):
+                        self.zed_initial_transform[r, c] = self.T_auv_detection[r, c]
+                pos_param.set_initial_world_transform(self.zed_initial_transform)
+                
                 err = self.zed.enable_positional_tracking(pos_param)
                 if err != sl.ERROR_CODE.SUCCESS:
                     self.node.get_logger().error(f"Failed to enable positional tracking: {err}")
@@ -665,6 +672,23 @@ class FrontCamObjectDetectorNode():
         response.message = (
             f"Annotated image {'enabled' if self.annotated_image_enabled else 'disabled'}"
         )
+        self.node.get_logger().info(response.message)
+        return response
+        
+    def _reset_vio_pose_callback(self, request, response):
+        del request
+        if self.has_zed_sdk and self.enable_vio:
+            err = self.zed.reset_positional_tracking(self.zed_initial_transform)
+            if err == sl.ERROR_CODE.SUCCESS:
+                response.success = True
+                response.message = "VIO positional tracking reset successfully"
+            else:
+                response.success = False
+                response.message = f"Failed to reset VIO tracking: {err}"
+        else:
+            response.success = False
+            response.message = "VIO is disabled or ZED SDK is not available."
+            
         self.node.get_logger().info(response.message)
         return response
 
@@ -894,6 +918,12 @@ class FrontCamObjectDetectorNode():
             is_touching_top_down_border = (y1 <= margin) or (y2 >= img_h - margin)
             
             calc_mode = mode
+            
+            # Apply depth scale to the focal lengths to correct for water refraction
+            # This corrects the distance geometrically while preserving plane constraints!
+            fx_scaled = self.cam_fx * depth_scale
+            fy_scaled = self.cam_fy * depth_scale
+            
             # 1a. Known Height Projection
             if calc_mode == "known_height" and label_str in self.known_heights:
                 max_pitch = self.node.get_parameter('depth_estimation.known_height_angle_limits.max_pitch_deg').get_parameter_value().double_value
@@ -903,10 +933,12 @@ class FrontCamObjectDetectorNode():
                 if not is_touching_top_down_border and abs(math.degrees(auv_pitch)) <= max_pitch and abs(math.degrees(auv_roll)) <= max_roll:
                     # Use pinhole camera model: Z = f_y * real_height / pixel_height
                     h_m = self.known_heights[label_str]
-                    z_m = (self.cam_fy * h_m) / bbox_h
+                    z_m = (fy_scaled * h_m) / bbox_h
                     if z_m > 0:
-                        x_m = (bbox_cx - self.cam_cx) * z_m / self.cam_fx
-                        y_m = (bbox_cy - self.cam_cy) * z_m / self.cam_fy
+                        x_m = (bbox_cx - self.cam_cx) * z_m / fx_scaled
+                        y_m = (bbox_cy - self.cam_cy) * z_m / fy_scaled
+                        # We can still apply depth_offset linearly here since known_height has no rigid plane constraint
+                        z_m += depth_offset
                         cam_pos_vec = np.array([z_m, -x_m, -y_m])
                     
             # 1b. Ray-Plane Intersection
@@ -932,7 +964,7 @@ class FrontCamObjectDetectorNode():
                     if px_y is not None:
                         # Ray generation in ROS camera frame (X forward, Y left, Z up).
                         # A point (u,v) in image translates to ray [1.0, -X_cv, -Y_cv] in ROS frame.
-                        v_c_ros = np.array([1.0, -(px_x - self.cam_cx)/self.cam_fx, -(px_y - self.cam_cy)/self.cam_fy, 0.0])
+                        v_c_ros = np.array([1.0, -(px_x - self.cam_cx)/fx_scaled, -(px_y - self.cam_cy)/fy_scaled, 0.0])
                         
                         # Transform ray and camera origin to the world frame
                         v_w_ros = np.dot(T_W_C, v_c_ros)
@@ -940,6 +972,7 @@ class FrontCamObjectDetectorNode():
                         
                         # Intersect ray with horizontal plane Z = plane_z
                         # Equation: P0_z + t * v_z = plane_z  =>  t = (plane_z - P0_z) / v_z
+                        t = -1
                         if abs(v_w_ros[2]) > 1e-6:
                             t = (plane_z - P0_w[2]) / v_w_ros[2]
                         if t > 0: # Intersection is strictly in front of the camera
@@ -955,6 +988,7 @@ class FrontCamObjectDetectorNode():
             cam_pos_vec = np.array([float(pos_cam[0]), float(pos_cam[1]), float(pos_cam[2])])
 
         # 3. Apply depth_scale/offset only to raw ZED SDK points
+        # Geometric projections have already corrected their focal lengths
         scale_ratio = 1.0
         if is_zed_point:
             raw_dist = np.linalg.norm(cam_pos_vec)

@@ -14,9 +14,13 @@ namespace sensors
         this->declare_parameter<std::string>("frame_id_auv", "auv_link");
         this->declare_parameter<std::string>("frame_id_global", "pool_link");
         this->declare_parameter<bool>("publish_pose_tf", true);
+        this->declare_parameter<bool>("use_vio_for_position", false);
+        this->declare_parameter<bool>("use_vio_for_orientation", false);
         this->get_parameter("frame_id_auv", frame_id_auv_);
         this->get_parameter("frame_id_global", frame_id_global_);
         this->get_parameter("publish_pose_tf", publish_pose_tf_);
+        this->get_parameter("use_vio_for_position", use_vio_for_position_);
+        this->get_parameter("use_vio_for_orientation", use_vio_for_orientation_);
 
         imu_sub_ = this->create_subscription<imu_msg>(
             "auv_frame/imu",
@@ -41,6 +45,12 @@ namespace sensors
             std::bind(&State_aggregator::dvl_velocity_callback, this, std::placeholders::_1)
         );
 
+        vio_pose_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(
+            "front_cam/vio/pose",
+            rclcpp::SensorDataQoS().keep_last(1),
+            std::bind(&State_aggregator::vio_pose_callback, this, std::placeholders::_1)
+        );
+
         pose_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>(
             "state/pose",
             rclcpp::SensorDataQoS().keep_last(1)
@@ -51,10 +61,15 @@ namespace sensors
         current_depth_ = 0.0;
         current_position_dvl_ = Vec3::Zero();
         current_velocity_ = Vec3::Zero();
-        current_orientation_.w = 1.0;
-        current_orientation_.x = 0.0;
-        current_orientation_.y = 0.0;
-        current_orientation_.z = 0.0;   
+        current_orientation_imu_.w = 1.0;
+        current_orientation_imu_.x = 0.0;
+        current_orientation_imu_.y = 0.0;
+        current_orientation_imu_.z = 0.0;   
+        current_position_vio_ = Vec3::Zero();
+        current_orientation_vio_.w = 1.0;
+        current_orientation_vio_.x = 0.0;
+        current_orientation_vio_.y = 0.0;
+        current_orientation_vio_.z = 0.0;   
         
         // Timer to publish aggregated state
         publish_timer_ = this->create_wall_timer(
@@ -67,21 +82,18 @@ namespace sensors
     // IMU callback
     void State_aggregator::imu_callback(const imu_msg::SharedPtr imu_in)
     {
-        // Update current orientation from IMU
-        current_orientation_ = imu_in->orientation;
+        current_orientation_imu_ = imu_in->orientation;
     }
 
     // Depth callback
     void State_aggregator::depth_callback(const float64_msg::SharedPtr depth_in)
     {
-        // Update current depth from Depth sensor
         current_depth_ = depth_in->data;
     }
 
     // DVL position callback
     void State_aggregator::dvl_position_callback(const geometry_msgs::msg::PointStamped::SharedPtr position_in)
     {
-        // Update current position from DVL
         current_position_dvl_(0) = position_in->point.x;
         current_position_dvl_(1) = position_in->point.y;
         current_position_dvl_(2) = position_in->point.z;
@@ -90,10 +102,18 @@ namespace sensors
     // DVL velocity callback
     void State_aggregator::dvl_velocity_callback(const geometry_msgs::msg::TwistStamped::SharedPtr velocity_in)
     {
-        // Update current velocity from DVL
         current_velocity_(0) = velocity_in->twist.linear.x;
         current_velocity_(1) = velocity_in->twist.linear.y;
         current_velocity_(2) = velocity_in->twist.linear.z;
+    }
+
+    // VIO pose callback
+    void State_aggregator::vio_pose_callback(const geometry_msgs::msg::PoseStamped::SharedPtr pose_in)
+    {
+        current_position_vio_(0) = pose_in->pose.position.x;
+        current_position_vio_(1) = pose_in->pose.position.y;
+        current_position_vio_(2) = pose_in->pose.position.z;
+        current_orientation_vio_ = pose_in->pose.orientation;
     }
 
     // Publish aggregated state
@@ -103,9 +123,9 @@ namespace sensors
         pose_msg.header.stamp = this->now();
         pose_msg.header.frame_id = frame_id_global_;
 
-        pose_msg.pose.orientation = current_orientation_;
-        pose_msg.pose.position.x = current_position_dvl_(0);
-        pose_msg.pose.position.y = current_position_dvl_(1);
+        pose_msg.pose.orientation = use_vio_for_orientation_ ? current_orientation_vio_ : current_orientation_imu_;
+        pose_msg.pose.position.x = use_vio_for_position_ ? current_position_vio_(0) : current_position_dvl_(0);
+        pose_msg.pose.position.y = use_vio_for_position_ ? current_position_vio_(1) : current_position_dvl_(1);
         pose_msg.pose.position.z = -current_depth_; // Down is negative Z
 
         pose_pub_->publish(pose_msg);

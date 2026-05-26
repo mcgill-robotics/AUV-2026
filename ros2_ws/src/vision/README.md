@@ -206,6 +206,13 @@ This is intentionally separate from the official `auv_link` TF so Foxglove and d
 
 - `/image_collection/toggle_manual_front_collection` - compatibility alias for the same `AutomaticCapture` behavior.
 
+- `/vision/front_cam/reset_vio_pose` - `std_srvs/Trigger`
+  - Resets the ZED positional tracking (VIO) to zero drift and snaps the AUV back to the world origin.
+
+  ```bash
+  ros2 service call /vision/front_cam/reset_vio_pose std_srvs/srv/Trigger
+  ```
+
 ### Down Camera
 
 - `/vision/down_cam/toggle_collection` - `auv_msgs/AutomaticCapture`
@@ -249,15 +256,26 @@ The launch file publishes the static chain:
 This split matters:
 - 3D detections stay in `zed_left_camera_frame`
 - image-like topics use `zed_left_camera_frame_optical`
+- **Note on VIO**: The ZED's internal positional tracking is initialized with the physical offset from `auv_link`. This means the world frame origin corresponds exactly to the AUV's starting position and orientation, not the camera's optical frame.
 
 That layout is what Foxglove expects for correct camera visualization.
 
 ## 2026 Tracking / Mapping Logic
 
+### Depth Estimation Modes
+
+To overcome the limitations of stereo depth mapping (like water refraction and noisy point clouds on featureless objects like pipes/gates), the front camera node supports multiple depth estimation modes configurable in `vision_pipeline.yaml` under `depth_estimation`:
+
+- `zed_3d`: The default mode. Retrieves the 3D position directly from the ZED SDK's depth map using the center of the bounding box. It strictly applies the `depth_scale` and `depth_offset` parameters to correct for refraction.
+- `known_height`: Uses a pinhole camera model to estimate depth based on the known physical height of an object (e.g. gates or bins). It leverages the `known_heights` configuration. To prevent bad measurements when the AUV is pitching/rolling heavily, this mode respects `known_height_angle_limits`.
+- `{pixel}_to_{plane}`: Projects a specific point of the bounding box (`bottom`, `top`, or `center`) onto a known horizontal plane (e.g. `floor`, `surface`). For example, `bottom_to_floor` draws a ray from the camera, through the bottom-center of the bounding box, and intersects it with the pool floor.
+  
+*Note: All geometric modes (`known_height` and `*_to_*`) automatically scale the camera's focal length (`fx`, `fy`) by `depth_scale` to geometrically correct for water refraction while preserving the rigid plane constraints.*
+
 ### Front-Camera Filters
 
 - `gate_top_crop` is a bounding box filter applied to gate detections before ZED ingestion. The lower portion (half by default) of the gate box is cropped off since it is mostly made up of the background, which may lead to poor depth estimation.
-- `border_exclusion` is a simple filter applied before ZED ingestion. For configured labels such as `gate`, any 2D detection touching the image border within `border_exclusion_margin_px` is dropped. This helps reject partial detections at the left/right image edges that often produce unstable depth or incorrect clipped 3D positions.
+- `border_exclusion` is a simple filter applied before 3D geometric projection or ZED ingestion. For configured labels, any 2D detection touching the image border within `border_exclusion_margin_px` is ignored for distance calculations or drops back to center-point projection. This prevents projecting objects infinitely far when their bottom edge touches the image border.
   
 ### Object Map Filters
 

@@ -290,6 +290,8 @@ The package provides a single ROS node: `sensor_node`.
 | `/sensors/dvl` | TBD | TBD |
 | `state/pose` | PoseStamped | Aggregated pose of the AUV in `pool` frame | 
 
+**Note on VIO Fallback:** The `state_aggregator` node can optionally use the Visual Inertial Odometry (VIO) pose from the ZED camera instead of the DVL/IMU. This is configured via the `use_vio_for_position` and `use_vio_for_orientation` parameters in `sensors_frames.yaml`. When enabled, X and Y position are taken from the VIO (Z is always from the depth sensor), and orientation is taken from the VIO quaternion. This is highly useful for testing or operating when DVL/IMU hardware is unavailable.
+
 **Note on TF Publishing:** The `state_aggregator` node can optionally publish a TF transform (`publish_pose_tf` parameter in `sensors_frames.yaml`) from the global frame (`pool_link`) to the AUV frame (`auv_link`). This is primarily used for Foxglove visualization and provides an easier ROS-native way to transform poses from the global frame to the AUV frame. This is disabled by default for actual missions to save computation.
 
 ---
