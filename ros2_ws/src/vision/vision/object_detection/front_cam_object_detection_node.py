@@ -10,6 +10,7 @@ import time
 from auv_msgs.msg import VisionDetection, VisionDetectionFrame
 from auv_msgs.srv import AutomaticCapture
 import cv2
+import math
 from cv_bridge import CvBridge
 from geometry_msgs.msg import PoseStamped, TransformStamped
 import numpy as np
@@ -28,7 +29,7 @@ from sensor_msgs.msg import CameraInfo, CompressedImage, Image
 from std_msgs.msg import Float64
 from std_srvs.srv import Trigger
 from tf2_ros import TransformBroadcaster
-from tf_transformations import concatenate_matrices, inverse_matrix
+from tf_transformations import concatenate_matrices, inverse_matrix, quaternion_matrix, euler_from_quaternion
 
 from vision.object_detection.utils import (
     bbox_from_xyxy,
@@ -80,11 +81,11 @@ class FrontCamObjectDetectorNode():
         self.node.declare_parameter('model_path', Parameter.Type.STRING)
         self.node.declare_parameter('queue_size', Parameter.Type.INTEGER)
         self.node.declare_parameter('publish_annotated', Parameter.Type.BOOL)
-        self.node.declare_parameter('publish_annotated_rate', Parameter.Type.INTEGER)
+        self.node.declare_parameter('publish_annotated_every_n_frames', Parameter.Type.INTEGER)
         self.node.declare_parameter('publish_camera_info', Parameter.Type.BOOL)
         self.node.declare_parameter('publish_depth', Parameter.Type.BOOL)
         self.node.declare_parameter('publish_depth_compressed', Parameter.Type.BOOL)
-        self.node.declare_parameter('publish_depth_rate', Parameter.Type.INTEGER)
+        self.node.declare_parameter('publish_depth_every_n_frames', Parameter.Type.INTEGER)
         self.node.declare_parameter('enable_depth_collection', Parameter.Type.BOOL)
         self.node.declare_parameter('collection_depth_dir', Parameter.Type.STRING)
         self.node.declare_parameter("compressed", Parameter.Type.BOOL)
@@ -200,12 +201,12 @@ class FrontCamObjectDetectorNode():
         queue_size = self.node.get_parameter('queue_size').get_parameter_value().integer_value
         self.publish_annotated_image = self.node.get_parameter('publish_annotated').get_parameter_value().bool_value
         self.annotated_image_enabled = self.publish_annotated_image
-        self.publish_annotated_every_n_frames = self.node.get_parameter('publish_annotated_rate').get_parameter_value().integer_value
+        self.publish_annotated_every_n_frames = self.node.get_parameter('publish_annotated_every_n_frames').get_parameter_value().integer_value
         self.publish_camera_info = self.node.get_parameter('publish_camera_info').get_parameter_value().bool_value
         self.publish_depth_image = self.node.get_parameter('publish_depth').get_parameter_value().bool_value
         self.publish_depth_compressed = self.node.get_parameter('publish_depth_compressed').get_parameter_value().bool_value
         self.broadcast_vio_tf = self.node.get_parameter('broadcast_vio_tf').get_parameter_value().bool_value
-        self.publish_depth_every_n_frames = self.node.get_parameter('publish_depth_rate').get_parameter_value().integer_value
+        self.publish_depth_every_n_frames = self.node.get_parameter('publish_depth_every_n_frames').get_parameter_value().integer_value
         self.collect_depth_image = self.node.get_parameter('enable_depth_collection').get_parameter_value().bool_value
         self.compressed = self.node.get_parameter('compressed').get_parameter_value().bool_value
         self.enable_object_detection = self.node.get_parameter('enable_object_detection').get_parameter_value().bool_value
@@ -245,6 +246,38 @@ class FrontCamObjectDetectorNode():
             self.node.get_parameter('zed_depth_stabilization').get_parameter_value().integer_value
         )
         sim = self.node.get_parameter('sim').get_parameter_value().bool_value
+        
+        self.node.declare_parameter("zed_positional_tracking_mode.sim", "GEN_1")
+        self.node.declare_parameter("zed_positional_tracking_mode.real", "GEN_3")
+        self.zed_positional_tracking_mode_name = self.node.get_parameter(
+            'zed_positional_tracking_mode.sim' if sim else 'zed_positional_tracking_mode.real'
+        ).get_parameter_value().string_value
+
+        self.depth_modes = {}
+        self.known_heights = {}
+        for label in self.class_names:
+            mode_param = f"depth_estimation.mode_by_label.{label}"
+            height_param = f"depth_estimation.known_heights.{label}"
+            self.node.declare_parameter(mode_param, "")
+            self.node.declare_parameter(height_param, 0.0)
+            
+            mode_val = self.node.get_parameter(mode_param).get_parameter_value().string_value
+            if mode_val:
+                self.depth_modes[label] = mode_val
+            height_val = self.node.get_parameter(height_param).get_parameter_value().double_value
+            if height_val > 0.0:
+                self.known_heights[label] = height_val
+
+        self.known_planes = {}
+        # Parse known planes
+        self.node.declare_parameter("depth_estimation.known_planes.surface", 0.0)
+        self.node.declare_parameter("depth_estimation.known_planes.floor", -4.0)
+        self.known_planes["surface"] = self.node.get_parameter("depth_estimation.known_planes.surface").get_parameter_value().double_value
+        self.known_planes["floor"] = self.node.get_parameter("depth_estimation.known_planes.floor").get_parameter_value().double_value
+        
+        self.node.declare_parameter("depth_estimation.known_height_angle_limits.max_pitch_deg", 20.0)
+        self.node.declare_parameter("depth_estimation.known_height_angle_limits.max_roll_deg", 20.0)
+
         self.zed_camera_resolution_name = self.node.get_parameter(
             'zed_resolution.sim' if sim else 'zed_resolution.real'
         ).get_parameter_value().string_value
@@ -420,7 +453,11 @@ class FrontCamObjectDetectorNode():
             if self.enable_vio:
                 # Enable Positional Tracking
                 pos_param = sl.PositionalTrackingParameters()
-                pos_param.mode = sl.POSITIONAL_TRACKING_MODE.GEN_1
+                pos_param.mode = self._enum_from_name(
+                    sl.POSITIONAL_TRACKING_MODE,
+                    self.zed_positional_tracking_mode_name,
+                    'zed_positional_tracking_mode'
+                )
                 pos_param.enable_imu_fusion = True
                 pos_param.set_floor_as_origin = False
                 pos_param.enable_area_memory = False
@@ -701,6 +738,13 @@ class FrontCamObjectDetectorNode():
         fy = float(calibration.fy)
         cx = float(calibration.cx)
         cy = float(calibration.cy)
+        
+        # Save intrinsics for custom depth projection
+        self.cam_fx = fx
+        self.cam_fy = fy
+        self.cam_cx = cx
+        self.cam_cy = cy
+        
         distortion = list(calibration.disto)
 
         camera_info.width = int(resolution.width)
@@ -815,6 +859,113 @@ class FrontCamObjectDetectorNode():
             is_collection_frame=is_collection_frame, 
             t_start=t_start
         )
+
+    def _compute_3d_position(self, obj, label_str, bbox_xyxy, img_h, T_W_C, depth_scale, depth_offset, auv_roll=0.0, auv_pitch=0.0):
+        """
+        Computes the 3D position of an object in the camera frame.
+        
+        Args:
+            obj: The ZED SDK object containing fallback 3D position.
+            label_str: The class label of the object.
+            bbox_xyxy: The 2D bounding box [x1, y1, x2, y2].
+            img_h: The image height in pixels.
+            T_W_C: Transformation matrix from camera to world (pool_link). Can be None.
+            depth_scale: Scaling factor applied to ZED depth.
+            depth_offset: Offset applied to ZED depth.
+            auv_roll: The AUV's roll angle in radians.
+            auv_pitch: The AUV's pitch angle in radians.
+            
+        Returns:
+            cam_pos_vec: A numpy array [x, y, z] in the ROS camera frame, or None if invalid.
+            scale_ratio: The ratio used to scale the covariance matrix.
+        """
+        mode = self.depth_modes.get(label_str, "zed_3d")
+        cam_pos_vec = None
+        is_zed_point = False
+        
+        # 1. Custom depth calculation logic
+        if mode != "zed_3d" and bbox_xyxy is not None:
+            x1, y1, x2, y2 = bbox_xyxy
+            bbox_cx = (x1 + x2) / 2.0
+            bbox_cy = (y1 + y2) / 2.0
+            bbox_h = max(1.0, y2 - y1)
+            
+            margin = self.border_exclusion_margin_px
+            is_touching_top_down_border = (y1 <= margin) or (y2 >= img_h - margin)
+            
+            calc_mode = mode
+            # 1a. Known Height Projection
+            if calc_mode == "known_height" and label_str in self.known_heights:
+                max_pitch = self.node.get_parameter('depth_estimation.known_height_angle_limits.max_pitch_deg').get_parameter_value().double_value
+                max_roll = self.node.get_parameter('depth_estimation.known_height_angle_limits.max_roll_deg').get_parameter_value().double_value
+                
+                # Only use known_height if the box is fully visible and the AUV is relatively flat
+                if not is_touching_top_down_border and abs(math.degrees(auv_pitch)) <= max_pitch and abs(math.degrees(auv_roll)) <= max_roll:
+                    # Use pinhole camera model: Z = f_y * real_height / pixel_height
+                    h_m = self.known_heights[label_str]
+                    z_m = (self.cam_fy * h_m) / bbox_h
+                    if z_m > 0:
+                        x_m = (bbox_cx - self.cam_cx) * z_m / self.cam_fx
+                        y_m = (bbox_cy - self.cam_cy) * z_m / self.cam_fy
+                        cam_pos_vec = np.array([z_m, -x_m, -y_m])
+                    
+            # 1b. Ray-Plane Intersection
+            elif "_to_" in calc_mode and T_W_C is not None:
+                proj_type, _, plane_name = calc_mode.partition("_to_")
+                if plane_name in self.known_planes:
+                    plane_z = self.known_planes[plane_name]
+                    
+                    # Determine projection pixel with border exclusion (abort if touching)
+                    px_x = bbox_cx
+                    px_y = None
+                    
+                    if proj_type == "bottom":
+                        if y2 < img_h - margin:
+                            px_y = y2
+                    elif proj_type == "top":
+                        if y1 > margin:
+                            px_y = y1
+                    elif proj_type == "center":
+                        if not is_touching_top_down_border:
+                            px_y = bbox_cy
+                        
+                    if px_y is not None:
+                        # Ray generation in ROS camera frame (X forward, Y left, Z up).
+                        # A point (u,v) in image translates to ray [1.0, -X_cv, -Y_cv] in ROS frame.
+                        v_c_ros = np.array([1.0, -(px_x - self.cam_cx)/self.cam_fx, -(px_y - self.cam_cy)/self.cam_fy, 0.0])
+                        
+                        # Transform ray and camera origin to the world frame
+                        v_w_ros = np.dot(T_W_C, v_c_ros)
+                        P0_w = np.dot(T_W_C, np.array([0.0, 0.0, 0.0, 1.0]))
+                        
+                        # Intersect ray with horizontal plane Z = plane_z
+                        # Equation: P0_z + t * v_z = plane_z  =>  t = (plane_z - P0_z) / v_z
+                        if abs(v_w_ros[2]) > 1e-6:
+                            t = (plane_z - P0_w[2]) / v_w_ros[2]
+                        if t > 0: # Intersection is strictly in front of the camera
+                            P_c = t * v_c_ros[:3]
+                            cam_pos_vec = np.array([P_c[0], P_c[1], P_c[2]])
+
+        # 2. Fallback to ZED 3D
+        if cam_pos_vec is None:
+            is_zed_point = True
+            pos_cam = obj.position
+            if np.isnan(pos_cam).any() or np.isinf(pos_cam).any() or pos_cam[0] < 0:
+                return None, 1.0
+            cam_pos_vec = np.array([float(pos_cam[0]), float(pos_cam[1]), float(pos_cam[2])])
+
+        # 3. Apply depth_scale/offset only to raw ZED SDK points
+        scale_ratio = 1.0
+        if is_zed_point:
+            raw_dist = np.linalg.norm(cam_pos_vec)
+            if raw_dist > 0:
+                corrected_dist = raw_dist * depth_scale + depth_offset
+                if corrected_dist < 0.01:
+                    corrected_dist = 0.01
+                scale_ratio = corrected_dist / raw_dist
+                cam_pos_vec = cam_pos_vec * scale_ratio
+                
+        return cam_pos_vec, scale_ratio
 
     def _process_frame(self, img, frame_stamp, depth=None, vio_pose_msg=None, is_collection_frame=False, t_start=None):
         if vio_pose_msg is not None:
@@ -962,26 +1113,34 @@ class FrontCamObjectDetectorNode():
                 depth_scale = self.node.get_parameter('depth_scale').get_parameter_value().double_value
                 depth_offset = self.node.get_parameter('depth_offset').get_parameter_value().double_value
 
+                img_h, img_w = img.shape[:2]
+                
+                # Precompute T_W_C (Transform from Camera to World).
+                # This 4x4 matrix converts points/vectors from the local camera frame into the global pool_link frame.
+                # T_W_C = T_W_auv (AUV pose in world) * T_auv_detection (Camera pose in AUV)
+                T_W_C = None
+                auv_roll, auv_pitch = 0.0, 0.0
+                if detection_frame_auv_pose_msg is not None:
+                    pose = detection_frame_auv_pose_msg.pose
+                    auv_roll, auv_pitch, _ = euler_from_quaternion([pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w])
+                    T_W_auv = quaternion_matrix([pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w])
+                    T_W_auv[0:3, 3] = [pose.position.x, pose.position.y, pose.position.z]
+                    T_W_C = np.dot(T_W_auv, self.T_auv_detection)
+                
                 for obj in objects.object_list:
-                    pos_cam = obj.position
-                    if np.isnan(pos_cam).any() or np.isinf(pos_cam).any():
+                    label_str = self.class_names[obj.raw_label]
+                    bbox_xyxy = model_bboxes_by_unique_id.get(obj.unique_object_id)
+                    
+                    pos_result = self._compute_3d_position(
+                        obj, label_str, bbox_xyxy, img_h, T_W_C, depth_scale, depth_offset, auv_roll, auv_pitch
+                    )
+                    if pos_result[0] is None:
                         continue
-                    if pos_cam[0] < 0:
-                        continue
-
-                    cam_pos_vec = np.array([float(pos_cam[0]), float(pos_cam[1]), float(pos_cam[2])])
-
-                    raw_dist = np.linalg.norm(cam_pos_vec)
-                    scale_ratio = 1.0
-                    if raw_dist > 0:
-                        corrected_dist = raw_dist * depth_scale + depth_offset
-                        if corrected_dist < 0.01:
-                            corrected_dist = 0.01
-                        scale_ratio = corrected_dist / raw_dist
-                        cam_pos_vec = cam_pos_vec * scale_ratio
+                    
+                    cam_pos_vec, scale_ratio = pos_result
 
                     detection = VisionDetection()
-                    detection.label = self.class_names[obj.raw_label]
+                    detection.label = label_str
                     detection.confidence = float(obj.confidence) / 100.0
                     detection.pose_camera.pose.position.x = float(cam_pos_vec[0])
                     detection.pose_camera.pose.position.y = float(cam_pos_vec[1])

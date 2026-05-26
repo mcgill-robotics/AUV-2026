@@ -38,6 +38,9 @@ front_cam_object_detection:
     zed_fps:
       sim: 30 # FPS for Unity/stream input
       real: 30 # FPS for the real ZED 2i
+    zed_positional_tracking_mode:
+      sim: GEN_1
+      real: GEN_3
     zed_flip_mode: 'OFF' # OFF, ON, or AUTO
     zed_self_calib: false # wrapper-aligned default
     zed_enable_right_side_measure: false # keep left-aligned processing only
@@ -94,22 +97,50 @@ front_cam_object_detection:
     # Distance correction parameters
     depth_scale: 1.0
     depth_offset: 0.0
+
+    # Depth Estimation Configurations
+    depth_estimation:
+      # mode_by_label: Determines how 3D depth is calculated for each object.
+      # Available modes:
+      #  - "zed_3d": Uses the ZED SDK's default 3D bounding box (Default if unlisted).
+      #  - "known_height": Uses pinhole math based on actual object height.
+      #  - "{pixel}_to_{plane}": Projects a ray to intersect a known horizontal plane.
+      #      - pixel: "top" (top edge), "center" (center of bbox) or "bottom" (bottom edge of bbox)
+      #      - plane: any plane defined in `known_planes` (e.g. "surface", "floor")
+      mode_by_label:
+        octagon: "center_to_surface"
+        table: "bottom_to_floor"
+        bin_structure: "zed_3d" #"bottom_to_floor"
+        board: "zed_3d" #"bottom_to_floor"
+        gate: "zed_3d" #"top_to_surface"
+        white_pipe: "zed_3d" #"known_height"
+        red_pipe: "zed_3d" #"known_height"
+      known_planes:
+        surface: 0.0
+        floor: -2.1
+      known_heights:
+        gate: 1.5
+        white_pipe: 0.9
+        red_pipe: 0.9
+      known_height_angle_limits:
+        max_pitch_deg: 20.0
+        max_roll_deg: 20.0
     
     # Detection-time filters / heuristics
     gate_top_crop: # Removes bottom X% of bounding box for gate to ignore legs/pool floor noise
       enable: true
       ratio: 0.50 # The ratio (0.0 to 1.0) of the gate bounding box to keep from the top edge
     border_exclusion: # Excludes objects that are too close to the border
-      enable: false
+      enable: true
       margin_px: 20 # The number of pixels to exclude from the border
-      labels: ["gate"] # List of labels to apply border exclusion to
+      labels: ["white_pipe", "red_pipe"] # List of labels to apply border exclusion to
 
     publish_camera_info: true # publish CameraInfo for the front camera feed using ZED left-camera intrinsics
     publish_annotated: true # publishes the front camera feed topic at detection_frame_topic + /annotated, toggled raw/annotated at runtime via service
-    publish_annotated_rate: 1 # publish annotated image every N detection frames
+    publish_annotated_every_n_frames: 1 # publish annotated image every N detection frames
     publish_depth: true # publish raw 32FC1 depth map image
     publish_depth_compressed: false # publish depth map as compressed 16-bit PNG
-    publish_depth_rate: 5 # publish depth image every N frames
+    publish_depth_every_n_frames: 5 # publish depth image every N frames
     stream_ip: "127.0.1.1" # may be used by ZED ROS Wrapper or ZED SDK directly
     stream_port: 30000 # may be used by ZED ROS Wrapper or ZED SDK directly
 
@@ -190,10 +221,10 @@ down_cam_object_detection:
     queue_size: 10
     
     publish_annotated: true
-    publish_annotated_rate: 1
+    publish_annotated_every_n_frames: 1
     publish_depth: true
     publish_depth_compressed: false
-    publish_depth_rate: 5
+    publish_depth_every_n_frames: 5
     
     collection_dir: down_cam_collection
     collection_interval_seconds: 2.0
@@ -300,7 +331,7 @@ object_map:
     #   - table_primary: publish octagon at table XY
     #   - octagon_primary: publish table at octagon XY
     #   - midpoint: publish both at shared midpoint XY
-    table_octagon_mode: "midpoint" 
+    table_octagon_mode: "table_primary" 
 
 
         

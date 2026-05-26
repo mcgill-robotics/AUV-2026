@@ -41,7 +41,7 @@ class DownCamObjectDetectorNode():
         self.node.declare_parameter('detection_topic', Parameter.Type.STRING)
         self.node.declare_parameter('queue_size', Parameter.Type.INTEGER)
         self.node.declare_parameter('publish_annotated', Parameter.Type.BOOL)
-        self.node.declare_parameter('publish_annotated_rate', Parameter.Type.INTEGER)
+        self.node.declare_parameter('publish_annotated_every_n_frames', Parameter.Type.INTEGER)
         self.node.declare_parameter("model_detection_threshold", Parameter.Type.DOUBLE)
         self.node.declare_parameter('compressed', Parameter.Type.BOOL)
         self.node.declare_parameter("enable_object_detection", Parameter.Type.BOOL)
@@ -90,7 +90,7 @@ class DownCamObjectDetectorNode():
         )
         self.annotated_image_enabled = self.publish_annotated_image
         self.publish_annotated_every_n_frames = (
-            self.node.get_parameter('publish_annotated_rate').get_parameter_value().integer_value
+            self.node.get_parameter('publish_annotated_every_n_frames').get_parameter_value().integer_value
         )
         self.conf_threshold = (
             self.node.get_parameter('model_detection_threshold').get_parameter_value().double_value
