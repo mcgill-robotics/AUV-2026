@@ -51,6 +51,15 @@ ObjectMapNode::ObjectMapNode() : Node("object_map_node")
         max_per_class_map[max_per_class_labels[i]] = static_cast<int>(max_per_class_values[i]);
     }
 
+    std::vector<std::string> object_size_labels = this->declare_parameter<std::vector<std::string>>("object_size_labels", std::vector<std::string>());
+    std::vector<double> object_size_x = this->declare_parameter<std::vector<double>>("object_size_x", std::vector<double>());
+    std::vector<double> object_size_y = this->declare_parameter<std::vector<double>>("object_size_y", std::vector<double>());
+    std::vector<double> object_size_z = this->declare_parameter<std::vector<double>>("object_size_z", std::vector<double>());
+
+    for (size_t i = 0; i < object_size_labels.size() && i < object_size_x.size() && i < object_size_y.size() && i < object_size_z.size(); ++i) {
+        object_sizes_map[object_size_labels[i]] = Eigen::Vector3d(object_size_x[i], object_size_y[i], object_size_z[i]);
+    }
+
     object_tracker = ObjectTracker(
         max_per_class_map,
         large_structure_labels,
@@ -186,6 +195,16 @@ auv_msgs::msg::VisionObject ObjectMapNode::build_object_message(
     object_msg.pose.position.x = position(0);
     object_msg.pose.position.y = position(1);
     apply_z_axis_depth_constraints(object_msg, position);
+
+    if (object_sizes_map.count(label)) {
+        object_msg.size.x = object_sizes_map.at(label).x();
+        object_msg.size.y = object_sizes_map.at(label).y();
+        object_msg.size.z = object_sizes_map.at(label).z();
+    } else {
+        object_msg.size.x = 0.0;
+        object_msg.size.y = 0.0;
+        object_msg.size.z = 0.0;
+    }
 
     tf2::Quaternion q;
     q.setRPY(0.0, 0.0, theta_z);

@@ -11,13 +11,12 @@ from foxglove_msgs.msg import (
     SceneEntity,
     SceneEntityDeletion,
     SceneUpdate,
-    SpherePrimitive,
     TextPrimitive,
 )
 from geometry_msgs.msg import PointStamped, Pose, Vector3
 
 
-class SphereConverterNode(Node):
+class SceneConverterNode(Node):
     # Mapping of AUV object labels to RGBA colors for Foxglove visualization
     CATEGORY_COLORS = {
         'gate':         {'r': 1.0, 'g': 0.5, 'b': 0.0, 'a': 0.8}, # Orange
@@ -28,14 +27,12 @@ class SphereConverterNode(Node):
         'table':        {'r': 0.6, 'g': 0.3, 'b': 0.1, 'a': 0.8}, # Brown
         'bin':          {'r': 0.0, 'g': 1.0, 'b': 1.0, 'a': 0.8}, # Cyan
         'board':        {'r': 0.5, 'g': 0.5, 'b': 0.5, 'a': 0.8}, # Gray
-        'shark':        {'r': 0.0, 'g': 0.5, 'b': 1.0, 'a': 0.8}, # Light Blue
-        'sawfish':      {'r': 0.0, 'g': 0.8, 'b': 0.2, 'a': 0.8}, # Green
     }
 
     def __init__(self):
         super().__init__('vision_to_foxglove_node')
         
-        # Declare parameter for input topic, default to /vision/objects_3d
+        # Declare parameter for input topic, default to /vision/object_map
         self.declare_parameter('input_topic', '/vision/object_map')
         input_topic = self.get_parameter('input_topic').get_parameter_value().string_value
         
@@ -56,10 +53,8 @@ class SphereConverterNode(Node):
             10)
         
         # Publishers
-        self.publisher = self.create_publisher(
-            SceneUpdate,
-            '/foxglove/scene_spheres',
-            10)
+        self.scene_publisher = self.create_publisher(SceneUpdate, '/foxglove/scene_objects', 10)
+        self.published_entity_ids = set()
 
         self.table_publisher = self.create_publisher(
             FoxgloveObjectArray,
@@ -72,7 +67,7 @@ class SphereConverterNode(Node):
         
         self.get_logger().info(f"Vision to Foxglove converter started.")
         self.get_logger().info(f"Subscribed to  : {input_topic}")
-        self.get_logger().info(f"Publishing to  : /foxglove/scene_spheres, /vision/foxglove_table")
+        self.get_logger().info(f"Publishing to  : /foxglove/scene_objects, /vision/foxglove_table")
         self.get_logger().info(f"Using frame_id : {self.frame_id}")
 
     def _transform_point_to_auv(self, position, transform):
@@ -101,14 +96,11 @@ class SphereConverterNode(Node):
         except tf2_ros.TransformException:
             pass
 
-        # 1. Send an explicit "Delete All Entities" command to clear previous frame's objects
-        wipe_cmd = SceneEntityDeletion()
-        wipe_cmd.timestamp = msg.header.stamp
-        wipe_cmd.type = SceneEntityDeletion().ALL # 1 = ALL (Delete all existing entities on the same topic)
-        scene_update.deletions.append(wipe_cmd)
-        
+        # Track IDs for this frame
+        current_frame_ids = set()
+
         # 2. Add the new entities
-        for i, obj in enumerate(msg.array):
+        for obj in msg.array:
             # --- Table Logic ---
             fobj = FoxgloveObject()
             fobj.label = obj.label
@@ -132,40 +124,42 @@ class SphereConverterNode(Node):
             # -------------------
 
             entity = SceneEntity()
-            entity.id = f"{obj.label}_{i}"
+            entity.id = f"{obj.label}_{obj.id}"
+            current_frame_ids.add(entity.id)
             
             # Use the new array header properties for accurate synchronization
             entity.frame_id = frame_id
             entity.timestamp = msg.header.stamp
 
-            sphere = SpherePrimitive()
-            
-            # We can now simply copy the standard geometry_msgs/Pose completely!
-            sphere.pose = obj.pose
+            # Color mapping based on label category
+            color_map = self.CATEGORY_COLORS.get(obj.label, {'r': 1.0, 'g': 0.0, 'b': 1.0, 'a': 0.8}) # Default Magenta
+
+            cube = CubePrimitive()
+            cube.pose = obj.pose
             
             # Size mapping (Use the dynamic size vector if set, otherwise fallback to 0.25 default)
             if obj.size.x > 0.01 and obj.size.y > 0.01 and obj.size.z > 0.01:
-                sphere.size = obj.size
+                cube.size = obj.size
             else:
-                sphere.size = Vector3(x=0.25, y=0.25, z=0.25)
+                cube.size = Vector3(x=0.25, y=0.25, z=0.25)
             
-            # Color mapping based on label category
-            color_map = self.CATEGORY_COLORS.get(obj.label, {'r': 1.0, 'g': 0.0, 'b': 1.0, 'a': 0.8}) # Default Magenta
-            sphere.color.r = color_map['r']
-            sphere.color.g = color_map['g']
-            sphere.color.b = color_map['b']
-            sphere.color.a = color_map['a'] * obj.confidence  # Dim out low confidence objects
+            cube.color.r = color_map['r']
+            cube.color.g = color_map['g']
+            cube.color.b = color_map['b']
+            cube.color.a = color_map['a'] 
 
-            entity.spheres.append(sphere)
+            entity.cubes.append(cube)
             
             # Add a floating text label slightly above the object
             text_label = TextPrimitive()
             
-            # Create a completely independent Pose for the text to avoid mutating the sphere's pose
+            # Create a completely independent Pose for the text to avoid mutating the object's pose
             text_pose = Pose()
             text_pose.position.x = obj.pose.position.x
             text_pose.position.y = obj.pose.position.y
-            text_pose.position.z = obj.pose.position.z + (sphere.size.z / 2.0) + 0.2
+            
+            z_offset = (obj.size.z / 2.0) if (obj.size.z > 0.01) else 0.25
+            text_pose.position.z = obj.pose.position.z + z_offset + 0.25
             text_pose.orientation = obj.pose.orientation
             
             text_label.pose = text_pose
@@ -184,6 +178,16 @@ class SphereConverterNode(Node):
             entity.texts.append(text_label)
             scene_update.entities.append(entity)
 
+        # 1. Send explicit deletions ONLY for entities that disappeared
+        deleted_ids = self.published_entity_ids - current_frame_ids
+        for del_id in deleted_ids:
+            wipe_cmd = SceneEntityDeletion()
+            wipe_cmd.timestamp = msg.header.stamp
+            wipe_cmd.type = SceneEntityDeletion.MATCHING_ID
+            wipe_cmd.id = del_id
+            scene_update.deletions.append(wipe_cmd)
+            
+        self.published_entity_ids = current_frame_ids
         
         # Add a static pool floor representation
         floor_entity = SceneEntity()
@@ -207,14 +211,14 @@ class SphereConverterNode(Node):
         floor_cube.color.a = 0.3
         
         floor_entity.cubes.append(floor_cube)
-        # scene_update.entities.append(floor_entity)
+        scene_update.entities.append(floor_entity)
 
         self.table_publisher.publish(table_msg)
-        self.publisher.publish(scene_update)
+        self.scene_publisher.publish(scene_update)
 
 def main(args=None):
     rclpy.init(args=args)
-    node = SphereConverterNode()
+    node = SceneConverterNode()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

@@ -237,6 +237,12 @@ def generate_launch_description():
         ros_arguments=["--ros-args", "--log-level", "down_cam_object_detection:=" + default_config["down_cam_object_detection"]["ros__parameters"]["log_level"]]
     )
     
+    sizes_config = default_config["object_map"]["ros__parameters"].get("object_sizes", {})
+    size_labels = list(sizes_config.keys())
+    size_x = [float(v[0]) for v in sizes_config.values()]
+    size_y = [float(v[1]) for v in sizes_config.values()]
+    size_z = [float(v[2]) for v in sizes_config.values()]
+    
     object_map_node = Node (
         package="vision",
         executable="object_map",
@@ -248,6 +254,10 @@ def generate_launch_description():
                 "frame_id_auv": default_config["front_cam_object_detection"]["ros__parameters"]["auv_frame_id"],
                 "max_per_class_labels": list(default_config["object_map"]["ros__parameters"]["max_per_class"].keys()),
                 "max_per_class_values": list(default_config["object_map"]["ros__parameters"]["max_per_class"].values()),
+                "object_size_labels": size_labels,
+                "object_size_x": size_x,
+                "object_size_y": size_y,
+                "object_size_z": size_z,
                 "sim": LaunchConfiguration("sim"),
                 "use_sim_time": LaunchConfiguration("sim"),
             },

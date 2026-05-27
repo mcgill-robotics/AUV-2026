@@ -63,6 +63,7 @@ private:
     void publish_object_map(const std::vector<Track>& tracks);
 
     std::map<std::string, Track> persistent_objects;
+    std::unordered_map<std::string, Eigen::Vector3d> object_sizes_map;
     bool enable_z_axis_locking;
     std::string table_octagon_refinement_mode;
     double pool_floor_z;
