@@ -348,11 +348,12 @@ class ScanBehaviour(py_trees.behaviour.Behaviour):
     def _on_goal_result(self, goal_success: bool):
         self.action_status = ActionStatus.SUCCEEDED if goal_success else ActionStatus.FAILED
 
-class GoDistanceFromObject(py_trees.behaviour.Behaviour):
-    def __init__(self, target_class: str, target_distance: float):
-        super().__init__(f"GoDistanceFrom{target_class}")
+class GoNearObject(py_trees.behaviour.Behaviour):
+    def __init__(self, target_class: str, target_distance: float, height_offset: float | None = None):
+        super().__init__(f"GoNear{target_class}")
         self.target_class = target_class
         self.target_distance = target_distance
+        self.height_offset = height_offset
         self.blackboard = self.attach_blackboard_client(name=self.name)
         self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
@@ -393,7 +394,12 @@ class GoDistanceFromObject(py_trees.behaviour.Behaviour):
             goal_x = target_x - normalized_direction[0] * self.target_distance
             goal_y = target_y - normalized_direction[1] * self.target_distance
 
-            goal = move_global(goal_x, goal_y, do_z=False)
+            if self.height_offset is None:
+                goal = move_global(goal_x, goal_y, do_z=False)
+            else:
+                goal_z = target_obj.pose.position.z + self.height_offset
+                goal = move_global(goal_x, goal_y, goal_z, do_z=True)
+
             self.navigation_client.send_navigation_goal(goal, self.name, custom_goal_response=self.on_server_goal_response, custom_goal_result=self.on_server_goal_result)
 
             self.action_status = ActionStatus.PENDING
