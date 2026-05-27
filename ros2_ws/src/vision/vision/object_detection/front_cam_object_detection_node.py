@@ -384,7 +384,7 @@ class FrontCamObjectDetectorNode():
             )
             
         self.bridge = CvBridge()
-        if not os.path.exists(model_path):
+        if self.enable_object_detection and not os.path.exists(model_path):
             self.node.get_logger().error(f"Model path does not exist: {model_path}")
             self.node.get_logger().fatal("Exiting due to missing model.")
             raise FileNotFoundError(f"Model path does not exist: {model_path}")

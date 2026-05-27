@@ -160,6 +160,7 @@ def generate_launch_description():
                 'compressed': LaunchConfiguration("compressed"),
                 "enable_object_detection": enable_front_detection,
                 "has_zed_sdk": LaunchConfiguration("has_zed_sdk"),
+                "depth_estimation.known_planes.floor": default_config["object_map"]["ros__parameters"]["z_axis_locking"]["pool_floor_z"],
             }
         ],
         ros_arguments=["--ros-args", "--log-level", "front_cam_object_detection:=" + default_config["front_cam_object_detection"]["ros__parameters"]["log_level"]]
@@ -218,6 +219,24 @@ def generate_launch_description():
             "--child-frame-id", default_config["front_cam_object_detection"]["ros__parameters"]["image_frame_id"],
         ],
     )
+
+    # TF2 static transform for the downward facing camera (sensors/down_cam)
+    auv_to_down_cam_tf = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="auv_to_down_cam_tf",
+        arguments=[
+            "--x", str(default_config["down_cam_object_detection"]["ros__parameters"]["auv_to_down_cam"]["xyz"][0]),
+            "--y", str(default_config["down_cam_object_detection"]["ros__parameters"]["auv_to_down_cam"]["xyz"][1]),
+            "--z", str(default_config["down_cam_object_detection"]["ros__parameters"]["auv_to_down_cam"]["xyz"][2]),
+            "--roll", str(default_config["down_cam_object_detection"]["ros__parameters"]["auv_to_down_cam"]["rpy"][0]),
+            "--pitch", str(default_config["down_cam_object_detection"]["ros__parameters"]["auv_to_down_cam"]["rpy"][1]),
+            "--yaw", str(default_config["down_cam_object_detection"]["ros__parameters"]["auv_to_down_cam"]["rpy"][2]),
+            "--frame-id", default_config["front_cam_object_detection"]["ros__parameters"]["auv_frame_id"],
+            "--child-frame-id", default_config["down_cam_object_detection"]["ros__parameters"]["camera_frame_id"],
+        ],
+    )
+
     
     down_detection_node = Node(
         package='vision',
@@ -251,6 +270,8 @@ def generate_launch_description():
             config_path,
             {
                 "front_cam_detection_frame_topic": default_config["front_cam_object_detection"]["ros__parameters"]["detection_frame_topic"],
+                "down_cam_detection_topic": default_config["down_cam_object_detection"]["ros__parameters"]["detection_topic"],
+                "down_cam_info_topic": default_config["down_cam_object_detection"]["ros__parameters"]["camera_info_topic"],
                 "frame_id_auv": default_config["front_cam_object_detection"]["ros__parameters"]["auv_frame_id"],
                 "max_per_class_labels": list(default_config["object_map"]["ros__parameters"]["max_per_class"].keys()),
                 "max_per_class_values": list(default_config["object_map"]["ros__parameters"]["max_per_class"].values()),
@@ -279,6 +300,7 @@ def generate_launch_description():
     launch_description.add_action(auv_to_camera_center_tf)
     launch_description.add_action(camera_center_to_detection_tf)
     launch_description.add_action(detection_to_optical_tf)
+    launch_description.add_action(auv_to_down_cam_tf)
     # launch_description.add_action(front_cam_enhancement_node)
     # launch_description.add_action(down_cam_enhancement_node)
     launch_description.add_action(front_detection_node)

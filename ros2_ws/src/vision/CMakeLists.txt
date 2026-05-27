@@ -18,6 +18,7 @@ set(ROS_DEPS
     auv_msgs
     std_msgs
     geometry_msgs
+    sensor_msgs
     vision_msgs
     tf2
     tf2_ros
@@ -97,8 +98,19 @@ install(PROGRAMS ${PYTHON_NODE_SOURCES} DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME}/)
 # configuration files
 install(DIRECTORY config DESTINATION share/${PROJECT_NAME}/)
-# Model files
-install(DIRECTORY models DESTINATION share/${PROJECT_NAME}/)
+# Model files: Compute relative path from install share to source models folder, and automatically symlink it
+file(RELATIVE_PATH REL_PATH_TO_MODELS 
+     "${CMAKE_INSTALL_PREFIX}/share/${PROJECT_NAME}" 
+     "${CMAKE_CURRENT_SOURCE_DIR}/models")
+
+install(CODE "
+  file(MAKE_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/share/${PROJECT_NAME}\")
+  file(REMOVE_RECURSE \"\${CMAKE_INSTALL_PREFIX}/share/${PROJECT_NAME}/models\")
+  execute_process(
+    COMMAND ln -sf \"${REL_PATH_TO_MODELS}\" \"\${CMAKE_INSTALL_PREFIX}/share/${PROJECT_NAME}/models\"
+  )
+  message(STATUS \"Created relative symlink for models: share/${PROJECT_NAME}/models -> ${REL_PATH_TO_MODELS}\")
+")
 
 # Headers
 install(DIRECTORY include/ DESTINATION include)

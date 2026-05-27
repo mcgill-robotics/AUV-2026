@@ -18,6 +18,45 @@ ros2 launch vision vision_pipeline.launch.py
 
 Configuration is loaded from [config/vision_pipeline.yaml](config/vision_pipeline.yaml).
 
+### Changing Pools (Pool-Side Calibration)
+
+When deploying the AUV at a new pool, there is **only one primary parameter** you need to change in [config/vision_pipeline.yaml](config/vision_pipeline.yaml) to ensure all 3D projections, locking, and depth calculations function correctly:
+
+1. **`pool_floor_z`**: Under `object_map.ros__parameters.z_axis_locking.pool_floor_z` (default `-2.1`), set this to the absolute depth of your pool in meters (negative value).
+   
+   *Note: Updating this single value automatically propagates to the front camera depth estimation plane, the down-camera raycasting plane (which dynamically projects to `pool_floor_z + table_height` for table-top items), and the C++ map snap-to-floor constraints.*
+
+Other pool-specific parameters to optionally verify:
+* **`pool_surface_z`**: Under `object_map.ros__parameters.z_axis_locking.pool_surface_z` (default `0.0`), change if the relative water level offset changes.
+* **`lane_boundary`**: If wall-reflection/clutter filtering is needed, remember to set **`enable: true`**, and then adjust the `x_min`, `x_max`, `y_min`, and `y_max` AABB coordinates to match your active competition lane dimensions.
+
+### Calculating Camera Intrinsics (For Future Reference)
+* Downward-facing Camera Model: [ELP-USB500W02M-AF60](https://www.webcamerausb.com/elp-5megapixel-high-resolution-autofocus-usb-camera-module-usb20-ov5640-color-cmos-sensor-60degree-lens-not-support-otg-p-63.html)
+
+If you replace the downward-facing camera module or change the resolution of `down_cam_object_detection` in `vision_pipeline.yaml` (e.g. from 640x480 to 1280x720), you must recompute and update the camera intrinsics (`fx`, `fy`, `cx`, `cy`) under the `down_cam_object_detection` block for accurate 3D ray-casting.
+
+Here is the general formula for a standard pinhole camera model based on the lens's **Diagonal Field of View (DFOV)** and the image resolution ($W \times H$):
+
+1. **Diagonal in Pixels ($D_{\text{pixels}}$)**:
+   $$D_{\text{pixels}} = \sqrt{W^2 + H^2}$$
+   *(For $640 \times 480$: $D_{\text{pixels}} = \sqrt{640^2 + 480^2} = 800\text{ pixels}$)*
+
+2. **Focal Length in Pixels ($f$)**:
+   $$f_x = f_y = f = \frac{D_{\text{pixels}}}{2 \tan\left(\frac{\theta_d}{2}\right)}$$
+   Where $\theta_d$ is the Diagonal FOV of the lens in degrees.
+   *(For a 60° FOV lens at 640x480: $f = \frac{800}{2 \tan(30^\circ)} = 400\sqrt{3} \approx 692.8$)*
+   
+   *Note: $f_x$ and $f_y$ represent the focal length scaled by the physical pixel pitch along the horizontal ($p_x$) and vertical ($p_y$) directions ($f_x = F / p_x, f_y = F / p_y$). Since modern CMOS sensors (like the OV5640) use perfectly **square pixels** ($p_x = p_y = 1.4\mu\text{m}$), the horizontal and vertical focal lengths in pixels are identical ($f_x = f_y$).*
+
+3. **Principal Point / Optical Center ($c_x, c_y$)**:
+   $$c_x = \frac{W}{2}, \quad c_y = \frac{H}{2}$$
+   *(For $640 \times 480$: $c_x = 320.0$, $c_y = 240.0$)*
+
+4. **Horizontal and Vertical Field of View (FOV)**:
+   Using the focal length $f$:
+   * **Horizontal FOV (HFOV)**: $\text{HFOV} = 2 \cdot \arctan\left(\frac{W}{2f}\right) = 2 \cdot \arctan\left(\frac{640}{2 \cdot 692.8}\right) \approx 49.6^\circ$
+   * **Vertical FOV (VFOV)**: $\text{VFOV} = 2 \cdot \arctan\left(\frac{H}{2f}\right) = 2 \cdot \arctan\left(\frac{480}{2 \cdot 692.8}\right) \approx 38.2^\circ$
+
 ### Launch Parameters
 
 | Parameter | Type | Default | Description |

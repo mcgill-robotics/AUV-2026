@@ -12,7 +12,8 @@ from cv_bridge import CvBridge
 import rclpy
 from rclpy.node import Node
 from rclpy.parameter import Parameter
-from sensor_msgs.msg import CompressedImage, Image
+import copy
+from sensor_msgs.msg import CameraInfo, CompressedImage, Image
 from std_srvs.srv import Trigger
 from vision_msgs.msg import Detection2DArray
 
@@ -54,6 +55,13 @@ class DownCamObjectDetectorNode():
         self.node.declare_parameter('height', Parameter.Type.INTEGER)
         self.node.declare_parameter('fps', Parameter.Type.INTEGER)
         self.node.declare_parameter('camera_frame_id', Parameter.Type.STRING)
+
+        # ── Camera intrinsics parameters ─────────────────────────
+        self.node.declare_parameter('fx', Parameter.Type.DOUBLE)
+        self.node.declare_parameter('fy', Parameter.Type.DOUBLE)
+        self.node.declare_parameter('cx', Parameter.Type.DOUBLE)
+        self.node.declare_parameter('cy', Parameter.Type.DOUBLE)
+        self.node.declare_parameter('camera_info_topic', Parameter.Type.STRING)
 
         # ── V4L2 image controls (HD USB Camera) ──────────────────
         self.node.declare_parameter('brightness', Parameter.Type.INTEGER)
@@ -108,6 +116,13 @@ class DownCamObjectDetectorNode():
         self.camera_fps = self.node.get_parameter('fps').get_parameter_value().integer_value
         self.camera_frame_id = self.node.get_parameter('camera_frame_id').get_parameter_value().string_value
 
+        # Intrinsics
+        self.fx = self.node.get_parameter('fx').get_parameter_value().double_value
+        self.fy = self.node.get_parameter('fy').get_parameter_value().double_value
+        self.cx = self.node.get_parameter('cx').get_parameter_value().double_value
+        self.cy = self.node.get_parameter('cy').get_parameter_value().double_value
+        self.camera_info_topic = self.node.get_parameter('camera_info_topic').get_parameter_value().string_value
+
         # Collection
         self._collecting = False
         self._last_collection_time = 0.0
@@ -133,7 +148,7 @@ class DownCamObjectDetectorNode():
         self.bridge = CvBridge()
 
         # ── Load model ───────────────────────────────────────────
-        if not os.path.exists(model_path):
+        if self.enable_object_detection and not os.path.exists(model_path):
             self.node.get_logger().fatal(f"Model path does not exist: {model_path}")
             raise FileNotFoundError(f"Model path does not exist: {model_path}")
 
@@ -150,6 +165,14 @@ class DownCamObjectDetectorNode():
             queue_size,
         )
         self.node.get_logger().info(f"Publishing detections to: {detection_topic}")
+
+        self.pub_camera_info = self.node.create_publisher(
+            CameraInfo,
+            self.camera_info_topic,
+            queue_size,
+        )
+        self.node.get_logger().info(f"Publishing camera info to: {self.camera_info_topic}")
+        self.camera_info_template = self._build_camera_info_template()
 
         if self.publish_annotated_image:
             publish_topic = detection_topic + "/annotated" + ("/compressed" if self.compressed else "")
@@ -340,6 +363,12 @@ class DownCamObjectDetectorNode():
         det_msg.header.frame_id = self.camera_frame_id
         self.pub_detections.publish(det_msg)
 
+        # ── Publish CameraInfo ───────────────────────────
+        if self.pub_camera_info is not None:
+            camera_info_msg = copy.deepcopy(self.camera_info_template)
+            camera_info_msg.header.stamp = frame_stamp.to_msg()
+            self.pub_camera_info.publish(camera_info_msg)
+
         if (
             self.annotated_image_enabled
             and self._frame_counter % self.publish_annotated_every_n_frames == 0
@@ -351,6 +380,31 @@ class DownCamObjectDetectorNode():
                 frame_stamp.to_msg(),
                 self.camera_frame_id,
             )
+
+    def _build_camera_info_template(self) -> CameraInfo:
+        camera_info = CameraInfo()
+        camera_info.header.frame_id = self.camera_frame_id
+
+        camera_info.width = self.image_width
+        camera_info.height = self.image_height
+        camera_info.distortion_model = "plumb_bob"
+        camera_info.d = [0.0, 0.0, 0.0, 0.0, 0.0]
+        camera_info.k = [
+            self.fx, 0.0, self.cx,
+            0.0, self.fy, self.cy,
+            0.0, 0.0, 1.0,
+        ]
+        camera_info.r = [
+            1.0, 0.0, 0.0,
+            0.0, 1.0, 0.0,
+            0.0, 0.0, 1.0,
+        ]
+        camera_info.p = [
+            self.fx, 0.0, self.cx, 0.0,
+            0.0, self.fy, self.cy, 0.0,
+            0.0, 0.0, 1.0, 0.0,
+        ]
+        return camera_info
 
     def destroy(self):
         """Release camera resources."""

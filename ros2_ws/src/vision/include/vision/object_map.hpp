@@ -14,6 +14,9 @@
 #include "auv_msgs/msg/vision_object.hpp"
 #include "auv_msgs/msg/vision_object_array.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
+#include "sensor_msgs/msg/camera_info.hpp"
+#include "vision_msgs/msg/detection2_d_array.hpp"
+#include <mutex>
 #include "object_tracker.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "tf2/LinearMath/Quaternion.h"
@@ -43,6 +46,8 @@ private:
 
     bool is_surface_bound(const std::string& label) const;
 
+    bool is_table_top_object(const std::string& label) const;
+
     bool is_table_octagon_mode_enabled() const;
 
     void apply_z_axis_depth_constraints(
@@ -59,6 +64,8 @@ private:
         int frames_since_last_seen) const;
 
     void detection_callback(const auv_msgs::msg::VisionDetectionFrame::SharedPtr msg);
+    void down_cam_callback(const vision_msgs::msg::Detection2DArray::SharedPtr msg);
+    void down_cam_info_callback(const sensor_msgs::msg::CameraInfo::SharedPtr msg);
 
     void publish_object_map(const std::vector<Track>& tracks);
 
@@ -78,6 +85,7 @@ private:
     std::vector<std::string> unique_objects;
     std::vector<std::string> floor_objects;
     std::vector<std::string> surface_objects;
+    std::vector<std::string> table_top_objects;
     std::string auv_frame_id;
     std::string world_frame_id = "pool_link";
 
@@ -87,4 +95,23 @@ private:
     rclcpp::Subscription<auv_msgs::msg::VisionDetectionFrame>::SharedPtr detection_subscriber;
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+
+    rclcpp::Subscription<vision_msgs::msg::Detection2DArray>::SharedPtr down_cam_subscriber;
+    rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr down_cam_info_subscriber;
+    
+    // Down camera intrinsics
+    double down_cam_fx;
+    double down_cam_fy;
+    double down_cam_cx;
+    double down_cam_cy;
+    double water_refraction_scale;
+
+    // Thread-safe buffer for down-cam projected 3D measurements
+    std::mutex down_cam_mutex;
+    double table_z;
+    std::vector<Eigen::Vector3d> down_cam_measurements;
+    std::vector<Eigen::Matrix3d> down_cam_covariances;
+    std::vector<std::string> down_cam_classes;
+    std::vector<double> down_cam_orientations;
+    std::vector<double> down_cam_confidences;
 };
