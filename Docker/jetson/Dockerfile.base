@@ -67,13 +67,19 @@ RUN mkdir -p tmp_cudss && cd tmp_cudss && \
 # =============================================================================
 # Installing basic development tools and prerequisites as its own mini-section
 # to avoid overlapping with subsequent compilation dependencies.
+# Also includes essential terminal utilities for developer debugging.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
     curl \
     git \
+    nano \
     python3-colcon-common-extensions \
     python3-rosdep \
+    sudo \
+    tar \
+    tmux \
+    vim \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
@@ -159,7 +165,7 @@ RUN git clone --depth 1 --branch humble https://github.com/ros-perception/vision
 COPY Docker/jetson/constraints.txt /tmp/
 
 # =============================================================================
-# 5. PyTorch (no version pins - Jetson AI Lab index prunes old versions)
+# 6. PyTorch (no version pins - Jetson AI Lab index prunes old versions)
 # =============================================================================
 # Install torch ecosystem from Jetson AI Lab with standard PyPI as fallback.
 # After pushing this image, upstream wheel removal doesn't affect us.
@@ -171,7 +177,7 @@ RUN uv pip install --no-cache \
     torch torchvision torchaudio
 
 # =============================================================================
-# 4. ZED SDK + Python API
+# 7. ZED SDK + Python API
 # =============================================================================
 # Verify ZED SDK URL exists
 ENV ZED_SDK_URL="https://download.stereolabs.com/zedsdk/${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}.${ZED_SDK_PATCH}/l4t${L4T_MAJOR}.${L4T_MINOR}/jetsons"
@@ -193,7 +199,7 @@ RUN cd /tmp && \
 
 # Install ZED Python API with --no-deps to prevent NumPy override.
 RUN export PIP_INDEX_URL="https://pypi.python.org/simple" && \
-    pip install --no-cache-dir protobuf && \
+    uv pip install --no-cache protobuf && \
     git clone -b v${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}.${ZED_SDK_PATCH} \
         https://github.com/stereolabs/zed-python-api.git /tmp/zed-python-api && \
     uv pip install -v --no-deps --no-build-isolation /tmp/zed-python-api/src && \

@@ -67,19 +67,12 @@ RUN curl -fsSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o
     libwayland-dev \
     libxkbcommon-dev \
     lsb-release \
-    nano \
     ninja-build \
-    python3-colcon-common-extensions \
-    python3-rosdep \
     python3-vcstool \
     python3-wheel \
-    sudo \
-    tar \
-    tmux \
     udev \
     usbutils \
     v4l-utils \
-    vim \
     && rm -rf /var/lib/apt/lists/* && apt-get clean
 
 # =============================================================================
