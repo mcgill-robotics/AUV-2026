@@ -162,11 +162,12 @@ front_cam_object_detection:
 
 down_cam_object_detection:
   ros__parameters:
-    enable_object_detection: false
+    enable_object_detection: true
     image_topic: /down_cam/image_raw # this will be the input topic if sim=true, this will be set to down_image_enhancement.ros__parameters.output_topic if enhance_images is set to true
     detection_topic: /vision/down_cam/detections
     camera_info_topic: /down_cam/camera_info
-    camera_frame_id: "sensors/down_cam"
+    base_frame_id: "sensors/down_cam"
+    camera_frame_id: "sensors/down_cam_optical"
 
     # Camera intrinsics (calculated from ELP OV5640 60 deg diagonal FOV lens at 640x480)
     # This results in a Horizontal FOV of ~49.6° and a Vertical FOV of ~38.2°
@@ -209,8 +210,8 @@ down_cam_object_detection:
     auto_focus: false                    # default true; when true, focus_absolute is ignored
     focus_absolute: 7                    # [0..21]    only used when auto_focus is false; default 16
     
-    # model_relative_path: models/synthetic_down_cam_rfdetr_onnx
-    model_relative_path: models/real_down_cam_rfdetr_onnx
+    model_relative_path: models/synthetic_down_cam_rfdetr_onnx
+    # model_relative_path: models/real_down_cam_rfdetr_onnx
     model_detection_threshold: 0.60
     # WARNING: These class names MUST be manually maintained when changing models to have new classes. 
     # You must also update the `class_names.txt` file in the model package.
@@ -269,6 +270,16 @@ object_map:
       - "octagon"
       - "search_rescue"
       - "survey_repair"
+      - "pill"
+      - "nutbolt"
+      - "electric"
+      - "bandaid"
+      - "warning"
+      - "redcross_helmet"
+      - "ambulance"
+      - "firetruck"
+      - "blood"
+      - "fire"
 
     table_top_objects:
       - "pill"
@@ -277,7 +288,6 @@ object_map:
       - "bandaid"
       - "warning"
       - "redcross_helmet"
-      - "bin"
       - "table"
 
     # Semi-persistent tracking: keeps tracks for these labels CONFIRMED for longer, 
@@ -378,16 +388,24 @@ object_map:
 
         
     # Object Tracker Parameters
-    new_object_min_distance_threshold: 0.5 # distance in meters between a new detection and existing tracks to be considered a new object and start a new track
+    new_object_min_distance_threshold: 0.00 # distance in meters between a new detection and existing tracks to be considered a new object and start a new track
 
-    # relatively strict parameters
-    gating_threshold: 3.5 # Mahalanobis distance threshold (~3 sigma) for associating detections to tracks
-    min_hits: 20 # Consecutive frames a detection must be matched to confirm a new track
-    max_age: 8 # Number of frames to keep a lost track alive before deleting it [CURRENTLY UNUSED]      
-    max_position_jump: 2.0 # Maximum allowed distance (meters) between predictions and measurements
-    conf_to_tent_threshold: 5 # Number of consecutive missed frames before a CONFIRMED track degrades to TENTATIVE
-    tent_init_buffer: 5 # Extra frames allowed for a new TENTATIVE track to initialize before being deleted if unmatched
-  
+    front_tracker:
+      gating_threshold: 3.5 # Mahalanobis distance threshold (~3 sigma) for associating detections to tracks
+      min_hits: 20 # Consecutive frames a detection must be matched to confirm a new track
+      max_age: 8 # Number of frames to keep a lost track alive before deleting it [CURRENTLY UNUSED]      
+      max_position_jump: 2.0 # Maximum allowed distance (meters) between predictions and measurements
+      conf_to_tent_threshold: 5 # Number of consecutive missed frames before a CONFIRMED track degrades to TENTATIVE
+      tent_init_buffer: 5 # Extra frames allowed for a new TENTATIVE track to initialize before being deleted if unmatched
+
+    down_tracker:
+      gating_threshold: 3.5
+      min_hits: 10 # Lower hits required because objects pass under the auv quickly
+      max_age: 8
+      max_position_jump: 2.0
+      conf_to_tent_threshold: 5
+      tent_init_buffer: 5
+
     # loose parameters
     # gating_threshold: 5.0
     # min_hits: 5
@@ -403,6 +421,7 @@ object_map:
     # max_position_jump: 99.0
     # conf_to_tent_threshold: 1
     # tent_init_buffer: 1
+
 
     # Debug
     log_level: info

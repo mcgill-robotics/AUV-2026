@@ -233,6 +233,23 @@ def generate_launch_description():
             "--pitch", str(default_config["down_cam_object_detection"]["ros__parameters"]["auv_to_down_cam"]["rpy"][1]),
             "--yaw", str(default_config["down_cam_object_detection"]["ros__parameters"]["auv_to_down_cam"]["rpy"][2]),
             "--frame-id", default_config["front_cam_object_detection"]["ros__parameters"]["auv_frame_id"],
+            "--child-frame-id", default_config["down_cam_object_detection"]["ros__parameters"]["base_frame_id"],
+        ],
+    )
+
+    # TF2 static transform to create the optical frame where Z points into the scene
+    down_cam_to_optical_tf = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="down_cam_to_optical_tf",
+        arguments=[
+            "--x", "0.0",
+            "--y", "0.0",
+            "--z", "0.0",
+            "--roll", "-1.57079632679",
+            "--pitch", "0.0",
+            "--yaw", "-1.57079632679",
+            "--frame-id", default_config["down_cam_object_detection"]["ros__parameters"]["base_frame_id"],
             "--child-frame-id", default_config["down_cam_object_detection"]["ros__parameters"]["camera_frame_id"],
         ],
     )
@@ -301,6 +318,7 @@ def generate_launch_description():
     launch_description.add_action(camera_center_to_detection_tf)
     launch_description.add_action(detection_to_optical_tf)
     launch_description.add_action(auv_to_down_cam_tf)
+    launch_description.add_action(down_cam_to_optical_tf)
     # launch_description.add_action(front_cam_enhancement_node)
     # launch_description.add_action(down_cam_enhancement_node)
     launch_description.add_action(front_detection_node)

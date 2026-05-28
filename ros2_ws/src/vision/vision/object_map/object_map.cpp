@@ -29,12 +29,19 @@ ObjectMapNode::ObjectMapNode() : Node("object_map_node")
     bool large_structure_pipe_separation_enabled = this->declare_parameter<bool>("large_structure_pipe_separation.enable");
     float min_large_structure_pipe_separation =
         this->declare_parameter<float>("large_structure_pipe_separation.min_distance_m");
-    double gating_threshold = this->declare_parameter<double>("gating_threshold");
-    int min_hits = this->declare_parameter<int>("min_hits");
-    int max_age = this->declare_parameter<int>("max_age");
-    double max_position_jump = this->declare_parameter<double>("max_position_jump");
-    int conf_to_tent_threshold = this->declare_parameter<int>("conf_to_tent_threshold");
-    int tent_init_buffer = this->declare_parameter<int>("tent_init_buffer");
+    double front_gating_threshold = this->declare_parameter<double>("front_tracker.gating_threshold");
+    int front_min_hits = this->declare_parameter<int>("front_tracker.min_hits");
+    int front_max_age = this->declare_parameter<int>("front_tracker.max_age");
+    double front_max_position_jump = this->declare_parameter<double>("front_tracker.max_position_jump");
+    int front_conf_to_tent_threshold = this->declare_parameter<int>("front_tracker.conf_to_tent_threshold");
+    int front_tent_init_buffer = this->declare_parameter<int>("front_tracker.tent_init_buffer");
+
+    double down_gating_threshold = this->declare_parameter<double>("down_tracker.gating_threshold");
+    int down_min_hits = this->declare_parameter<int>("down_tracker.min_hits");
+    int down_max_age = this->declare_parameter<int>("down_tracker.max_age");
+    double down_max_position_jump = this->declare_parameter<double>("down_tracker.max_position_jump");
+    int down_conf_to_tent_threshold = this->declare_parameter<int>("down_tracker.conf_to_tent_threshold");
+    int down_tent_init_buffer = this->declare_parameter<int>("down_tracker.tent_init_buffer");
 
     bool enable_gate_midpoint_refinement =
         this->declare_parameter<bool>("gate_midpoint");
@@ -70,7 +77,7 @@ ObjectMapNode::ObjectMapNode() : Node("object_map_node")
         object_sizes_map[object_size_labels[i]] = Eigen::Vector3d(object_size_x[i], object_size_y[i], object_size_z[i]);
     }
 
-    object_tracker = ObjectTracker(
+    front_tracker = ObjectTracker(
         max_per_class_map,
         large_structure_labels,
         pipe_labels,
@@ -79,12 +86,34 @@ ObjectMapNode::ObjectMapNode() : Node("object_map_node")
         min_large_structure_separation,
         large_structure_pipe_separation_enabled,
         min_large_structure_pipe_separation,
-        gating_threshold,
-        min_hits,
-        max_age,
-        max_position_jump,
-        conf_to_tent_threshold,
-        tent_init_buffer,
+        front_gating_threshold,
+        front_min_hits,
+        front_max_age,
+        front_max_position_jump,
+        front_conf_to_tent_threshold,
+        front_tent_init_buffer,
+        semi_persistent_objects,
+        semi_persistent_conf_to_tent_threshold,
+        enable_gate_midpoint_refinement,
+        enable_board_icon_refinement,
+        refinement_plausibility_radius
+    );
+
+    down_tracker = ObjectTracker(
+        max_per_class_map,
+        large_structure_labels,
+        pipe_labels,
+        new_object_min_distance_threshold,
+        large_structure_separation_enabled,
+        min_large_structure_separation,
+        large_structure_pipe_separation_enabled,
+        min_large_structure_pipe_separation,
+        down_gating_threshold,
+        down_min_hits,
+        down_max_age,
+        down_max_position_jump,
+        down_conf_to_tent_threshold,
+        down_tent_init_buffer,
         semi_persistent_objects,
         semi_persistent_conf_to_tent_threshold,
         enable_gate_midpoint_refinement,
@@ -255,7 +284,7 @@ void ObjectMapNode::down_cam_callback(const vision_msgs::msg::Detection2DArray::
 
     double fx, fy, cx, cy;
     {
-        std::lock_guard<std::mutex> lock(down_cam_mutex);
+
         fx = down_cam_fx;
         fy = down_cam_fy;
         cx = down_cam_cx;
@@ -305,7 +334,7 @@ void ObjectMapNode::down_cam_callback(const vision_msgs::msg::Detection2DArray::
 
     for (const auto& detection : msg->detections) {
         if (detection.results.empty()) continue;
-        
+
         // Find best result
         double best_score = -1.0;
         std::string best_class = "";
@@ -322,7 +351,10 @@ void ObjectMapNode::down_cam_callback(const vision_msgs::msg::Detection2DArray::
         double u = detection.bbox.center.position.x;
         double v = detection.bbox.center.position.y;
         
-        // Ray casting in camera frame (accounting for flat port water refraction)
+        // Ray casting in camera optical frame (accounting for flat port water refraction)
+        // NOTE: Because we set z_c = 1.0, this ray is formed in the standard OPTICAL frame 
+        // (Z points into the scene). Therefore, the world_camera_basis matrix MUST come 
+        // from a "..._optical" TF frame, otherwise the ray will shoot straight forward
         double effective_fx = fx * water_refraction_scale;
         double effective_fy = fy * water_refraction_scale;
         double x_c = (u - cx) / effective_fx;
@@ -359,20 +391,28 @@ void ObjectMapNode::down_cam_callback(const vision_msgs::msg::Detection2DArray::
         new_confidences.push_back(best_score);
     }
     
-    // Store safely in buffer to be consumed by main tracker update
-    {
-        std::lock_guard<std::mutex> lock(down_cam_mutex);
-        down_cam_measurements.insert(down_cam_measurements.end(), new_measurements.begin(), new_measurements.end());
-        down_cam_covariances.insert(down_cam_covariances.end(), new_covariances.begin(), new_covariances.end());
-        down_cam_classes.insert(down_cam_classes.end(), new_classes.begin(), new_classes.end());
-        down_cam_orientations.insert(down_cam_orientations.end(), new_orientations.begin(), new_orientations.end());
-        down_cam_confidences.insert(down_cam_confidences.end(), new_confidences.begin(), new_confidences.end());
+    // Provide persistent positions so the down tracker can re-initialize tracks if they re-enter the FOV
+    std::vector<std::pair<std::string, Eigen::Vector3d>> persistent_positions;
+    for (const auto& [label, track] : persistent_objects) {
+        persistent_positions.push_back({label, track.get_position()});
     }
+
+    // Directly update the independent down camera tracker
+    down_tracker.update(
+        new_measurements,
+        new_covariances,
+        new_classes,
+        new_orientations,
+        new_confidences,
+        p0,   // Observer position (camera center)
+        true, // Has observer position
+        persistent_positions
+    );
 }
 
 void ObjectMapNode::down_cam_info_callback(const sensor_msgs::msg::CameraInfo::SharedPtr msg)
 {
-    std::lock_guard<std::mutex> lock(down_cam_mutex);
+
     down_cam_fx = msg->k[0];
     down_cam_fy = msg->k[4];
     down_cam_cx = msg->k[2];
@@ -495,25 +535,8 @@ void ObjectMapNode::detection_callback(const auv_msgs::msg::VisionDetectionFrame
         persistent_positions.emplace_back(label, track.get_position());
     }
 
-    // Consume buffered down cam measurements
-    {
-        std::lock_guard<std::mutex> lock(down_cam_mutex);
-        if (!down_cam_measurements.empty()) {
-            filtered_measurements.insert(filtered_measurements.end(), down_cam_measurements.begin(), down_cam_measurements.end());
-            filtered_covariances.insert(filtered_covariances.end(), down_cam_covariances.begin(), down_cam_covariances.end());
-            filtered_classes.insert(filtered_classes.end(), down_cam_classes.begin(), down_cam_classes.end());
-            filtered_orientations.insert(filtered_orientations.end(), down_cam_orientations.begin(), down_cam_orientations.end());
-            filtered_confidences.insert(filtered_confidences.end(), down_cam_confidences.begin(), down_cam_confidences.end());
-            
-            down_cam_measurements.clear();
-            down_cam_covariances.clear();
-            down_cam_classes.clear();
-            down_cam_orientations.clear();
-            down_cam_confidences.clear();
-        }
-    }
-
-    std::vector<Track> all_tracks = object_tracker.update(
+    // Update the independent front camera tracker
+    std::vector<Track> front_tracks = front_tracker.update(
         filtered_measurements,
         filtered_covariances,
         filtered_classes,
@@ -523,8 +546,16 @@ void ObjectMapNode::detection_callback(const auv_msgs::msg::VisionDetectionFrame
         has_observer_position,
         persistent_positions);
 
-        // auto t3 = std::chrono::high_resolution_clock::now();
+    // Get the latest tracks from the down camera tracker
+    const std::vector<Track>& down_tracks = down_tracker.get_tracks();
 
+    // Combine tracks from both trackers for publishing and persistence logic
+    std::vector<Track> all_tracks;
+    all_tracks.reserve(front_tracks.size() + down_tracks.size());
+    all_tracks.insert(all_tracks.end(), front_tracks.begin(), front_tracks.end());
+    all_tracks.insert(all_tracks.end(), down_tracks.begin(), down_tracks.end());
+
+    // auto t3 = std::chrono::high_resolution_clock::now();
 
     publish_object_map(all_tracks);
 

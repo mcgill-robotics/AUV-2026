@@ -962,8 +962,13 @@ class FrontCamObjectDetectorNode():
                             px_y = bbox_cy
                         
                     if px_y is not None:
-                        # Ray generation in ROS camera frame (X forward, Y left, Z up).
-                        # A point (u,v) in image translates to ray [1.0, -X_cv, -Y_cv] in ROS frame.
+                        # Ray generation in Standard ROS Frame (X forward, Y left, Z up).
+                        # Instead of using an _optical TF frame, we manually "twist" the optical ray
+                        # into a standard ROS ray. A point (u,v) with depth Z=1 in an image translates to:
+                        # X (Forward) = Depth (1.0)
+                        # Y (Left)    = -X_optical
+                        # Z (Up)      = -Y_optical
+                        # This allows us to safely multiply by the standard base T_W_C transform.
                         v_c_ros = np.array([1.0, -(px_x - self.cam_cx)/fx_scaled, -(px_y - self.cam_cy)/fy_scaled, 0.0])
                         
                         # Transform ray and camera origin to the world frame

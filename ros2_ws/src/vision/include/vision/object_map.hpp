@@ -89,7 +89,8 @@ private:
     std::string auv_frame_id;
     std::string world_frame_id = "pool_link";
 
-    ObjectTracker object_tracker;
+    ObjectTracker front_tracker;
+    ObjectTracker down_tracker;
     rclcpp::Time frame_collection_time;
     rclcpp::Publisher<auv_msgs::msg::VisionObjectArray>::SharedPtr object_map_publisher;
     rclcpp::Subscription<auv_msgs::msg::VisionDetectionFrame>::SharedPtr detection_subscriber;
@@ -106,12 +107,5 @@ private:
     double down_cam_cy;
     double water_refraction_scale;
 
-    // Thread-safe buffer for down-cam projected 3D measurements
-    std::mutex down_cam_mutex;
     double table_z;
-    std::vector<Eigen::Vector3d> down_cam_measurements;
-    std::vector<Eigen::Matrix3d> down_cam_covariances;
-    std::vector<std::string> down_cam_classes;
-    std::vector<double> down_cam_orientations;
-    std::vector<double> down_cam_confidences;
 };
