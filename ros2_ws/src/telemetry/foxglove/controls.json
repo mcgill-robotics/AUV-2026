@@ -46,7 +46,7 @@
                         "diffEnabled": false
                 },
                 "RawMessages!imuSetpoint": {
-                        "topicPath": "/controls/quaternion_setpoint",
+                        "topicPath": "/controls/attitude_reference",
                         "diffEnabled": false
                 },
                 "Publish!effort": {

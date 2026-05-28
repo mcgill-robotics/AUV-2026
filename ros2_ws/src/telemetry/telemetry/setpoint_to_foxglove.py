@@ -3,6 +3,7 @@ from rclpy.node import Node
 
 from std_msgs.msg import Float64
 from geometry_msgs.msg import Quaternion, PoseStamped
+from auv_msgs.msg import AttitudeReference
 
 
 class SetpointToFoxgloveNode(Node):
@@ -28,7 +29,7 @@ class SetpointToFoxgloveNode(Node):
         self.create_subscription(Float64, '/controls/x_setpoint', self.x_callback, 10)
         self.create_subscription(Float64, '/controls/y_setpoint', self.y_callback, 10)
         self.create_subscription(Float64, '/controls/depth_setpoint', self.z_callback, 10)
-        self.create_subscription(Quaternion, '/controls/quaternion_setpoint', self.q_callback, 10)
+        self.create_subscription(AttitudeReference, '/controls/attitude_reference', self.q_callback, 10)
         
         self.get_logger().info("Setpoint to Foxglove converter started.")
         self.get_logger().info(f"Publishing unified PoseStamped to: /foxglove/pose_setpoint (frame: {self.frame_id})")
@@ -62,10 +63,10 @@ class SetpointToFoxgloveNode(Node):
         self.publish_pose()
         
     def q_callback(self, msg):
-        self.qx = msg.x
-        self.qy = msg.y
-        self.qz = msg.z
-        self.qw = msg.w
+        self.qx = msg.orientation.x
+        self.qy = msg.orientation.y
+        self.qz = msg.orientation.z
+        self.qw = msg.orientation.w
         self.publish_pose()
 
 

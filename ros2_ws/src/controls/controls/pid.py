@@ -20,6 +20,7 @@ class PID:
                 self.derivative_error = 0.0
 
                 self.last_setpoint = 0.0
+                self.previous_position = 0.0
                 
 
         def compute_errors(self, setpoint, position, previous_position, time_step):

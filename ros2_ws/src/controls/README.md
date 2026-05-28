@@ -27,7 +27,7 @@ This process occurs in three stages:
 
 
 ## Overview
-The controls package implements separate depth, planar, and attitude controllers. The depth controller uses a PID loop on `/processed/depth` and publishes a vertical effort on `/controls/depth_effort`. The planar controller handles X and Y translation by subscribing to DVL position data (`auv_frame/dvl/position`) and publishing efforts on `/controls/x_effort` and `/controls/y_effort`. The attitude controller uses IMU orientation (`processed/imu`) and a target quaternion (`quaternion_setpoint`) to publish torques on `/controls/attitude_effort`. The superimposer node sums all efforts, applies optional bias terms, and publishes `/controls/combined_effort` for propulsion.
+The controls package implements separate depth, planar, and attitude controllers. The depth controller uses a PID loop on `/auv_frame/depth` and publishes a vertical effort on `/controls/depth_effort`. The planar controller handles X and Y translation by subscribing to DVL position data (`auv_frame/dvl/position`) and publishing efforts on `/controls/x_effort` and `/controls/y_effort`. The attitude controller uses IMU orientation (`auv_frame/imu`) and a target attitude reference (`/controls/attitude_reference`) to publish torques on `/controls/attitude_effort`. The superimposer node sums all efforts, applies optional bias terms, and publishes `/controls/total_effort` for propulsion.
 
 Additionally, the **Navigation Server** acts as a high-level orchestrator. It hosts an Action Server (`/motion/navigate`) that accepts goal poses and handles computing errors, resolving coordinates, publishing setpoints to the underlying PID controllers, and reporting convergence.
 
@@ -69,7 +69,7 @@ Publishing a depth setpoint onto `/controls/y_setpoint`:
         ros2 topic pub /controls/y_setpoint std_msgs/msg/Float64 "{data: 2.0}" 
 
 
-Publishing an attitude setpoint onto `/controls/quaternion_setpoint`:
+Publishing an attitude setpoint onto `/controls/attitude_reference`:
 
         ros2 topic pub /controls/attitude_reference auv_msgs/msg/AttitudeReference "{orientation: {x: 0.0, y: 0.0, z: 0.7071, w: 0.7071}, angular_velocity: {x: 0.0, y: 0.0, z: 0.0}}"
 
@@ -111,7 +111,7 @@ The package provides six ROS nodes: `depth_controller`, `attitude_controller`, `
 - `y_controller` input: `auv_frame/dvl/position`, `/controls/y_setpoint`
 - `y_controller` output: `/controls/y_effort`
 
-- `attitude_controller` input: `/auv_frame/imu`, `quaternion_setpoint`
+- `attitude_controller` input: `/auv_frame/imu`, `/controls/attitude_reference`
 
 - `attitude_controller` output: `/controls/attitude_effort`
 
@@ -119,11 +119,11 @@ The package provides six ROS nodes: `depth_controller`, `attitude_controller`, `
 
 - `superimposer` output: `/controls/combined_effort`
 - `trajectory_planner` input: `controls/FlipCommand`
-- `trajectory_planner` output: `controls/quaternion_setpoint`
+- `trajectory_planner` output: `/controls/attitude_reference`
 
 - `navigation_server` input: `/state/pose` (geometry_msgs/PoseStamped)
 
-- `navigation_server` output: Action Server `/motion/navigate`, publishers pointing to `/controls/depth_setpoint`, `/controls/x_setpoint`, `/controls/y_setpoint`, `/controls/quaternion_setpoint`
+- `navigation_server` output: Action Server `/motion/navigate`, publishers pointing to `/controls/depth_setpoint`, `/controls/x_setpoint`, `/controls/y_setpoint`, `/controls/attitude_reference`
 
 
 ### Published Topics
@@ -135,7 +135,7 @@ The package provides six ROS nodes: `depth_controller`, `attitude_controller`, `
 | `/controls/y_effort` | `geometry_msgs/Wrench` | Y-axis controller effort in the **pool frame** |
 | `/controls/attitude_effort` | `geometry_msgs/Wrench` | Attitude controller effort (torques) in the **body frame** |
 | `/controls/total_effort` | `geometry_msgs/Wrench` | Sum of depth and attitude efforts with optional biases in the **body frame** |
-| `/controls/quaternion_setpoint` | `geometry_msgs/Quaternion` | Desired vehicle orientation |
+| `/controls/attitude_reference` | `auv_msgs/AttitudeReference` | Desired vehicle orientation and angular velocity |
 
 
 ### Subscribed Topics
@@ -146,7 +146,7 @@ The package provides six ROS nodes: `depth_controller`, `attitude_controller`, `
 | `/auv_frame/imu` | `sensor_msgs/Imu` | Orientation and angular velocity for attitude control |
 | `auv_frame/dvl/position` | `geometry_msgs/Float64` | AUV's position in the pool frame from the DVL | 
 | `/controls/depth_setpoint` | `std_msgs/Float64` | Desired vehicle depth |
-| `/controls/quaternion_setpoint` | `geometry_msgs/Quaternion` | Desired vehicle orientation |
+| `/controls/attitude_reference` | `auv_msgs/AttitudeReference` | Desired vehicle orientation and angular velocity |
 | `/controls/x_setpoint` | `std_msgs/Float64` | Desired vehicle position along the X-axis | 
 | `/controls/y_setpoint` | `std_msgs/Float64` | Desired vehicle position along the Y-axis | 
 | `/controls/depth_effort` | `geometry_msgs/Wrench` | Depth effort input to superimposer |

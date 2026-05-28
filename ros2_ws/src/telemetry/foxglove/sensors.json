@@ -158,9 +158,9 @@
       "value": "{\n  \"data\": 0.3\n}"
     },
     "Publish!attitude_sp": {
-      "topicName": "/controls/quaternion_setpoint",
-      "datatype": "geometry_msgs/Quaternion",
-      "value": "{\n  \"x\": 0.3826,\n  \"y\": 0,\n  \"z\": 0,\n  \"w\": 0.9238\n}\n"
+      "topicName": "/controls/attitude_reference",
+      "datatype": "auv_msgs/msg/AttitudeReference",
+      "value": "{\n  \"orientation\": { \"x\": 0.3826, \"y\": 0, \"z\": 0, \"w\": 0.9238 },\n  \"angular_velocity\": { \"x\": 0, \"y\": 0, \"z\": 0 }\n}\n"
     },
     "Publish!xy_sp": {
       "topicName": "/controls/x_setpoint",

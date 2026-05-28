@@ -100,10 +100,10 @@
                         "value": "{ \"data\": 1.0 }"
                 },
                 "Publish!quat_sp": {
-                        "topicName": "/controls/quaternion_setpoint",
-                        "datatype": "geometry_msgs/msg/Quaternion",
+                        "topicName": "/controls/attitude_reference",
+                        "datatype": "auv_msgs/msg/AttitudeReference",
                         "buttonText": "Set Orientation",
-                        "value": "{ \"x\": 0.0, \"y\": 0.0, \"z\": 0.0, \"w\": 1.0 }"
+                        "value": "{ \"orientation\": { \"x\": 0.0, \"y\": 0.0, \"z\": 0.0, \"w\": 1.0 }, \"angular_velocity\": { \"x\": 0.0, \"y\": 0.0, \"z\": 0.0 } }"
                 },
                 "RawMessages!feedback": {
                         "topicPath": "/propulsion/forces",
