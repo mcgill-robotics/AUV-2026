@@ -9,6 +9,7 @@ from .debugNavigation.test_move_forward_behaviour import TestMoveForwardBehaviou
 from .debugNavigation.test_yaw_behaviour import TestYawBehaviour
 from .debugNavigation.test_dive_behaviour import TestDiveBehaviour
 from .debugNavigation.test_serivce_call_behaviour import TestServiceCallBehaviour
+from .debugNavigation.comprehensive_test_mission import ComprehensiveTestMission
 
 # --- NEW ROBOSUB 2026 TASKS ---
 from .robosub2026.gate_task import GateTask
@@ -62,14 +63,15 @@ class MissionSpawner(py_trees.behaviour.Behaviour):
                     "  5: Basic Yaw (180 deg)\n"
                     "  6: Translation Rectangle (no yaw)\n"
                     "  7: Test Service Call (reset dead reckoning)\n"
+                    "  8: Comprehensive Lane Test\n"
                     "--- RoboSub 2026 Tasks ---\n"
-                    "  8: Gate Task\n"
-                    "  9: Slalom Task\n"
-                    " 10: Bins Task\n"
-                    " 11: Torpedo Task\n"
-                    " 12: Table & Octagon Task\n"
+                    "  9: Gate Task\n"
+                    " 10: Slalom Task\n"
+                    " 11: Bins Task\n"
+                    " 12: Torpedo Task\n"
+                    " 13: Table & Octagon Task\n"
                     "--- Full Run ---\n"
-                    " 13: FULL COMPETITION RUN"
+                    " 14: FULL COMPETITION RUN"
                 )
                 self.node.get_logger().info(menu_text)
                 self.message_shown = True
@@ -112,16 +114,18 @@ class MissionSpawner(py_trees.behaviour.Behaviour):
         elif choice == 7:
             return TestServiceCallBehaviour()
         elif choice == 8:
-            return GateTask(p['position_tolerance'], p['hold_time'], p['timeout'])
+            return ComprehensiveTestMission(p['position_tolerance'], p['hold_time'], p['timeout'])
         elif choice == 9:
-            return SlalomTask(**slalom)
+            return GateTask(p['position_tolerance'], p['hold_time'], p['timeout'])
         elif choice == 10:
-            return BinsTask(p['position_tolerance'], p['hold_time'], p['timeout'])
+            return SlalomTask(**slalom)
         elif choice == 11:
-            return TorpedoTask(p['position_tolerance'], p['hold_time'], p['timeout'])
+            return BinsTask(p['position_tolerance'], p['hold_time'], p['timeout'])
         elif choice == 12:
-            return TableOctagonTask(p['position_tolerance'], p['hold_time'], p['timeout'])
+            return TorpedoTask(p['position_tolerance'], p['hold_time'], p['timeout'])
         elif choice == 13:
+            return TableOctagonTask(p['position_tolerance'], p['hold_time'], p['timeout'])
+        elif choice == 14:
             full_run = py_trees.composites.Sequence("FULL COMPETITION RUN", memory=True)
             full_run.add_children([
                 GateTask(p['position_tolerance'], p['hold_time'], p['timeout']),
