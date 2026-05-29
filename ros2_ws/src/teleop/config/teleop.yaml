@@ -1,7 +1,7 @@
 # Teleop Converter default parameters
 teleop_converter:
   ros__parameters:
-    # Scaling (forces in Newtons, torques in Nm)
+    # Scaling for Propulsion Mode (RB) (forces in Newtons, torques in Nm)
     surge_scale: 20.0
     sway_scale: 20.0
     heave_scale: 20.0
@@ -9,18 +9,30 @@ teleop_converter:
     roll_scale: 2.0
     pitch_scale: 2.0
     
+    # Max Offsets for Controls Mode (LB) (meters, rad)
+    surge_max_offset: 1.0
+    sway_max_offset: 1.0
+    depth_max_offset: 0.5
+    yaw_max_offset: 0.5
+    roll_max_offset: 0.5
+    pitch_max_offset: 0.5
+    
     # Safety
-    require_deadman: true
     timeout_sec: 0.5
     deadzone: 0.1
     
-    # Axis indices (Xbox One S Controller, USB mode, Linux)
-    # See: https://wiki.ros.org/joy
+    # Axis indices (SDL2 game_controller_node standard mappings)
     axis_left_x: 0
     axis_left_y: 1
-    axis_right_x: 3
-    axis_lt: 2
+    axis_right_x: 2
+    axis_right_y: 3
+    axis_lt: 4
     axis_rt: 5
-    axis_dpad_x: 6
-    axis_dpad_y: 7
-    btn_deadman: 4
+    
+    # Button indices (SDL2)
+    btn_controls_mode: 9    # LB
+    btn_propulsion_mode: 10 # RB
+    btn_dpad_up: 11
+    btn_dpad_down: 12
+    btn_dpad_left: 13
+    btn_dpad_right: 14

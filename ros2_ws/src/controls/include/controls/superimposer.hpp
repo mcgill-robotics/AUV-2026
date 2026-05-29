@@ -66,6 +66,10 @@ namespace controls
                         double max_depth_effort_;
                         double max_attitude_effort_;
 
+                        bool enabled_;
+                        rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr parameter_callback_handle_;
+                        rcl_interfaces::msg::SetParametersResult parameters_callback(const std::vector<rclcpp::Parameter> &parameters);
+
 
         };
 

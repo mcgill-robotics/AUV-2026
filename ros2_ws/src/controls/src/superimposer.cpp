@@ -61,6 +61,13 @@ namespace controls
        max_depth_effort_ = this->get_parameter("max_depth_effort").as_double();
        max_attitude_effort_ = this->get_parameter("max_attitude_effort").as_double();
 
+       this->declare_parameter<bool>("enabled", true);
+       enabled_ = this->get_parameter("enabled").as_bool();
+
+       parameter_callback_handle_ = this->add_on_set_parameters_callback(
+           std::bind(&superimposer::parameters_callback, this, std::placeholders::_1)
+       );
+
         publish_timer_ = this->create_wall_timer(
             std::chrono::milliseconds(static_cast<int64_t>(1000 / publish_hz_)),   // Control loop frequency
             std::bind(&superimposer::publish_combined_effort, this)
@@ -132,11 +139,38 @@ namespace controls
 
    void superimposer::attitude_effort_callback(const wrench_msg::SharedPtr msg)
    {
-       attitude_effort_ = *msg; // This already is in the AUV body frame
-   }
+        attitude_effort_ = *msg;
+    }
+
+    rcl_interfaces::msg::SetParametersResult superimposer::parameters_callback(const std::vector<rclcpp::Parameter> &parameters)
+    {
+        rcl_interfaces::msg::SetParametersResult result;
+        result.successful = true;
+
+        for (const auto &parameter : parameters)
+        {
+            if (parameter.get_name() == "enabled")
+            {
+                if (parameter.get_type() != rclcpp::ParameterType::PARAMETER_BOOL)
+                {
+                    result.successful = false;
+                    result.reason = "'enabled' must be a boolean";
+                    return result;
+                }
+                enabled_ = parameter.as_bool();
+                RCLCPP_INFO(this->get_logger(), "Superimposer enabled: %s", enabled_ ? "true" : "false");
+            }
+        }
+
+        return result;
+    }
 
    void superimposer::publish_combined_effort()
    {
+       if (!enabled_) {
+           return;
+       }
+
        wrench_msg combined_effort;
 
        // Transform depth effort from pool frame to body frame. 
