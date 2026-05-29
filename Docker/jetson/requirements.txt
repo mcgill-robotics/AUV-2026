@@ -6,10 +6,13 @@ typing_extensions
 protobuf
 
 # Main Libraries
+pyserial
 ultralytics
 roboflow
 albumentations
 pandas
+scipy
+osqp
 rfdetr
 supervision
 pytorch_lightning
