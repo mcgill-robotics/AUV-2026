@@ -36,7 +36,7 @@ class DryTestNode(Node):
         # Load topics from centralized config
         topics = load_topics_config()
         microseconds_topic = topics['propulsion']['microseconds']
-        effort_topic = topics['controls']['effort']
+        effort_topic = topics['controls']['total_effort']
 
         self.thruster_microseconds_pub = self.create_publisher(Int16MultiArray, microseconds_topic, 1)
         self.forces_pub = self.create_publisher(Wrench, effort_topic, 1)

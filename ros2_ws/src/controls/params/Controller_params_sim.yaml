@@ -47,3 +47,16 @@ y_controller:
         KI: 0.0
         I_MAX: 10.0
         enabled: true
+
+superimposer:
+    ros__parameters:
+        effort_bias_force_x: 0.0
+        effort_bias_force_y: 0.0
+        effort_bias_force_z: 0.0
+        effort_bias_torque_x: 0.0
+        effort_bias_torque_y: 0.0
+        effort_bias_torque_z: 0.0
+        publish_hz: 50.0
+        max_planar_effort: 0.0
+        max_depth_effort: 0.0
+        max_attitude_effort: 0.0

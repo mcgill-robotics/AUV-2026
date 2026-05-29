@@ -90,7 +90,8 @@ def generate_launch_description():
     superimposer_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             LaunchConfiguration("superimposer_launch_file")
-        )
+        ),
+        launch_arguments={"sim": sim}.items(),
     )
 
     trajectory_planner_launch = IncludeLaunchDescription(

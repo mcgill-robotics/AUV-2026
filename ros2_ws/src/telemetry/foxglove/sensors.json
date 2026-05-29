@@ -6,25 +6,10 @@
   },
   "layout": {
     "first": {
-      "first": "Publish!depth_sp",
-      "second": {
-        "first": "Publish!attitude_sp",
-        "second": {
-          "first": {
-            "first": "Publish!xy_sp",
-            "second": "Publish!w3c60c",
-            "direction": "column",
-            "splitPercentage": 49.609931405317894
-          },
-          "second": "Plot!11y8nrv",
-          "direction": "column",
-          "splitPercentage": 58.478024117530104
-        },
-        "direction": "column",
-        "splitPercentage": 25.252283876525212
-      },
+      "first": "Stack!1jqyvhf",
+      "second": "Plot!11y8nrv",
       "direction": "column",
-      "splitPercentage": 23.372803639028238
+      "splitPercentage": 84.81179673045641
     },
     "second": {
       "first": {
@@ -43,14 +28,60 @@
       "splitPercentage": 49.86529193529038
     },
     "direction": "row",
-    "splitPercentage": 17.341939035488068
+    "splitPercentage": 25.877632898696092
   },
   "configById": {
+    "Publish!t61rhb": {
+      "topicName": "/controls/depth_setpoint",
+      "datatype": "std_msgs/msg/Float64",
+      "value": "{\n  \"data\": 0.6\n}"
+    },
+    "Publish!143ln3a": {
+      "topicName": "/controls/attitude_reference",
+      "datatype": "auv_msgs/msg/AttitudeReference",
+      "value": "{\n  \"orientation\": {\"x\": 0, \"y\": 0, \"z\": -0.7071, \"w\": 0.7071},\n  \"angular_velocity\": {\"x\": 0, \"y\": 0, \"z\": 0}\n}"
+    },
+    "Publish!4ezrimt": {
+      "topicName": "/controls/x_setpoint",
+      "datatype": "std_msgs/msg/Float64",
+      "value": "{\n  \"data\": 0\n}"
+    },
+    "Publish!iymlgs": {
+      "datatype": "std_msgs/msg/Float64",
+      "value": "{\n  \"data\": 0\n}",
+      "topicName": "/controls/y_setpoint"
+    },
+    "Publish!cnmpa4": {
+      "topicName": "/controls/flip_command",
+      "datatype": "auv_msgs/msg/FlipCommand",
+      "value": "{\n  \"axis\": 2, \"count\": 1, \n  \"direction\": 1, \"flip_duration\": 15.0\n}"
+    },
+    "CallService!1y4ckso": {
+      "requestPayload": "{}",
+      "layout": "vertical",
+      "timeoutSeconds": 10,
+      "serviceName": "/dvl/reset_dead_reckoning",
+      "editingMode": false
+    },
+    "CallService!32g2cf4": {
+      "requestPayload": "{}",
+      "layout": "vertical",
+      "timeoutSeconds": 20,
+      "editingMode": false,
+      "serviceName": "/dvl/calibrate_gyro"
+    },
+    "CallService!g3b1pw": {
+      "requestPayload": "{}",
+      "layout": "vertical",
+      "timeoutSeconds": 10,
+      "serviceName": "/dvl/get_config"
+    },
     "RawMessages!imu_raw": {
       "topicPath": "/imu/data"
     },
     "RawMessages!imu_proc": {
-      "topicPath": "/auv_frame/imu"
+      "topicPath": "/auv_frame/imu",
+      "defaultExpanded": false
     },
     "RawMessages!depth_raw": {
       "topicPath": "/sensors/depth/z"
@@ -85,23 +116,38 @@
       "topicPath": "/dvl/dead_reckoning"
     },
     "RawMessages!dvl_odom": {
-      "topicPath": "/dvl/odometry"
+      "topicPath": "/dvl/odometry",
+      "defaultExpanded": false
+    },
+    "Plot!uzvu32": {
+      "xAxisVal": "custom",
+      "paths": [
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/state/pose.pose.position.x",
+          "enabled": true,
+          "color": "#4e98e2",
+          "id": "b410f54f-9e93-4eda-a061-f12631bed8c8",
+          "xValuePath": "/state/pose.pose.position.y.@mul(-1)",
+          "label": "State pose (x,y)"
+        }
+      ],
+      "axisScalesMode": "lockedScales"
     },
     "3D!pose_viz": {
       "cameraState": {
-        "perspective": true,
         "distance": 5.5477914624333335,
+        "perspective": true,
         "phi": 16.604439786068458,
-        "thetaOffset": 87.48303157709171,
-        "targetOffset": [
-          -0.2783487582741777,
-          -0.8719347642231049,
-          -1.0261750482991814e-17
-        ],
         "target": [
           0,
           0,
           0
+        ],
+        "targetOffset": [
+          -0.2783487582741777,
+          -0.8719347642231049,
+          -1.0261750482991814e-17
         ],
         "targetOrientation": [
           0,
@@ -109,6 +155,7 @@
           0,
           1
         ],
+        "thetaOffset": 87.48303157709171,
         "fovy": 45,
         "near": 0.5,
         "far": 5000
@@ -147,30 +194,48 @@
         "poseEstimateYDeviation": 0.5,
         "poseEstimateThetaDeviation": 0.26179939
       },
-      "imageMode": {}
+      "imageMode": {},
+      "synchronize": false
     },
     "RawMessages!pose_raw": {
-      "topicPath": "/state/pose"
+      "topicPath": "/state/pose",
+      "defaultExpanded": false
     },
-    "Publish!depth_sp": {
-      "topicName": "/controls/depth_setpoint",
-      "datatype": "std_msgs/Float64",
-      "value": "{\n  \"data\": 0.3\n}"
-    },
-    "Publish!attitude_sp": {
-      "topicName": "/controls/attitude_reference",
-      "datatype": "auv_msgs/msg/AttitudeReference",
-      "value": "{\n  \"orientation\": { \"x\": 0.3826, \"y\": 0, \"z\": 0, \"w\": 0.9238 },\n  \"angular_velocity\": { \"x\": 0, \"y\": 0, \"z\": 0 }\n}\n"
-    },
-    "Publish!xy_sp": {
-      "topicName": "/controls/x_setpoint",
-      "datatype": "std_msgs/msg/Float64",
-      "value": "{\n  \"data\": 0.0\n}"
-    },
-    "Publish!w3c60c": {
-      "topicName": "/controls/y_setpoint",
-      "datatype": "std_msgs/msg/Float64",
-      "value": "{\n  \"data\": 0\n}"
+    "Stack!1jqyvhf": {
+      "panels": [
+        {
+          "panelId": "Publish!t61rhb",
+          "size": 0.18534980465156634
+        },
+        {
+          "panelId": "Publish!143ln3a",
+          "size": 0.21190256345538677
+        },
+        {
+          "panelId": "Publish!4ezrimt",
+          "size": 0.17611406245893302
+        },
+        {
+          "panelId": "Publish!iymlgs",
+          "size": 0.19227661129604137
+        },
+        {
+          "panelId": "Publish!cnmpa4",
+          "size": 0.20697463827582896
+        },
+        {
+          "panelId": "CallService!1y4ckso",
+          "size": 0.09601449488191352
+        },
+        {
+          "panelId": "CallService!32g2cf4",
+          "size": 0.051856886796579856
+        },
+        {
+          "panelId": "CallService!g3b1pw",
+          "size": 0.22852354770434372
+        }
+      ]
     },
     "Plot!11y8nrv": {
       "paths": [
@@ -225,7 +290,7 @@
       ]
     },
     "Tab!dvl": {
-      "activeTabIdx": 2,
+      "activeTabIdx": 3,
       "tabs": [
         {
           "title": "Velocity",
@@ -238,14 +303,18 @@
         {
           "title": "Odometry",
           "layout": "RawMessages!dvl_odom"
+        },
+        {
+          "title": "XY Path",
+          "layout": "Plot!uzvu32"
         }
       ]
     },
     "Tab!pose": {
-      "activeTabIdx": 1,
+      "activeTabIdx": 0,
       "tabs": [
         {
-          "title": "3D Path",
+          "title": "3D Position",
           "layout": "3D!pose_viz"
         },
         {

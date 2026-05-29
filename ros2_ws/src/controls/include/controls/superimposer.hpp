@@ -62,6 +62,9 @@ namespace controls
                         double effort_bias_torque_y; 
                         double effort_bias_torque_z;
                         double publish_hz_;
+                        double max_planar_effort_;
+                        double max_depth_effort_;
+                        double max_attitude_effort_;
 
 
         };
