@@ -108,4 +108,5 @@ private:
     double water_refraction_scale;
 
     double table_z;
+    std::unordered_map<std::string, double> down_cam_heights_map;
 };

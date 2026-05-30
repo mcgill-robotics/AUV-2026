@@ -68,8 +68,8 @@ front_cam_object_detection:
     zed_image_gain: 80 # wrapper-aligned common stereo starting point [0..100] when exposure.auto is false
     zed_image_auto_exposure: false # wrapper-aligned default; when true the manual gain/exposure values are ignored
     zed_image_exposure: 25 # wrapper-aligned common stereo starting point [0..100] when exposure.auto is false
-    zed_image_auto_white_balance: true # wrapper-aligned default; when true the manual white balance temperature is ignored
-    zed_image_white_balance_temperature: 2800 # Affected value should be between 2800 and 6500 with a step of 100. # Setting a value will automatically set WHITEBALANCE_AUTO to 0. 
+    zed_image_auto_white_balance: false # wrapper-aligned default; when true the manual white balance temperature is ignored
+    zed_image_white_balance_temperature: 4000 # Affected value should be between 2800 and 6500 with a step of 100. # Setting a value will automatically set WHITEBALANCE_AUTO to 0. 
     zed_led_status: -1 # -1 leaves the SDK/camera default
 
     # Positional tracking and pose publication parameters
@@ -340,7 +340,7 @@ object_map:
       warning: 1
       redcross_helmet: 1
 
-    # Fallback object sizes (width, depth, height) when 3D models are not available
+    # Fallback object sizes (width, depth, height)
     object_sizes:
       gate: [0.15, 3.0, 1.5]
       white_pipe: [0.05, 0.05, 0.9]
@@ -350,6 +350,17 @@ object_map:
       bin: [0.3, 0.3, 0.3]
       bin_structure: [0.6, 1.2, 0.25]
       board: [ 0.1, 0.62, 1.33]
+      pill: [ 0.07, 0.07, 0.05]
+      nutbolt: [ 0.07, 0.07, 0.05]
+      electric: [ 0.09, 0.09, 0.03]
+      bandaid: [ 0.09, 0.09, 0.03]
+      warning: [ 0.22, 0.22, 0.08]
+      redcross_helmet: [ 0.22, 0.22, 0.08]
+      ambulance: [ 0.20, 0.20, 0.20]
+      firetruck: [ 0.20, 0.20, 0.20]
+      fire: [ 0.20, 0.20, 0.20]
+      blood: [ 0.20, 0.20, 0.20]
+      
 
     # Object Map Filters
     large_structure_separation: # assume large structures near each other are the same structure
@@ -377,6 +388,11 @@ object_map:
       enable: true # Forces specific unique objects to snap to pool floor/surface Z coordinates
       pool_floor_z: -2.1 # pool depth
       pool_surface_z: 0.0 # pool frame points downward
+
+    # Down Camera Projection Z-Heights (relative to pool floor)
+    # If a detected object isn't in this list, it is ignored by the down camera tracker
+    down_cam_projection_labels: ["pill", "nutbolt", "electric", "bandaid", "warning", "redcross_helmet", "table", "lane_marker"]
+    down_cam_projection_heights: [0.67, 0.67, 0.67, 0.67, 0.67, 0.67, 0.67, 0.0]
 
     # table_octagon_mode: 
     #   - none: no refinement

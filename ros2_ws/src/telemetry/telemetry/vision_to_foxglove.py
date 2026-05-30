@@ -19,14 +19,20 @@ from geometry_msgs.msg import PointStamped, Pose, Vector3
 class SceneConverterNode(Node):
     # Mapping of AUV object labels to RGBA colors for Foxglove visualization
     CATEGORY_COLORS = {
-        'gate':         {'r': 1.0, 'g': 0.5, 'b': 0.0, 'a': 0.8}, # Orange
-        'lane_marker':  {'r': 1.0, 'g': 1.0, 'b': 0.0, 'a': 0.8}, # Yellow
-        'red_pipe':     {'r': 1.0, 'g': 0.0, 'b': 0.0, 'a': 0.8}, # Red
-        'white_pipe':   {'r': 1.0, 'g': 1.0, 'b': 1.0, 'a': 0.8}, # White
-        'octagon':      {'r': 0.5, 'g': 0.0, 'b': 0.5, 'a': 0.8}, # Purple
-        'table':        {'r': 0.6, 'g': 0.3, 'b': 0.1, 'a': 0.8}, # Brown
-        'bin':          {'r': 0.0, 'g': 1.0, 'b': 1.0, 'a': 0.8}, # Cyan
-        'board':        {'r': 0.5, 'g': 0.5, 'b': 0.5, 'a': 0.8}, # Gray
+        'gate':            {'r': 1.0,  'g': 0.5,  'b': 0.0,  'a': 0.8}, # Orange
+        'lane_marker':     {'r': 1.0,  'g': 1.0,  'b': 0.0,  'a': 0.8}, # Yellow
+        'red_pipe':        {'r': 1.0,  'g': 0.0,  'b': 0.0,  'a': 0.8}, # Red
+        'white_pipe':      {'r': 1.0,  'g': 1.0,  'b': 1.0,  'a': 0.8}, # White
+        'octagon':         {'r': 0.5,  'g': 0.0,  'b': 0.5,  'a': 0.8}, # Purple
+        'table':           {'r': 0.6,  'g': 0.3,  'b': 0.1,  'a': 0.8}, # Brown
+        'bin':             {'r': 0.0,  'g': 1.0,  'b': 1.0,  'a': 0.8}, # Cyan
+        'board':           {'r': 0.5,  'g': 0.5,  'b': 0.5,  'a': 0.8}, # Gray
+        'blood':           {'r': 0.50, 'g': 0.00, 'b': 0.00, 'a': 0.8}, # Deep Blood Maroon
+        'fire':            {'r': 1.00, 'g': 0.55, 'b': 0.00, 'a': 0.8}, # Flame Orange
+        'ambulance':       {'r': 0.95, 'g': 0.10, 'b': 0.30, 'a': 0.8}, # Cherry Red
+        'firetruck':       {'r': 1.00, 'g': 0.00, 'b': 0.00, 'a': 0.8}, # Red
+        'redcross_helmet': {'r': 1.0,  'g': 1.0,  'b': 1.0,  'a': 0.8}, # White
+        'warning':         {'r': 1.0,  'g': 1.0,  'b': 1.0,  'a': 0.8}, # White
     }
 
     def __init__(self):

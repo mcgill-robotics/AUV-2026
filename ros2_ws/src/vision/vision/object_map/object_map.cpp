@@ -77,6 +77,13 @@ ObjectMapNode::ObjectMapNode() : Node("object_map_node")
         object_sizes_map[object_size_labels[i]] = Eigen::Vector3d(object_size_x[i], object_size_y[i], object_size_z[i]);
     }
 
+    std::vector<std::string> down_cam_projection_labels = this->declare_parameter<std::vector<std::string>>("down_cam_projection_labels", std::vector<std::string>());
+    std::vector<double> down_cam_projection_heights = this->declare_parameter<std::vector<double>>("down_cam_projection_heights", std::vector<double>());
+
+    for (size_t i = 0; i < down_cam_projection_labels.size() && i < down_cam_projection_heights.size(); ++i) {
+        down_cam_heights_map[down_cam_projection_labels[i]] = down_cam_projection_heights[i];
+    }
+
     front_tracker = ObjectTracker(
         max_per_class_map,
         large_structure_labels,
@@ -365,8 +372,12 @@ void ObjectMapNode::down_cam_callback(const vision_msgs::msg::Detection2DArray::
         // Ray direction in world frame
         tf2::Vector3 ray_world = world_camera_basis * ray_cam;
         
-        // Intersect with plane Z = table_z (if table-top object) or pool_floor_z
-        double target_z = is_table_top_object(best_class) ? table_z : pool_floor_z;
+        // Determine the target projection plane based on the object's configured height from the floor
+        if (!down_cam_heights_map.count(best_class)) {
+            continue; // Skip objects not explicitly configured for down camera projection
+        }
+        double target_z = pool_floor_z + down_cam_heights_map.at(best_class);
+        
         if (std::abs(ray_world.z()) < 1e-6) {
             continue; // Ray is horizontal
         }
