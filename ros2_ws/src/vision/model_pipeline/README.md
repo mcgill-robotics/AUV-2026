@@ -51,6 +51,7 @@ Running the Python scripts directly provides maximum modularity and makes debugg
    ```bash
    python3 training.py --model rfdetr --dataset-dir data/processed_coco_aug --epochs 50
    ```
+   Not needed, good to monitor training metrics.
    ```bash
    python3 -m tensorboard.main --logdir /home/douglas/AUV-2026/ros2_ws/src/vision/model_pipeline/runs/rfdetr
    ```
