@@ -366,12 +366,17 @@ class GoNearObject(py_trees.behaviour.Behaviour):
 
     def initialise(self):
         # Find the target in object map
-        if hasattr(self.blackboard, 'vision') and self.blackboard.vision.object_map is not None:
+        if hasattr(self.blackboard, 'vision') and self.blackboard.vision.object_map is not None \
+           and hasattr(self.blackboard, 'sensors') and self.blackboard.sensors.pose is not None:
             target_obj = None
+            auv_pose = self.blackboard.sensors.pose.pose.position
+            min_distance = float('inf')
             for obj in self.blackboard.vision.object_map.array:
                 if obj.label == self.target_class:
-                    target_obj = obj
-                    break
+                    distance = math.sqrt((obj.pose.position.x - auv_pose.x) ** 2 + (obj.pose.position.y - auv_pose.y) ** 2)
+                    if distance < min_distance:
+                        target_obj = obj
+                        min_distance = distance
             
             if target_obj is None:
                 self.node.get_logger().error(f"[{self.name}] Target '{self.target_class}' not found in vision during setup!")
