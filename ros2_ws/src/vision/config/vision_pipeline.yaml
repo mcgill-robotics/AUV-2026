@@ -110,7 +110,7 @@ front_cam_object_detection:
       #      - plane: any plane defined in `known_planes` (e.g. "surface", "floor")
       mode_by_label:
         octagon: "center_to_surface"
-        table: "bottom_to_floor"
+        table: "bottom_to_floor" #"zed_3d"
         bin_structure: "zed_3d" #"bottom_to_floor"
         board: "zed_3d" #"bottom_to_floor"
         gate: "zed_3d" #"top_to_surface"
@@ -166,8 +166,8 @@ down_cam_object_detection:
     image_topic: /down_cam/image_raw # this will be the input topic if sim=true, this will be set to down_image_enhancement.ros__parameters.output_topic if enhance_images is set to true
     detection_topic: /vision/down_cam/detections
     camera_info_topic: /down_cam/camera_info
-    base_frame_id: "sensors/down_cam"
-    camera_frame_id: "sensors/down_cam_optical"
+    base_frame_id: "down_camera"
+    camera_frame_id: "down_camera_optical_frame"
 
     # Camera intrinsics (calculated from ELP OV5640 60 deg diagonal FOV lens at 640x480)
     # This results in a Horizontal FOV of ~49.6° and a Vertical FOV of ~38.2°
@@ -179,7 +179,7 @@ down_cam_object_detection:
 
     # Extrinsics (static transform from auv_link to sensors/down_cam)
     auv_to_down_cam:
-      xyz: [0.1, -0.1, -0.2]
+      xyz: [-0.08, 0.08, -0.08]
       rpy: [0.0, 1.57079632679, 0.0] # [Roll, Pitch, Yaw] in radians. 1.57079632679 is exactly 90 degrees pitch forward/down (pointing towards the pool floor).
 
     # Camera hardware (direct capture via cv2.VideoCapture, no usb_cam_node needed)
@@ -376,8 +376,8 @@ object_map:
       enable: false # discard world-frame detections outside the competition lane AABB
       x_min: -3.0 # back boundary (meters, world frame)
       x_max: 25.0  # front boundary
-      y_min: -7.5 # right boundary
-      y_max: 7.5  # left boundary
+      y_min: -11.0 # right boundary
+      y_max: 4.0  # left boundary
 
     # Refinement: make use of other detections to improve tracking of certain objects
     gate_midpoint: true # Uses search_rescue/survey_repair panel detections to refine the gate pose

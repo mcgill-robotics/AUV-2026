@@ -90,11 +90,29 @@ def publish_annotated_image_util(detector_node, img, tracked_detections, stamp, 
         and tracked_detections is not None
         and len(tracked_detections) > 0
     ):
-        labels = [f"{detector_node.class_names[int(tracked_detections.class_id[i])]} {tracked_detections.confidence[i]:.2f}"
-                    for i in range(len(tracked_detections)) if int(tracked_detections.class_id[i]) < len(detector_node.class_names)]
+        # 1. Calculate optimal scale/thickness based on image resolution
+        #    (Note: shape is [height, width], function expects (width, height))
+        resolution_wh = (img.shape[1], img.shape[0])
+        
+        dynamic_text_scale = sv.calculate_optimal_text_scale(resolution_wh=resolution_wh)
+        dynamic_thickness = sv.calculate_optimal_line_thickness(resolution_wh=resolution_wh)
 
-        box_annotator = sv.BoxAnnotator(thickness=2)
-        label_annotator = sv.LabelAnnotator(text_thickness=2, text_scale=0.8)
+        labels = [
+            f"{detector_node.class_names[int(class_id)]} {confidence:.2f}"
+            for class_id, confidence in zip(tracked_detections.class_id, tracked_detections.confidence)
+            if int(class_id) < len(detector_node.class_names)
+        ]
+
+        # 2. Initialize Annotators with dynamic values and smart positioning
+        box_annotator = sv.BoxAnnotator(
+            thickness=dynamic_thickness
+        )
+        
+        label_annotator = sv.LabelAnnotator(
+            text_scale=dynamic_text_scale,
+            text_thickness=dynamic_thickness,
+            text_padding=10
+        )
 
         output_image = box_annotator.annotate(scene=output_image, detections=tracked_detections)
         output_image = label_annotator.annotate(scene=output_image, detections=tracked_detections, labels=labels)

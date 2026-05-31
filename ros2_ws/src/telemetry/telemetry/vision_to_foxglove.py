@@ -4,16 +4,21 @@ import rclpy
 from rclpy.node import Node
 import tf2_ros
 import tf2_geometry_msgs
-
+from tf_transformations import quaternion_from_euler
+import yaml
+import os
+from ament_index_python.packages import get_package_share_directory
 from auv_msgs.msg import FoxgloveObject, FoxgloveObjectArray, VisionObjectArray
 from foxglove_msgs.msg import (
     CubePrimitive,
+    LinePrimitive,
     SceneEntity,
     SceneEntityDeletion,
     SceneUpdate,
     TextPrimitive,
+    ModelPrimitive,
 )
-from geometry_msgs.msg import PointStamped, Pose, Vector3
+from geometry_msgs.msg import PointStamped, Pose, Vector3, Point
 
 
 class SceneConverterNode(Node):
@@ -50,7 +55,46 @@ class SceneConverterNode(Node):
         
         self.declare_parameter('pool_floor_z', -2.1)
         self.pool_floor_z = self.get_parameter('pool_floor_z').get_parameter_value().double_value
+
+        self.declare_parameter('auv_model_url', 'package://telemetry/meshes/auv.glb')
+        self.auv_model_url = self.get_parameter('auv_model_url').get_parameter_value().string_value
         
+        self.declare_parameter('auv_model_roll', 0.0)
+        self.auv_model_roll = self.get_parameter('auv_model_roll').get_parameter_value().double_value
+
+        self.declare_parameter('auv_model_pitch', 0.0)
+        self.auv_model_pitch = self.get_parameter('auv_model_pitch').get_parameter_value().double_value
+
+        self.declare_parameter('auv_model_yaw', 0.0)
+        self.auv_model_yaw = self.get_parameter('auv_model_yaw').get_parameter_value().double_value
+
+        self.declare_parameter('auv_model_x', 0.0)
+        self.auv_model_x = self.get_parameter('auv_model_x').get_parameter_value().double_value
+
+        self.declare_parameter('auv_model_y', 0.0)
+        self.auv_model_y = self.get_parameter('auv_model_y').get_parameter_value().double_value
+
+        self.declare_parameter('auv_model_z', 0.0)
+        self.auv_model_z = self.get_parameter('auv_model_z').get_parameter_value().double_value
+        
+        # Load lane boundaries from vision_pipeline.yaml
+        self.draw_lane_boundary = False
+        try:
+            vision_config_path = os.path.join(get_package_share_directory('vision'), 'config', 'vision_pipeline.yaml')
+            with open(vision_config_path, 'r') as f:
+                vision_config = yaml.safe_load(f)
+            lane_config = vision_config.get('object_map', {}).get('ros__parameters', {}).get('lane_boundary', {})
+            
+            self.draw_lane_boundary = lane_config.get('enable', False)
+            if self.draw_lane_boundary:
+                self.lane_x_min = float(lane_config.get('x_min', -3.0))
+                self.lane_x_max = float(lane_config.get('x_max', 25.0))
+                self.lane_y_min = float(lane_config.get('y_min', -7.5))
+                self.lane_y_max = float(lane_config.get('y_max', 7.5))
+                self.get_logger().info(f"Lane boundaries enabled: X[{self.lane_x_min}, {self.lane_x_max}], Y[{self.lane_y_min}, {self.lane_y_max}]")
+        except Exception as e:
+            self.get_logger().warning(f"Could not load lane boundaries from vision_pipeline.yaml: {e}")
+
         # Subscriptions
         self.subscription = self.create_subscription(
             VisionObjectArray,
@@ -218,6 +262,87 @@ class SceneConverterNode(Node):
         
         floor_entity.cubes.append(floor_cube)
         scene_update.entities.append(floor_entity)
+
+        # Draw Lane Boundaries if enabled
+        if getattr(self, 'draw_lane_boundary', False):
+            lane_entity = SceneEntity()
+            lane_entity.id = "lane_boundary"
+            lane_entity.frame_id = frame_id
+            lane_entity.timestamp = msg.header.stamp
+            
+            lane_line = LinePrimitive()
+            lane_line.type = LinePrimitive.LINE_STRIP
+            lane_line.pose.orientation.w = 1.0
+            lane_line.thickness = 0.1 # 10cm thick line
+            lane_line.scale_invariant = False
+            
+            # Bright Green
+            lane_line.color.r = 0.0
+            lane_line.color.g = 1.0
+            lane_line.color.b = 0.0
+            lane_line.color.a = 0.8
+            
+            z_plane = self.pool_floor_z + 0.05 # Slightly above the floor to avoid z-fighting
+            
+            # Create rectangle
+            pts = [
+                Point(x=self.lane_x_min, y=self.lane_y_min, z=z_plane),
+                Point(x=self.lane_x_max, y=self.lane_y_min, z=z_plane),
+                Point(x=self.lane_x_max, y=self.lane_y_max, z=z_plane),
+                Point(x=self.lane_x_min, y=self.lane_y_max, z=z_plane),
+                Point(x=self.lane_x_min, y=self.lane_y_min, z=z_plane) # Close the loop
+            ]
+            lane_line.points = pts
+            
+            lane_entity.lines.append(lane_line)
+            scene_update.entities.append(lane_entity)
+
+        # Add the AUV 3D Model
+        auv_entity = SceneEntity()
+        auv_entity.id = "auv_3d_model"
+        auv_entity.timestamp = msg.header.stamp
+        
+        auv_model = ModelPrimitive()
+        
+        # Base pose in AUV frame
+        auv_pose = Pose()
+        auv_pose.position.x = self.auv_model_x
+        auv_pose.position.y = self.auv_model_y
+        auv_pose.position.z = self.auv_model_z
+
+        # Compute quaternion from Euler angles using tf_transformations
+        q = quaternion_from_euler(self.auv_model_roll, self.auv_model_pitch, self.auv_model_yaw)
+        auv_pose.orientation.x = q[0]
+        auv_pose.orientation.y = q[1]
+        auv_pose.orientation.z = q[2]
+        auv_pose.orientation.w = q[3]
+
+        if transform is not None:
+            try:
+                # Lookup transform from auv_link -> pool_link
+                auv_to_pool_tf = self.tf_buffer.lookup_transform(
+                    frame_id,          # Target (pool_link)
+                    self.auv_frame_id, # Source (auv_link)
+                    rclpy.time.Time()
+                )
+                
+                # Transform from auv_link to pool_link
+                transformed_pose = tf2_geometry_msgs.do_transform_pose(auv_pose, auv_to_pool_tf)
+                auv_model.pose = transformed_pose
+                auv_entity.frame_id = frame_id
+            except tf2_ros.TransformException:
+                auv_model.pose = auv_pose
+                auv_entity.frame_id = self.auv_frame_id
+        else:
+            auv_model.pose = auv_pose
+            auv_entity.frame_id = self.auv_frame_id
+        
+        auv_model.scale = Vector3(x=1.0, y=1.0, z=1.0)
+        auv_model.url = self.auv_model_url
+        auv_model.override_color = False
+        
+        auv_entity.models.append(auv_model)
+        scene_update.entities.append(auv_entity)
 
         self.table_publisher.publish(table_msg)
         self.scene_publisher.publish(scene_update)

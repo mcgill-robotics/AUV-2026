@@ -1,0 +1,13 @@
+vision_to_foxglove:
+  ros__parameters:
+    input_topic: "/vision/object_map"
+    frame_id: "pool_link"
+    auv_frame_id: "auv_link"
+    pool_floor_z: -2.1
+    auv_model_url: "package://telemetry/meshes/auv.glb"
+    auv_model_roll: -1.5708
+    auv_model_pitch: 0.0
+    auv_model_yaw: 0.0
+    auv_model_x: 0.0
+    auv_model_y: 0.0
+    auv_model_z: 0.02
