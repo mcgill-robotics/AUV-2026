@@ -16,6 +16,7 @@ This process occurs in three stages:
   - [Usage](#usage)
     - [Raw Setpoint Publishing](#raw-setpoint-publishing)
     - [Navigation Server (Action Client)](#navigation-server-action-client)
+    - [Flip Commands](#flip-commands)
   - [Nodes](#nodes)
     - [Published Topics](#published-topics)
     - [Subscribed Topics](#subscribed-topics)
@@ -54,29 +55,29 @@ To activate the y-axis controller:
 ### Raw Setpoint Publishing
 
 Publishing a depth setpoint onto `/controls/depth_setpoint`:
-
-        ros2 topic pub /controls/depth_setpoint std_msgs/msg/Float64 "{data: 1.5}" 
-
+```bash
+ros2 topic pub /controls/depth_setpoint std_msgs/msg/Float64 "{data: 1.5}" 
+```
 Publishing a depth setpoint onto `/controls/x_setpoint`:
 
-
-        ros2 topic pub /controls/x_setpoint std_msgs/msg/Float64 "{data: 2.0}" 
-
+```bash
+ros2 topic pub /controls/x_setpoint std_msgs/msg/Float64 "{data: 2.0}" 
+```
 
 Publishing a depth setpoint onto `/controls/y_setpoint`:
 
-
-        ros2 topic pub /controls/y_setpoint std_msgs/msg/Float64 "{data: 2.0}" 
-
+```bash
+ros2 topic pub /controls/y_setpoint std_msgs/msg/Float64 "{data: 2.0}" 
+```
 
 Publishing an attitude setpoint onto `/controls/attitude_reference`:
-
-        ros2 topic pub /controls/attitude_reference auv_msgs/msg/AttitudeReference "{orientation: {x: 0.0, y: 0.0, z: 0.7071, w: 0.7071}, angular_velocity: {x: 0.0, y: 0.0, z: 0.0}}"
-
+```bash
+ros2 topic pub /controls/attitude_reference auv_msgs/msg/AttitudeReference "{orientation: {x: 0.0, y: 0.0, z: 0.7071, w: 0.7071}, angular_velocity: {x: 0.0, y: 0.0, z: 0.0}}"
+```
 ### Navigation Server (Action Client)
 To send a test 3D goal to the Navigation Server via the ROS 2 Action CLI:
-
-        ros2 action send_goal /motion/navigate auv_msgs/action/AUVNavigate "{
+```
+ros2 action send_goal /motion/navigate auv_msgs/action/AUVNavigate "{
           target_pose: {
             position: {x: 1.0, y: 1.0, z: 1.0},
             orientation: {x: 0.0, y: 0.0, z: 0.7071, w: 0.7071}
@@ -92,68 +93,73 @@ To send a test 3D goal to the Navigation Server via the ROS 2 Action CLI:
           hold_time: 2.0,
           timeout: 30.0
         }" --feedback
+```
 
 To send a goal programmatically using Python, utilize the `goal_helpers` library included in `controls/goal_helpers.py`. See `test_nav.py` for examples.
 
+### Flip Commands
 
 Publishing a flip command onto `/controls/flip_command`:
-        
-        ros2 topic pub --once /controls/flip_command auv_msgs/msg/FlipCommand "{axis: 0, count: 1, direction: 1, flip_duration: 15.0}"
+```bash     
+ros2 topic pub --once /controls/flip_command auv_msgs/msg/FlipCommand "{axis: 0, count: 1, direction: 1, flip_duration: 15.0}"
+```
 **Note**: flip durations shorter than 15 seconds are currently unfeasible and result in random movements. A fix will be introduced in the future.
 ## Nodes
 The package provides six ROS nodes: `depth_controller`, `attitude_controller`, `x_controller`, `y_controller`, `superimposer`, `trajectory_planner`, and `navigation_server`.
 
-- `depth_controller` input: `/auv_frame/depth`, `/controls/depth_setpoint`
+- `depth_controller`:
+  -  input: `/auv_frame/depth`, `/controls/depth_setpoint`
+  - output: `/controls/depth_effort`
+- `x_controller`:
+  -  input: `auv_frame/dvl/position`, `/controls/x_setpoint`
+  - output: `/controls/x_effort`
+- `y_controller`:
+  -  input: `auv_frame/dvl/position`, `/controls/y_setpoint`
+  - output: `/controls/y_effort`
 
-- `depth_controller` output: `/controls/depth_effort`
-- `x_controller` input: `auv_frame/dvl/position`, `/controls/x_setpoint`
-- `x_controller` output: `/controls/x_effort`
-- `y_controller` input: `auv_frame/dvl/position`, `/controls/y_setpoint`
-- `y_controller` output: `/controls/y_effort`
+- `attitude_controller`:
+  -  input: `/auv_frame/imu`, `quaternion_setpoint`
+  - output: `/controls/attitude_effort`
+- `superimposer`:
+  -  input: `/controls/depth_effort`, `/controls/attitude_effort`, `/controls/x_effort`, `/controls/y_effort`, `processed/imu`
+  - output: `/controls/combined_effort`
+- `trajectory_planner`:
+  -  input: `controls/FlipCommand`
+  - output: `controls/quaternion_setpoint`
 
-- `attitude_controller` input: `/auv_frame/imu`, `/controls/attitude_reference`
-
-- `attitude_controller` output: `/controls/attitude_effort`
-
-- `superimposer` input: `/controls/depth_effort`, `/controls/attitude_effort`, `/controls/x_effort`, `/controls/y_effort`, `processed/imu`
-
-- `superimposer` output: `/controls/combined_effort`
-- `trajectory_planner` input: `controls/FlipCommand`
-- `trajectory_planner` output: `/controls/attitude_reference`
-
-- `navigation_server` input: `/state/pose` (geometry_msgs/PoseStamped)
-
-- `navigation_server` output: Action Server `/motion/navigate`, publishers pointing to `/controls/depth_setpoint`, `/controls/x_setpoint`, `/controls/y_setpoint`, `/controls/attitude_reference`
+- `navigation_server`:
+  -  input: `/state/pose` (geometry_msgs/PoseStamped)
+  - output: Action Server `/motion/navigate`, publishers pointing to `/controls/depth_setpoint`, `/controls/x_setpoint`, `/controls/y_setpoint`, `/controls/quaternion_setpoint`
 
 
 ### Published Topics
 
- Topic | Message | Description |
-| ------ | ------- | ---------- |
-| `/controls/depth_effort` | `geometry_msgs/Wrench` | Depth controller effort (force.z) in the **pool frame** |
-| `/controls/x_effort` | `geometry_msgs/Wrench` | X-axis controller effort in the **pool frame** |
-| `/controls/y_effort` | `geometry_msgs/Wrench` | Y-axis controller effort in the **pool frame** |
-| `/controls/attitude_effort` | `geometry_msgs/Wrench` | Attitude controller effort (torques) in the **body frame** |
-| `/controls/total_effort` | `geometry_msgs/Wrench` | Sum of depth and attitude efforts with optional biases in the **body frame** |
-| `/controls/attitude_reference` | `auv_msgs/AttitudeReference` | Desired vehicle orientation and angular velocity |
+ | Topic                           | Message                    | Description                                                                  |
+ | ------------------------------- | -------------------------- | ---------------------------------------------------------------------------- |
+ | `/controls/depth_effort`        | `geometry_msgs/Wrench`     | Depth controller effort (force.z) in the **pool frame**                      |
+ | `/controls/x_effort`            | `geometry_msgs/Wrench`     | X-axis controller effort in the **pool frame**                               |
+ | `/controls/y_effort`            | `geometry_msgs/Wrench`     | Y-axis controller effort in the **pool frame**                               |
+ | `/controls/attitude_effort`     | `geometry_msgs/Wrench`     | Attitude controller effort (torques) in the **body frame**                   |
+ | `/controls/total_effort`        | `geometry_msgs/Wrench`     | Sum of depth and attitude efforts with optional biases in the **body frame** |
+ | `/controls/quaternion_setpoint` | `geometry_msgs/Quaternion` | Desired vehicle orientation                                                  |
 
 
 ### Subscribed Topics
 
-| Topic | Message | Description |
-| ------ | ------- | ---------- |
-| `/auv_frame/depth` | `std_msgs/Float64` | Current depth estimate |
-| `/auv_frame/imu` | `sensor_msgs/Imu` | Orientation and angular velocity for attitude control |
-| `auv_frame/dvl/position` | `geometry_msgs/Float64` | AUV's position in the pool frame from the DVL | 
-| `/controls/depth_setpoint` | `std_msgs/Float64` | Desired vehicle depth |
-| `/controls/attitude_reference` | `auv_msgs/AttitudeReference` | Desired vehicle orientation and angular velocity |
-| `/controls/x_setpoint` | `std_msgs/Float64` | Desired vehicle position along the X-axis | 
-| `/controls/y_setpoint` | `std_msgs/Float64` | Desired vehicle position along the Y-axis | 
-| `/controls/depth_effort` | `geometry_msgs/Wrench` | Depth effort input to superimposer |
-| `/controls/attitude_effort` | `geometry_msgs/Wrench` | Attitude effort input to superimposer |
-| `/controls/x_effort` | `geometry_msgs/Wrench` | X-axis effort input to superimposer |
-| `/controls/y_effort` | `geometry_msgs/Wrench` | Y-axis effort input to superimposer |
-| `/controls/flip_command` | `auv_msgs/FlipCommand` | Flip Commands that specifies axis, count, direction, and period per flip | 
+| Topic                           | Message                    | Description                                                              |
+| ------------------------------- | -------------------------- | ------------------------------------------------------------------------ |
+| `/auv_frame/depth`              | `std_msgs/Float64`         | Current depth estimate                                                   |
+| `/auv_frame/imu`                | `sensor_msgs/Imu`          | Orientation and angular velocity for attitude control                    |
+| `auv_frame/dvl/position`        | `geometry_msgs/Float64`    | AUV's position in the pool frame from the DVL                            |
+| `/controls/depth_setpoint`      | `std_msgs/Float64`         | Desired vehicle depth                                                    |
+| `/controls/quaternion_setpoint` | `geometry_msgs/Quaternion` | Desired vehicle orientation                                              |
+| `/controls/x_setpoint`          | `std_msgs/Float64`         | Desired vehicle position along the X-axis                                |
+| `/controls/y_setpoint`          | `std_msgs/Float64`         | Desired vehicle position along the Y-axis                                |
+| `/controls/depth_effort`        | `geometry_msgs/Wrench`     | Depth effort input to superimposer                                       |
+| `/controls/attitude_effort`     | `geometry_msgs/Wrench`     | Attitude effort input to superimposer                                    |
+| `/controls/x_effort`            | `geometry_msgs/Wrench`     | X-axis effort input to superimposer                                      |
+| `/controls/y_effort`            | `geometry_msgs/Wrench`     | Y-axis effort input to superimposer                                      |
+| `/controls/flip_command`        | `auv_msgs/FlipCommand`     | Flip Commands that specifies axis, count, direction, and period per flip |
 
 ## Installation
 
@@ -180,21 +186,21 @@ The package provides six ROS nodes: `depth_controller`, `attitude_controller`, `
 - `scipy` - Used by `navigation_server` and `controls.utils` for 3D coordinate transformations.
 
 ### Building
-
-	source /opt/ros/humble/setup.bash
-	cd <AUV-2026>/ros2_ws
-	colcon build --packages-select controls
-
+```bash
+source /opt/ros/humble/setup.bash
+cd <AUV-2026>/ros2_ws
+colcon build --packages-select controls
+```
 After build is complete, make the packages visible to ROS
-
-	source ros2_ws/install/setup.bash
-
+```bash
+source ros2_ws/install/setup.bash
+```
 ### Running
 
 Launch all package nodes
-
-	ros2 launch controls controls.launch.py
-
+```bash
+ros2 launch controls controls.launch.py
+```
 
 ### License
 
