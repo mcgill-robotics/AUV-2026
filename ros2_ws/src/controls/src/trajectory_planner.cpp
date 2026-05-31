@@ -22,7 +22,7 @@ namespace controls
                 );
 
                 trajectory_timer_ = this->create_wall_timer(
-                        std::chrono::milliseconds(static_cast<int64_t>(1000 / planner_rate_hz_)),
+                        std::chrono::milliseconds(static_cast<int64_t>(1000 / trajectory_planner_rate_hz_)),
                         std::bind(&TrajectoryPlanner::trajectory_timer_callback, this)
                 );
         }

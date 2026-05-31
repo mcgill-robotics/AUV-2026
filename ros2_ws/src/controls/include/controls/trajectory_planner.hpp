@@ -45,7 +45,7 @@ namespace controls
 
                 bool flip_in_progress_ = false;
 
-                float planner_rate_hz_ = 10.0;
+                float trajectory_planner_rate_hz_ = 10.0;
 
                 rclcpp::Time flip_start_time_;
 
