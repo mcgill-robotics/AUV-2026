@@ -45,6 +45,13 @@ class MatchPipesBehaviour(py_trees.behaviour.Behaviour):
         self.blackboard.register_key(key="/slalom/target_y", access=py_trees.common.Access.WRITE)
         self.blackboard.register_key(key="/slalom/target_z", access=py_trees.common.Access.WRITE)
         self.blackboard.register_key(key="/slalom/target_yaw", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key="/slalom/target_yaw", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/slalom/has_offset", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key="/slalom/has_offset", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/slalom/offset_x", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key="/slalom/offset_y", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key="/slalom/offset_x", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/slalom/offset_y", access=py_trees.common.Access.READ)
 
     def update(self):
         # --- Resolve gate_side: blackboard (from GateTask) takes priority over config default ---
@@ -114,6 +121,34 @@ class MatchPipesBehaviour(py_trees.behaviour.Behaviour):
         red_x = closest_red.pose.position.x
         red_y = closest_red.pose.position.y
         self.node.get_logger().info(f"[{self.name}] Closest red pipe at ({red_x:.2f}, {red_y:.2f})")
+
+        # --- OPTIMIZED PATH: APPLY CACHED OFFSET ---
+        has_offset = False
+        try:
+            if self.blackboard.slalom.has_offset:
+                has_offset = True
+        except (AttributeError, KeyError):
+            pass
+
+        if has_offset:
+            target_x = red_x + self.blackboard.slalom.offset_x
+            target_y = red_y + self.blackboard.slalom.offset_y
+            target_z = closest_red.pose.position.z
+            
+            try:
+                target_yaw = self.blackboard.slalom.target_yaw
+            except (AttributeError, KeyError):
+                target_yaw = auv_yaw
+
+            self.blackboard.slalom.target_x = target_x
+            self.blackboard.slalom.target_y = target_y
+            self.blackboard.slalom.target_z = target_z
+            self.blackboard.slalom.target_yaw = target_yaw
+            
+            self.node.get_logger().info(
+                f"[{self.name}] [OPTIMIZED] Applied cached offset: target=({target_x:.2f}, {target_y:.2f}) using red pipe at ({red_x:.2f}, {red_y:.2f})"
+            )
+            return py_trees.common.Status.SUCCESS
 
         # --- Find best collinear white pair ---
         # For each pair of white pipes, we check whether the red pipe lies
@@ -232,6 +267,16 @@ class MatchPipesBehaviour(py_trees.behaviour.Behaviour):
         self.blackboard.slalom.target_z = target_z
         self.blackboard.slalom.target_yaw = target_yaw
 
+        # Cache the offset vector from this layer for subsequent layers
+        self.blackboard.slalom.offset_x = target_x - red_x
+        self.blackboard.slalom.offset_y = target_y - red_y
+        self.blackboard.slalom.has_offset = True
+
+        self.node.get_logger().info(
+            f"[{self.name}] [NOMINAL] Cached new offset vector: "
+            f"({self.blackboard.slalom.offset_x:.2f}, {self.blackboard.slalom.offset_y:.2f})"
+        )
+
         self.node.get_logger().info(
             f"[{self.name}] Target: ({target_x:.2f}, {target_y:.2f}, z={target_z:.2f}) "
             f"yaw={math.degrees(target_yaw):.1f}° (gate_side={gate_side})"
@@ -327,6 +372,77 @@ class NavigateToGapBehaviour(py_trees.behaviour.Behaviour):
 
 
 
+class SkipScanCheckBehaviour(py_trees.behaviour.Behaviour):
+    """
+    Checks if a cached slalom offset is available and a red pipe is detected
+    close in front of the AUV [1.5m, 3.0m].
+    
+    If both conditions are met, returns SUCCESS (allowing the scan phase to be skipped).
+    Otherwise, returns FAILURE.
+    """
+    def __init__(self, min_dist: float = 1.5, max_dist: float = 3.0, name="Skip Scan Check"):
+        super().__init__(name)
+        self.min_dist = min_dist
+        self.max_dist = max_dist
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/slalom/has_offset", access=py_trees.common.Access.READ)
+
+    def update(self):
+        # 1. Check if we have a cached offset vector
+        has_offset = False
+        try:
+            if self.blackboard.slalom.has_offset:
+                has_offset = True
+        except (AttributeError, KeyError):
+            pass
+
+        if not has_offset:
+            self.node.get_logger().info(f"[{self.name}] No cached offset available. Cannot skip scan.")
+            return py_trees.common.Status.FAILURE
+
+        # 2. Get AUV pose and heading
+        if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.pose is None:
+            return py_trees.common.Status.FAILURE
+
+        auv_pose = self.blackboard.sensors.pose.pose
+        auv_x, auv_y = auv_pose.position.x, auv_pose.position.y
+        auv_yaw = yaw_from_quaternion(auv_pose.orientation)
+        fwd_x, fwd_y = math.cos(auv_yaw), math.sin(auv_yaw)
+
+        # 3. Check for close red pipe in front
+        if not hasattr(self.blackboard, 'vision') or self.blackboard.vision.object_map is None:
+            return py_trees.common.Status.FAILURE
+
+        red_pipe_nearby = False
+        for obj in self.blackboard.vision.object_map.array:
+            if obj.label == "red_pipe":
+                dx = obj.pose.position.x - auv_x
+                dy = obj.pose.position.y - auv_y
+                dist = math.hypot(dx, dy)
+                dot = dx * fwd_x + dy * fwd_y
+                
+                # Check if it is in front and within range
+                if dot > 0 and self.min_dist <= dist <= self.max_dist:
+                    self.node.get_logger().info(
+                        f"[{self.name}] Red pipe found in front at dist={dist:.2f}m. SCAN CANCELLED."
+                    )
+                    red_pipe_nearby = True
+                    break
+
+        if red_pipe_nearby:
+            return py_trees.common.Status.SUCCESS
+        
+        self.node.get_logger().info(f"[{self.name}] No red pipe in range [{self.min_dist}, {self.max_dist}]m.")
+        return py_trees.common.Status.FAILURE
+
+
+
+
 class SlalomLayer(py_trees.composites.Selector):
     """
     Handles a single slalom layer with a nominal execution and a fallback failsafe.
@@ -367,15 +483,40 @@ class SlalomLayer(py_trees.composites.Selector):
             num_failures=30  # 1 seconds grace period for object map at 30Hz
         )
 
+        # ── OPTIMIZATION: Skip Scan Selector ──────────────────────────────────
+        scan_selector = py_trees.composites.Selector(name=f"Scan or Skip L{layer_num}", memory=True)
+
+        if layer_num > 1:
+            skip_scan_check = SkipScanCheckBehaviour(
+                min_dist=1.5, 
+                max_dist=3.5, 
+                name=f"Skip Scan Check L{layer_num}"
+            )
+            scan_selector.add_children([
+                skip_scan_check,
+                ScanBehaviour(
+                    scan_angle_deg=scan_angle_deg,
+                    pause_time=scan_pause_time,
+                    yaw_tolerance_rad=scan_yaw_tolerance_rad,
+                    turn_hold_time_s=scan_hold_time,
+                    turn_timeout_s=scan_timeout,
+                    name=f"Scan Pipes L{layer_num}",
+                )
+            ])
+        else:
+            scan_selector.add_child(
+                ScanBehaviour(
+                    scan_angle_deg=scan_angle_deg,
+                    pause_time=scan_pause_time,
+                    yaw_tolerance_rad=scan_yaw_tolerance_rad,
+                    turn_hold_time_s=scan_hold_time,
+                    turn_timeout_s=scan_timeout,
+                    name=f"Scan Pipes L{layer_num}",
+                )
+            )
+
         nominal.add_children([
-            ScanBehaviour(
-                scan_angle_deg=scan_angle_deg,
-                pause_time=scan_pause_time,
-                yaw_tolerance_rad=scan_yaw_tolerance_rad,
-                turn_hold_time_s=scan_hold_time,
-                turn_timeout_s=scan_timeout,
-                name=f"Scan Pipes L{layer_num}",
-            ),
+            scan_selector,
             retry_match,
             NavigateToGapBehaviour(
                 adjust_depth=adjust_depth,
