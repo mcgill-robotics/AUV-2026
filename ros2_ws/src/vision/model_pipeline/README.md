@@ -1,5 +1,8 @@
 # Vision Model Pipeline
 
+> [!IMPORTANT]
+> **Docker Environment:** All python scripts and commands listed in this document must be executed from inside the Docker container.
+
 ## Complete End-to-End Workflow (Sim to Real)
 This is the recommended comprehensive workflow for bridging the gap from our Unity synthetic environments to real-world deployment:
 
