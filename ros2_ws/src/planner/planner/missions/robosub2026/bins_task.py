@@ -34,7 +34,7 @@ class BinsTask(py_trees.composites.Sequence):
         )
 
         # 4. Align with correct bin (try as many bins as needed until we have dropped both markers in the correct bins)
-        align_correct_bin = AlignCorrectBin()
+        align_correct_bin = AlignCorrectBin(bins_params)
 
         self.add_children([
             search_for_bin_structure,
