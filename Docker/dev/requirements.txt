@@ -16,3 +16,4 @@ onnx
 onnxruntime
 inference-models
 transforms3d
+crcmod

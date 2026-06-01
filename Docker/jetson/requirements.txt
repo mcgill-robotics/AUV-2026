@@ -3,11 +3,11 @@ sympy
 cython
 setuptools<70
 typing_extensions
-
-torch 
-torchvision
+protobuf
 
 # Main Libraries
+pyserial
+crcmod
 ultralytics
 roboflow
 albumentations
