@@ -8,6 +8,7 @@
         "dynamic_spatial_size_supported": false,
         "color_mode": "rgb",
         "resize_mode": "letterbox",
+        "padding_value": 114,
         "input_channels": 3,
         "scaling_factor": 255.0
     },
