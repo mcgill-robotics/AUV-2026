@@ -67,7 +67,6 @@ else
     git config --global --add safe.directory "$(pwd)" || $SUDO git config --system --add safe.directory "$(pwd)"
     git config --global --add safe.directory $(pwd)/ros2_ws/src/Xsens_MTi_Driver || $SUDO git config --system --add safe.directory $(pwd)/ros2_ws/src/Xsens_MTi_Driver
     git config --global --add safe.directory $(pwd)/ros2_ws/src/ros-tcp-endpoint || $SUDO git config --system --add safe.directory $(pwd)/ros2_ws/src/ros-tcp-endpoint
-    git config --global --add safe.directory $(pwd)/ros2_ws/src/zed-ros2-wrapper || $SUDO git config --system --add safe.directory $(pwd)/ros2_ws/src/zed-ros2-wrapper
     # do not exit on error
     set +e
     git submodule update --init --recursive
@@ -107,7 +106,6 @@ fi
 # ---------------------------------------------------------
 # 2. Hardware/SDK Detection
 # ---------------------------------------------------------
-ZED_DIR="src/zed-ros2-wrapper"
 CAN_BUILD_ZED=false
 
 # Check 1: Is this a Jetson? (Hardware check)
@@ -131,50 +129,7 @@ if [ -n "${CI:-}" ] && [ "$IS_JETSON" = true ]; then
 fi
 
 # ---------------------------------------------------------
-# 3. Configure Ignore Rules
-# ---------------------------------------------------------
-if [ "$CAN_BUILD_ZED" = false ]; then
-    echo "⚠️  No ZED SDK or Jetson detected. Ignoring ZED packages."
-    SKIP_KEYS="zed zed_msgs zed_components"
-    if [ -d "$ZED_DIR" ]; then
-        touch "$ZED_DIR/AMENT_IGNORE"
-    fi
-else
-    echo "🚀 ZED Environment Ready. Including ZED packages."
-    # Skip OpenCV to avoid overwriting Jetson/CUDA optimized version
-    SKIP_KEYS="zed zed_msgs zed_components opencv libopencv-dev python3-opencv opencv-python"
-    if [ -f "$ZED_DIR/AMENT_IGNORE" ]; then
-        rm "$ZED_DIR/AMENT_IGNORE"
-    fi
-fi
-
-# ---------------------------------------------------------
-# 4. Dependency Installation (Rosdep)
-# ---------------------------------------------------------
-# echo -e "\n=== Checking Rosdep ==="
-
-# # 4a. Initialize if missing
-# if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then
-#     echo "   -> Initializing rosdep..."
-#     $SUDO rosdep init
-# fi
-
-# 4b. Update if needed
-# We run this as the current user (NO SUDO) so permissions stay correct
-# echo "   -> Updating rosdep cache..."
-# rosdep update
-
-# echo -e "\n=== Installing Dependencies ==="
-# # Uses sudo if on host, no sudo if in docker
-# $SUDO apt-get update
-
-# # Note: rosdep install handles sudo internally/interactively
-# # Skipped as per user request (dependencies assumed present in Docker)
-# # rosdep install --from-paths src --ignore-src -r -y \
-# #    --skip-keys="$SKIP_KEYS"
-
-# ---------------------------------------------------------
-# 5. Build (colcon)
+# 3. Build (colcon)
 # ---------------------------------------------------------
 
 echo -e "\n=== Building Workspace ==="
@@ -238,11 +193,8 @@ fi
 
 
 # ---------------------------------------------------------
-# 6. Cleanup
+# 4. Cleanup
 # ---------------------------------------------------------
-if [ "$CAN_BUILD_ZED" = false ] && [ -f "$ZED_DIR/AMENT_IGNORE" ]; then
-    rm "$ZED_DIR/AMENT_IGNORE"
-fi
 
 if [ $SUBMODULE_ERROR_CODE -ne 0 ]; then
     echo -e "\n⚠️  Warning: git submodule update failed with code $SUBMODULE_ERROR_CODE. Submodules may not be properly initialized."
