@@ -245,7 +245,7 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
         self.navigation_client.client_wait_for_server(timeout_sec=5.0)
 
         self.blackboard.register_key('/vision/down_cam/detections', access=py_trees.common.Access.READ)
-        self.blackboard.register_key('/gate/task_type', access=py_trees.common.Access.READ)
+        self.blackboard.register_key('/gate/selected_role', access=py_trees.common.Access.READ)
 
         self.node.get_logger().info("Starting FollowDowncamBin behavior")
         # parameters are cached in constructor
@@ -299,8 +299,8 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
                 return py_trees.common.Status.RUNNING
             
             # check if its the wrong label
-            if (self.blackboard.gate.task_type == "fire" and self.blood_detections > self.fire_detections + self.wrong_task_type_threshold
-                or self.blackboard.gate.task_type == "blood" and self.fire_detections > self.blood_detections + self.wrong_task_type_threshold):
+            if (self.blackboard.gate.selected_role == "survey_repair" and self.blood_detections > self.fire_detections + self.wrong_task_type_threshold
+                or self.blackboard.gate.selected_role == "search_rescue" and self.fire_detections > self.blood_detections + self.wrong_task_type_threshold):
                 self.node.get_logger().info("Detected wrong task type, going to other bin.")
                 return py_trees.common.Status.FAILURE
         
