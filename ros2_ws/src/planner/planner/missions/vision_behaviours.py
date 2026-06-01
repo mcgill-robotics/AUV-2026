@@ -1,6 +1,6 @@
 import math
 import py_trees
-from controls.goal_helpers import set_global_yaw, look_at, move_global
+from controls.goal_helpers import set_global_yaw, look_at, move_global, _DEFAULT_POS_TOL, _DEFAULT_HOLD#, _DEFAULT_TIMEOUT,_DEFAULT_YAW_TOL, POSITION_EPSILON
 from controls.utils import yaw_from_quaternion, normalize_angle
 from .action_status_enum import ActionStatus
 
@@ -349,11 +349,13 @@ class ScanBehaviour(py_trees.behaviour.Behaviour):
         self.action_status = ActionStatus.SUCCEEDED if goal_success else ActionStatus.FAILED
 
 class GoNearObject(py_trees.behaviour.Behaviour):
-    def __init__(self, target_class: str, target_distance: float, height_offset: float | None = None):
+    def __init__(self, target_class: str, target_distance: float, height_offset: float | None = None, tolerance_meters: float=_DEFAULT_POS_TOL, hold_time: float=_DEFAULT_HOLD):
         super().__init__(f"GoNear{target_class}")
         self.target_class = target_class
         self.target_distance = target_distance
         self.height_offset = height_offset
+        self.tolerance_meters = tolerance_meters
+        self.hold_time = hold_time
         self.blackboard = self.attach_blackboard_client(name=self.name)
         self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
@@ -400,10 +402,10 @@ class GoNearObject(py_trees.behaviour.Behaviour):
             goal_y = target_y - normalized_direction[1] * self.target_distance
 
             if self.height_offset is None:
-                goal = move_global(goal_x, goal_y, do_z=False)
+                goal = move_global(goal_x, goal_y, do_z=False, tolerance=self.tolerance_meters, hold_time=self.hold_time)
             else:
                 goal_z = target_obj.pose.position.z + self.height_offset
-                goal = move_global(goal_x, goal_y, goal_z, do_z=True)
+                goal = move_global(goal_x, goal_y, goal_z, do_z=True, tolerance=self.tolerance_meters, hold_time=self.hold_time)
 
             self.navigation_client.send_navigation_goal(goal, self.name, custom_goal_response=self.on_server_goal_response, custom_goal_result=self.on_server_goal_result)
 

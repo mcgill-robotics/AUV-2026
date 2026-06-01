@@ -12,157 +12,30 @@ CAMERA_WIDTH = 640
 CAMERA_HEIGHT = 480
 BIN_DOWNCAM_MOVING_AVERAGE_WEIGHT = 1.0
 GO_ABOVE_BIN_HEIGHT = 0.7
+GO_ABOVE_BIN_STRUCTURE_HEIGHT = 0.5
+SWITCH_SIDES_SAFETY_HEIGHT = 1.2
+WRONG_TASK_TYPE_THRESHOLD = 5
+BIN_STRUCTURE_DISTANCE = 2.0
+BIN_LINED_UP_THRESHOLD = 10 #pixels
 
-@dataclass
-class BinInfo:
-    pose: geometry_msgs.msg._pose
-    visited: bool = False
-
-class FollowDowncamBin(py_trees.behaviour.Behaviour):
-    def __init__(self):
-        super().__init__("FollowDowncamBin")
-        self.blackboard = self.attach_blackboard_client(name=self.name)
-        self.action_status = ActionStatus.PENDING
-
-        self.down_cam_bin_position = None
-        self.down_cam_new_goal_timer = 0
-        # When you send a new goal, the old one fails, account for this
-        self.expected_failures = 0
-    
-    def setup(self, **kwargs):
-        self.navigation_client = kwargs['shared_nav_client']
-        self.node = kwargs['node']
-        self.navigation_client.client_wait_for_server(timeout_sec=5.0)
-
-        self.blackboard.register_key('/vision/down_cam/detections', access=py_trees.common.Access.READ)
-
-        self.node.get_logger().info("Starting FollowDowncamBin behavior")
-        
-    def on_server_goal_response(self, goal_response: bool):
-        if not goal_response:
-            self.node.get_logger().error(f"[{self.name}] Goal rejected by server.")
-            self.action_status = ActionStatus.FAILED
-
-    def on_server_goal_result(self, goal_success: bool) -> None:
-        if goal_success:
-            self.action_status = ActionStatus.SUCCEEDED
-        elif self.expected_failures > 0:
-            self.expected_failures -= 1
-        else:
-            self.action_status = ActionStatus.FAILED
-
-    def update(self) -> py_trees.common.Status:
-        # Check for failure condition from the async callbacks (goal response and goal result)
-        if self.action_status is ActionStatus.FAILED:
-            self.node.get_logger().error(f"[{self.name}] Action failed midway.")
-            return py_trees.common.Status.FAILURE
-            
-        # Completion check
-        if self.action_status is ActionStatus.SUCCEEDED:
-            # If succeeded, it means we got to the downcam goal before it was updated, meaning we're very close so this behavior is complete
-            # return py_trees.common.Status.SUCCESS
-            pass
-        
-        # If not sent, send it
-        if self.action_status is ActionStatus.NOT_SENT:
-            self.navigation_client.send_navigation_goal(self.goal, self.name, self.on_server_goal_response, self.on_server_goal_result)
-            self.action_status = ActionStatus.PENDING
-            return py_trees.common.Status.RUNNING
-        
-        if hasattr(self.blackboard, 'vision') and self.blackboard.vision.down_cam.detections is not None:
-            downcam_bin_positions = []
-
-            for detection in self.blackboard.vision.down_cam.detections.detections:
-                hypothesis = detection.results[0].hypothesis
-                if hypothesis.class_id == "bin" or hypothesis.class_id == "blood" or hypothesis.class_id == "fire":
-                    
-                    coordinates = (detection.bbox.center.position.x, detection.bbox.center.position.y)
-                    downcam_bin_positions.append(coordinates)
-                    # Coordinates are in pixel coordinates, add half camera dimensions to get coordiantes from center
-                    # Y is also inverted (+y is down in pixel coordinates)
-
-            if len(downcam_bin_positions) == 0:
-                return py_trees.common.Status.RUNNING
-
-            # find bin closest to camera center
-            closest_downcam_bin = None
-            closest_bin_distance = float('inf')
-            for downcam_bin in downcam_bin_positions:
-                distance_squared = float((downcam_bin[0] - CAMERA_WIDTH / 2) ** 2 + (downcam_bin[1] - CAMERA_HEIGHT / 2) ** 2)
-                if distance_squared < closest_bin_distance:
-                    closest_downcam_bin = (downcam_bin[0] - CAMERA_WIDTH / 2, downcam_bin[1] - CAMERA_HEIGHT / 2)
-                    closest_bin_distance = distance_squared
-
-            self.node.get_logger().info(f"Bin position: {closest_downcam_bin}")
-
-            current_bin_position = closest_downcam_bin
-            # Moving average
-            PREV_WEIGHT = 1 - BIN_DOWNCAM_MOVING_AVERAGE_WEIGHT
-            self.down_cam_bin_position = (
-                (self.down_cam_bin_position[0] * PREV_WEIGHT + current_bin_position[0] * BIN_DOWNCAM_MOVING_AVERAGE_WEIGHT),
-                (self.down_cam_bin_position[1] * PREV_WEIGHT + current_bin_position[1] * BIN_DOWNCAM_MOVING_AVERAGE_WEIGHT)
-            ) if self.down_cam_bin_position is not None else current_bin_position
-                        
-            # Get the angle based on fov
-            x_angle = math.radians(self.down_cam_bin_position[0] / CAMERA_WIDTH * DOWNCAM_FOV_HORIZONTAL)
-            y_angle = math.radians(self.down_cam_bin_position[1] / CAMERA_HEIGHT * DOWNCAM_FOV_VERTICAL)
-
-            #self.node.get_logger().info(f"Sending new goal: x_angle: {x_angle}, y_angle: {y_angle}")
-
-            self.expected_failures += 1  # current goal will fail once, ignore that failure
-
-            # We know the bin is 1.0m below us, so calculate the bin position
-            self.goal = move_robot_centric(forward=-math.tan(y_angle) * (GO_ABOVE_BIN_HEIGHT - 0.1), sway=-math.tan(x_angle) * (GO_ABOVE_BIN_HEIGHT - 0.1))
-            # self.goal = move_robot_centric(forward=-self.down_cam_bin_position[1] / CAMERA_HEIGHT, sway=-self.down_cam_bin_position[0] / CAMERA_WIDTH)
-            self.action_status = ActionStatus.NOT_SENT  # Next tick, new goal will be sent automatically
-
-        return py_trees.common.Status.RUNNING
-
-class AlignClosestBin(py_trees.composites.Sequence):
-    def __init__(self):
-        super().__init__("AlignClosestBin", memory=True)
-        #go_above_closest_bin = vision_behaviours.GoNearObject(target_class="bin", target_distance=0.0, height_offset=GO_ABOVE_BIN_HEIGHT)
-        go_above_closest_bin = GoAboveClosestBin()
-        follow_downcam_bin = FollowDowncamBin()
-
-        self.add_children([go_above_closest_bin, follow_downcam_bin])
-
-class GoAboveClosestBin(py_trees.behaviour.Behaviour):
-    def __init__(self):
-        super().__init__("GoAboveClosestBin")
-        self.blackboard = self.attach_blackboard_client(name=self.name)
-
-    def setup(self, **kwargs):
-        self.node = kwargs['node']
-        self.navigation_client = kwargs['shared_nav_client']
-        self.navigation_client.client_wait_for_server(timeout_sec=5.0)
-        self.blackboard.register_key(key="/bins_task/closest_bins", access=py_trees.common.Access.READ)
-
-    def update(self) -> py_trees.common.Status:
-        if not hasattr(self.blackboard.bins_task, 'closest_bins') or self.blackboard.bins_task.closest_bins is None:
-            return py_trees.common.Status.FAILURE
-        
-        bins = self.blackboard.bins_task.closest_bins
-        bin_position = bins[0].pose if bins[0].visited else bins[1].pose
-
-        goal = move_global(bin_position.x, bin_position.y, bin_position.z + GO_ABOVE_BIN_HEIGHT)
-        self.navigation_client.send_navigation_goal(goal, self.name)
-        return py_trees.common.Status.SUCCESS
-    
 class GoNearBinStructure(py_trees.composites.Sequence): 
-    def __init__(self):
+    def __init__(self, bin_structure_distance: float, go_above_bin_structure_height: float):
         super().__init__("GoNearBinStructure", memory=True)
 
         go_4m_away_node = vision_behaviours.GoNearObject(
             target_class="bin_structure",
-            target_distance=4.0)
+            target_distance=4.0, 
+            tolerance_meters=0.5,
+            hold_time=0.0)
 
         look_at_bin_structure = vision_behaviours.SearchSweepBehaviour(target_class="bin_structure")
         
         go_2m_away_node = vision_behaviours.GoNearObject(
             target_class="bin_structure",
-            target_distance=2.0,
-            height_offset=0.5
+            target_distance=bin_structure_distance,
+            height_offset=go_above_bin_structure_height,
+            tolerance_meters=0.5,
+            hold_time=0.0
         )
 
         self.add_children([
@@ -170,6 +43,11 @@ class GoNearBinStructure(py_trees.composites.Sequence):
             look_at_bin_structure,
             go_2m_away_node,
         ])
+
+@dataclass
+class BinInfo:
+    pose: geometry_msgs.msg._pose
+    visited: bool = False
 
 # TODO: don't fail if it only finds one bin
 class GetClosestBins(py_trees.behaviour.Behaviour):
@@ -216,3 +94,317 @@ class GetClosestBins(py_trees.behaviour.Behaviour):
     def update(self) -> py_trees.common.Status:
         return py_trees.common.Status.SUCCESS if self.success else py_trees.common.Status.FAILURE
     
+class AlignClosestBin(py_trees.composites.Sequence):
+    def __init__(self):
+        super().__init__("AlignClosestBin", memory=True)
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+        go_above_closest_bin = GoAboveClosestBin()
+        follow_downcam_bin = FollowDowncamBin()
+        drop_marker = DropMarker()
+
+        self.add_children([go_above_closest_bin, follow_downcam_bin, drop_marker])
+    
+    def setup(self, **kwargs):
+        self.blackboard.register_key(key="/bins_task/number_markers", access=py_trees.common.Access.WRITE)
+
+class AlignBinsAttempt(py_trees.composites.Sequence):
+    def __init__(self):
+        super().__init__("AlignBinsAttempt", memory=True)
+        # just run it twice, works with visited logic
+        get_bins = GetClosestBins()
+        align_bins = TryAlignBothBins()
+
+        self.add_children([get_bins, align_bins])
+
+class TryAlignBothBins(py_trees.composites.Selector):
+    def __init__(self):
+        super().__init__("TryAlignBothBins", memory=True)
+        try_align_first_bin = AlignClosestBin()
+        try_align_second_bin = AlignClosestBin()
+
+        self.add_children([try_align_first_bin, try_align_second_bin])
+
+class AlignOtherSideBin(py_trees.composites.Sequence):
+    def __init__(self):
+        super().__init__("AlignOtherBin", memory=True)
+        go_to_other_side = GoToOtherSide()
+        align_bins_attempt = AlignBinsAttempt()
+
+        self.add_children([go_to_other_side, align_bins_attempt])
+
+class SwitchSides(py_trees.behaviour.Behaviour):
+    def __init__(self):
+        super().__init__("SwitchSides")
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+        self.action_status = ActionStatus.NOT_SENT
+
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.navigation_client = kwargs['shared_nav_client']
+        self.navigation_client.client_wait_for_server(timeout_sec=5.0)
+        self.blackboard.register_key(key="/bins_task/closest_bins", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
+
+    def initialise(self):
+        if not hasattr(self.blackboard.bins_task, 'closest_bins') or self.blackboard.bins_task.closest_bins is None:
+            self.action_status = ActionStatus.FAILED
+        
+        for object in self.blackboard.vision.object_map.array:
+            if object.label == "bin_structure":
+                structure_pos = object.pose.position
+                break
+
+        bins = self.blackboard.bins_task.closest_bins
+        bins_midpoint = (bins[0].pose.x + bins[1].pose.x) / 2, (bins[0].pose.y + bins[1].pose.y) / 2
+        structure_to_bins_vector = bins_midpoint[0] - structure_pos.x, bins_midpoint[1] - structure_pos.y
+        structure_to_bins_mag = math.sqrt(structure_to_bins_vector[0] ** 2 + structure_to_bins_vector[1] ** 2)
+        structure_to_bins_unit_vector = structure_to_bins_vector[0] / structure_to_bins_mag, structure_to_bins_vector[1] / structure_to_bins_mag
+        goal_position = structure_pos.x - structure_to_bins_unit_vector[0] * BIN_STRUCTURE_DISTANCE, structure_pos.y - structure_to_bins_unit_vector[1] * BIN_STRUCTURE_DISTANCE
+        
+        yaw_goal = math.atan2(structure_pos.y - goal_position[1], structure_pos.x - goal_position[0])
+        
+        goal = move_global(goal_position[0], goal_position[1], structure_pos.z + GO_ABOVE_BIN_STRUCTURE_HEIGHT, yaw=yaw_goal)
+
+        self.navigation_client.send_navigation_goal(goal, self.name, custom_goal_response=self.on_server_goal_response, custom_goal_result=self.on_server_goal_result)
+        self.action_status = ActionStatus.PENDING
+
+    def on_server_goal_response(self, goal_response: bool):
+        if not goal_response:
+            self.node.get_logger().error(f"[{self.name}] Goal rejected by server.")
+            self.action_status = ActionStatus.FAILED
+
+    def on_server_goal_result(self, goal_success: bool) -> None:
+        if goal_success:
+            self.action_status = ActionStatus.SUCCEEDED
+        else:
+            self.action_status = ActionStatus.FAILED
+
+    def update(self) -> py_trees.common.Status:
+        if self.action_status == ActionStatus.FAILED:
+            return py_trees.common.Status.FAILURE
+        
+        if self.action_status == ActionStatus.SUCCEEDED:
+            return py_trees.common.Status.SUCCESS
+        
+        return py_trees.common.Status.RUNNING
+    
+class AlignCorrectBin(py_trees.composites.Selector):
+    def __init__(self):
+        super().__init__("AlignCorrectBin", memory=True)
+        align_bin_first_side = AlignBinsAttempt()
+        align_other_bin = AlignOtherSideBin()
+
+        self.add_children([align_bin_first_side, align_other_bin])
+
+class GoToOtherSide(py_trees.composites.Sequence):
+    def __init__(self):
+        super().__init__("GoToOtherSide", memory=True)
+        go_up = vision_behaviours.GoNearObject(target_class="bin_structure", target_distance=0.0, height_offset=SWITCH_SIDES_SAFETY_HEIGHT, tolerance_meters=0.3)
+        switch_sides = SwitchSides()
+
+        self.add_children([go_up, switch_sides])
+
+class FollowDowncamBin(py_trees.behaviour.Behaviour):
+    def __init__(self):
+        super().__init__("FollowDowncamBin")
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+        self.action_status = ActionStatus.PENDING
+
+        self.down_cam_bin_position = None
+        self.down_cam_new_goal_timer = 0
+        # When you send a new goal, the old one fails, account for this
+        self.expected_failures = 0
+        self.fire_detections = 0
+        self.blood_detections = 0
+        
+        self.bin_lined_up_frames = 0
+    
+    def setup(self, **kwargs):
+        self.navigation_client = kwargs['shared_nav_client']
+        self.node = kwargs['node']
+        self.navigation_client.client_wait_for_server(timeout_sec=5.0)
+
+        self.blackboard.register_key('/vision/down_cam/detections', access=py_trees.common.Access.READ)
+        self.blackboard.register_key('/gate/task_type', access=py_trees.common.Access.READ)
+
+        self.node.get_logger().info("Starting FollowDowncamBin behavior")
+        
+    def on_server_goal_response(self, goal_response: bool):
+        if not goal_response:
+            self.node.get_logger().error(f"[{self.name}] Goal rejected by server.")
+            self.action_status = ActionStatus.FAILED
+
+    def on_server_goal_result(self, goal_success: bool) -> None:
+        if goal_success:
+            self.action_status = ActionStatus.SUCCEEDED
+        elif self.expected_failures > 0:
+            self.expected_failures -= 1
+        else:
+            self.action_status = ActionStatus.FAILED
+
+    def update(self) -> py_trees.common.Status:
+        # Check for failure condition from the async callbacks (goal response and goal result)
+        if self.action_status is ActionStatus.FAILED:
+            self.node.get_logger().error(f"[{self.name}] Action failed midway.")
+            return py_trees.common.Status.FAILURE
+            
+        # Completion check
+        if self.action_status is ActionStatus.SUCCEEDED:
+            # If succeeded, it means we got to the downcam goal before it was updated, meaning we're very close so this behavior is complete
+            # return py_trees.common.Status.SUCCESS
+            pass
+        
+        # If not sent, send it
+        if self.action_status is ActionStatus.NOT_SENT:
+            self.navigation_client.send_navigation_goal(self.goal, self.name, self.on_server_goal_response, self.on_server_goal_result)
+            self.action_status = ActionStatus.PENDING
+            return py_trees.common.Status.RUNNING
+        
+        if hasattr(self.blackboard, 'vision') and self.blackboard.vision.down_cam.detections is not None:
+            downcam_bins = []
+
+            for detection in self.blackboard.vision.down_cam.detections.detections:
+                hypothesis = detection.results[0].hypothesis
+                if hypothesis.class_id == "bin" or hypothesis.class_id == "blood" or hypothesis.class_id == "fire":
+                    
+                    #coordinates = (detection.bbox.center.position.x, detection.bbox.center.position.y)
+                    downcam_bins.append(detection)
+                    # if hypothesis.class_id == "fire":
+                    #     self.fire_detections += 1
+                    # elif hypothesis.class_id == "blood":
+                    #     self.blood_detections += 1
+
+            if len(downcam_bins) == 0:
+                return py_trees.common.Status.RUNNING
+            
+            # check if its the wrong label
+            if (self.blackboard.gate.task_type == "fire" and self.blood_detections > self.fire_detections + WRONG_TASK_TYPE_THRESHOLD
+                or self.blackboard.gate.task_type == "blood" and self.fire_detections > self.blood_detections + WRONG_TASK_TYPE_THRESHOLD):
+                self.node.get_logger().info("Detected wrong task type, going to other bin.")
+                return py_trees.common.Status.FAILURE
+        
+            elif self.bin_lined_up_frames >= BIN_LINED_UP_THRESHOLD:
+                self.node.get_logger().info("Bin has been lined up for multiple frames, assuming aligned and succeeding.")
+                return py_trees.common.Status.SUCCESS
+
+            # find bin closest to camera center
+            closest_downcam_bin = None
+            closest_bin_detection = None
+            closest_bin_distance = float('inf')
+            for downcam_bin_detection in downcam_bins:
+                downcam_bin_position = (downcam_bin_detection.bbox.center.position.x, downcam_bin_detection.bbox.center.position.y)
+                distance_squared = float((downcam_bin_position[0] - CAMERA_WIDTH / 2) ** 2 + (downcam_bin_position[1] - CAMERA_HEIGHT / 2) ** 2)
+                if distance_squared < closest_bin_distance:
+                    closest_bin_detection = downcam_bin_detection
+                    closest_downcam_bin = (downcam_bin_position[0] - CAMERA_WIDTH / 2, downcam_bin_position[1] - CAMERA_HEIGHT / 2)
+                    closest_bin_distance = distance_squared
+
+            if closest_bin_detection is not None:
+                if closest_bin_detection.results[0].hypothesis.class_id == "fire":
+                    self.fire_detections += 1
+                elif closest_bin_detection.results[0].hypothesis.class_id == "blood":
+                    self.blood_detections += 1
+
+            self.node.get_logger().debug(f"Bin position: {closest_downcam_bin}")
+
+            if closest_bin_distance < BIN_LINED_UP_THRESHOLD**2:
+                self.bin_lined_up_frames += 1
+            else:
+                self.bin_lined_up_frames = 0
+
+
+            
+            current_bin_position = closest_downcam_bin
+            # Moving average
+            PREV_WEIGHT = 1 - BIN_DOWNCAM_MOVING_AVERAGE_WEIGHT
+            self.down_cam_bin_position = (
+                (self.down_cam_bin_position[0] * PREV_WEIGHT + current_bin_position[0] * BIN_DOWNCAM_MOVING_AVERAGE_WEIGHT),
+                (self.down_cam_bin_position[1] * PREV_WEIGHT + current_bin_position[1] * BIN_DOWNCAM_MOVING_AVERAGE_WEIGHT)
+            ) if self.down_cam_bin_position is not None else current_bin_position
+                        
+            # Get the angle based on fov
+            x_angle = math.radians(self.down_cam_bin_position[0] / CAMERA_WIDTH * DOWNCAM_FOV_HORIZONTAL)
+            y_angle = math.radians(self.down_cam_bin_position[1] / CAMERA_HEIGHT * DOWNCAM_FOV_VERTICAL)
+
+            #self.node.get_logger().info(f"Sending new goal: x_angle: {x_angle}, y_angle: {y_angle}")
+
+            self.expected_failures += 1  # current goal will fail once, ignore that failure
+
+            # We know the bin is 1.0m below us, so calculate the bin position
+            self.goal = move_robot_centric(forward=-math.tan(y_angle) * (GO_ABOVE_BIN_HEIGHT - 0.1), sway=-math.tan(x_angle) * (GO_ABOVE_BIN_HEIGHT - 0.1))
+            # self.goal = move_robot_centric(forward=-self.down_cam_bin_position[1] / CAMERA_HEIGHT, sway=-self.down_cam_bin_position[0] / CAMERA_WIDTH)
+            self.action_status = ActionStatus.NOT_SENT  # Next tick, new goal will be sent automatically
+
+        return py_trees.common.Status.RUNNING
+
+class GoAboveClosestBin(py_trees.behaviour.Behaviour):
+    def __init__(self):
+        super().__init__("GoAboveClosestBin")
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+        self.action_status = ActionStatus.NOT_SENT
+
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.navigation_client = kwargs['shared_nav_client']
+        self.navigation_client.client_wait_for_server(timeout_sec=5.0)
+        self.blackboard.register_key(key="/bins_task/closest_bins", access=py_trees.common.Access.WRITE)
+
+    def on_server_goal_response(self, goal_response: bool):
+        if not goal_response:
+            self.node.get_logger().error(f"[{self.name}] Goal rejected by server.")
+            self.action_status = ActionStatus.FAILED
+    
+    def on_server_goal_result(self, goal_success: bool) -> None:
+        if goal_success:
+            self.action_status = ActionStatus.SUCCEEDED
+        else:
+            self.action_status = ActionStatus.FAILED
+
+    def update(self) -> py_trees.common.Status:
+        if self.action_status == ActionStatus.FAILED:
+            return py_trees.common.Status.FAILURE
+        elif self.action_status == ActionStatus.SUCCEEDED:
+            return py_trees.common.Status.SUCCESS
+        elif self.action_status == ActionStatus.NOT_SENT:
+            if not hasattr(self.blackboard.bins_task, 'closest_bins') or self.blackboard.bins_task.closest_bins is None:
+                return py_trees.common.Status.FAILURE
+            
+            bins = self.blackboard.bins_task.closest_bins
+            if bins[0] == None or (bins[0].visited and bins[1] == None):
+                return py_trees.common.Status.FAILURE
+            
+            if bins[0].visited:
+                bin_position = bins[1].pose
+                bins[1].visited = True
+            else:
+                bin_position = bins[0].pose
+                bins[0].visited = True
+
+            goal = move_global(bin_position.x, bin_position.y, bin_position.z + GO_ABOVE_BIN_HEIGHT)
+            self.navigation_client.send_navigation_goal(goal, self.name, custom_goal_response=self.on_server_goal_response, custom_goal_result=self.on_server_goal_result)
+
+            self.action_status = ActionStatus.PENDING
+
+            return py_trees.common.Status.RUNNING
+        else:
+            return py_trees.common.Status.RUNNING
+
+# Placeholder for drop marker
+class DropMarker(py_trees.behaviour.Behaviour):
+    def __init__(self):
+        super().__init__("DropMarker")
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+    
+    def setup(self, **kwargs):
+        self.blackboard.register_key(key="/bins_task/number_markers", access=py_trees.common.Access.WRITE)
+    
+    def update(self) -> py_trees.common.Status:
+        if not hasattr(self.blackboard.bins_task, 'number_markers'):
+            return py_trees.common.Status.FAILURE
+        
+        self.blackboard.bins_task.number_markers += 1
+        
+        if self.blackboard.bins_task.number_markers >= 2:
+            return py_trees.common.Status.SUCCESS
+        else:
+            return py_trees.common.Status.FAILURE
