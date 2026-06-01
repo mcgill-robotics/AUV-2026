@@ -3,6 +3,8 @@ from pathlib import Path
 import os
 import cv2
 import numpy as np
+import hashlib
+import glob
 import supervision as sv
 from inference_models import AutoModel, BackendType
 from vision_msgs.msg import Detection2DArray, Detection2D, ObjectHypothesisWithPose
@@ -21,6 +23,40 @@ def load_model(model_path: str, logger):
     CUDA Graphs for Native TRT based on model_config.json.
     """
     logger.info(f"Initializing model package from: {model_path}")
+
+    # 0. Smart Cache Invalidation
+    # Calculate MD5 hash of weights.onnx to detect if the user updated the model.
+    # If the hash changed, purge old .engine files so TensorRT is forced to rebuild.
+    onnx_path = os.path.join(model_path, "weights.onnx")
+    hash_path = os.path.join(model_path, "weights.md5")
+    
+    if os.path.exists(onnx_path):
+        try:
+            with open(onnx_path, "rb") as f:
+                file_hash = hashlib.md5(f.read()).hexdigest()
+            
+            cache_valid = False
+            if os.path.exists(hash_path):
+                with open(hash_path, "r") as f:
+                    saved_hash = f.read().strip()
+                if saved_hash == file_hash:
+                    cache_valid = True
+            
+            if not cache_valid:
+                logger.info("ONNX file update detected (or first run). Purging old TensorRT engine caches...")
+                engine_files = glob.glob(os.path.join(model_path, "*.engine"))
+                for engine_file in engine_files:
+                    try:
+                        os.remove(engine_file)
+                        logger.info(f"Deleted outdated cache: {os.path.basename(engine_file)}")
+                    except Exception as e:
+                        logger.warning(f"Failed to delete {engine_file}: {e}")
+                
+                with open(hash_path, "w") as f:
+                    f.write(file_hash)
+                logger.info("Saved new ONNX hash for future runs.")
+        except Exception as e:
+            logger.warning(f"Failed to perform MD5 hash check: {e}")
 
     # 1. Define our high-performance ONNX settings
     # These are ignored if the model_config.json specifies backend_type: "trt"

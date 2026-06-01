@@ -60,7 +60,7 @@ Note: this assumes data is in `data/raw_import`. To override this, see [example 
    ```
 4. **Train Model**:
    ```bash
-   python3 training.py --model rfdetr --dataset-dir data/processed_coco_aug --epochs 50
+   python3 training.py --model rfdetr --dataset-dir data/processed_coco_aug --epochs 50 --unity
    ```
    ```bash
    python3 -m tensorboard.main --logdir /home/douglas/AUV-2026/ros2_ws/src/vision/model_pipeline/runs/rfdetr
@@ -99,8 +99,8 @@ After running the command, simply drag the generated `my_raw_images_prelabeled` 
     2. Download the zip and extract its contents (`images/`, `labels/`, `data.yaml`) into `AUV-2026/ros2_ws/src/vision/model_pipeline/data/raw_import/`.
 5. **Run the Pre-processing Script**
     1. For **YOLO**: `python3 organize_dataset.py --input data/raw_import --output data/processed`
-    2. For **RF-DETR**: `python3 organize_dataset.py --input data/raw_import --output data/processed_coco --format coco`
-6. **Execute Fine-tuning Process**
+    2. For **RF-DETR**: `python3 organize_dataset.py --input data/raw_import --output data/processed_coco --format coco --letterbox 512`
+7. **Execute Fine-tuning Process**
     1. Download or locate your previously trained synthetic baseline model (`.pt` or `.pth`) and place it inside `model_pipeline`.
     2. For **YOLO**: Run `./training.sh <your_synthetic_model>.pt` inside the Docker container.
     3. For **RF-DETR**: Run `./training.sh <your_synthetic_model>.pth --model-type rfdetr` inside the Docker container.
@@ -151,7 +151,7 @@ The model is now ready for the vision pipeline!
 | 2 | `organize_dataset.py` | `augment_dataset.py` |
 | 3 | `training.py --custom-model <model>` | `training.py` (from scratch) |
 
-The format flag (`--format coco`) and dataset paths (`data/processed_coco`, `data/processed_coco_aug`) are automatically set when `--model-type rfdetr` is used.
+The format flag (`--format coco`) and dataset paths (`data/processed_coco`, `data/processed_coco_aug`) are automatically set when `--model-type rfdetr` is used. The `--letterbox 512` flag should be passed via `--organize-args` for RF-DETR to maintain aspect ratio during training.
 
 ### Examples for main training script
 As always keep in mind these script assume the defaults, notably that the input dataset for training is `data/raw_import`.
@@ -164,7 +164,9 @@ As always keep in mind these script assume the defaults, notably that the input 
 #### 2. Fine-tune RF-DETR
 
 ```bash
-./training.sh best_rf_detr_small_model.pth --model-type rfdetr
+python3 fix_labels.py --data-dir data/raw_import
+python3 organize_dataset.py --input data/raw_import --output data/processed_coco --format coco --letterbox 512
+python3 training.py --model rfdetr --dataset-dir data/processed_coco --custom-model best_rf_detr_small_model.pth
 ```
 
 #### 3. Train YOLO from scratch on synthetic Unity data
@@ -181,7 +183,10 @@ Say you have a different folder of synthetic data (e.g. `data/my_unity_data`) th
 ```
 
 #### 5. Train RF-DETR from scratch on synthetic Unity data
-
+```bash
+python3 organize_dataset.py --input data/raw_import --output data/processed_coco --format coco --letterbox 512
+python3 augment_dataset.py --input data/processed_coco --output data/processed_coco_aug --multiplier 1 --format coco
+python3 training.py --model rfdetr --dataset-dir data/processed_coco_aug --epochs 50 --unity
 ```
 ./training.sh --mode synthetic --model-type rfdetr
 ```
@@ -195,7 +200,10 @@ Say you have a different folder of synthetic data (e.g. `data/my_unity_data`) th
 ```
 
 #### 7. Train RF-DETR synthetic with extra epochs
-
+```bash
+python3 organize_dataset.py --input data/raw_import --output data/processed_coco --format coco --letterbox 512
+python3 augment_dataset.py --input data/processed_coco --output data/processed_coco_aug --multiplier 1 --format coco
+python3 training.py --model rfdetr --dataset-dir data/processed_coco_aug --epochs 100 --unity
 ```
 ./training.sh --mode synthetic --model-type rfdetr \
     --training-args "--epochs 100"
@@ -216,6 +224,7 @@ The default parameters for the underlying scripts are set to values that we foun
 |  | `--train` | Proportion of the entire dataset to use for training (between 0 and 1) | `0.7` |
 |  | `--val` | Proportion of the entire dataset to use for validation (between 0 and 1) | `0.2` |
 | `-f` | `--format` | Output format: `yolo` or `coco` (for RF-DETR) | `yolo` |
+|  | `--letterbox`| Optional size to letterbox pad images (e.g. 512). Essential for maintaining aspect ratio for RF-DETR | `None` |
 
 - The augmentation process (handled by `augment_dataset.py`, only used for synthetic training)
 
@@ -243,7 +252,7 @@ The default parameters for the underlying scripts are set to values that we foun
 |  | `--imgsz` | Image size for training (YOLO only) | `640` |
 |  | `--workers` | Number of dataloader workers (YOLO only) | `2` |
 |  | `--cache` | Cache images for faster training (YOLO only) | `False` |
-|  | `--unity` | Use augmentation parameters tuned for Unity synthetic data (YOLO only) | `False` |
+|  | `--unity` | Use training parameters tailored for synthetic Unity datasets (avoids double-augmenting for RF-DETR) | `False` |
 |  | `--dataset-dir` | COCO dataset path (RF-DETR only) | `data/processed` |
 |  | `--grad-accum-steps` | Gradient accumulation steps (RF-DETR only) | `4` |
 

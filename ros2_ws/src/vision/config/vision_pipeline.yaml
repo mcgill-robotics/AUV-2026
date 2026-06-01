@@ -228,6 +228,7 @@ down_cam_object_detection:
       - "warning"
       - "redcross_helmet"
       - "bin_structure"
+      - "bin"
     queue_size: 10
     
     publish_annotated: true

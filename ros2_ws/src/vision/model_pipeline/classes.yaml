@@ -1,5 +1,6 @@
 # Class names for the AUV vision model pipeline.
 # This is the single source of truth — update here and all scripts pick it up.
+# For front looking camera
 names:
 - "gate"
 - "lane_marker"
@@ -21,3 +22,18 @@ names:
 - "fire"
 - "bin_structure"
 
+
+# For down looking camera
+# names:
+# - "blood"
+# - "fire"
+# - "lane_marker"
+# - "pill"
+# - "nutbolt"
+# - "electric"
+# - "bandaid"
+# - "table"
+# - "warning"
+# - "redcross_helmet"
+# - "bin_structure"
+# - "bin"

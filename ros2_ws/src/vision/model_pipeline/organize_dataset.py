@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import List, Tuple
 
 import cv2
+import numpy as np
 from tqdm import tqdm
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
@@ -93,6 +94,61 @@ def find_image_label_pairs(input_dir: Path) -> List[Tuple[Path, Path]]:
             
     return pairs
 
+def load_yolo_labels(label_path: Path) -> Tuple[List[List[float]], List[int]]:
+    bboxes, class_labels = [], []
+    if label_path.exists():
+        with open(label_path, 'r') as f:
+            for line in f:
+                parts = line.strip().split()
+                if len(parts) == 5:
+                    cls = int(float(parts[0]))
+                    xc, yc, w, h = [float(x) for x in parts[1:]]
+                    xmin = max(0.0, xc - w/2)
+                    ymin = max(0.0, yc - h/2)
+                    xmax = min(1.0, xc + w/2)
+                    ymax = min(1.0, yc + h/2)
+                    new_w = max(0.000001, xmax - xmin)
+                    new_h = max(0.000001, ymax - ymin)
+                    new_xc = xmin + new_w / 2
+                    new_yc = ymin + new_h / 2
+                    bboxes.append([new_xc, new_yc, new_w, new_h])
+                    class_labels.append(cls)
+    return bboxes, class_labels
+
+def save_yolo_labels(label_path: Path, bboxes: List[List[float]], class_labels: List[int]):
+    with open(label_path, 'w') as f:
+        for bbox, cls in zip(bboxes, class_labels):
+            f.write(f"{int(float(cls))} {' '.join([f'{x:.6f}' for x in bbox])}\n")
+
+def process_and_save_image(img_path: Path, lbl_path: Path, img_dest: Path, lbl_dest: Path, letterbox_size: int = None):
+    """Copies or resizes the image/label. Returns the new (height, width) of the saved image."""
+    if not letterbox_size:
+        shutil.copy2(img_path, img_dest)
+        shutil.copy2(lbl_path, lbl_dest)
+        # we still need height/width for COCO, so we read it
+        img = cv2.imread(str(img_dest))
+        return img.shape[:2] if img is not None else (0, 0)
+    
+    import albumentations as A
+    transform = A.Compose([
+        A.LongestMaxSize(max_size=letterbox_size),
+        A.PadIfNeeded(min_height=letterbox_size, min_width=letterbox_size, border_mode=cv2.BORDER_CONSTANT, fill=(114, 114, 114))
+    ], bbox_params=A.BboxParams(format='yolo', label_fields=['class_labels'], min_visibility=0.0))
+    
+    image = cv2.imread(str(img_path))
+    if image is None:
+        return (0, 0)
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    
+    bboxes, class_labels = load_yolo_labels(lbl_path)
+    augmented = transform(image=image, bboxes=bboxes, class_labels=class_labels)
+    
+    aug_img = cv2.cvtColor(augmented['image'], cv2.COLOR_RGB2BGR)
+    cv2.imwrite(str(img_dest), aug_img)
+    save_yolo_labels(lbl_dest, augmented['bboxes'], augmented['class_labels'])
+    
+    return aug_img.shape[:2]
+
 def create_directory_structure(processed_dir: Path, fmt: str):
     """Create the train/val/test directory structure."""
     if processed_dir.exists():
@@ -108,7 +164,7 @@ def create_directory_structure(processed_dir: Path, fmt: str):
         for split in ["train", "valid", "test"]:
             (processed_dir / split).mkdir(parents=True, exist_ok=True)
 
-def split_and_move_data_yolo(pairs: List[Tuple[Path, Path]], processed_dir: Path, ratios: tuple):
+def split_and_move_data_yolo(pairs: List[Tuple[Path, Path]], processed_dir: Path, ratios: tuple, letterbox_size: int = None):
     """Shuffle and split data into train/val/test sets (YOLO format)."""
     random.shuffle(pairs)
     
@@ -128,8 +184,7 @@ def split_and_move_data_yolo(pairs: List[Tuple[Path, Path]], processed_dir: Path
         lbl_dest = processed_dir / split_name / "labels"
         
         for img_path, lbl_path in tqdm(split_pairs, desc=f"{split_name}"):
-            shutil.copy2(img_path, img_dest / img_path.name)
-            shutil.copy2(lbl_path, lbl_dest / lbl_path.name)
+            process_and_save_image(img_path, lbl_path, img_dest / img_path.name, lbl_dest / lbl_path.name, letterbox_size)
     
     return splits
 
@@ -152,7 +207,7 @@ def yolo_to_coco_annotation(label_path: Path, image_id: int, img_width: int,
             if len(parts) != 5:
                 continue
 
-            cls = int(parts[0])
+            cls = int(float(parts[0]))
             xc, yc, w, h = [float(x) for x in parts[1:]]
 
             # Convert YOLO normalised (xc, yc, w, h) → COCO absolute (x, y, w, h)
@@ -175,7 +230,7 @@ def yolo_to_coco_annotation(label_path: Path, image_id: int, img_width: int,
     return annotations, ann_id
 
 def split_and_move_data_coco(pairs: List[Tuple[Path, Path]], processed_dir: Path,
-                             ratios: tuple, class_names: list):
+                             ratios: tuple, class_names: list, letterbox_size: int = None):
     """Shuffle and split data into train/valid/test sets (COCO format)."""
     random.shuffle(pairs)
 
@@ -202,16 +257,13 @@ def split_and_move_data_coco(pairs: List[Tuple[Path, Path]], processed_dir: Path
 
         for image_id, (img_path, lbl_path) in enumerate(
                 tqdm(split_pairs, desc=f"{split_name}"), start=1):
-            # Copy image and YOLO label into the split directory
+            # Process image and labels
             dst_img = split_dir / img_path.name
-            shutil.copy2(img_path, dst_img)
-            shutil.copy2(lbl_path, split_dir / lbl_path.name)
-
-            # Read image dimensions
-            img = cv2.imread(str(img_path))
-            if img is None:
+            dst_lbl = split_dir / lbl_path.name
+            img_height, img_width = process_and_save_image(img_path, lbl_path, dst_img, dst_lbl, letterbox_size)
+            
+            if img_height == 0:
                 continue
-            img_height, img_width = img.shape[:2]
 
             images_list.append({
                 "id": image_id,
@@ -221,7 +273,7 @@ def split_and_move_data_coco(pairs: List[Tuple[Path, Path]], processed_dir: Path
             })
 
             anns, ann_id = yolo_to_coco_annotation(
-                lbl_path, image_id, img_width, img_height, ann_id)
+                dst_lbl, image_id, img_width, img_height, ann_id)
             annotations_list.extend(anns)
 
         coco_dict = {
@@ -266,6 +318,12 @@ def main():
         default="yolo",
         help="Output format: yolo (default) or coco (for RF-DETR)"
     )
+    parser.add_argument(
+        "--letterbox",
+        type=int,
+        default=None,
+        help="Optional size to letterbox pad the images to (e.g., 512 for RF-DETR)."
+    )
     
     args = parser.parse_args()
     
@@ -295,10 +353,10 @@ def main():
     ratios = (args.train, args.val, 1.0 - args.train - args.val)
 
     if fmt == "yolo":
-        split_and_move_data_yolo(pairs, output_dir, ratios)
+        split_and_move_data_yolo(pairs, output_dir, ratios, args.letterbox)
         generate_data_yaml(output_dir, class_names)
     else:
-        split_and_move_data_coco(pairs, output_dir, ratios, class_names)
+        split_and_move_data_coco(pairs, output_dir, ratios, class_names, args.letterbox)
     
     print("\n" + "=" * 50)
     print("Done!")

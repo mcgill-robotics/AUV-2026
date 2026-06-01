@@ -9,3 +9,4 @@ table
 warning
 redcross_helmet
 bin_structure
+bin
