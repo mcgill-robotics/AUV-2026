@@ -58,36 +58,48 @@
     },
     "CallService!1y4ckso": {
       "requestPayload": "{}",
-      "layout": "vertical",
+      "layout": "horizontal",
       "timeoutSeconds": 10,
-      "serviceName": "/dvl/reset_dead_reckoning",
-      "editingMode": false
+      "serviceName": "dvl/reset_dead_reckoning",
+      "editingMode": false,
+      "buttonColor": "#82ffe9",
+      "buttonTooltip": "Call this service when starting navigation; it will set current position as then reference point fir DVL position",
+      "buttonText": "Reset Dead Reckoning",
+      "foxglovePanelTitle": "Reset DVL Dead Reckoning"
     },
     "CallService!32g2cf4": {
       "requestPayload": "{}",
-      "layout": "vertical",
+      "layout": "horizontal",
       "timeoutSeconds": 20,
+      "serviceName": "dvl/calibrate_gyro",
       "editingMode": false,
-      "serviceName": "/dvl/calibrate_gyro"
+      "buttonColor": "#ff8282",
+      "buttonTooltip": "Call this service on an even surface for the DVL to align it's internal IMU gyroscope",
+      "buttonText": "Calibrate DVL Gyroscope"
     },
     "CallService!g3b1pw": {
       "requestPayload": "{}",
       "layout": "vertical",
       "timeoutSeconds": 10,
-      "serviceName": "/dvl/get_config"
+      "serviceName": "dvl/get_config",
+      "buttonText": "Get Current DVL Configuration",
+      "editingMode": true
     },
     "RawMessages!imu_raw": {
-      "topicPath": "/imu/data"
+      "topicPath": "/imu/data",
+      "defaultExpanded": false
     },
     "RawMessages!imu_proc": {
       "topicPath": "/auv_frame/imu",
       "defaultExpanded": false
     },
     "RawMessages!depth_raw": {
-      "topicPath": "/sensors/depth/z"
+      "topicPath": "/sensors/depth/z",
+      "defaultExpanded": false
     },
     "RawMessages!depth_proc": {
-      "topicPath": "/auv_frame/depth"
+      "topicPath": "/auv_frame/depth",
+      "defaultExpanded": false
     },
     "Plot!1fswa2v": {
       "paths": [
@@ -110,10 +122,12 @@
       "maxYValue": 4
     },
     "RawMessages!dvl_vel": {
-      "topicPath": "/dvl/velocity"
+      "topicPath": "/dvl/velocity",
+      "defaultExpanded": false
     },
     "RawMessages!dvl_dr": {
-      "topicPath": "/dvl/dead_reckoning"
+      "topicPath": "/dvl/dead_reckoning",
+      "defaultExpanded": false
     },
     "RawMessages!dvl_odom": {
       "topicPath": "/dvl/odometry",
@@ -229,11 +243,11 @@
         },
         {
           "panelId": "CallService!32g2cf4",
-          "size": 0.051856886796579856
+          "size": 0.09966893476889305
         },
         {
           "panelId": "CallService!g3b1pw",
-          "size": 0.22852354770434372
+          "size": 0.6497734640344714
         }
       ]
     },
@@ -260,7 +274,7 @@
       "showPlotValuesInLegend": true
     },
     "Tab!imu": {
-      "activeTabIdx": 1,
+      "activeTabIdx": 0,
       "tabs": [
         {
           "title": "IMU (Raw)",
@@ -290,7 +304,7 @@
       ]
     },
     "Tab!dvl": {
-      "activeTabIdx": 3,
+      "activeTabIdx": 0,
       "tabs": [
         {
           "title": "Velocity",
@@ -311,7 +325,7 @@
       ]
     },
     "Tab!pose": {
-      "activeTabIdx": 0,
+      "activeTabIdx": 1,
       "tabs": [
         {
           "title": "3D Position",
