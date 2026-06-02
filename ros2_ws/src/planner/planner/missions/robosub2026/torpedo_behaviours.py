@@ -99,11 +99,11 @@ class TorpedoNodeFactory:
         )
         return node_go_to_animal
 
-class TorpedoBehaviourTree:
+class TorpedoBehaviourTree(py_trees.composites.Selector):
     def __init__(self):
+        super().__init__("Torpedo Strategy", memory=True)
         self.factory = TorpedoNodeFactory()
-        self.root = py_trees.composites.Selector("torpedo_mission_root", memory=False)
-        self.root.add_children(
+        self.add_children(
             [
                 self.node_highest_pts(),
                 self.node_partial_points(),
