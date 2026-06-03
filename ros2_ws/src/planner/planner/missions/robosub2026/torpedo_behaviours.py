@@ -1,6 +1,7 @@
 import py_trees
 import py_trees_ros
 from time import sleep
+from ..vision_behaviours import SearchSweepBehaviour
 
 TORPEDO_COUNT = 2
 
@@ -99,14 +100,29 @@ class TorpedoNodeFactory:
         )
         return node_go_to_animal
 
-class TorpedoBehaviourTree(py_trees.composites.Selector):
-    def __init__(self):
+class TorpedoStrategySelector(py_trees.composites.Selector):
+    """
+    High Level Strategy Selector for Torpedo Task. Depending on if we find the board
+    1. Try to get highest points by finding board, aligning with board, and firing torpedos through the correct holes
+    2. If we fail to find the board or find a path to the front of the board such that we are aligned, try to get partial points by just firing torpedos at random
+    """
+    
+    def __init__(
+            self,
+            scan_pause_time: float = 1.0,
+            yaw_tolerance_rad: float = 0.3,
+            hold_time: float = 0.5,
+            timeout: float = 45.0,
+        ):
         super().__init__("Torpedo Strategy", memory=True)
         self.factory = TorpedoNodeFactory()
+        self.ss_time = scan_pause_time
+        self.yaw_tolerance_rad = yaw_tolerance_rad
+        self.hold_time = hold_time
+        self.timeout = timeout
         self.add_children(
             [
-                self.node_highest_pts(),
-                self.node_partial_points(),
+                self.board_strategy(),
                 self.node_base_case()
             ]
         )
@@ -115,61 +131,63 @@ class TorpedoBehaviourTree(py_trees.composites.Selector):
         pass
 
     # This is the first node in the torpedo BT
-    def node_highest_pts(self)->py_trees.composites.Sequence: # rename this to something better
+    def board_strategy(self)->py_trees.composites.Sequence:
         """
-        First subtree to get the hightest amount of points.
-        Sequence: get the chosen animal, go to chosen animal, fire torpedo 1, go to other animal, fire torpedo 2.
+        Subtree to align to board and fire into board
+        1. Search Sweep to find board
+        2. Determine Distance Strategy
 
         returns py_trees.composites.Sequence
         """
-        node_highest_pts = py_trees.composites.Sequence("highest_pts", memory=True)
-        get_chosen_animal = Action("get_chosen_animal")
-        go_to_animal1 = self.factory.make_node_go_to_animal("Animal1") # TODO: replace this with animal name
-        go_to_animal2 = self.factory.make_node_go_to_animal("Animal2") # TODO: replace with other animal name
-        fire_torpedo1 = Action("fire_torpedo1")
-        fire_torpedo2 = Action("fire_torpedo2")
+        board_align:py_trees.composites.Sequence = py_trees.composites.Sequence("Board Strategy", memory=True)
+        ss_board = SearchSweepBehaviour(
+            target_class="board",
+            num_steps=5,
+            max_attempts=2,
+            step_timeout=self.ss_time,
+            clockwise=False,
+            look_at_on_success=True,
+            yaw_tolerance_rad=self.yaw_tolerance_rad,
+            turn_hold_time_s=self.hold_time,
+            turn_timeout_s=self.timeout,
+            name="Search Sweep for Board"
+        )
 
-        node_highest_pts.add_children(
+        board_align.add_children(
             [
-                get_chosen_animal,
-                go_to_animal1,
-                fire_torpedo1,
-                go_to_animal2, 
-                fire_torpedo2,
+                ss_board
             ]
         )
 
-        return node_highest_pts
-
-    def node_partial_points(self)->py_trees.composites.Sequence: # TODO: rename this to something less ambiguous
+        return board_align
+    
+    def distance_strategy_selector(self)->py_trees.composites.Selector:
         """
-        Subtree to get partial points if we can't get the highest points (Ex. failure during highest points subtree)
-        This backup plan plan does not try to align with board but still tries to go to the animal
-        
-        returns pytree.composites.Sequence
+        Distance from board
+        1. Farther: 0.46m away
+        2. Far: 0.3m away
+        3. Close: <0.3m away, just stick torpedo up to board and hope for the best
         """
-        node_partial_points = py_trees.composites.Sequence("partial_pts", memory=True) #TODO: rename this this as well
-        generic_align_board = self.factory.make_node_check_align_board("generic") # TODO: rename this
-        check_torpedo_count1 = Action("check_torpedo_count1")
-        check_torpedo_count2 = Action("check_torpedo_count2")
-        fire_torpedo1 = Action("fire_torpedo1")
-        fire_torpedo2 = Action("fire_torpedo2")
-
-        node_partial_points.add_children(
+        distance_strategy_selector = py_trees.composites.Selector("Distance Strategy Selector", memory=True)
+        distance_strategy_selector.add_children(
             [
-            generic_align_board,
-            check_torpedo_count1,
-            fire_torpedo1,
-            check_torpedo_count2,
-            fire_torpedo2,
+                self.build_distance_strategy(0.46),
+                self.build_distance_strategy(0.3),
+                self.build_distance_strategy(0.1)
             ]
-        )
-        
-        return node_partial_points
+         )
+        return distance_strategy_selector
+
+
+    def build_distance_strategy(self, distance_from_board: float)->py_trees.composites.Sequence:
+        """
+        Build a distance strategy based on the distance from the board
+        """
+        pass
 
     def node_base_case(self)->py_trees.composites.Sequence:
         """
-        Base case subtree that will just try to fire the torpedos without aligning with the board or going to the animals
+        Base case subtree that will just try to fire the torpedos without finding or aligning to board
         
         returns py_trees.composites.Sequence
         """

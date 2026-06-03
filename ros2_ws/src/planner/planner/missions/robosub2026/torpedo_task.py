@@ -1,5 +1,5 @@
 import py_trees
-from .torpedo_behaviours import TorpedoBehaviourTree
+from .torpedo_behaviours import TorpedoStrategySelector
 
 class TorpedoTask(py_trees.composites.Sequence):
     """
@@ -17,6 +17,6 @@ class TorpedoTask(py_trees.composites.Sequence):
         # 4. Align with Small opening and fire torpedo
         # 5. Optional: Maintain distance (1ft or 1.5ft) for extra points
         self.add_children([
-            TorpedoBehaviourTree(),
+            TorpedoStrategySelector(),
             py_trees.behaviours.Success(name="Placeholder Torpedo Success")
         ])
