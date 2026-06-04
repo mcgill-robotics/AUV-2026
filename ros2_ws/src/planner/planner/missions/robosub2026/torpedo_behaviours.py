@@ -2,8 +2,23 @@ import py_trees
 import py_trees_ros
 from time import sleep
 from ..vision_behaviours import SearchSweepBehaviour
+from enum import Enum
 
+class Season(Enum):
+    SPRING = 1
+    SUMMER = 2
+    AUTUMN = 3
+    WINTER = 4
 TORPEDO_COUNT = 2
+
+"""
+For the sake of standardization, we define board types based on their icons, going clockwise from the top left:
+Board Type 1: Fire Firetruck Blood Ambulance
+Board Type 2: Blood Ambulance Fire Firetruck
+"""
+class BoardType(Enum):
+    FIRE_TOP_LEFT = 1
+    BLOOD_TOP_LEFT = 2
 
 class Action(py_trees.behaviour.Behaviour):
     def __init__(self, name):
@@ -11,6 +26,7 @@ class Action(py_trees.behaviour.Behaviour):
 
     def setup(self, **kwargs):
         self.logger.debug(f"Action::setup {self.name}")
+        self.blackboard = self.attach_blackboard_client(name=self.name)
 
     def initialise(self):
         self.logger.debug(f"Action::initialize {self.name}")
@@ -28,6 +44,7 @@ class Condition(py_trees.behaviour.Behaviour):
 
     def setup(self, **kwargs):
         self.logger.debug(f"Condition::setup {self.name}")
+        self.blackboard = self.attach_blackboard_client(name=self.name)
 
     def initialise(self):
         self.logger.debug(f"Condition::initialize {self.name}")
@@ -152,10 +169,67 @@ class TorpedoStrategySelector(py_trees.composites.Selector):
             turn_timeout_s=self.timeout,
             name="Search Sweep for Board"
         )
-
+        
+        ss_blood = SearchSweepBehaviour(
+            target_class="blood",
+            num_steps=5,
+            max_attempts=2,
+            step_timeout=self.ss_time,
+            clockwise=False,
+            look_at_on_success=True,
+            yaw_tolerance_rad=self.yaw_tolerance_rad,
+            turn_hold_time_s=self.hold_time,
+            turn_timeout_s=self.timeout,
+            name="Search Sweep for Blood"
+        )
+        
+        ss_fire = SearchSweepBehaviour(
+            target_class="fire",
+            num_steps=5,
+            max_attempts=2,
+            step_timeout=self.ss_time,
+            clockwise=False,
+            look_at_on_success=True,
+            yaw_tolerance_rad=self.yaw_tolerance_rad,
+            turn_hold_time_s=self.hold_time,
+            turn_timeout_s=self.timeout,
+            name="Search Sweep for Fire"
+        )
+        
+        ss_ambulance = SearchSweepBehaviour(
+            target_class="ambulance",
+            num_steps=5,
+            max_attempts=2,
+            step_timeout=self.ss_time,
+            clockwise=False,
+            look_at_on_success=True,
+            yaw_tolerance_rad=self.yaw_tolerance_rad,
+            turn_hold_time_s=self.hold_time,
+            turn_timeout_s=self.timeout,
+            name="Search Sweep for Ambulance"
+        )
+        
+        ss_firetruck = SearchSweepBehaviour(
+            target_class="firetruck",
+            num_steps=5,
+            max_attempts=2,
+            step_timeout=self.ss_time,
+            clockwise=False,
+            look_at_on_success=True,
+            yaw_tolerance_rad=self.yaw_tolerance_rad,
+            turn_hold_time_s=self.hold_time,
+            turn_timeout_s=self.timeout,
+            name="Search Sweep for Firetruck"
+        )
+                
         board_align.add_children(
             [
-                ss_board
+                ss_board,
+                ss_blood,
+                ss_fire,
+                ss_ambulance,
+                ss_firetruck,
+                self.distance_strategy_selector()
             ]
         )
 
@@ -183,7 +257,15 @@ class TorpedoStrategySelector(py_trees.composites.Selector):
         """
         Build a distance strategy based on the distance from the board
         """
-        pass
+        distance_strategy = py_trees.composites.Sequence(f"Distance Strategy {distance_from_board}m", memory=True)
+        move_and_align = MoveAndAlignToBoard(distance_from_board)
+        # TODO add navigation to board position here
+        distance_strategy.add_children(
+            [
+                move_and_align,
+            ]
+        )
+        return distance_strategy
 
     def node_base_case(self)->py_trees.composites.Sequence:
         """
@@ -206,3 +288,90 @@ class TorpedoStrategySelector(py_trees.composites.Selector):
             ]
         )
         return node_base_case
+
+
+### Actions:
+
+class MoveAndAlignToBoard(Action):
+    """
+    
+    """
+    def __init__(self, distance_from_board):
+        super().__init__("Move and Align to Board")
+        self.distance_from_board = distance_from_board
+
+    def setup(self, **kwargs):
+        super().setup(**kwargs)
+        self.node = kwargs['node']
+        self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/board/type", access=py_trees.common.Access.WRITE)
+        
+    def update(self):
+        # 1. Get AUV Pose
+        if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.pose is None:
+            self.node.get_logger().warn(f"[{self.name}] Waiting for /sensors/pose.")
+            return py_trees.common.Status.RUNNING
+        auv_pose = self.blackboard.sensors.pose.pose
+        
+        # 2. Get board and icon position from blackboard
+        if not hasattr(self.blackboard, 'vision') or self.blackboard.vision.object_map is None:
+            self.node.get_logger().error(f"[{self.name}] No object map available.")
+            return py_trees.common.Status.FAILURE
+        board_vo = None
+        blood_vo = None
+        fire_vo = None
+        ambulance_vo = None
+        firetruck_vo = None
+        for vision_object in self.blackboard.vision.object_map.array:
+            match vision_object.label:
+                case "board":
+                    board_vo = vision_object
+                case "blood":
+                    blood_vo = vision_object
+                case "fire":
+                    fire_vo = vision_object
+                case "ambulance":
+                    ambulance_vo = vision_object
+                case "firetruck":
+                    firetruck_vo = vision_object
+                case _: # we don't care about other vision objects
+                    continue
+
+        if board_vo is None:
+            self.node.get_logger().error(f"[{self.name}] Board not found in vision.")
+            return py_trees.common.Status.FAILURE
+        
+        hazard_pair_found = (blood_vo is not None and fire_vo is not None)
+        vehicle_pair_found = (ambulance_vo is not None and firetruck_vo is not None)
+        
+        if not hazard_pair_found and not vehicle_pair_found:
+            self.node.get_logger().error(f"[{self.name}] Missing hazard and vehicle vision object pairs in board. Unable to determine board type.")
+            return py_trees.common.Status.FAILURE
+        
+
+        if hazard_pair_found:
+            # fire is above blood for board type 1, blood is above fire for board type 2
+            if fire_vo.pose.position.z > blood_vo.pose.position.z:
+                hazard_board_type: BoardType = BoardType.FIRE_TOP_LEFT
+            else:
+                hazard_board_type: BoardType = BoardType.BLOOD_TOP_LEFT
+                
+        if vehicle_pair_found:
+            # firetruck is above ambulance for board type 1, ambulance is above firetruck for board type 2
+            if firetruck_vo.pose.position.z > ambulance_vo.pose.position.z:
+                vehicle_board_type: BoardType = BoardType.FIRE_TOP_LEFT
+            else:
+                vehicle_board_type: BoardType = BoardType.BLOOD_TOP_LEFT
+                
+        if hazard_pair_found and vehicle_pair_found and hazard_board_type != vehicle_board_type:
+            self.node.get_logger().error(f"[{self.name}] Inconsistent board type between hazard and vehicle vision objects.")
+            return py_trees.common.Status.FAILURE
+        else:
+            board_type = hazard_board_type if hazard_pair_found else vehicle_board_type
+            self.blackboard.board.type = board_type.value
+            self.node.get_logger().info(f"[{self.name}] Detected board type: {board_type.name}")
+        
+
+        # # 2. Move to distance from board while aligning to board
+        return py_trees.common.Status.SUCCESS
