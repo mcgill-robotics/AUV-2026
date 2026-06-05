@@ -22,6 +22,7 @@ import argparse
 import yaml
 from pathlib import Path
 from typing import List, Tuple
+import albumentations as A
 
 import cv2
 import numpy as np
@@ -129,7 +130,6 @@ def process_and_save_image(img_path: Path, lbl_path: Path, img_dest: Path, lbl_d
         img = cv2.imread(str(img_dest))
         return img.shape[:2] if img is not None else (0, 0)
     
-    import albumentations as A
     transform = A.Compose([
         A.LongestMaxSize(max_size=letterbox_size),
         A.PadIfNeeded(min_height=letterbox_size, min_width=letterbox_size, border_mode=cv2.BORDER_CONSTANT, fill=(114, 114, 114))

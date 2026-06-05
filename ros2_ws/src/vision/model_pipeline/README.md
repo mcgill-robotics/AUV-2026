@@ -1,5 +1,8 @@
 # Vision Model Pipeline
 
+> [!IMPORTANT]
+> **Docker Environment:** All python scripts and commands listed in this document must be executed from inside the Docker container.
+
 ## Complete End-to-End Workflow (Sim to Real)
 This is the recommended comprehensive workflow for bridging the gap from our Unity synthetic environments to real-world deployment:
 
@@ -18,13 +21,7 @@ For training on synthetic data generated from Unity, follow this pipeline to ens
 
 ### 1.1 YOLO Workflow
 
-#### Using `training.sh` (recommended):
-```bash
-./training.sh --mode synthetic
-```
-Note: this assumes data is in `data/raw_import`. To override this, see [example 4 from the training script](#4-train-yolo-model-from-scratch-using-alternate-input-folder).
-
-#### Manual steps
+Running the Python scripts directly provides maximum modularity and makes debugging much easier if any step fails.
 
 1. **Collect Raw Data**: Put your Unity exports in `data/raw_import`. It should have `yolo_images/` and `yolo_labels/` folders.
 2. **Organize Dataset**: Split the data into train/val/test and generate `data.yaml`.
@@ -40,14 +37,9 @@ Note: this assumes data is in `data/raw_import`. To override this, see [example 
    python3 training.py --model v11 --size s --data data/processed_aug/data.yaml --unity
    ```
 
+*(Alternatively, you can run the automated script: `./training.sh --mode synthetic`)*
+
 ### 1.2 RF-DETR Workflow
-
-**Using `training.sh` (recommended):**
-```bash
-./training.sh --mode synthetic --model-type rfdetr
-```
-
-**Manual steps:**
 
 1. **Collect Raw Data**: Same as above.
 2. **Organize Dataset** in COCO format:
@@ -62,10 +54,12 @@ Note: this assumes data is in `data/raw_import`. To override this, see [example 
    ```bash
    python3 training.py --model rfdetr --dataset-dir data/processed_coco_aug --epochs 50 --unity
    ```
+   Not needed, good to monitor training metrics.
    ```bash
    python3 -m tensorboard.main --logdir /home/douglas/AUV-2026/ros2_ws/src/vision/model_pipeline/runs/rfdetr
    ```
 
+*(Alternatively, you can run the automated script: `./training.sh --mode synthetic --model-type rfdetr`)*
 
 
 ## 2. Pre-labeling for Roboflow
@@ -97,14 +91,17 @@ After running the command, simply drag the generated `my_raw_images_prelabeled` 
 4. **Download Dataset to Machine**
     1. Select export format **YOLOv11** (even if using RF-DETR, because our script organizes everything automatically!).
     2. Download the zip and extract its contents (`images/`, `labels/`, `data.yaml`) into `AUV-2026/ros2_ws/src/vision/model_pipeline/data/raw_import/`.
-5. **Run the Pre-processing Script**
+5. **Undo Roboflow Shenanigans**
+    1. Roboflow sometimes re-orders the labels in alphabetical order. To undo this and perfectly map everything to the correct targets (as defined in `classes.yaml`), simply run the `fix_labels.py` script.
+    2. Run `python3 fix_labels.py --data-dir data/raw_import`. The script will automatically read the target labels from `classes.yaml` and the current labels from your Roboflow `data.yaml`, then correctly remap your dataset indices
+6. **Run the Pre-processing Script**
     1. For **YOLO**: `python3 organize_dataset.py --input data/raw_import --output data/processed`
     2. For **RF-DETR**: `python3 organize_dataset.py --input data/raw_import --output data/processed_coco --format coco --letterbox 512`
 7. **Execute Fine-tuning Process**
     1. Download or locate your previously trained synthetic baseline model (`.pt` or `.pth`) and place it inside `model_pipeline`.
-    2. For **YOLO**: Run `./training.sh <your_synthetic_model>.pt` inside the Docker container.
-    3. For **RF-DETR**: Run `./training.sh <your_synthetic_model>.pth --model-type rfdetr` inside the Docker container.
-7. **Locate Your Fine-Tuned Weights**
+    2. For **YOLO**: Run `python3 training.py --model v11 --size s --data data/processed/data.yaml --custom-model <your_synthetic_model>.pt`
+    3. For **RF-DETR**: Run `python3 training.py --model rfdetr --dataset-dir data/processed_coco --custom-model <your_synthetic_model>.pth`
+8. **Locate Your Fine-Tuned Weights**
     1. YOLO outputs generally save to: `runs/detect/yolo11s/weights/best.pt`
     2. RF-DETR outputs generally save to: `runs/rfdetr/best_rf_detr_small_model.pth`
 
@@ -153,16 +150,17 @@ The model is now ready for the vision pipeline!
 
 The format flag (`--format coco`) and dataset paths (`data/processed_coco`, `data/processed_coco_aug`) are automatically set when `--model-type rfdetr` is used. The `--letterbox 512` flag should be passed via `--organize-args` for RF-DETR to maintain aspect ratio during training.
 
-### Examples for main training script
-As always keep in mind these script assume the defaults, notably that the input dataset for training is `data/raw_import`.
-#### 1. Fine-tune YOLO (default)
+### Examples for Python Pipeline
+As always keep in mind these scripts assume the defaults, notably that the input dataset for training is `data/raw_import`.
 
+#### 1. Fine-tune YOLO (default)
 ```bash
-./training.sh yolov11s_synthetic_best.pt
+python3 fix_labels.py --data-dir data/raw_import
+python3 organize_dataset.py --input data/raw_import --output data/processed
+python3 training.py --model v11 --size s --data data/processed/data.yaml --custom-model yolov11s_synthetic_best.pt
 ```
 
 #### 2. Fine-tune RF-DETR
-
 ```bash
 python3 fix_labels.py --data-dir data/raw_import
 python3 organize_dataset.py --input data/raw_import --output data/processed_coco --format coco --letterbox 512
@@ -170,16 +168,18 @@ python3 training.py --model rfdetr --dataset-dir data/processed_coco --custom-mo
 ```
 
 #### 3. Train YOLO from scratch on synthetic Unity data
-
 ```bash
-./training.sh --mode synthetic
+python3 organize_dataset.py --input data/raw_import --output data/processed
+python3 augment_dataset.py --input data/processed --output data/processed_aug --multiplier 3
+python3 training.py --model v11 --size s --data data/processed_aug/data.yaml --unity
 ```
 
 #### 4. Train YOLO model from scratch using alternate input folder
 Say you have a different folder of synthetic data (e.g. `data/my_unity_data`) that you want to train on instead of the default `data/raw_import`:
-
 ```bash
-./training.sh --mode synthetic --organize-args "--input ./data/my_unity_data"
+python3 organize_dataset.py --input ./data/my_unity_data --output data/processed
+python3 augment_dataset.py --input data/processed --output data/processed_aug --multiplier 3
+python3 training.py --model v11 --size s --data data/processed_aug/data.yaml --unity
 ```
 
 #### 5. Train RF-DETR from scratch on synthetic Unity data
@@ -188,15 +188,12 @@ python3 organize_dataset.py --input data/raw_import --output data/processed_coco
 python3 augment_dataset.py --input data/processed_coco --output data/processed_coco_aug --multiplier 1 --format coco
 python3 training.py --model rfdetr --dataset-dir data/processed_coco_aug --epochs 50 --unity
 ```
-./training.sh --mode synthetic --model-type rfdetr
-```
 
 #### 6. Fine-tune YOLO, medium model, 1 epoch, custom input folder
-
-```
-./training.sh yolov11s_synthetic_best.pt \
-    --organize-args "--input ./data" \
-    --training-args "--size m --epochs 1"
+```bash
+python3 fix_labels.py --data-dir ./data
+python3 organize_dataset.py --input ./data --output data/processed
+python3 training.py --model v11 --size m --epochs 1 --data data/processed/data.yaml --custom-model yolov11s_synthetic_best.pt
 ```
 
 #### 7. Train RF-DETR synthetic with extra epochs
@@ -205,9 +202,8 @@ python3 organize_dataset.py --input data/raw_import --output data/processed_coco
 python3 augment_dataset.py --input data/processed_coco --output data/processed_coco_aug --multiplier 1 --format coco
 python3 training.py --model rfdetr --dataset-dir data/processed_coco_aug --epochs 100 --unity
 ```
-./training.sh --mode synthetic --model-type rfdetr \
-    --training-args "--epochs 100"
-```
+
+*(Note: While the explicit Python commands above are recommended for full modularity, you can also use the `./training.sh` wrapper script which acts as a unified entrypoint combining these steps.)*
 
 ### Details on underlying scripts and parameters
 
@@ -256,6 +252,15 @@ The default parameters for the underlying scripts are set to values that we foun
 |  | `--dataset-dir` | COCO dataset path (RF-DETR only) | `data/processed` |
 |  | `--grad-accum-steps` | Gradient accumulation steps (RF-DETR only) | `4` |
 
+- Undoing roboflow shenanigans (handled by `fix_labels.py`)
+
+| Argument / Flag | Description | Default Value |
+| --- | --- | --- |
+| `--data-dir` | Root directory containing `data.yaml` and any subfolders named `labels` | `None` |
+| `--label-dir` | Directory containing label .txt files to remap | `data/raw_import/labels` or folder named `labels` inside `--data-dir` path if specified |
+| `--data-yaml` | Path to `data.yaml` to update with target class names | `data/raw_import/data.yaml` or file named `data.yaml` inside `--data-dir` path if specified |
+| `--skip-yaml` | Do not update the `data.yaml` file | `False` |
+
 ## 5. Visualize Predictions
 
 You can view inference results on random images from your dataset using `visualize_label.py` to verify the model predictions before deployment:
@@ -268,4 +273,9 @@ python3 visualize_label.py --folder data/processed/test/images --model-type yolo
 **For RF-DETR:**
 ```bash
 python3 visualize_label.py --folder data/processed_coco/test/images --model-type rfdetr --model best_rf_detr_small_model.pth
+```
+
+**Visualize from existing label**
+```bash
+python3 visualize_label.py --folder data/raw_import/images --from-label
 ```
