@@ -19,7 +19,7 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
         step_timeout: float = 2.0,
         clockwise: bool = False,
         look_at_on_success: bool = True,
-        yaw_tolerance_rad: float = math.radians(30.0),  # (rad) yaw convergence threshold per turn step
+        angular_tolerance_rad: float = math.radians(30.0),  # (rad) yaw convergence threshold per turn step
         turn_hold_time_s: float = 0.1,                   # (s) hold time before turn step SUCCESS
         turn_timeout_s: float = 30.0,                    # (s) timeout before turn step FAILURE
         name="SearchSweep",
@@ -31,7 +31,7 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
         self.step_timeout = step_timeout
         self.clockwise = clockwise
         self.look_at_on_success = look_at_on_success
-        self.yaw_tolerance_rad = yaw_tolerance_rad
+        self.angular_tolerance_rad = angular_tolerance_rad
         self.turn_hold_time_s = turn_hold_time_s
         self.turn_timeout_s = turn_timeout_s
         
@@ -47,6 +47,7 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
         self.current_step = 0
         self.action_status = ActionStatus.NOT_SENT
         self.sent_goal = False
+        self.result_message = ''
         
         # Pause tracking
         self.is_pausing = False
@@ -72,6 +73,7 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
         self.current_step = 0
         self.action_status = ActionStatus.NOT_SENT
         self.sent_goal = False
+        self.result_message = ''
         self.is_pausing = False
         self.start_yaw = None
         self.is_looking_at_target = False
@@ -106,7 +108,7 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
                 return py_trees.common.Status.SUCCESS
             
             if self.action_status == ActionStatus.FAILED:
-                self.node.get_logger().error(f"[{self.name}] Final alignment turn failed.")
+                self.node.get_logger().error(f"[{self.name}] Final alignment turn failed. {self.result_message}")
                 return py_trees.common.Status.FAILURE
             
             if self.action_status == ActionStatus.NOT_SENT:
@@ -122,7 +124,7 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
                     target_y=self.target_found_pos[1],
                     current_x=auv_x,
                     current_y=auv_y,
-                    tolerance=self.yaw_tolerance_rad,   # (rad)
+                    tolerance=self.angular_tolerance_rad,   # (rad)
                     hold_time=self.step_timeout,        # (s) hold to let vision settle on target
                     timeout=self.turn_timeout_s,        # (s)
                 )
@@ -141,7 +143,7 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
             
         # If the turn failed unexpectedly
         if self.action_status == ActionStatus.FAILED:
-            self.node.get_logger().error(f"[{self.name}] Turn action failed midway.")
+            self.node.get_logger().error(f"[{self.name}] Turn action failed midway. {self.result_message}")
             return py_trees.common.Status.FAILURE
             
         # If we just finished a turn step, we need to pause
@@ -149,7 +151,7 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
             if not self.is_pausing:
                 self.is_pausing = True
                 self.pause_start_time = self.node.get_clock().now().nanoseconds / 1e9
-                self.node.get_logger().info(f"[{self.name}] Step complete. Pausing for {self.step_timeout}s to stabilize vision.")
+                self.node.get_logger().info(f"[{self.name}] Step complete. Pausing for {self.step_timeout}s to stabilize vision. {self.result_message}")
             
             # Check if pause time has elapsed
             elapsed = (self.node.get_clock().now().nanoseconds / 1e9) - self.pause_start_time
@@ -193,7 +195,7 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
             # We use a tiny hold_time because the behavior itself handles the stabilization pause.
             goal = set_global_yaw(
                 yaw_rad=target_yaw,
-                tolerance=self.yaw_tolerance_rad,  # (rad)
+                tolerance=self.angular_tolerance_rad,  # (rad)
                 hold_time=self.turn_hold_time_s,   # (s)
                 timeout=self.turn_timeout_s,       # (s)
             )
@@ -213,7 +215,8 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
         if not goal_response:
             self.action_status = ActionStatus.FAILED
 
-    def on_server_goal_result(self, goal_success: bool):
+    def on_server_goal_result(self, goal_success: bool, message: str):
+        self.result_message = message
         if goal_success:
             self.action_status = ActionStatus.SUCCEEDED
         else:
@@ -233,7 +236,7 @@ class ScanBehaviour(py_trees.behaviour.Behaviour):
         self,
         scan_angle_deg: float = 30.0,
         pause_time: float = 1.0,
-        yaw_tolerance_rad: float = math.radians(30.0),  # (rad) yaw convergence threshold per turn
+        angular_tolerance_rad: float = math.radians(30.0),  # (rad) yaw convergence threshold per turn
         turn_hold_time_s: float = 0.1,                   # (s) hold time before turn SUCCESS
         turn_timeout_s: float = 30.0,                    # (s) timeout before turn FAILURE
         name="Scan Pipes",
@@ -241,7 +244,7 @@ class ScanBehaviour(py_trees.behaviour.Behaviour):
         super().__init__(name)
         self.scan_angle_rad = math.radians(scan_angle_deg)
         self.pause_time = pause_time
-        self.yaw_tolerance_rad = yaw_tolerance_rad
+        self.angular_tolerance_rad = angular_tolerance_rad
         self.turn_hold_time_s = turn_hold_time_s
         self.turn_timeout_s = turn_timeout_s
 
@@ -252,6 +255,7 @@ class ScanBehaviour(py_trees.behaviour.Behaviour):
         self.current_phase = 0
         self.action_status = ActionStatus.NOT_SENT
         self.sent_goal = False
+        self.result_message = ''
         self.is_pausing = False
         self.pause_start_time = 0.0
 
@@ -266,6 +270,7 @@ class ScanBehaviour(py_trees.behaviour.Behaviour):
         self.current_phase = 0
         self.action_status = ActionStatus.NOT_SENT
         self.sent_goal = False
+        self.result_message = ''
         self.is_pausing = False
 
     def _scan_offsets(self):
@@ -308,11 +313,11 @@ class ScanBehaviour(py_trees.behaviour.Behaviour):
         if self.action_status == ActionStatus.SUCCEEDED:
             self.is_pausing = True
             self.pause_start_time = self.node.get_clock().now().nanoseconds / 1e9
-            self.node.get_logger().info(f"[{self.name}] Rotation complete, pausing {self.pause_time}s for vision.")
+            self.node.get_logger().info(f"[{self.name}] Rotation complete, pausing {self.pause_time}s for vision. {self.result_message}")
             return py_trees.common.Status.RUNNING
 
         if self.action_status == ActionStatus.FAILED:
-            self.node.get_logger().error(f"[{self.name}] Rotation failed.")
+            self.node.get_logger().error(f"[{self.name}] Rotation failed. {self.result_message}")
             return py_trees.common.Status.FAILURE
 
         if self.action_status == ActionStatus.PENDING:
@@ -329,7 +334,7 @@ class ScanBehaviour(py_trees.behaviour.Behaviour):
             )
             goal = set_global_yaw(
                 yaw_rad=target_yaw,
-                tolerance=self.yaw_tolerance_rad,  # (rad)
+                tolerance=self.angular_tolerance_rad,  # (rad)
                 hold_time=self.turn_hold_time_s,   # (s)
                 timeout=self.turn_timeout_s,       # (s)
             )
@@ -344,7 +349,8 @@ class ScanBehaviour(py_trees.behaviour.Behaviour):
         if not goal_response:
             self.action_status = ActionStatus.FAILED
 
-    def _on_goal_result(self, goal_success: bool):
+    def _on_goal_result(self, goal_success: bool, message: str):
+        self.result_message = message
         self.action_status = ActionStatus.SUCCEEDED if goal_success else ActionStatus.FAILED
 
 

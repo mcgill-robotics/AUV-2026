@@ -238,6 +238,7 @@ class NavigateThroughGateBehaviour(py_trees.behaviour.Behaviour):
         self.timeout = timeout
         self.blackboard = self.attach_blackboard_client(name=self.name)
         self.action_status = ActionStatus.NOT_SENT
+        self.result_message = ''
 
     def setup(self, **kwargs):
         self.node = kwargs["node"]
@@ -249,14 +250,15 @@ class NavigateThroughGateBehaviour(py_trees.behaviour.Behaviour):
 
     def initialise(self):
         self.action_status = ActionStatus.NOT_SENT
+        self.result_message = ''
 
     def update(self):
         if self.action_status == ActionStatus.SUCCEEDED:
-            self.node.get_logger().info(f"[{self.name}] Cleared the gate.")
+            self.node.get_logger().info(f"[{self.name}] Cleared the gate. {self.result_message}")
             return py_trees.common.Status.SUCCESS
 
         if self.action_status == ActionStatus.FAILED:
-            self.node.get_logger().error(f"[{self.name}] Failed to pass through the gate.")
+            self.node.get_logger().error(f"[{self.name}] Failed to pass through the gate. {self.result_message}")
             return py_trees.common.Status.FAILURE
 
         if self.action_status == ActionStatus.PENDING:
@@ -290,8 +292,12 @@ class NavigateThroughGateBehaviour(py_trees.behaviour.Behaviour):
         if not goal_response:
             self.action_status = ActionStatus.FAILED
 
-    def _on_goal_result(self, goal_success):
-        self.action_status = ActionStatus.SUCCEEDED if goal_success else ActionStatus.FAILED
+    def _on_goal_result(self, goal_success, message):
+        self.result_message = message
+        if goal_success:
+            self.action_status = ActionStatus.SUCCEEDED
+        else:
+            self.action_status = ActionStatus.FAILED
 
     def terminate(self, new_status):
         if new_status == py_trees.common.Status.INVALID:
