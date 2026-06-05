@@ -1,6 +1,7 @@
-name: Docker Images Main CI
+name: Docker Images CI
 
 on:
+  # Publish to DockerHub on merges to main
   push:
     branches: [ "main", "pooltest/*", "dev/*" ]
   pull_request:
@@ -17,6 +18,9 @@ on:
         type: boolean
         default: false
 
+  # Run twice daily to catch upstream dependency breakage
+  # (base image updates, apt packages, pip packages) without
+  # any changes to our repository.
   schedule:
     - cron: '0 0,12 * * *'
 
@@ -57,14 +61,29 @@ jobs:
     permissions:
       contents: read
       packages: write
+      actions: read
+      pull-requests: write
 
     steps:
+      - name: Collect Workflow Telemetry
+        uses: ycfreeman/workflow-telemetry-action@v3.0.2
+        with:
+          job_summary: true
+          comment_on_pr: false
+          theme: light
+          proc_trace_chart_show: false
+          proc_trace_table_show: false
+
       - name: Checkout
-        uses: actions/checkout@v4
+        # Using actions/checkout@v6 explicitly to ensure updated Node/npm environment and eliminate associated CI/CD deprecation warnings.
+        uses: actions/checkout@v6
         with:
           fetch-tags: true
           submodules: recursive
           lfs: true
+      
+      - name: Add Swapfile
+        uses: ./.github/actions/swapfile
 
       - name: Clean up Disk Space
         uses: ./.github/actions/cleanup_disk
@@ -72,23 +91,28 @@ jobs:
       - name: Set Docker Tags
         id: docker_tags
         run: |
-          # 1. Determine the base tag (manual input or default 'dev')
-          BASE_TAG="${{ github.event.inputs.tag_name }}"
-          TAG_NAME="${BASE_TAG:-dev}"
+          # 1. Determine the base tag
+          # If manual input exists, use it. Otherwise, use branch name slug.
+          if [ -n "${{ github.event.inputs.tag_name }}" ]; then
+            TAG_NAME="${{ github.event.inputs.tag_name }}"
+          else
+            # Extract branch name and slugify it (replace / with -)
+            BRANCH_NAME="${{ github.ref_name }}"
+            TAG_NAME="${BRANCH_NAME//\//-}"
+          fi
           
           # 2. Define the image name
           IMAGE="mcgillrobotics/auv_2026"
           
-          # 3. Create the primary tag string (used for verification)
+          # 3. Create the primary tag string
           PRIMARY_TAG="$IMAGE:$TAG_NAME-${{ matrix.suffix }}"
           
           # 4. Create the list of tags to push
-          # Start with the primary tag
-          TAGS="$PRIMARY_TAG"
-          
-          # If this is a push to main, append the 'latest' tag
+          # For main branch, we only use 'latest'. For others, we use the branch/manual tag.
           if [[ "${{ github.ref }}" == "refs/heads/main" && "${{ github.event_name }}" == "push" ]]; then
-            TAGS="$TAGS,$IMAGE:latest-${{ matrix.suffix }}"
+            TAGS="$IMAGE:latest-${{ matrix.suffix }}"
+          else
+            TAGS="$PRIMARY_TAG"
           fi
           
           echo "PRIMARY_TAG=$PRIMARY_TAG" >> $GITHUB_ENV
@@ -96,7 +120,7 @@ jobs:
 
       - name: Login to DockerHub
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -122,34 +146,38 @@ jobs:
             echo "Tag '$FULL_TAG' does not exist. Proceeding with building."
           fi
 
+      # Note: Buildx is intentionally not enabled here.
+      # The GHA cache backend consumes several GB per platform and
+      # exhausts the free plan's 10GB cache quota very quickly.
       # - name: Set up Docker Buildx
       #   uses: docker/setup-buildx-action@v3
 
       - name: Build and Load image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}
           platforms: ${{ matrix.platform }}
-          load: true
+          load: true   # Load into local Docker daemon for verification below
           push: false
           tags: ${{ env.PRIMARY_TAG }}
           build-args: |
             CI=true
       
-      - name: Add Swapfile
-        uses: ./.github/actions/swapfile
-
       - name: Verify Build
         run: |
-          docker run --rm --user $(id -u):$(id -g) -v ${{ github.workspace }}:/home/douglas/AUV-2026 ${{ env.PRIMARY_TAG }} /bin/bash -c "./build.sh -d"
+          docker run --rm \
+            --user $(id -u):$(id -g) \
+            -v ${{ github.workspace }}:/home/douglas/AUV-2026 \
+            ${{ env.PRIMARY_TAG }} \
+            /bin/bash -c "./build.sh -d"
 
-      - name: Verify Python Libraries Permissions
+      - name: Verify Python library imports and permissions
         run: |
           docker run --rm --user $(id -u):$(id -g) ${{ env.PRIMARY_TAG }} python3 -c "
           import cv2, torch, torchvision, ultralytics, pandas, scipy, albumentations, sys, re
           print('All key Python libraries imported successfully as non-root user.')
-          
+
           matrix_suffix = '${{ matrix.suffix }}'
           if matrix_suffix in ['nvidia-amd64', 'jetson']:
               build_info = cv2.getBuildInformation()
@@ -171,22 +199,13 @@ jobs:
           else:
               print('CPU container, skipping CUDA check.')
           "
-      - name: Teardown swap space
-        if: always()
-        run: |
-          if swapon --show | grep -q /swapfile; then
-            echo "Disabling and removing swapfile..."
-            sudo swapoff /swapfile
-            sudo rm /swapfile
-            echo "Done. Disk reclaimed:"
-            df -h /
-          else
-            echo "No swapfile found, nothing to clean up."
-          fi
 
-      - name: Push image
+      # Rebuild from scratch to push — necessary because 'load: true'
+      # above is incompatible with a direct push in the same step.
+      # Buildx would solve this but is disabled due to cache disk constraints.
+      - name: Push verified image to DockerHub
         if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}

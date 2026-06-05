@@ -5,13 +5,13 @@ planner_root_tree:
     use_ground_truth: false
 
     pre_qual:
-      yaw_tolerance: 0.5         # (rad) TODO: convert to deg for consistency
+      angular_tolerance: 0.5         # (rad) TODO: convert to deg for consistency
       positional_tolerance: 0.3  # (m)
       hold_time: 1.0             # (s)
-      timeout: 20.0              # (s)
+      timeout: 30.0              # (s)
 
       orbit:
-        yaw_tolerance_scale: 0.5
+        angular_tolerance_scale: 0.5
         positional_tolerance_scale: 0.5
         hold_time_initial: 1.0
         hold_time_segments: 0.2
@@ -19,7 +19,8 @@ planner_root_tree:
 
     slalom:
       num_layers: 3               # Number of pipe layers to navigate
-      gate_side: "right"           # Default fallback side if /gate/side is not on the blackboard (set by GateTask at runtime)
+      gate_side: "right"           # Default fallback side if /gate/selected_side is not on the blackboard (set by GateTask at runtime)
+      yaw_inward_offset_deg: 15.0  # (deg) Inward angle to hug the centerline and most probably see the red pipe
       scan_angle_deg: 60.0         # (deg) Angle to sweep left/right during pipe scan
       scan_pause_time: 1.0         # (s) Seconds to pause after each scan rotation
       collinearity_threshold: 0.5  # (m) Max perpendicular distance for pipe triplet matching
@@ -27,9 +28,9 @@ planner_root_tree:
       layer_distance: 2.0          # (m) Distance between pipe layers
       initial_depth: -1.0          # (m) Depth for the initial dive before slalom
       position_tolerance: 0.3      # (m) Position convergence threshold for gap navigation
-      yaw_tolerance_deg: 17.0      # (deg) Yaw convergence threshold for gap navigation
+      angular_tolerance_deg: 17.0      # (deg) Yaw convergence threshold for gap navigation
       hold_time: 0.5               # (s) Seconds to hold within tolerance before SUCCESS
       timeout: 45.0                # (s) Seconds before gap navigation FAILURE
-      scan_yaw_tolerance_deg: 30.0 # (deg) Yaw tolerance for scan/sweep turn steps
+      scan_angular_tolerance_deg: 30.0 # (deg) Yaw tolerance for scan/sweep turn steps
       scan_hold_time: 0.1          # (s) Hold time before scan turn step SUCCESS
       scan_timeout: 30.0           # (s) Timeout before scan turn step FAILURE

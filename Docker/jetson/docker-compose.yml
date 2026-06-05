@@ -1,6 +1,6 @@
 services:
   douglas:
-    image: "mcgillrobotics/auv_2026:ros2"
+    image: "mcgillrobotics/auv_2026:${TAG:-latest-jetson}"
     runtime: nvidia
     privileged: true
     network_mode: host
@@ -28,7 +28,7 @@ services:
       - /var/nvidia/nvcam/settings/:/var/nvidia/nvcam/settings/
       - /etc/systemd/system/zed_x_daemon.service:/etc/systemd/system/zed_x_daemon.service
       - type: bind
-        source: ../../../AUV-2026
+        source: ../../
         target: /home/douglas/AUV-2026
     command: bash -c ${OVERRIDE_COMMAND:-"tail -f /dev/null"}
     build:

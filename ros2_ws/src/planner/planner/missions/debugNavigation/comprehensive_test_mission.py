@@ -6,7 +6,7 @@ import math
 from rclpy.node import Node
 
 # AUV dependencies
-from controls.goal_helpers import set_depth, set_global_yaw, move_global
+from controls.goal_helpers import set_depth, set_global_yaw, move_global, set_attitude
 
 # Planner dependencies
 from ..mission_behaviour_components import BasicActionBehaviour, TimerBehaviour
@@ -77,9 +77,39 @@ class ComprehensiveTestMission(py_trees.composites.Sequence):
         delay_11 = TimerBehaviour(timer_duration=2.0, name="Delay 11")
 
         # =====================================================================
-        # 11. Final Reset
+        # 11. Roll Test (+- 45 degrees)
+        # =====================================================================
+        roll_right = BasicActionBehaviour("Roll 45 Right", set_attitude(roll=math.pi/4, hold_time=hold_time, timeout=timeout))
+        delay_12 = TimerBehaviour(timer_duration=2.0, name="Delay 12")
+
+        roll_left = BasicActionBehaviour("Roll 45 Left", set_attitude(roll=-math.pi/4, hold_time=hold_time, timeout=timeout))
+        delay_13 = TimerBehaviour(timer_duration=2.0, name="Delay 13")
+
+        roll_level = BasicActionBehaviour("Roll Level", set_attitude(roll=0.0, hold_time=hold_time, timeout=timeout))
+        delay_14 = TimerBehaviour(timer_duration=2.0, name="Delay 14")
+
+        # =====================================================================
+        # 12. Pitch Test (+- 45 degrees)
+        # =====================================================================
+        pitch_down = BasicActionBehaviour("Pitch 45 Down", set_attitude(pitch=math.pi/4, hold_time=hold_time, timeout=timeout))
+        delay_15 = TimerBehaviour(timer_duration=2.0, name="Delay 15")
+
+        pitch_up = BasicActionBehaviour("Pitch 45 Up", set_attitude(pitch=-math.pi/4, hold_time=hold_time, timeout=timeout))
+        delay_16 = TimerBehaviour(timer_duration=2.0, name="Delay 16")
+
+        pitch_level = BasicActionBehaviour("Pitch Level", set_attitude(pitch=0.0, hold_time=hold_time, timeout=timeout))
+        delay_17 = TimerBehaviour(timer_duration=2.0, name="Delay 17")
+
+        # =====================================================================
+        # 13. Final Reset
         # =====================================================================
         turn_fwd_2 = BasicActionBehaviour("Face Forward Final", set_global_yaw(yaw_rad=0.0, hold_time=hold_time, timeout=timeout))
+        delay_18 = TimerBehaviour(timer_duration=2.0, name="Delay 18")
+
+        # =====================================================================
+        # 14. Surface
+        # =====================================================================
+        surface = BasicActionBehaviour("Surface", set_depth(z=surface_depth, hold_time=hold_time, timeout=timeout))
         
         self.add_children([
             dive, delay_0,
@@ -88,11 +118,18 @@ class ComprehensiveTestMission(py_trees.composites.Sequence):
             turn_90, delay_3,
             sway_right, delay_4,
             sway_left, delay_5,
-            turn_fwd_1, delay_6,
+            # turn_fwd_1, delay_6,
             # heave_up, delay_7,
             # heave_down, delay_8,
             turn_45, delay_9,
             diag_out, delay_10,
             diag_back, delay_11,
-            turn_fwd_2
+            # roll_right, delay_12,
+            # roll_left, delay_13,
+            # roll_level, delay_14,
+            # pitch_down, delay_15,
+            # pitch_up, delay_16,
+            # pitch_level, delay_17,
+            turn_fwd_2, delay_18,
+            surface
         ])
