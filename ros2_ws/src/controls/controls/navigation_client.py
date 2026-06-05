@@ -96,8 +96,8 @@ class NavigationClient(Node):
 
                 # Perform the custom goal result, if provided by the user
                 if custom_goal_result != None:
-                        # Extract the actual success boolean from the AUVNavigate.Result message
-                        custom_goal_result(goal_success=result.result.success)
+                        # Extract the actual success boolean and message from the AUVNavigate.Result message
+                        custom_goal_result(goal_success=result.result.success, message=result.result.message)
                 # Clear the current goal handle since the goal is completed
                 self.current_goal_handle = None
         

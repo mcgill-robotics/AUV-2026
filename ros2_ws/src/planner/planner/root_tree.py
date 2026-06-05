@@ -26,24 +26,24 @@ def main():
     node = rclpy.create_node("planner_root_tree")
 
     # Get tolerance, timeout and tick rate parameters from the configs
-    node.declare_parameter("pre_qual.yaw_tolerance", 1.0)
+    node.declare_parameter("pre_qual.angular_tolerance", 1.0)
     node.declare_parameter("pre_qual.positional_tolerance", 1.0)
     node.declare_parameter("pre_qual.timeout", 1.0)
     node.declare_parameter("pre_qual.hold_time", 1.0)
     node.declare_parameter("tick_rate", 1.0)
 
-    pre_qual_yaw_tolerance = node.get_parameter("pre_qual.yaw_tolerance").get_parameter_value().double_value
+    pre_qual_angular_tolerance = node.get_parameter("pre_qual.angular_tolerance").get_parameter_value().double_value
     pre_qual_positional_tolerance = node.get_parameter("pre_qual.positional_tolerance").get_parameter_value().double_value
     pre_qual_timeout = node.get_parameter("pre_qual.timeout").get_parameter_value().double_value
     pre_qual_hold_time = node.get_parameter("pre_qual.hold_time").get_parameter_value().double_value
     tick_rate = node.get_parameter("tick_rate").get_parameter_value().double_value
 
-    node.declare_parameter("pre_qual.orbit.yaw_tolerance_scale", 1.0)
+    node.declare_parameter("pre_qual.orbit.angular_tolerance_scale", 1.0)
     node.declare_parameter("pre_qual.orbit.positional_tolerance_scale", 1.0)
     node.declare_parameter("pre_qual.orbit.hold_time_initial", 1.0)
     node.declare_parameter("pre_qual.orbit.hold_time_segments", 1.0)
 
-    orbit_pre_qual_yaw_tolerance_scale = node.get_parameter("pre_qual.orbit.yaw_tolerance_scale").get_parameter_value().double_value
+    orbit_pre_qual_angular_tolerance_scale = node.get_parameter("pre_qual.orbit.angular_tolerance_scale").get_parameter_value().double_value
     orbit_pre_qual_positional_tolerance_scale = node.get_parameter("pre_qual.orbit.positional_tolerance_scale").get_parameter_value().double_value
     orbit_pre_qual_hold_time_initial = node.get_parameter("pre_qual.orbit.hold_time_initial").get_parameter_value().double_value
     orbit_pre_qual_hold_time_segments = node.get_parameter("pre_qual.orbit.hold_time_segments").get_parameter_value().double_value
@@ -58,10 +58,10 @@ def main():
     node.declare_parameter("slalom.layer_distance", 2.0)
     node.declare_parameter("slalom.initial_depth", -1.0)
     node.declare_parameter("slalom.position_tolerance", 0.3)
-    node.declare_parameter("slalom.yaw_tolerance_deg", 17.0)
+    node.declare_parameter("slalom.angular_tolerance_deg", 17.0)
     node.declare_parameter("slalom.hold_time", 0.5)
     node.declare_parameter("slalom.timeout", 45.0)
-    node.declare_parameter("slalom.scan_yaw_tolerance_deg", 30.0)
+    node.declare_parameter("slalom.scan_angular_tolerance_deg", 30.0)
     node.declare_parameter("slalom.scan_hold_time", 0.1)
     node.declare_parameter("slalom.scan_timeout", 30.0)
 
@@ -75,10 +75,10 @@ def main():
         "layer_distance": node.get_parameter("slalom.layer_distance").get_parameter_value().double_value,
         "initial_depth": node.get_parameter("slalom.initial_depth").get_parameter_value().double_value,
         "position_tolerance": node.get_parameter("slalom.position_tolerance").get_parameter_value().double_value,
-        "yaw_tolerance_rad": math.radians(node.get_parameter("slalom.yaw_tolerance_deg").get_parameter_value().double_value),  # deg -> rad
+        "angular_tolerance_rad": math.radians(node.get_parameter("slalom.angular_tolerance_deg").get_parameter_value().double_value),  # deg -> rad
         "hold_time": node.get_parameter("slalom.hold_time").get_parameter_value().double_value,
         "timeout": node.get_parameter("slalom.timeout").get_parameter_value().double_value,
-        "scan_yaw_tolerance_rad": math.radians(node.get_parameter("slalom.scan_yaw_tolerance_deg").get_parameter_value().double_value),  # deg -> rad
+        "scan_angular_tolerance_rad": math.radians(node.get_parameter("slalom.scan_angular_tolerance_deg").get_parameter_value().double_value),  # deg -> rad
         "scan_hold_time": node.get_parameter("slalom.scan_hold_time").get_parameter_value().double_value,
         "scan_timeout": node.get_parameter("slalom.scan_timeout").get_parameter_value().double_value,
     }
@@ -136,10 +136,10 @@ def main():
     # Mission Sequence
     missions = DynamicMissionSequence(
         position_tolerance=pre_qual_positional_tolerance,
-        yaw_tolerance=pre_qual_yaw_tolerance,
+        angular_tolerance=pre_qual_angular_tolerance,
         hold_time=pre_qual_hold_time,
         timeout=pre_qual_timeout,
-        orbit_pre_qual_yaw_tolerance_scale=orbit_pre_qual_yaw_tolerance_scale,
+        orbit_pre_qual_angular_tolerance_scale=orbit_pre_qual_angular_tolerance_scale,
         orbit_pre_qual_positional_tolerance_scale=orbit_pre_qual_positional_tolerance_scale,
         orbit_pre_qual_hold_time_initial=orbit_pre_qual_hold_time_initial,
         orbit_pre_qual_hold_time_segments=orbit_pre_qual_hold_time_segments,

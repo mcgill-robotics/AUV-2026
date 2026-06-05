@@ -17,7 +17,7 @@ from controls.utils import quaternion_from_yaw
 
 # Default tolerances used across all helpers
 _DEFAULT_POS_TOL = 0.1     # meters
-_DEFAULT_YAW_TOL = 0.175   # radians (~10 degrees)
+_DEFAULT_ANGULAR_TOL = 0.175 # radians (~10 degrees)
 _DEFAULT_HOLD = 2.0        # seconds
 _DEFAULT_TIMEOUT = 30.0    # seconds
 POSITION_EPSILON = 1e-5 # small threshold to consider position as "zero" for do_* flags
@@ -29,11 +29,13 @@ def _make_goal(
     do_x: bool = False,
     do_y: bool = False,
     do_z: bool = False,
+    do_roll: bool = False,
+    do_pitch: bool = False,
     do_yaw: bool = False,
     is_relative: bool = False,
     is_local_frame: bool = False,
     position_tolerance: float = _DEFAULT_POS_TOL,
-    yaw_tolerance: float = _DEFAULT_YAW_TOL,
+    angular_tolerance: float = _DEFAULT_ANGULAR_TOL,
     hold_time: float = _DEFAULT_HOLD,
     timeout: float = _DEFAULT_TIMEOUT,
 ) -> AUVNavigate.Goal:
@@ -43,11 +45,13 @@ def _make_goal(
     goal.do_x = do_x
     goal.do_y = do_y
     goal.do_z = do_z
+    goal.do_roll = do_roll
+    goal.do_pitch = do_pitch
     goal.do_yaw = do_yaw
     goal.is_relative = is_relative
     goal.is_local_frame = is_local_frame
     goal.position_tolerance = position_tolerance
-    goal.yaw_tolerance = yaw_tolerance
+    goal.angular_tolerance = angular_tolerance
     goal.hold_time = hold_time
     goal.timeout = timeout
     return goal
@@ -60,7 +64,7 @@ def _make_goal(
 def move_to_pose(
     pose: Pose,
     tolerance: float = _DEFAULT_POS_TOL,
-    yaw_tolerance: float = _DEFAULT_YAW_TOL,
+    angular_tolerance: float = _DEFAULT_ANGULAR_TOL,
     hold_time: float = _DEFAULT_HOLD,
     timeout: float = _DEFAULT_TIMEOUT,
 ) -> AUVNavigate.Goal:
@@ -69,15 +73,15 @@ def move_to_pose(
     Args:
         pose: Target pose in pool frame.
         tolerance: Position convergence threshold in meters.
-        yaw_tolerance: Yaw convergence threshold in radians.
+        angular_tolerance: Angular convergence threshold in radians.
         hold_time: Seconds to hold within tolerance before SUCCESS.
         timeout: Seconds before FAILURE (0 = no timeout).
     """
     return _make_goal(
         target_pose=pose,
-        do_x=True, do_y=True, do_z=True, do_yaw=True,
+        do_x=True, do_y=True, do_z=True, do_roll=True, do_pitch=True, do_yaw=True,
         position_tolerance=tolerance,
-        yaw_tolerance=yaw_tolerance,
+        angular_tolerance=angular_tolerance,
         hold_time=hold_time,
         timeout=timeout,
     )
@@ -87,35 +91,54 @@ def move_global(
     x: float,
     y: float,
     z: float = 0.0,
+    roll: float = None,
+    pitch: float = None,
     yaw: float = None,
     tolerance: float = _DEFAULT_POS_TOL,
-    yaw_tolerance: float = _DEFAULT_YAW_TOL,
+    angular_tolerance: float = _DEFAULT_ANGULAR_TOL,
     hold_time: float = _DEFAULT_HOLD,
     timeout: float = _DEFAULT_TIMEOUT,
     do_z: bool = True,
 ) -> AUVNavigate.Goal:
-    """Move to absolute XYZ in pool frame, optionally setting yaw.
+    """Move to absolute XYZ in pool frame, optionally setting orientation.
 
     Args:
         x: Target X position in meters (pool frame).
         y: Target Y position in meters (pool frame).
         z: Target Z position in meters (negative = below surface).
+        roll: Target roll in radians. None = don't control roll.
+        pitch: Target pitch in radians. None = don't control pitch.
         yaw: Target yaw in radians. None = don't control yaw.
         tolerance: Position convergence threshold in meters.
-        yaw_tolerance: Yaw convergence threshold in radians.
+        angular_tolerance: Angular convergence threshold in radians.
         hold_time: Seconds to hold within tolerance before SUCCESS.
         timeout: Seconds before FAILURE (0 = no timeout).
         do_z: Whether to actively control depth to target Z.
     """
     pose = Pose()
     pose.position = Point(x=x, y=y, z=z)
+    
+    do_roll = roll is not None
+    do_pitch = pitch is not None
     do_yaw = yaw is not None
-    pose.orientation = quaternion_from_yaw(yaw) if do_yaw else Quaternion(w=1.0)
+    
+    # We construct the quaternion only with the specified values (defaulting others to 0 here,
+    # the server will merge them with current orientation)
+    import scipy.spatial.transform
+    r = scipy.spatial.transform.Rotation.from_euler('ZYX', [
+        yaw if do_yaw else 0.0,
+        pitch if do_pitch else 0.0,
+        roll if do_roll else 0.0
+    ])
+    q = r.as_quat()
+    pose.orientation = Quaternion(x=q[0], y=q[1], z=q[2], w=q[3])
+    
     return _make_goal(
         target_pose=pose,
-        do_x=True, do_y=True, do_z=do_z, do_yaw=do_yaw,
+        do_x=True, do_y=True, do_z=do_z,
+        do_roll=do_roll, do_pitch=do_pitch, do_yaw=do_yaw,
         position_tolerance=tolerance,
-        yaw_tolerance=yaw_tolerance,
+        angular_tolerance=angular_tolerance,
         hold_time=hold_time,
         timeout=timeout,
     )
@@ -149,7 +172,7 @@ def set_depth(
 
 def set_global_yaw(
     yaw_rad: float,
-    tolerance: float = _DEFAULT_YAW_TOL,
+    tolerance: float = _DEFAULT_ANGULAR_TOL,
     hold_time: float = _DEFAULT_HOLD,
     timeout: float = _DEFAULT_TIMEOUT,
 ) -> AUVNavigate.Goal:
@@ -157,7 +180,7 @@ def set_global_yaw(
 
     Args:
         yaw_rad: Target yaw in radians.
-        tolerance: Yaw convergence threshold in radians.
+        tolerance: Angular convergence threshold in radians.
         hold_time: Seconds to hold within tolerance before SUCCESS.
         timeout: Seconds before FAILURE (0 = no timeout).
     """
@@ -166,7 +189,49 @@ def set_global_yaw(
     return _make_goal(
         target_pose=pose,
         do_yaw=True,
-        yaw_tolerance=tolerance,
+        angular_tolerance=tolerance,
+        hold_time=hold_time,
+        timeout=timeout,
+    )
+
+def set_attitude(
+    roll: float = None,
+    pitch: float = None,
+    yaw: float = None,
+    tolerance: float = _DEFAULT_ANGULAR_TOL,
+    hold_time: float = _DEFAULT_HOLD,
+    timeout: float = _DEFAULT_TIMEOUT,
+) -> AUVNavigate.Goal:
+    """Set the AUV attitude (Roll, Pitch, Yaw). Position is unaffected.
+
+    Args:
+        roll: Target roll in radians. None = don't control.
+        pitch: Target pitch in radians. None = don't control.
+        yaw: Target yaw in radians. None = don't control.
+        tolerance: Angular convergence threshold in radians.
+        hold_time: Seconds to hold within tolerance before SUCCESS.
+        timeout: Seconds before FAILURE (0 = no timeout).
+    """
+    pose = Pose()
+    do_roll = roll is not None
+    do_pitch = pitch is not None
+    do_yaw = yaw is not None
+    
+    import scipy.spatial.transform
+    r = scipy.spatial.transform.Rotation.from_euler('ZYX', [
+        yaw if do_yaw else 0.0,
+        pitch if do_pitch else 0.0,
+        roll if do_roll else 0.0
+    ])
+    q = r.as_quat()
+    pose.orientation = Quaternion(x=q[0], y=q[1], z=q[2], w=q[3])
+    
+    return _make_goal(
+        target_pose=pose,
+        do_roll=do_roll,
+        do_pitch=do_pitch,
+        do_yaw=do_yaw,
+        angular_tolerance=tolerance,
         hold_time=hold_time,
         timeout=timeout,
     )
@@ -177,7 +242,7 @@ def look_at(
     target_y: float,
     current_x: float,
     current_y: float,
-    tolerance: float = _DEFAULT_YAW_TOL,
+    tolerance: float = _DEFAULT_ANGULAR_TOL,
     hold_time: float = _DEFAULT_HOLD,
     timeout: float = _DEFAULT_TIMEOUT,
 ) -> AUVNavigate.Goal:
@@ -188,7 +253,7 @@ def look_at(
         target_y: Target Y position in the global frame.
         current_x: Current AUV X position in the global frame.
         current_y: Current AUV Y position in the global frame.
-        tolerance: Yaw convergence threshold in radians.
+        tolerance: Angular convergence threshold in radians.
         hold_time: Seconds to hold within tolerance before SUCCESS.
         timeout: Seconds before FAILURE (0 = no timeout).
     """
@@ -206,9 +271,11 @@ def move_robot_centric(
     forward: float = 0.0,
     sway: float = 0.0,
     heave: float = 0.0,
+    droll: float = 0.0,
+    dpitch: float = 0.0,
     dyaw: float = 0.0,
     tolerance: float = _DEFAULT_POS_TOL,
-    yaw_tolerance: float = _DEFAULT_YAW_TOL,
+    angular_tolerance: float = _DEFAULT_ANGULAR_TOL,
     hold_time: float = _DEFAULT_HOLD,
     timeout: float = _DEFAULT_TIMEOUT,
 ) -> AUVNavigate.Goal:
@@ -221,25 +288,35 @@ def move_robot_centric(
         forward: Meters forward (+X body, camera direction).
         sway: Meters left (+Y body).
         heave: Meters up (+Z body).
+        droll: Radians to roll (positive = right).
+        dpitch: Radians to pitch (positive = down).
         dyaw: Radians to turn (positive = left).
         tolerance: Position convergence threshold in meters.
-        yaw_tolerance: Yaw convergence threshold in radians.
+        angular_tolerance: Angular convergence threshold in radians.
         hold_time: Seconds to hold within tolerance before SUCCESS.
         timeout: Seconds before FAILURE (0 = no timeout).
     """
     do_pos = (abs(forward) > POSITION_EPSILON or abs(sway) > POSITION_EPSILON or abs(heave) > POSITION_EPSILON)
+    do_roll = (abs(droll) > ORIENTATION_EPSILON)
+    do_pitch = (abs(dpitch) > ORIENTATION_EPSILON)
     do_yaw = (abs(dyaw) > ORIENTATION_EPSILON)
 
     pose = Pose()
     pose.position = Point(x=forward, y=sway, z=heave)
-    pose.orientation = quaternion_from_yaw(dyaw)
+    
+    import scipy.spatial.transform
+    r = scipy.spatial.transform.Rotation.from_euler('ZYX', [dyaw, dpitch, droll])
+    q = r.as_quat()
+    pose.orientation = Quaternion(x=q[0], y=q[1], z=q[2], w=q[3])
+    
     return _make_goal(
         target_pose=pose,
-        do_x=do_pos, do_y=do_pos, do_z=do_pos, do_yaw=do_yaw,
+        do_x=do_pos, do_y=do_pos, do_z=do_pos, 
+        do_roll=do_roll, do_pitch=do_pitch, do_yaw=do_yaw,
         is_relative=True,
         is_local_frame=True,
         position_tolerance=tolerance,
-        yaw_tolerance=yaw_tolerance,
+        angular_tolerance=angular_tolerance,
         hold_time=hold_time,
         timeout=timeout,
     )
@@ -279,7 +356,7 @@ def translate_field_centric(
 
 def rotate_relative(
     dyaw_rad: float,
-    tolerance: float = _DEFAULT_YAW_TOL,
+    tolerance: float = _DEFAULT_ANGULAR_TOL,
     hold_time: float = _DEFAULT_HOLD,
     timeout: float = _DEFAULT_TIMEOUT,
 ) -> AUVNavigate.Goal:
@@ -287,7 +364,7 @@ def rotate_relative(
 
     Args:
         dyaw_rad: Radians to turn (positive = left).
-        tolerance: Yaw convergence threshold in radians.
+        tolerance: Angular convergence threshold in radians.
         hold_time: Seconds to hold within tolerance before SUCCESS.
         timeout: Seconds before FAILURE (0 = no timeout).
     """
@@ -297,7 +374,7 @@ def rotate_relative(
         target_pose=pose,
         do_yaw=True,
         is_relative=True,
-        yaw_tolerance=tolerance,
+        angular_tolerance=tolerance,
         hold_time=hold_time,
         timeout=timeout,
     )
@@ -310,7 +387,7 @@ def rotate_relative(
 def stabilize(
     hold_time: float = _DEFAULT_HOLD,
     tolerance: float = _DEFAULT_POS_TOL,
-    yaw_tolerance: float = _DEFAULT_YAW_TOL,
+    angular_tolerance: float = _DEFAULT_ANGULAR_TOL,
     timeout: float = 0.0,
 ) -> AUVNavigate.Goal:
     """Hold the current pose. Relative with zero offset = current pose.
@@ -321,18 +398,18 @@ def stabilize(
     Args:
         hold_time: Seconds to hold within tolerance before SUCCESS.
         tolerance: Position convergence threshold in meters.
-        yaw_tolerance: Yaw convergence threshold in radians.
+        angular_tolerance: Angular convergence threshold in radians.
         timeout: Seconds before FAILURE (0 = no timeout).
     """
     pose = Pose()
     pose.orientation = Quaternion(w=1.0)
     return _make_goal(
         target_pose=pose,
-        do_x=True, do_y=True, do_z=True, do_yaw=True,
+        do_x=True, do_y=True, do_z=True, do_roll=True, do_pitch=True, do_yaw=True,
         is_relative=True,
         is_local_frame=False,
         position_tolerance=tolerance,
-        yaw_tolerance=yaw_tolerance,
+        angular_tolerance=angular_tolerance,
         hold_time=hold_time,
         timeout=timeout,
     )
