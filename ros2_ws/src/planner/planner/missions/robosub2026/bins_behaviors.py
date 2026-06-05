@@ -6,9 +6,9 @@ from controls.goal_helpers import move_global, move_robot_centric
 from planner.missions.action_status_enum import ActionStatus
 import geometry_msgs.msg._pose
 
-class GoNearObject(py_trees.composites.Sequence): 
+class ApproachObject(py_trees.composites.Sequence): 
     def __init__(self, target_class: str, target_distance: float, height_offset: float):
-        super().__init__("GoNear" + target_class.capitalize(), memory=True)
+        super().__init__("Approach" + target_class.capitalize(), memory=True)
 
         go_4m_away_node = vision_behaviours.GoNearObject(
             target_class=target_class,
@@ -36,8 +36,8 @@ class FindBinStructure(py_trees.composites.Selector):
     def __init__(self, target_distance: float, height_offset: float):
         super().__init__("FindBinStructure", memory=True)
 
-        try_bin_structure = GoNearObject(target_class="bin_structure", target_distance=target_distance, height_offset=height_offset)
-        try_bins = GoNearObject(target_class="bin", target_distance=target_distance, height_offset=height_offset)
+        try_bin_structure = ApproachObject(target_class="bin_structure", target_distance=target_distance, height_offset=height_offset)
+        try_bins = ApproachObject(target_class="bin", target_distance=target_distance, height_offset=height_offset)
 
         self.add_children([
             try_bin_structure,
@@ -201,7 +201,7 @@ class SwitchSides(py_trees.behaviour.Behaviour):
         
         yaw_goal = math.atan2(structure_pos.y - goal_position[1], structure_pos.x - goal_position[0])
         
-        goal = move_global(goal_position[0], goal_position[1], structure_pos.z + self.go_above_bin_structure_height, yaw=yaw_goal)
+        goal = move_global(goal_position[0], goal_position[1], structure_pos.z + self.go_above_bin_structure_height, yaw=yaw_goal, hold_time=0.0)
 
         self.navigation_client.send_navigation_goal(goal, self.name, custom_goal_response=self.on_server_goal_response, custom_goal_result=self.on_server_goal_result)
         self.action_status = ActionStatus.PENDING
@@ -211,10 +211,11 @@ class SwitchSides(py_trees.behaviour.Behaviour):
             self.node.get_logger().error(f"[{self.name}] Goal rejected by server.")
             self.action_status = ActionStatus.FAILED
 
-    def on_server_goal_result(self, goal_success: bool) -> None:
+    def on_server_goal_result(self, goal_success: bool, message: str) -> None:
         if goal_success:
             self.action_status = ActionStatus.SUCCEEDED
         else:
+            self.node.get_logger().error(f"[{self.name}] Failed to switch sides. {message}")
             self.action_status = ActionStatus.FAILED
 
     def update(self) -> py_trees.common.Status:
@@ -306,11 +307,11 @@ class GoToBlackboardBinStructure(py_trees.behaviour.Behaviour):
             self.node.get_logger().error(f"[{self.name}] Goal rejected by server.")
             self.action_status = ActionStatus.FAILED
 
-    def on_server_goal_result(self, goal_success: bool) -> None:
+    def on_server_goal_result(self, goal_success: bool, message: str) -> None:
         if goal_success:
             self.action_status = ActionStatus.SUCCEEDED
         else:
-            self.node.get_logger().info(f"[{self.name}] Goal failed during execution.")
+            self.node.get_logger().error(f"[{self.name}] Goal failed during execution. {message}")
             self.action_status = ActionStatus.FAILED
 
     def initialise(self):
@@ -318,7 +319,7 @@ class GoToBlackboardBinStructure(py_trees.behaviour.Behaviour):
             return py_trees.common.Status.FAILURE
         
         structure_pos = self.blackboard.bins_task.structure_pos
-        self.goal = move_global(structure_pos.x, structure_pos.y, structure_pos.z + self.height_offset)
+        self.goal = move_global(structure_pos.x, structure_pos.y, structure_pos.z + self.height_offset, hold_time=0.0)
 
     def update(self):
         if self.action_status is ActionStatus.NOT_SENT:
@@ -392,12 +393,13 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
             self.node.get_logger().error(f"[{self.name}] Goal rejected by server.")
             self.action_status = ActionStatus.FAILED
 
-    def on_server_goal_result(self, goal_success: bool) -> None:
+    def on_server_goal_result(self, goal_success: bool, message: str) -> None:
         if goal_success:
             self.action_status = ActionStatus.SUCCEEDED
         elif self.expected_failures > 0:
             self.expected_failures -= 1
         else:
+            self.node.get_logger().error(f"[{self.name}] Goal failed during execution. {message}")
             self.action_status = ActionStatus.FAILED
 
     def update(self) -> py_trees.common.Status:
@@ -513,10 +515,11 @@ class GoAboveClosestBin(py_trees.behaviour.Behaviour):
             self.node.get_logger().error(f"[{self.name}] Goal rejected by server.")
             self.action_status = ActionStatus.FAILED
     
-    def on_server_goal_result(self, goal_success: bool) -> None:
+    def on_server_goal_result(self, goal_success: bool, message: str) -> None:
         if goal_success:
             self.action_status = ActionStatus.SUCCEEDED
         else:
+            self.node.get_logger().error(f"[{self.name}] Failed to go above closest bin. {message}")
             self.action_status = ActionStatus.FAILED
 
     def update(self) -> py_trees.common.Status:

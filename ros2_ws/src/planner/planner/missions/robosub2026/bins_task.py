@@ -1,7 +1,7 @@
 from matplotlib.pylab import det
 import py_trees
 import planner.missions.vision_behaviours as vision_behaviours
-from planner.missions.robosub2026.bins_behaviors import FindBinStructure, GoNearObject, AlignCorrectBin
+from planner.missions.robosub2026.bins_behaviors import FindBinStructure, ApproachObject, AlignCorrectBin
 from planner.missions.mission_behaviour_components import BasicActionBehaviour
 from controls.goal_helpers import move_global
 
@@ -25,7 +25,7 @@ class BinsTask(py_trees.composites.Sequence):
         
         # 2. Go to bin structure
         if bins_params.get('force_fallback_search', False):
-            go_near_bin_structure = GoNearObject(
+            go_near_bin_structure = ApproachObject(
                 target_class="bin",
                 target_distance=bins_params.get('bin_structure_distance', 2.0),
                 height_offset=bins_params.get('go_above_bin_structure_height', 0.5)

@@ -426,12 +426,12 @@ class GoNearObject(py_trees.behaviour.Behaviour):
             self.node.get_logger().error(f"[{self.name}] Failed to send goal to navigation server.")
             self.action_status = ActionStatus.FAILED
     
-    def on_server_goal_result(self, goal_success: bool):
+    def on_server_goal_result(self, goal_success: bool, message: str):
         if goal_success:
-            self.node.get_logger().info(f"[{self.name}] Reached target distance from {self.target_class}.")
+            self.node.get_logger().info(f"[{self.name}] Reached target distance from {self.target_class}. {message}")
             self.action_status = ActionStatus.SUCCEEDED
         else:
-            self.node.get_logger().error(f"[{self.name}] Failed to reach target distance from {self.target_class}.")
+            self.node.get_logger().error(f"[{self.name}] Failed to reach target distance from {self.target_class}. {message}")
             self.action_status = ActionStatus.FAILED
         
     def update(self):
