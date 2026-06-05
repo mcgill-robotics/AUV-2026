@@ -322,7 +322,7 @@ class GateTask(py_trees.composites.Sequence):
         search_attempts: int = 2,
         scan_angle_deg: float = 35.0,
         scan_pause_time: float = 1.0,
-        pass_distance: float = 2.0,
+        pass_distance: float = 1.0,
     ):
         super().__init__("Gate Task", memory=True)
 
