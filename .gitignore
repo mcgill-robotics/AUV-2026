@@ -34,3 +34,8 @@ ros2_ws/src/xsens_mti_ros2_driver/lib/**
 
 #model hash files
 *.md5
+
+# zed sdk recordings 
+*.svo
+*.svo2
+core.*

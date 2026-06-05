@@ -20,7 +20,7 @@ class SlalomTask(py_trees.composites.Sequence):
     Params:
         num_layers: Number of pipe layers to navigate (default 3).
         gate_side: Fallback default for which side of the red pipe to pass ("left" or "right").
-                   Overridden at runtime by /gate/side on the blackboard (set by GateTask).
+                   Overridden at runtime by /gate/selected_side on the blackboard (set by GateTask).
         scan_angle_deg: (deg) Angle to scan left/right from center during the scan phase.
         scan_pause_time: (s) Seconds to pause after each scan rotation for vision.
         collinearity_threshold: (m) Max perpendicular distance for pipe triplet matching.
@@ -28,10 +28,10 @@ class SlalomTask(py_trees.composites.Sequence):
         layer_distance: (m) Expected distance between pipe layers (used for failsafe).
         initial_depth: (m) Depth for the initial dive before slalom (negative = below surface).
         position_tolerance: (m) Position convergence threshold for gap navigation.
-        yaw_tolerance: (rad) Yaw convergence threshold for gap navigation.
+        angular_tolerance: (rad) Yaw convergence threshold for gap navigation.
         hold_time: (s) Seconds to hold within tolerance before declaring SUCCESS.
         timeout: (s) Seconds before gap navigation declares FAILURE.
-        scan_yaw_tolerance_rad: (rad) Yaw tolerance for scan/sweep turn steps.
+        scan_angular_tolerance_rad: (rad) Yaw tolerance for scan/sweep turn steps.
         scan_hold_time: (s) Hold time before scan turn step SUCCESS.
         scan_timeout: (s) Timeout before scan turn step FAILURE.
     """
@@ -39,6 +39,7 @@ class SlalomTask(py_trees.composites.Sequence):
         self,
         num_layers: int = 3,
         gate_side: str = "right",
+        yaw_inward_offset_deg: float = 10.0,
         scan_angle_deg: float = 60.0,
         scan_pause_time: float = 1.0,
         collinearity_threshold: float = 0.5,
@@ -46,10 +47,10 @@ class SlalomTask(py_trees.composites.Sequence):
         layer_distance: float = 2.0,
         initial_depth: float = -1.0,
         position_tolerance: float = 0.3,
-        yaw_tolerance_rad: float = 0.3,
+        angular_tolerance_rad: float = 0.3,
         hold_time: float = 0.5,
         timeout: float = 45.0,
-        scan_yaw_tolerance_rad: float = math.radians(30.0),
+        scan_angular_tolerance_rad: float = math.radians(30.0),
         scan_hold_time: float = 0.1,
         scan_timeout: float = 30.0,
     ):
@@ -78,7 +79,7 @@ class SlalomTask(py_trees.composites.Sequence):
                 step_timeout=scan_pause_time,
                 clockwise=False,
                 look_at_on_success=True,
-                yaw_tolerance_rad=scan_yaw_tolerance_rad,
+                angular_tolerance_rad=scan_angular_tolerance_rad,
                 turn_hold_time_s=scan_hold_time,
                 turn_timeout_s=scan_timeout,
                 name="Search Red Pipe (Primary)",
@@ -90,7 +91,7 @@ class SlalomTask(py_trees.composites.Sequence):
                 step_timeout=scan_pause_time,
                 clockwise=False,
                 look_at_on_success=True,
-                yaw_tolerance_rad=scan_yaw_tolerance_rad,
+                angular_tolerance_rad=scan_angular_tolerance_rad,
                 turn_hold_time_s=scan_hold_time,
                 turn_timeout_s=scan_timeout,
                 name="Search White Pipe (Fallback)",
@@ -103,6 +104,7 @@ class SlalomTask(py_trees.composites.Sequence):
             layer = SlalomLayer(
                 layer_num=i + 1,
                 gate_side=gate_side,
+                yaw_inward_offset_deg=yaw_inward_offset_deg,
                 scan_angle_deg=scan_angle_deg,
                 scan_pause_time=scan_pause_time,
                 collinearity_threshold=collinearity_threshold,
@@ -110,10 +112,10 @@ class SlalomTask(py_trees.composites.Sequence):
                 layer_distance=layer_distance,
                 adjust_depth=(i == 0),
                 position_tolerance=position_tolerance,
-                yaw_tolerance_rad=yaw_tolerance_rad,
+                angular_tolerance_rad=angular_tolerance_rad,
                 hold_time=hold_time,
                 timeout=timeout,
-                scan_yaw_tolerance_rad=scan_yaw_tolerance_rad,
+                scan_angular_tolerance_rad=scan_angular_tolerance_rad,
                 scan_hold_time=scan_hold_time,
                 scan_timeout=scan_timeout,
             )
