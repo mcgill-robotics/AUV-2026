@@ -6,22 +6,22 @@ from controls.goal_helpers import move_global, move_robot_centric
 from planner.missions.action_status_enum import ActionStatus
 import geometry_msgs.msg._pose
 
-class GoNearBinStructure(py_trees.composites.Sequence): 
-    def __init__(self, bin_structure_distance: float, go_above_bin_structure_height: float):
-        super().__init__("GoNearBinStructure", memory=True)
+class GoNearObject(py_trees.composites.Sequence): 
+    def __init__(self, target_class: str, target_distance: float, height_offset: float):
+        super().__init__("GoNear" + target_class.capitalize(), memory=True)
 
         go_4m_away_node = vision_behaviours.GoNearObject(
-            target_class="bin_structure",
+            target_class=target_class,
             target_distance=4.0, 
             tolerance_meters=0.5,
             hold_time=0.0)
 
-        look_at_bin_structure = vision_behaviours.SearchSweepBehaviour(target_class="bin_structure")
+        look_at_bin_structure = vision_behaviours.SearchSweepBehaviour(target_class=target_class)
         
         go_2m_away_node = vision_behaviours.GoNearObject(
-            target_class="bin_structure",
-            target_distance=bin_structure_distance,
-            height_offset=go_above_bin_structure_height,
+            target_class=target_class,
+            target_distance=target_distance,
+            height_offset=height_offset,
             tolerance_meters=0.5,
             hold_time=0.0
         )
@@ -30,6 +30,18 @@ class GoNearBinStructure(py_trees.composites.Sequence):
             go_4m_away_node,
             look_at_bin_structure,
             go_2m_away_node,
+        ])
+
+class FindBinStructure(py_trees.composites.Selector):
+    def __init__(self, target_distance: float, height_offset: float):
+        super().__init__("FindBinStructure", memory=True)
+
+        try_bin_structure = GoNearObject(target_class="bin_structure", target_distance=target_distance, height_offset=height_offset)
+        try_bins = GoNearObject(target_class="bin", target_distance=target_distance, height_offset=height_offset)
+
+        self.add_children([
+            try_bin_structure,
+            try_bins,
         ])
 
 @dataclass
@@ -101,9 +113,6 @@ class AlignClosestBin(py_trees.composites.Sequence):
         drop_marker = DropMarker(self.bins_params)
 
         self.add_children([go_above_closest_bin, follow_downcam_bin, drop_marker])
-    
-    def setup(self, **kwargs):
-        self.blackboard.register_key(key="/bins_task/number_markers", access=py_trees.common.Access.WRITE)
 
 class AlignBinsAttempt(py_trees.composites.Sequence):
     def __init__(self, bins_params: dict = None):
@@ -132,6 +141,23 @@ class AlignOtherSideBin(py_trees.composites.Sequence):
         align_bins_attempt = AlignBinsAttempt(self.bins_params)
 
         self.add_children([go_to_other_side, align_bins_attempt])
+    
+class AlignCorrectBin(py_trees.composites.Selector):
+    def __init__(self, bins_params: dict = None):
+        super().__init__("AlignCorrectBin", memory=True)
+        self.bins_params = bins_params or {}
+        align_bin_first_side = AlignBinsAttempt(self.bins_params)
+        align_other_bin = AlignOtherSideBin(self.bins_params)
+
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+
+        self.add_children([align_bin_first_side, align_other_bin])
+
+    def setup(self, **kwargs):
+        self.blackboard.register_key('/bins_task/number_markers', access=py_trees.common.Access.WRITE)
+    
+    def initialise(self):
+        self.blackboard.bins_task.number_markers = 0
 
 class SwitchSides(py_trees.behaviour.Behaviour):
     def __init__(self, bins_params: dict = None):
@@ -143,6 +169,7 @@ class SwitchSides(py_trees.behaviour.Behaviour):
         self.bin_structure_distance = self.bins_params['bin_structure_distance']
         self.go_above_bin_structure_height = self.bins_params['go_above_bin_structure_height']
         self.switch_sides_safety_height = self.bins_params['switch_sides_height']
+        self.use_fallback = self.bins_params['force_fallback_alignment']
 
     def setup(self, **kwargs):
         self.node = kwargs['node']
@@ -150,19 +177,39 @@ class SwitchSides(py_trees.behaviour.Behaviour):
         self.navigation_client.client_wait_for_server(timeout_sec=5.0)
         self.blackboard.register_key(key="/bins_task/closest_bins", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
-        # parameters cached in constructor
+        self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
 
     def initialise(self):
         if not hasattr(self.blackboard.bins_task, 'closest_bins') or self.blackboard.bins_task.closest_bins is None:
             self.action_status = ActionStatus.FAILED
         
-        for object in self.blackboard.vision.object_map.array:
-            if object.label == "bin_structure":
-                structure_pos = object.pose.position
-                break
+        structure_pos = None
+        if not self.use_fallback:
+            for object in self.blackboard.vision.object_map.array:
+                if object.label == "bin_structure":
+                    structure_pos = object.pose.position
+                    break
 
         bins = self.blackboard.bins_task.closest_bins
         bins_midpoint = (bins[0].pose.x + bins[1].pose.x) / 2, (bins[0].pose.y + bins[1].pose.y) / 2
+
+        # Either using fallback or didn't find bin structure, use bins midpoint instead
+        if structure_pos is None:
+            self.node.get_logger().warn("Using bins for fallback alignment.")
+            auv_pose = self.blackboard.sensors.pose.pose.position
+            auv_to_bins_midpoint = (bins_midpoint[0] - auv_pose.x, bins_midpoint[1] - auv_pose.y)
+
+            bins_vector = (bins[1].pose.x - bins[0].pose.x, bins[1].pose.y - bins[0].pose.y)
+            bins_perpendicular_vector = (-bins_vector[1], bins_vector[0])
+            magnitude = math.sqrt(bins_perpendicular_vector[0] ** 2 + bins_perpendicular_vector[1] ** 2)
+            bins_perpendicular_unit_vector = bins_perpendicular_vector[0] / magnitude, bins_perpendicular_vector[1] / magnitude
+
+            dot_product = auv_to_bins_midpoint[0] * bins_perpendicular_unit_vector[0] + auv_to_bins_midpoint[1] * bins_perpendicular_unit_vector[1]
+            if dot_product < 0:
+                bins_perpendicular_unit_vector = (-bins_perpendicular_unit_vector[0], -bins_perpendicular_unit_vector[1])
+            
+            structure_pos = geometry_msgs.msg.Point(x=bins_midpoint[0] + bins_perpendicular_unit_vector[0] * self.bin_structure_distance, y=bins_midpoint[1] + bins_perpendicular_unit_vector[1] * self.bin_structure_distance, z=0.0)
+
         structure_to_bins_vector = bins_midpoint[0] - structure_pos.x, bins_midpoint[1] - structure_pos.y
         structure_to_bins_mag = math.sqrt(structure_to_bins_vector[0] ** 2 + structure_to_bins_vector[1] ** 2)
         structure_to_bins_unit_vector = structure_to_bins_vector[0] / structure_to_bins_mag, structure_to_bins_vector[1] / structure_to_bins_mag
@@ -195,24 +242,121 @@ class SwitchSides(py_trees.behaviour.Behaviour):
         
         return py_trees.common.Status.RUNNING
     
-class AlignCorrectBin(py_trees.composites.Selector):
+class GetBinStructurePos(py_trees.behaviour.Behaviour):
     def __init__(self, bins_params: dict = None):
-        super().__init__("AlignCorrectBin", memory=True)
-        self.bins_params = bins_params or {}
-        align_bin_first_side = AlignBinsAttempt(self.bins_params)
-        align_other_bin = AlignOtherSideBin(self.bins_params)
+        super().__init__("GetBinStructurePos")
+        self.bins_params = bins_params
+        self.bin_structure_distance = bins_params['bin_structure_distance']
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+        self.failed = False
 
-        self.add_children([align_bin_first_side, align_other_bin])
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/bins_task/structure_pos", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key="/bins_task/closest_bins", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
+
+    def initialise(self):
+        if not hasattr(self.blackboard.vision, 'object_map') or self.blackboard.vision.object_map is None:
+            self.failed = True
+            return
+        
+        structure_pos = None
+        if not self.bins_params["force_fallback_alignment"] and hasattr(self.blackboard.vision, 'object_map') and self.blackboard.vision.object_map is not None:
+            for object in self.blackboard.vision.object_map.array:
+                if object.label == "bin_structure":
+                    structure_pos = object.pose.position
+                    break
+
+        if structure_pos is None:
+            self.node.get_logger().warn("Using bins for fallback alignment.")
+            if not hasattr(self.blackboard, "bins_task") or self.blackboard.bins_task.closest_bins is None:
+                self.failed = True
+
+            bins = self.blackboard.bins_task.closest_bins
+            bins_avg_height = (bins[0].pose.z + bins[1].pose.z) / 2
+            bins_midpoint = (bins[0].pose.x + bins[1].pose.x) / 2, (bins[0].pose.y + bins[1].pose.y) / 2
+
+            auv_pose = self.blackboard.sensors.pose.pose.position
+            auv_to_bins_midpoint = (bins_midpoint[0] - auv_pose.x, bins_midpoint[1] - auv_pose.y)
+
+            bins_vector = (bins[1].pose.x - bins[0].pose.x, bins[1].pose.y - bins[0].pose.y)
+            bins_perpendicular_vector = (-bins_vector[1], bins_vector[0])
+            magnitude = math.sqrt(bins_perpendicular_vector[0] ** 2 + bins_perpendicular_vector[1] ** 2)
+            bins_perpendicular_unit_vector = bins_perpendicular_vector[0] / magnitude, bins_perpendicular_vector[1] / magnitude
+
+            dot_product = auv_to_bins_midpoint[0] * bins_perpendicular_unit_vector[0] + auv_to_bins_midpoint[1] * bins_perpendicular_unit_vector[1]
+            if dot_product < 0:
+                bins_perpendicular_unit_vector = (-bins_perpendicular_unit_vector[0], -bins_perpendicular_unit_vector[1])
+            
+            structure_pos = geometry_msgs.msg.Point(x=bins_midpoint[0] + bins_perpendicular_unit_vector[0] * self.bin_structure_distance, y=bins_midpoint[1] + bins_perpendicular_unit_vector[1] * self.bin_structure_distance, z=bins_avg_height)
+
+        if structure_pos is not None:
+            self.blackboard.bins_task.structure_pos = structure_pos
+        else:
+            self.failed = True
+
+    def update(self) -> py_trees.common.Status:
+        if self.failed:
+            return py_trees.common.Status.FAILURE
+        else:
+            return py_trees.common.Status.SUCCESS
+
+class GoToBlackboardBinStructure(py_trees.behaviour.Behaviour):
+    def __init__(self, height_offset: float, bins_params: dict = None):
+        super().__init__("GoToBlackboardBinStructure")
+        self.bins_params = bins_params
+        self.height_offset = height_offset
+        self.blackboard = self.attach_blackboard_client(self.name)
+        self.action_status = ActionStatus.NOT_SENT
+
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.navigation_client = kwargs['shared_nav_client']
+        self.blackboard.register_key("/bins_task/structure_pos", py_trees.common.Access.READ)
+
+    def on_server_goal_response(self, goal_response: bool):
+        if not goal_response:
+            self.node.get_logger().error(f"[{self.name}] Goal rejected by server.")
+            self.action_status = ActionStatus.FAILED
+
+    def on_server_goal_result(self, goal_success: bool) -> None:
+        if goal_success:
+            self.action_status = ActionStatus.SUCCEEDED
+        else:
+            self.node.get_logger().info(f"[{self.name}] Goal failed during execution.")
+            self.action_status = ActionStatus.FAILED
+
+    def initialise(self):
+        if not hasattr(self.blackboard.bins_task, 'structure_pos') or self.blackboard.bins_task.structure_pos is None:
+            return py_trees.common.Status.FAILURE
+        
+        structure_pos = self.blackboard.bins_task.structure_pos
+        self.goal = move_global(structure_pos.x, structure_pos.y, structure_pos.z + self.height_offset)
+
+    def update(self):
+        if self.action_status is ActionStatus.NOT_SENT:
+            self.action_status = ActionStatus.PENDING
+            self.navigation_client.send_navigation_goal(self.goal, self.name, self.on_server_goal_response, self.on_server_goal_result)
+        
+        if self.action_status is ActionStatus.FAILED:
+            return py_trees.common.Status.FAILURE
+        if self.action_status is ActionStatus.SUCCEEDED:
+            return py_trees.common.Status.SUCCESS
+        
+        return py_trees.common.Status.RUNNING
 
 class GoToOtherSide(py_trees.composites.Sequence):
     def __init__(self, bins_params: dict = None):
         super().__init__("GoToOtherSide", memory=True)
         self.bins_params = bins_params or {}
         switch_height = self.bins_params['switch_sides_height']
-        go_up = vision_behaviours.GoNearObject(target_class="bin_structure", target_distance=0.0, height_offset=switch_height, tolerance_meters=0.3)
+        get_bin_structure_pos = GetBinStructurePos(bins_params)
+        go_up = GoToBlackboardBinStructure(switch_height, bins_params=bins_params)
         switch_sides = SwitchSides(self.bins_params)
 
-        self.add_children([go_up, switch_sides])
+        self.add_children([get_bin_structure_pos, go_up, switch_sides])
 
 class FollowDowncamBin(py_trees.behaviour.Behaviour):
     def __init__(self, bins_params: dict = None):
@@ -249,7 +393,18 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
 
         self.node.get_logger().info("Starting FollowDowncamBin behavior")
         # parameters are cached in constructor
-        
+
+    def initialise(self):
+        # if hasattr(self.blackboard, 'gate') and self.blackboard.gate.selected_role is not None:
+        #     self.role = self.blackboard.gate.selected_role
+        # else:
+        #     self.role = "search_rescue" # default to search and rescue if for some reason gate role isn't available, better to try to align with any bin than fail outright
+        try:
+            self.role = self.blackboard.gate.selected_role
+        except Exception as e:
+            self.node.get_logger().error("Accessing /gate/selected_role failed, using search_rescue")
+            self.role = "search_rescue"
+
     def on_server_goal_response(self, goal_response: bool):
         if not goal_response:
             self.node.get_logger().error(f"[{self.name}] Goal rejected by server.")
@@ -286,7 +441,7 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
 
             for detection in self.blackboard.vision.down_cam.detections.detections:
                 hypothesis = detection.results[0].hypothesis
-                if hypothesis.class_id == "bin" or hypothesis.class_id == "blood" or hypothesis.class_id == "fire":
+                if hypothesis.class_id == "blood" or hypothesis.class_id == "fire": # or hypothesis.class_id == "bin": # for testing, accept any bin detection as valid
                     
                     #coordinates = (detection.bbox.center.position.x, detection.bbox.center.position.y)
                     downcam_bins.append(detection)
@@ -299,8 +454,8 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
                 return py_trees.common.Status.RUNNING
             
             # check if its the wrong label
-            if (self.blackboard.gate.selected_role == "survey_repair" and self.blood_detections > self.fire_detections + self.wrong_task_type_threshold
-                or self.blackboard.gate.selected_role == "search_rescue" and self.fire_detections > self.blood_detections + self.wrong_task_type_threshold):
+            if (self.role == "survey_repair" and self.blood_detections > self.fire_detections + self.wrong_task_type_threshold
+                or self.role == "search_rescue" and self.fire_detections > self.blood_detections + self.wrong_task_type_threshold):
                 self.node.get_logger().info("Detected wrong task type, going to other bin.")
                 return py_trees.common.Status.FAILURE
         
@@ -325,8 +480,6 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
                     self.fire_detections += 1
                 elif closest_bin_detection.results[0].hypothesis.class_id == "blood":
                     self.blood_detections += 1
-
-            self.node.get_logger().debug(f"Bin position: {closest_downcam_bin}")
 
             if closest_bin_distance < self.bin_lined_up_threshold**2: # because closest bin distance is squared as well
                 self.bin_lined_up_frames += 1

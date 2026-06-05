@@ -100,6 +100,9 @@ def main():
     node.declare_parameter("bins.task_completion_threshold", 5)
     node.declare_parameter("bins.bin_lined_up_threshold", 10)
     node.declare_parameter("bins.num_required_markers", 2)
+    node.declare_parameter("bins.num_bins", 4)
+    node.declare_parameter("bins.force_fallback_search", False)
+    node.declare_parameter("bins.force_fallback_alignment", False)
 
     bins_params = {
         "downcam_fov_horizontal": node.get_parameter("bins.downcam_fov_horizontal").get_parameter_value().double_value,
@@ -117,6 +120,9 @@ def main():
         "task_completion_threshold": node.get_parameter("bins.task_completion_threshold").get_parameter_value().integer_value,
         "bin_lined_up_threshold": node.get_parameter("bins.bin_lined_up_threshold").get_parameter_value().integer_value,
         "num_required_markers": node.get_parameter("bins.num_required_markers").get_parameter_value().integer_value,
+        "num_bins": node.get_parameter("bins.num_bins").get_parameter_value().integer_value,
+        "force_fallback_search": node.get_parameter("bins.force_fallback_search").get_parameter_value().bool_value,
+        "force_fallback_alignment": node.get_parameter("bins.force_fallback_alignment").get_parameter_value().bool_value,
     }
 
     # Set the root of the tree
