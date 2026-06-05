@@ -263,6 +263,31 @@ def look_at(
     return set_global_yaw(yaw_rad, tolerance, hold_time, timeout)
 
 
+def move_and_look_at(
+    x: float,
+    y: float,
+    z: float,
+    target_x: float,
+    target_y: float,
+    position_tolerance: float = _DEFAULT_POS_TOL,
+    yaw_tolerance: float = _DEFAULT_YAW_TOL,
+    hold_time: float = _DEFAULT_HOLD,
+    timeout: float = _DEFAULT_TIMEOUT,
+) -> AUVNavigate.Goal:
+    """Move to an absolute XYZ and look at a specific point."""
+    pose = Pose()
+    pose.position = Point(x=x, y=y, z=z)
+    yaw_rad = math.atan2(target_y - y, target_x - x)
+    pose.orientation = quaternion_from_yaw(yaw_rad)
+    return _make_goal(
+        target_pose=pose,
+        do_x=True, do_y=True, do_z=True, do_yaw=True,
+        position_tolerance=position_tolerance,
+        yaw_tolerance=yaw_tolerance,
+        hold_time=hold_time,
+        timeout=timeout,
+    )
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Relative Navigation (Delta Movements)
 # ─────────────────────────────────────────────────────────────────────────────

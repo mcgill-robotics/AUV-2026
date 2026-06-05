@@ -1,8 +1,12 @@
 import math
+from enum import Enum
+
+from typing import Optional, Tuple, List
 import py_trees
-from controls.goal_helpers import set_global_yaw, look_at
+from controls.goal_helpers import set_global_yaw, look_at, move_and_look
 from controls.utils import yaw_from_quaternion, normalize_angle
 from .action_status_enum import ActionStatus
+from auv_msgs.msg import VisionObject
 
 class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
     """
@@ -354,8 +358,160 @@ class ScanBehaviour(py_trees.behaviour.Behaviour):
         self.action_status = ActionStatus.SUCCEEDED if goal_success else ActionStatus.FAILED
 
 
+class CircleAroundPhases(Enum):
+    """
+    Phases of the Circle Around To Find behaviour state machine
+    """
+    APPROACH = 0
+    PAUSING = 1
+    CIRCLING = 2
 
 
+class CircleAroundToFindBehaviour(py_trees.behaviour.Behaviour):
+    """
+    Circles around a reference point while facing it, attempting at the same time to find a target object in vision.
+    This behaviour is mostly intended for the torpedo board, circling around the board to find the icons and thus confirming we are facing the right direction to shoot torpedoes.
+    
+    reference_class: The vision class of the reference point to circle around (e.g. "torpedo_board").
+    target_classes: A dictionary mapping vision classes of interest to integer counts of how many of each class to find (e.g. {"blood": 1, "ambulance": 1}).
+    reference_distance: (m) The distance to maintain from the reference point while circling.
+    num_steps: The number of discrete steps in the circle (e.g. 8 would be every 45 degrees).
+    max_attempts: The number of full circles (360-degree sweeps) to attempt before giving up.
+    step_timeout: (s) Seconds to pause after each turn step to let vision stabilize.
+    clockwise: Whether to circle in a clockwise direction (True) or counterclockwise (False).
+    look_at_on_success: Whether to do a final "look at" turn towards the reference point after finding the target object(s) to better center it in view.
+    yaw_tolerance_rad: (rad) Yaw convergence threshold for each turn step.
+    turn_hold_time_s: (s) Hold time before declaring turn step SUCCESS.
+    turn_timeout_s: (s) Timeout before declaring turn step FAILURE.
+    """
+    def __init__(
+        self,
+        reference_class: str,
+        target_classes: dict[str,int],
+        reference_distance: float = 1.0,
+        num_steps: int = 5,
+        max_attempts: int = 2,
+        step_timeout: float = 2.0,
+        clockwise: bool = False,
+        look_at_on_success: bool = True,
+        yaw_tolerance_rad: float = math.radians(30.0),  # (rad) yaw convergence threshold per turn step
+        turn_hold_time_s: float = 0.1,                   # (s) hold time before turn step SUCCESS
+        turn_timeout_s: float = 30.0,                    # (s) timeout before turn step FAILURE
+        name="CircleAroundToFind",
+    ):
+        super().__init__(name)
+        
+        self.reference_class: str = reference_class
+        self.target_classes: dict[str, int] = target_classes
+        self.reference_distance: float = reference_distance
+        self.num_steps: int = num_steps
+        self.max_attempts: int = max_attempts
+        self.step_timeout: float = step_timeout
+        self.clockwise: bool = clockwise
+        self.look_at_on_success: bool = look_at_on_success
+        self.yaw_tolerance_rad: float = yaw_tolerance_rad
+        self.turn_hold_time_s: float = turn_hold_time_s
+        self.turn_timeout_s: float = turn_timeout_s
 
+        # State tracking
+        self.phase: CircleAroundPhases = CircleAroundPhases.APPROACH
+        self.current_attempt: int = 0
+        self.current_step: int = 0
+        self.action_status: ActionStatus = ActionStatus.NOT_SENT
+        self.sent_goal: bool = False
+        self.reference_position: Optional[Tuple[float, float, float]] = None
 
+        
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+        # Pause tracking        
+        self.pause_start_time: float = 0.0
 
+        # Absolute angle tracking
+        self.start_yaw: Optional[float] = None
+        
+        # Target found tracking
+        self.found_targets: dict[str, int] = {cls: 0 for cls in target_classes.keys()}
+        
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.navigation_client = kwargs['shared_nav_client']
+        self.navigation_client.client_wait_for_server(timeout_sec=5.0) 
+        self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
+        
+    def initialise(self):
+        # Reset state when this behavior starts
+        self.phase = CircleAroundPhases.APPROACH
+        self.current_attempt = 0
+        self.current_step = 0
+        self.action_status = ActionStatus.NOT_SENT
+        self.sent_goal = False
+        self.is_pausing = False
+        self.start_yaw = None
+        self.found_targets = {cls: 0 for cls in self.target_classes.keys()}
+        self.reference_position = None
+        
+    def update(self):
+        match self.phase:
+            case CircleAroundPhases.APPROACH:
+                match self.action_status:
+                    case ActionStatus.SUCCEEDED:
+                        self.node.get_logger().info(f"[{self.name}] Initial face towards reference complete.")
+                        self.phase = CircleAroundPhases.PAUSING
+                        self.action_status = ActionStatus.NOT_SENT
+                        self.sent_goal = False
+                        return py_trees.common.Status.RUNNING
+                    case ActionStatus.FAILED:
+                        self.node.get_logger().error(f"[{self.name}] Initial face towards reference failed.")
+                        return py_trees.common.Status.FAILURE
+                    case ActionStatus.PENDING:
+                        return py_trees.common.Status.RUNNING
+                    case ActionStatus.NOT_SENT:
+                        pass
+
+                        
+                        
+                return py_trees.common.Status.RUNNING
+            case CircleAroundPhases.APPROACH:
+                # find AUV current pose
+                if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.pose is None:
+                    self.node.get_logger().warn(f"[{self.name}] Waiting for /sensors/pose to determine current position.")
+                    return py_trees.common.Status.RUNNING
+                auv_x = self.blackboard.sensors.pose.pose.position.x
+                auv_y = self.blackboard.sensors.pose.pose.position.y
+                # determine vector to reference point
+    
+    
+    
+    def _find_object_in_map(self,class_name: str)-> List[VisionObject]:
+        """Helper function to find all objects of a given class in the vision object map on the blackboard."""
+        
+        objects: List[VisionObject] = []
+        if hasattr(self.blackboard, 'vision') and self.blackboard.vision.object_map is not None:
+            for obj in self.blackboard.vision.object_map.array:
+                if obj.label == class_name:
+                    objects.append(obj)
+        return objects
+        
+    def _determine_auv_pose(self) -> Optional[Tuple[float, float, float, float]]:
+        """Helper function to determine the AUV's current position and yaw from the blackboard. Returns (x, y, z, yaw) or None if pose is not available."""
+        
+        if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.pose is None:
+            return None
+        auv_x = self.blackboard.sensors.pose.pose.position.x
+        auv_y = self.blackboard.sensors.pose.pose.position.y
+        auv_z = self.blackboard.sensors.pose.pose.position.z
+        current_quat = self.blackboard.sensors.pose.pose.orientation
+        auv_yaw = yaw_from_quaternion(current_quat)
+        return (auv_x, auv_y, auv_z, auv_yaw)
+    
+    def on_server_goal_response(self, goal_response: bool):
+        if not goal_response:
+            self.action_status = ActionStatus.FAILED
+            
+    def on_server_goal_result(self, goal_success: bool):
+        if goal_success:
+            self.action_status = ActionStatus.SUCCEEDED
+        else:
+            self.action_status = ActionStatus.FAILED
+                
