@@ -7,56 +7,7 @@ from controls.goal_helpers import set_global_yaw, look_at, move_to_and_look_at
 from controls.utils import yaw_from_quaternion, normalize_angle
 from .action_status_enum import ActionStatus
 from auv_msgs.msg import VisionObject
-from geometry_msgs.msg import Point
-
-from dataclasses import dataclass
-
-@dataclass
-class Vector2D:
-    x: float
-    y: float
-
-    def __add__(self, other: "Vector2D") -> "Vector2D":
-        return Vector2D(self.x + other.x, self.y + other.y)
-
-    def __sub__(self, other: "Vector2D") -> "Vector2D":
-        return Vector2D(self.x - other.x, self.y - other.y)
-
-    def __mul__(self, scalar: float) -> "Vector2D":
-        return Vector2D(self.x * scalar, self.y * scalar)
-
-    def __rmul__(self, scalar: float) -> "Vector2D":
-        return self.__mul__(scalar)   # supports: 3.0 * v
-
-    def __truediv__(self, scalar: float) -> "Vector2D":
-        return Vector2D(self.x / scalar, self.y / scalar)
-
-    def __neg__(self) -> "Vector2D":
-        return Vector2D(-self.x, -self.y)
-
-    def dot(self, other: "Vector2D") -> float:
-        return self.x * other.x + self.y * other.y
-
-    def cross(self, other: "Vector2D") -> "Vector2D":
-        return Vector2D(
-            self.y * other.x - self.x * other.y,
-            self.x * other.y - self.y * other.x
-        )
-
-    def __str__(self) -> str:
-        return f"Vector({self.x:.2f}, {self.y:.2f})"
-    
-    def norm(self) -> float:
-        return math.sqrt(self.dot(self))
-
-    def normalized(self) -> "Vector2D":
-        n = self.norm()
-        if n == 0:
-            raise ValueError("Cannot normalize a zero vector")
-        return self / n
-    @staticmethod
-    def from_point(point: Point) -> "Vector2D":
-        return Vector2D(x=point.x, y=point.y)
+from controls.utils import Vector2D
 class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
     """
     Rotates the AUV in a full 360-degree sweep, divided into `num_steps`. 
