@@ -3,11 +3,60 @@ from enum import Enum
 
 from typing import Optional, Tuple, List
 import py_trees
-from controls.goal_helpers import set_global_yaw, look_at, move_and_look
+from controls.goal_helpers import set_global_yaw, look_at, move_to_and_look_at
 from controls.utils import yaw_from_quaternion, normalize_angle
 from .action_status_enum import ActionStatus
 from auv_msgs.msg import VisionObject
+from geometry_msgs.msg import Point
 
+from dataclasses import dataclass
+
+@dataclass
+class Vector2D:
+    x: float
+    y: float
+
+    def __add__(self, other: "Vector2D") -> "Vector2D":
+        return Vector2D(self.x + other.x, self.y + other.y)
+
+    def __sub__(self, other: "Vector2D") -> "Vector2D":
+        return Vector2D(self.x - other.x, self.y - other.y)
+
+    def __mul__(self, scalar: float) -> "Vector2D":
+        return Vector2D(self.x * scalar, self.y * scalar)
+
+    def __rmul__(self, scalar: float) -> "Vector2D":
+        return self.__mul__(scalar)   # supports: 3.0 * v
+
+    def __truediv__(self, scalar: float) -> "Vector2D":
+        return Vector2D(self.x / scalar, self.y / scalar)
+
+    def __neg__(self) -> "Vector2D":
+        return Vector2D(-self.x, -self.y)
+
+    def dot(self, other: "Vector2D") -> float:
+        return self.x * other.x + self.y * other.y
+
+    def cross(self, other: "Vector2D") -> "Vector2D":
+        return Vector2D(
+            self.y * other.x - self.x * other.y,
+            self.x * other.y - self.y * other.x
+        )
+
+    def __str__(self) -> str:
+        return f"Vector({self.x:.2f}, {self.y:.2f})"
+    
+    def norm(self) -> float:
+        return math.sqrt(self.dot(self))
+
+    def normalized(self) -> "Vector2D":
+        n = self.norm()
+        if n == 0:
+            raise ValueError("Cannot normalize a zero vector")
+        return self / n
+    @staticmethod
+    def from_point(point: Point) -> "Vector2D":
+        return Vector2D(x=point.x, y=point.y)
 class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
     """
     Rotates the AUV in a full 360-degree sweep, divided into `num_steps`. 
@@ -366,17 +415,17 @@ class CircleAroundPhases(Enum):
     PAUSING = 1
     CIRCLING = 2
 
-
 class CircleAroundToFindBehaviour(py_trees.behaviour.Behaviour):
     """
     Circles around a reference point while facing it, attempting at the same time to find a target object in vision.
     This behaviour is mostly intended for the torpedo board, circling around the board to find the icons and thus confirming we are facing the right direction to shoot torpedoes.
     
     reference_class: The vision class of the reference point to circle around (e.g. "torpedo_board").
+    z_reference: (m) The depth to maintain while circling (e.g. the depth of the center of the board).
     target_classes: A dictionary mapping vision classes of interest to integer counts of how many of each class to find (e.g. {"blood": 1, "ambulance": 1}).
-    reference_distance: (m) The distance to maintain from the reference point while circling.
-    num_steps: The number of discrete steps in the circle (e.g. 8 would be every 45 degrees).
-    max_attempts: The number of full circles (360-degree sweeps) to attempt before giving up.
+    reference_distance: (m) The distance to maintain from the reference point while circling. Distance in 2D (Z provided separately as z_reference).
+    num_circle_steps: The number of discrete steps in the circle (e.g. 8 would be every 45 degrees).
+    max_circling_attempts: The number of full circles (360-degree sweeps) to attempt before giving up.
     step_timeout: (s) Seconds to pause after each turn step to let vision stabilize.
     clockwise: Whether to circle in a clockwise direction (True) or counterclockwise (False).
     look_at_on_success: Whether to do a final "look at" turn towards the reference point after finding the target object(s) to better center it in view.
@@ -387,10 +436,11 @@ class CircleAroundToFindBehaviour(py_trees.behaviour.Behaviour):
     def __init__(
         self,
         reference_class: str,
+        z_reference: float,
         target_classes: dict[str,int],
         reference_distance: float = 1.0,
-        num_steps: int = 5,
-        max_attempts: int = 2,
+        num_circle_steps: int = 5,
+        max_circling_attempts: int = 2,
         step_timeout: float = 2.0,
         clockwise: bool = False,
         look_at_on_success: bool = True,
@@ -402,10 +452,11 @@ class CircleAroundToFindBehaviour(py_trees.behaviour.Behaviour):
         super().__init__(name)
         
         self.reference_class: str = reference_class
+        self.z_reference: float = z_reference
         self.target_classes: dict[str, int] = target_classes
         self.reference_distance: float = reference_distance
-        self.num_steps: int = num_steps
-        self.max_attempts: int = max_attempts
+        self.num_circle_steps: int = num_circle_steps
+        self.max_circling_attempts: int = max_circling_attempts
         self.step_timeout: float = step_timeout
         self.clockwise: bool = clockwise
         self.look_at_on_success: bool = look_at_on_success
@@ -418,13 +469,13 @@ class CircleAroundToFindBehaviour(py_trees.behaviour.Behaviour):
         self.current_attempt: int = 0
         self.current_step: int = 0
         self.action_status: ActionStatus = ActionStatus.NOT_SENT
-        self.sent_goal: bool = False
-        self.reference_position: Optional[Tuple[float, float, float]] = None
+        self.reference_position: Optional[Vector2D] = None
 
         
         self.blackboard = self.attach_blackboard_client(name=self.name)
         # Pause tracking        
         self.pause_start_time: float = 0.0
+        self.is_pausing: bool = False
 
         # Absolute angle tracking
         self.start_yaw: Optional[float] = None
@@ -455,8 +506,8 @@ class CircleAroundToFindBehaviour(py_trees.behaviour.Behaviour):
         match self.phase:
             case CircleAroundPhases.APPROACH:
                 match self.action_status:
-                    case ActionStatus.SUCCEEDED:
-                        self.node.get_logger().info(f"[{self.name}] Initial face towards reference complete.")
+                    case ActionStatus.SUCCEEDED:  # Approach -> Pause
+                        self.node.get_logger().info(f"[{self.name}] Approach complete. AUV facing {self.reference_class} reference point at {self.reference_distance}m away.")
                         self.phase = CircleAroundPhases.PAUSING
                         self.action_status = ActionStatus.NOT_SENT
                         self.sent_goal = False
@@ -467,22 +518,62 @@ class CircleAroundToFindBehaviour(py_trees.behaviour.Behaviour):
                     case ActionStatus.PENDING:
                         return py_trees.common.Status.RUNNING
                     case ActionStatus.NOT_SENT:
-                        pass
+                        reference_obj_list = self._find_object_in_map(self.reference_class)
+                        if not reference_obj_list:
+                            self.node.get_logger().warn(f"[{self.name}] Reference object '{self.reference_class}' not found in vision. Unable to start circle around.")
+                            return py_trees.common.Status.FAILURE
+                        self.reference_position = Vector2D.from_point(reference_obj_list[0].pose.position)
+                        self.node.get_logger().info(f"[{self.name}] Found reference object '{self.reference_class}' at position {self.reference_position}. Starting facing towards it.")
+                        auv_pose = self._determine_auv_pose()
+                        if auv_pose is None:
+                            self.node.get_logger().warn(f"[{self.name}] Waiting for /sensors/pose to determine current position.")
+                            return py_trees.common.Status.RUNNING
+                        auv_2D_position, _, _ = auv_pose
+                        
+                        # determine vector from AUV to reference point
+                        auv_to_ref = self.reference_position - auv_2D_position
 
+                        # scale to desired reference distance
+                        goal_vector = auv_to_ref.normalized() * self.reference_distance
+                        goal_position = self.reference_position - goal_vector  # we want to be behind the reference
+                        
+                        self.node.get_logger().info(f"[{self.name}] AUV current 2D position: {auv_2D_position}, reference position: {self.reference_position}, AUV to reference vector: ({auv_to_ref.x}, {auv_to_ref.y}), goal position for approach: ({goal_position.x}, {goal_position.y}).")
                         
                         
+
+                        goal = move_to_and_look_at(
+                            target_x=goal_position.x,
+                            target_y=goal_position.y,
+                            target_z=self.z_reference,
+                            reference_x=self.reference_position.x,
+                            reference_y=self.reference_position.y,
+                            current_x=auv_2D_position.x,
+                            current_y=auv_2D_position.y,
+                            position_tolerance=self.yaw_tolerance_rad,  # (rad)
+                            hold_time=self.turn_hold_time_s,   # (s)
+                            timeout=self.turn_timeout_s,       # (s)
+                        )
+                        self.navigation_client.send_navigation_goal(goal, self.name, self.on_server_goal_response, self.on_server_goal_result)
+                        self.action_status = ActionStatus.PENDING
                 return py_trees.common.Status.RUNNING
-            case CircleAroundPhases.APPROACH:
-                # find AUV current pose
-                if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.pose is None:
-                    self.node.get_logger().warn(f"[{self.name}] Waiting for /sensors/pose to determine current position.")
-                    return py_trees.common.Status.RUNNING
-                auv_x = self.blackboard.sensors.pose.pose.position.x
-                auv_y = self.blackboard.sensors.pose.pose.position.y
-                # determine vector to reference point
-    
-    
-    
+            case CircleAroundPhases.PAUSING:
+                elapsed = (self.node.get_clock().now().nanoseconds / 1e9) - self.pause_start_time
+                # check if this is the first tick of the pause phase to log and start the timer
+                if not self.is_pausing:
+                    self.is_pausing = True
+                    self.pause_start_time = self.node.get_clock().now().nanoseconds / 1e9
+                    self.node.get_logger().info(f"[{self.name}] Pausing for {self.step_timeout}s to stabilize vision before circling.")
+                elif elapsed >= self.step_timeout:
+                    self.phase = CircleAroundPhases.CIRCLING
+                    # sanity reset
+                    self.action_status = ActionStatus.NOT_SENT
+                    self.sent_goal = False
+                return py_trees.common.Status.RUNNING
+
+            case CircleAroundPhases.CIRCLING:
+                return py_trees.common.Status.SUCCESS  # Placeholder for now  
+                
+
     def _find_object_in_map(self,class_name: str)-> List[VisionObject]:
         """Helper function to find all objects of a given class in the vision object map on the blackboard."""
         
@@ -492,8 +583,9 @@ class CircleAroundToFindBehaviour(py_trees.behaviour.Behaviour):
                 if obj.label == class_name:
                     objects.append(obj)
         return objects
+    
         
-    def _determine_auv_pose(self) -> Optional[Tuple[float, float, float, float]]:
+    def _determine_auv_pose(self) -> Optional[Tuple[Vector2D, float, float]]:
         """Helper function to determine the AUV's current position and yaw from the blackboard. Returns (x, y, z, yaw) or None if pose is not available."""
         
         if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.pose is None:
@@ -503,8 +595,8 @@ class CircleAroundToFindBehaviour(py_trees.behaviour.Behaviour):
         auv_z = self.blackboard.sensors.pose.pose.position.z
         current_quat = self.blackboard.sensors.pose.pose.orientation
         auv_yaw = yaw_from_quaternion(current_quat)
-        return (auv_x, auv_y, auv_z, auv_yaw)
-    
+        return (Vector2D(auv_x, auv_y), auv_z, auv_yaw)
+
     def on_server_goal_response(self, goal_response: bool):
         if not goal_response:
             self.action_status = ActionStatus.FAILED
