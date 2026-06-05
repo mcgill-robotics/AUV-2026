@@ -17,7 +17,7 @@ class MatchPipesBehaviour(py_trees.behaviour.Behaviour):
     blackboard for the downstream NavigateToGap behaviour to consume.
 
     The gate_side parameter is a fallback default. At runtime, the behaviour
-    reads /gate/side from the blackboard (written by GateTask). If present,
+    reads /gate/selected_side from the blackboard (written by GateTask). If present,
     the blackboard value overrides the config default.
 
     This is a one-shot computation that completes in a single tick.
@@ -25,12 +25,14 @@ class MatchPipesBehaviour(py_trees.behaviour.Behaviour):
     def __init__(
         self,
         gate_side: str = "right",
+        yaw_inward_offset_rad: float = math.radians(10.0),
         collinearity_threshold: float = 0.5,
         min_forward_dist: float = 0.5,
         name="Match Pipes",
     ):
         super().__init__(name)
         self.gate_side = gate_side
+        self.yaw_inward_offset_rad = yaw_inward_offset_rad
         self.collinearity_threshold = collinearity_threshold
         self.min_forward_dist = min_forward_dist
 
@@ -40,7 +42,7 @@ class MatchPipesBehaviour(py_trees.behaviour.Behaviour):
         self.node = kwargs['node']
         self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
-        self.blackboard.register_key(key="/gate/side", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/gate/selected_side", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/slalom/target_x", access=py_trees.common.Access.WRITE)
         self.blackboard.register_key(key="/slalom/target_y", access=py_trees.common.Access.WRITE)
         self.blackboard.register_key(key="/slalom/target_z", access=py_trees.common.Access.WRITE)
@@ -57,12 +59,12 @@ class MatchPipesBehaviour(py_trees.behaviour.Behaviour):
         # --- Resolve gate_side: blackboard (from GateTask) takes priority over config default ---
         gate_side = self.gate_side  # config default
         try:
-            bb_side = self.blackboard.gate.side
+            bb_side = self.blackboard.gate.selected_side
             if bb_side in ("left", "right"):
                 gate_side = bb_side
                 self.node.get_logger().info(f"[{self.name}] Using gate_side='{gate_side}' from blackboard.")
         except (AttributeError, KeyError):
-            self.node.get_logger().info(f"[{self.name}] No /gate/side on blackboard, using config default '{gate_side}'.")
+            self.node.get_logger().info(f"[{self.name}] No /gate/selected_side on blackboard, using config default '{gate_side}'.")
 
         # --- Get AUV pose ---
         if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.pose is None:
@@ -261,6 +263,14 @@ class MatchPipesBehaviour(py_trees.behaviour.Behaviour):
         diff2 = abs(normalize_angle(perp2 - auv_yaw))
         target_yaw = perp1 if diff1 < diff2 else perp2
 
+        # Apply inward convergence offset so AUV hugs the center axis
+        if gate_side == "left":
+            # Passing on the left side, we steer slightly Right (negative yaw)
+            target_yaw = normalize_angle(target_yaw - self.yaw_inward_offset_rad)
+        else:
+            # Passing on the right side, we steer slightly Left (positive yaw)
+            target_yaw = normalize_angle(target_yaw + self.yaw_inward_offset_rad)
+
         # --- Write results to blackboard ---
         self.blackboard.slalom.target_x = target_x
         self.blackboard.slalom.target_y = target_y
@@ -453,6 +463,7 @@ class SlalomLayer(py_trees.composites.Selector):
         self,
         layer_num: int,
         gate_side: str,
+        yaw_inward_offset_deg: float,
         scan_angle_deg: float,
         scan_pause_time: float,
         collinearity_threshold: float,
@@ -472,6 +483,7 @@ class SlalomLayer(py_trees.composites.Selector):
         nominal = py_trees.composites.Sequence(f"Layer {layer_num} Nominal", memory=True)
         match_behavior = MatchPipesBehaviour(
             gate_side=gate_side,
+            yaw_inward_offset_rad=math.radians(yaw_inward_offset_deg),
             collinearity_threshold=collinearity_threshold,
             min_forward_dist=min_forward_dist,
             name=f"Match Pipes L{layer_num}",
