@@ -48,6 +48,7 @@ class BasicActionBehaviour(py_trees.behaviour.Behaviour):
             self.sent_goal = False
             self.action_status = ActionStatus.NOT_SENT # Either succeeded, pending, failed or not sent
             self.is_waiting_for_result = False
+            self.result_message = ""
             
         def setup(self, **kwargs) -> None:
             """
@@ -72,7 +73,7 @@ class BasicActionBehaviour(py_trees.behaviour.Behaviour):
             """
             # Reset field needed to keep track of goal
             self.action_status = ActionStatus.NOT_SENT
-
+            self.result_message = ""
                 
         def update(self) -> py_trees.common.Status:
             """
@@ -93,12 +94,12 @@ class BasicActionBehaviour(py_trees.behaviour.Behaviour):
                 
             # Check for failure condition from the async callbacks (goal response and goal result)
             if self.action_status is ActionStatus.FAILED:
-                self.node.get_logger().error(f"[{self.name}] Action failed midway.")
+                self.node.get_logger().error(f"[{self.name}] Action failed: {self.result_message}")
                 return py_trees.common.Status.FAILURE
                 
             # Completion check
             if self.action_status is ActionStatus.SUCCEEDED:
-                self.node.get_logger().info(f"[{self.name}] Completed goal.")
+                self.node.get_logger().info(f"[{self.name}] Completed goal. {self.result_message}")
                 return py_trees.common.Status.SUCCESS
 
             # Block loop if currently navigating to a waypoint
@@ -125,17 +126,19 @@ class BasicActionBehaviour(py_trees.behaviour.Behaviour):
             if not goal_response:
                 self.action_status = ActionStatus.FAILED
 
-        def on_server_goal_result(self, goal_success: bool) -> None:
+        def on_server_goal_result(self, goal_success: bool, message: str) -> None:
             """
             Description: This function provides customized logic to be executed when
             the goal is finished. In this case, the custom implementation updates the status of the mission
             depending on whether or not the goal was successful or failed. Pass this function as an input 
             to the navigation_client.send_navigation_goal
 
-            Inputs: goal_success: str, The client will call this function with true upon success, and false upon failure
+            Inputs: goal_success: bool, The client will call this function with true upon success, and false upon failure
+                    message: str, The result message from the action server
 
             Outputs: None
             """
+            self.result_message = message
             if goal_success:
                 self.action_status = ActionStatus.SUCCEEDED
             else:

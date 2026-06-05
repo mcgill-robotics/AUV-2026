@@ -101,15 +101,15 @@ class MissionSpawner(py_trees.behaviour.Behaviour):
         slalom = p.get('slalom_params', {})
         bins = p.get('bins_params', {})
         if choice == 1:
-            return OrbitQualificationMission(p['yaw_tolerance'], p['position_tolerance'], p['hold_time'], p['timeout'], p['orbit_pre_qual_yaw_tolerance_scale'], p['orbit_pre_qual_positional_tolerance_scale'], p['orbit_pre_qual_hold_time_initial'], p['orbit_pre_qual_hold_time_segments'])
+            return OrbitQualificationMission(p['angular_tolerance'], p['position_tolerance'], p['hold_time'], p['timeout'], p['orbit_pre_qual_angular_tolerance_scale'], p['orbit_pre_qual_positional_tolerance_scale'], p['orbit_pre_qual_hold_time_initial'], p['orbit_pre_qual_hold_time_segments'])
         elif choice == 2:
-            return RectangleQualificationMission(p['yaw_tolerance'], p['position_tolerance'], p['hold_time'], p['timeout'])
+            return RectangleQualificationMission(p['angular_tolerance'], p['position_tolerance'], p['hold_time'], p['timeout'])
         elif choice == 3:
             return TestMoveForwardBehaviour(p['position_tolerance'], p['hold_time'], p['timeout'])
         elif choice == 4:
             return TestDiveBehaviour(p['position_tolerance'], p['hold_time'], p['timeout'])
         elif choice == 5:
-            return TestYawBehaviour(p['yaw_tolerance'], p['hold_time'], p['timeout'])
+            return TestYawBehaviour(p['angular_tolerance'], p['hold_time'], p['timeout'])
         elif choice == 6:
             return TranslationRectangleMission(p['position_tolerance'], p['hold_time'], p['timeout'])
         elif choice == 7:

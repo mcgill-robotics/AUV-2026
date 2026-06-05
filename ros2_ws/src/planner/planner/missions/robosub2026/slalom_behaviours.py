@@ -17,7 +17,7 @@ class MatchPipesBehaviour(py_trees.behaviour.Behaviour):
     blackboard for the downstream NavigateToGap behaviour to consume.
 
     The gate_side parameter is a fallback default. At runtime, the behaviour
-    reads /gate/side from the blackboard (written by GateTask). If present,
+    reads /gate/selected_side from the blackboard (written by GateTask). If present,
     the blackboard value overrides the config default.
 
     This is a one-shot computation that completes in a single tick.
@@ -25,12 +25,14 @@ class MatchPipesBehaviour(py_trees.behaviour.Behaviour):
     def __init__(
         self,
         gate_side: str = "right",
+        yaw_inward_offset_rad: float = math.radians(10.0),
         collinearity_threshold: float = 0.5,
         min_forward_dist: float = 0.5,
         name="Match Pipes",
     ):
         super().__init__(name)
         self.gate_side = gate_side
+        self.yaw_inward_offset_rad = yaw_inward_offset_rad
         self.collinearity_threshold = collinearity_threshold
         self.min_forward_dist = min_forward_dist
 
@@ -40,7 +42,7 @@ class MatchPipesBehaviour(py_trees.behaviour.Behaviour):
         self.node = kwargs['node']
         self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
-        self.blackboard.register_key(key="/gate/side", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/gate/selected_side", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/slalom/target_x", access=py_trees.common.Access.WRITE)
         self.blackboard.register_key(key="/slalom/target_y", access=py_trees.common.Access.WRITE)
         self.blackboard.register_key(key="/slalom/target_z", access=py_trees.common.Access.WRITE)
@@ -57,12 +59,12 @@ class MatchPipesBehaviour(py_trees.behaviour.Behaviour):
         # --- Resolve gate_side: blackboard (from GateTask) takes priority over config default ---
         gate_side = self.gate_side  # config default
         try:
-            bb_side = self.blackboard.gate.side
+            bb_side = self.blackboard.gate.selected_side
             if bb_side in ("left", "right"):
                 gate_side = bb_side
                 self.node.get_logger().info(f"[{self.name}] Using gate_side='{gate_side}' from blackboard.")
         except (AttributeError, KeyError):
-            self.node.get_logger().info(f"[{self.name}] No /gate/side on blackboard, using config default '{gate_side}'.")
+            self.node.get_logger().info(f"[{self.name}] No /gate/selected_side on blackboard, using config default '{gate_side}'.")
 
         # --- Get AUV pose ---
         if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.pose is None:
@@ -261,6 +263,14 @@ class MatchPipesBehaviour(py_trees.behaviour.Behaviour):
         diff2 = abs(normalize_angle(perp2 - auv_yaw))
         target_yaw = perp1 if diff1 < diff2 else perp2
 
+        # Apply inward convergence offset so AUV hugs the center axis
+        if gate_side == "left":
+            # Passing on the left side, we steer slightly Right (negative yaw)
+            target_yaw = normalize_angle(target_yaw - self.yaw_inward_offset_rad)
+        else:
+            # Passing on the right side, we steer slightly Left (positive yaw)
+            target_yaw = normalize_angle(target_yaw + self.yaw_inward_offset_rad)
+
         # --- Write results to blackboard ---
         self.blackboard.slalom.target_x = target_x
         self.blackboard.slalom.target_y = target_y
@@ -293,7 +303,7 @@ class NavigateToGapBehaviour(py_trees.behaviour.Behaviour):
         self,
         adjust_depth: bool = False,
         position_tolerance: float = 0.3,
-        yaw_tolerance_rad: float = 0.3,
+        angular_tolerance_rad: float = 0.3,
         hold_time: float = 0.5,
         timeout: float = 45.0,
         name="Navigate To Gap",
@@ -301,13 +311,14 @@ class NavigateToGapBehaviour(py_trees.behaviour.Behaviour):
         super().__init__(name)
         self.adjust_depth = adjust_depth
         self.position_tolerance = position_tolerance
-        self.yaw_tolerance_rad = yaw_tolerance_rad
+        self.angular_tolerance_rad = angular_tolerance_rad
         self.hold_time = hold_time
         self.timeout = timeout
         self.blackboard = self.attach_blackboard_client(name=self.name)
 
         self.action_status = ActionStatus.NOT_SENT
         self.sent_goal = False
+        self.result_message = ''
 
     def setup(self, **kwargs):
         self.node = kwargs['node']
@@ -321,14 +332,15 @@ class NavigateToGapBehaviour(py_trees.behaviour.Behaviour):
     def initialise(self):
         self.action_status = ActionStatus.NOT_SENT
         self.sent_goal = False
+        self.result_message = ''
 
     def update(self):
         if self.action_status == ActionStatus.SUCCEEDED:
-            self.node.get_logger().info(f"[{self.name}] Reached gap midpoint.")
+            self.node.get_logger().info(f"[{self.name}] Reached gap midpoint. {self.result_message}")
             return py_trees.common.Status.SUCCESS
 
         if self.action_status == ActionStatus.FAILED:
-            self.node.get_logger().error(f"[{self.name}] Failed to reach gap midpoint.")
+            self.node.get_logger().error(f"[{self.name}] Failed to reach gap midpoint. {self.result_message}")
             return py_trees.common.Status.FAILURE
 
         if self.action_status == ActionStatus.PENDING:
@@ -351,7 +363,7 @@ class NavigateToGapBehaviour(py_trees.behaviour.Behaviour):
             yaw=target_yaw, 
             do_z=self.adjust_depth,
             tolerance=self.position_tolerance,
-            yaw_tolerance=self.yaw_tolerance_rad,
+            angular_tolerance=self.angular_tolerance_rad,
             hold_time=self.hold_time,
             timeout=self.timeout,
         )
@@ -366,8 +378,12 @@ class NavigateToGapBehaviour(py_trees.behaviour.Behaviour):
         if not goal_response:
             self.action_status = ActionStatus.FAILED
 
-    def _on_goal_result(self, goal_success: bool):
-        self.action_status = ActionStatus.SUCCEEDED if goal_success else ActionStatus.FAILED
+    def _on_goal_result(self, goal_success: bool, message: str):
+        self.result_message = message
+        if goal_success:
+            self.action_status = ActionStatus.SUCCEEDED
+        else:
+            self.action_status = ActionStatus.FAILED
 
 
 
@@ -453,6 +469,7 @@ class SlalomLayer(py_trees.composites.Selector):
         self,
         layer_num: int,
         gate_side: str,
+        yaw_inward_offset_deg: float,
         scan_angle_deg: float,
         scan_pause_time: float,
         collinearity_threshold: float,
@@ -460,10 +477,10 @@ class SlalomLayer(py_trees.composites.Selector):
         layer_distance: float,
         adjust_depth: bool,
         position_tolerance: float = 0.3,
-        yaw_tolerance_rad: float = 0.3,
+        angular_tolerance_rad: float = 0.3,
         hold_time: float = 0.5,
         timeout: float = 45.0,
-        scan_yaw_tolerance_rad: float = math.radians(30.0),
+        scan_angular_tolerance_rad: float = math.radians(30.0),
         scan_hold_time: float = 0.1,
         scan_timeout: float = 30.0,
     ):
@@ -472,6 +489,7 @@ class SlalomLayer(py_trees.composites.Selector):
         nominal = py_trees.composites.Sequence(f"Layer {layer_num} Nominal", memory=True)
         match_behavior = MatchPipesBehaviour(
             gate_side=gate_side,
+            yaw_inward_offset_rad=math.radians(yaw_inward_offset_deg),
             collinearity_threshold=collinearity_threshold,
             min_forward_dist=min_forward_dist,
             name=f"Match Pipes L{layer_num}",
@@ -497,7 +515,7 @@ class SlalomLayer(py_trees.composites.Selector):
                 ScanBehaviour(
                     scan_angle_deg=scan_angle_deg,
                     pause_time=scan_pause_time,
-                    yaw_tolerance_rad=scan_yaw_tolerance_rad,
+                    angular_tolerance_rad=scan_angular_tolerance_rad,
                     turn_hold_time_s=scan_hold_time,
                     turn_timeout_s=scan_timeout,
                     name=f"Scan Pipes L{layer_num}",
@@ -508,7 +526,7 @@ class SlalomLayer(py_trees.composites.Selector):
                 ScanBehaviour(
                     scan_angle_deg=scan_angle_deg,
                     pause_time=scan_pause_time,
-                    yaw_tolerance_rad=scan_yaw_tolerance_rad,
+                    angular_tolerance_rad=scan_angular_tolerance_rad,
                     turn_hold_time_s=scan_hold_time,
                     turn_timeout_s=scan_timeout,
                     name=f"Scan Pipes L{layer_num}",
@@ -521,7 +539,7 @@ class SlalomLayer(py_trees.composites.Selector):
             NavigateToGapBehaviour(
                 adjust_depth=adjust_depth,
                 position_tolerance=position_tolerance,
-                yaw_tolerance_rad=yaw_tolerance_rad,
+                angular_tolerance_rad=angular_tolerance_rad,
                 hold_time=hold_time,
                 timeout=timeout,
                 name=f"Navigate To Gap L{layer_num}",
