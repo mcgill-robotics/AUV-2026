@@ -167,6 +167,7 @@ class SwitchSides(py_trees.behaviour.Behaviour):
         self.bins_params = bins_params or {}
         # cache parameter values from yaml (fail if missing)
         self.bin_structure_distance = self.bins_params['bin_structure_distance']
+        self.bins_to_bin_structure_distance = self.bins_params['bins_to_bin_structure']
         self.go_above_bin_structure_height = self.bins_params['go_above_bin_structure_height']
         self.switch_sides_safety_height = self.bins_params['switch_sides_height']
         self.use_fallback = self.bins_params['force_fallback_alignment']
@@ -176,39 +177,22 @@ class SwitchSides(py_trees.behaviour.Behaviour):
         self.navigation_client = kwargs['shared_nav_client']
         self.navigation_client.client_wait_for_server(timeout_sec=5.0)
         self.blackboard.register_key(key="/bins_task/closest_bins", access=py_trees.common.Access.READ)
-        self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/bins_task/structure_pos", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
 
     def initialise(self):
         if not hasattr(self.blackboard.bins_task, 'closest_bins') or self.blackboard.bins_task.closest_bins is None:
             self.action_status = ActionStatus.FAILED
+            self.node.get_logger().error("No bins found on blackboard for SwitchSides behavior.")
         
-        structure_pos = None
-        if not self.use_fallback:
-            for object in self.blackboard.vision.object_map.array:
-                if object.label == "bin_structure":
-                    structure_pos = object.pose.position
-                    break
+        if not hasattr(self.blackboard, 'bins_task') or self.blackboard.bins_task.structure_pos is None:
+            self.action_status = ActionStatus.FAILED
+            self.node.get_logger().error("No bin structure position found on blackboard for SwitchSides behavior.")
+        
+        structure_pos = self.blackboard.bins_task.structure_pos
 
         bins = self.blackboard.bins_task.closest_bins
         bins_midpoint = (bins[0].pose.x + bins[1].pose.x) / 2, (bins[0].pose.y + bins[1].pose.y) / 2
-
-        # Either using fallback or didn't find bin structure, use bins midpoint instead
-        if structure_pos is None:
-            self.node.get_logger().warn("Using bins for fallback alignment.")
-            auv_pose = self.blackboard.sensors.pose.pose.position
-            auv_to_bins_midpoint = (bins_midpoint[0] - auv_pose.x, bins_midpoint[1] - auv_pose.y)
-
-            bins_vector = (bins[1].pose.x - bins[0].pose.x, bins[1].pose.y - bins[0].pose.y)
-            bins_perpendicular_vector = (-bins_vector[1], bins_vector[0])
-            magnitude = math.sqrt(bins_perpendicular_vector[0] ** 2 + bins_perpendicular_vector[1] ** 2)
-            bins_perpendicular_unit_vector = bins_perpendicular_vector[0] / magnitude, bins_perpendicular_vector[1] / magnitude
-
-            dot_product = auv_to_bins_midpoint[0] * bins_perpendicular_unit_vector[0] + auv_to_bins_midpoint[1] * bins_perpendicular_unit_vector[1]
-            if dot_product < 0:
-                bins_perpendicular_unit_vector = (-bins_perpendicular_unit_vector[0], -bins_perpendicular_unit_vector[1])
-            
-            structure_pos = geometry_msgs.msg.Point(x=bins_midpoint[0] + bins_perpendicular_unit_vector[0] * self.bin_structure_distance, y=bins_midpoint[1] + bins_perpendicular_unit_vector[1] * self.bin_structure_distance, z=0.0)
 
         structure_to_bins_vector = bins_midpoint[0] - structure_pos.x, bins_midpoint[1] - structure_pos.y
         structure_to_bins_mag = math.sqrt(structure_to_bins_vector[0] ** 2 + structure_to_bins_vector[1] ** 2)
@@ -246,7 +230,7 @@ class GetBinStructurePos(py_trees.behaviour.Behaviour):
     def __init__(self, bins_params: dict = None):
         super().__init__("GetBinStructurePos")
         self.bins_params = bins_params
-        self.bin_structure_distance = bins_params['bin_structure_distance']
+        self.bins_to_bin_structure_distance = bins_params['bins_to_bin_structure']
         self.blackboard = self.attach_blackboard_client(name=self.name)
         self.failed = False
 
@@ -269,6 +253,7 @@ class GetBinStructurePos(py_trees.behaviour.Behaviour):
                     structure_pos = object.pose.position
                     break
 
+        # Either didn't find bin structure, or force fallback is enabled
         if structure_pos is None:
             self.node.get_logger().warn("Using bins for fallback alignment.")
             if not hasattr(self.blackboard, "bins_task") or self.blackboard.bins_task.closest_bins is None:
@@ -290,7 +275,7 @@ class GetBinStructurePos(py_trees.behaviour.Behaviour):
             if dot_product < 0:
                 bins_perpendicular_unit_vector = (-bins_perpendicular_unit_vector[0], -bins_perpendicular_unit_vector[1])
             
-            structure_pos = geometry_msgs.msg.Point(x=bins_midpoint[0] + bins_perpendicular_unit_vector[0] * self.bin_structure_distance, y=bins_midpoint[1] + bins_perpendicular_unit_vector[1] * self.bin_structure_distance, z=bins_avg_height)
+            structure_pos = geometry_msgs.msg.Point(x=bins_midpoint[0] + bins_perpendicular_unit_vector[0] * self.bins_to_bin_structure_distance, y=bins_midpoint[1] + bins_perpendicular_unit_vector[1] * self.bins_to_bin_structure_distance, z=bins_avg_height)
 
         if structure_pos is not None:
             self.blackboard.bins_task.structure_pos = structure_pos
@@ -353,7 +338,7 @@ class GoToOtherSide(py_trees.composites.Sequence):
         self.bins_params = bins_params or {}
         switch_height = self.bins_params['switch_sides_height']
         get_bin_structure_pos = GetBinStructurePos(bins_params)
-        go_up = GoToBlackboardBinStructure(switch_height, bins_params=bins_params)
+        go_up = GoToBlackboardBinStructure(height_offset=switch_height, bins_params=bins_params)
         switch_sides = SwitchSides(self.bins_params)
 
         self.add_children([get_bin_structure_pos, go_up, switch_sides])
@@ -390,9 +375,6 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
 
         self.blackboard.register_key('/vision/down_cam/detections', access=py_trees.common.Access.READ)
         self.blackboard.register_key('/gate/selected_role', access=py_trees.common.Access.READ)
-
-        self.node.get_logger().info("Starting FollowDowncamBin behavior")
-        # parameters are cached in constructor
 
     def initialise(self):
         # if hasattr(self.blackboard, 'gate') and self.blackboard.gate.selected_role is not None:

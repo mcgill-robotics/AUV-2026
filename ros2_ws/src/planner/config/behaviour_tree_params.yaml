@@ -52,5 +52,6 @@ planner_root_tree:
       bin_lined_up_threshold: 10          # (pixels) How close the center of the bin needs to be to the center of the image to be considered "lined up" for dropping the marker
       num_required_markers: 2             # (markers) Number of markers that need to be dropped in the correct bins to complete the task
       num_bins: 4                         # (bins) Total number of bins in the bin structure
-      force_fallback_search: True        # (bool) Force behaviour to look for bins instead of bin structure first
-      force_fallback_alignment: True     # (bool) Force behaviour to use bins for projection instead of bin structure
+      bins_to_bin_structure: 0.3          # (m) Approximate distance from center of bin structure to the bins
+      force_fallback_search: False         # (bool) Force behavior to look for bins instead of bin structure first
+      force_fallback_alignment: False      # (bool) Force behavior to use bins for projection instead of bin structure

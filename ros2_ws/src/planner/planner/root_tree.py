@@ -101,6 +101,7 @@ def main():
     node.declare_parameter("bins.bin_lined_up_threshold", 10)
     node.declare_parameter("bins.num_required_markers", 2)
     node.declare_parameter("bins.num_bins", 4)
+    node.declare_parameter("bins.bins_to_bin_structure", 0.3)
     node.declare_parameter("bins.force_fallback_search", False)
     node.declare_parameter("bins.force_fallback_alignment", False)
 
@@ -121,6 +122,7 @@ def main():
         "bin_lined_up_threshold": node.get_parameter("bins.bin_lined_up_threshold").get_parameter_value().integer_value,
         "num_required_markers": node.get_parameter("bins.num_required_markers").get_parameter_value().integer_value,
         "num_bins": node.get_parameter("bins.num_bins").get_parameter_value().integer_value,
+        "bins_to_bin_structure": node.get_parameter("bins.bins_to_bin_structure").get_parameter_value().double_value,
         "force_fallback_search": node.get_parameter("bins.force_fallback_search").get_parameter_value().bool_value,
         "force_fallback_alignment": node.get_parameter("bins.force_fallback_alignment").get_parameter_value().bool_value,
     }
