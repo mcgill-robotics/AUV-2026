@@ -30,6 +30,7 @@ set(srv_files
 	"srv/AutomaticCapture.srv"
 	"srv/ShootTorpedo.srv"
 	"srv/SetGripper.srv"
+	"srv/RosbagControl.srv"
 )
 
 set(action_files

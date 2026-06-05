@@ -1,0 +1,45 @@
+# Rosbag profiles define lists of topics to record or exclude.
+# Each profile can specify 'topics' (to record) and/or 'exclude' (topics to ignore).
+# Use regex (e.g., '.*') for patterns.
+
+profiles:
+  all:
+    topics:
+      - ".*"
+    exclude:
+      - ".*/annotated/compressed$" # Excludes the 30Hz annotated images, keeping the 5Hz _throttled versions
+      - ".*/depth$" # Excludes the 30Hz compressed depth images, keeping the 5Hz _throttled versions
+      # - ".*/depth/compressed$" # Excludes the 30Hz compressed depth images, keeping the 5Hz _throttled versions
+
+  all_no_vision:
+    topics:
+      - ".*"
+    exclude:
+      - ".*image.*"
+      - ".*pointcloud.*"
+      - "/vision/.*"
+      - "/zed/.*"
+
+  vision:
+    topics:
+      - "/zed/.*"
+      - "/vision/.*"
+    exclude:
+      - ".*/annotated/compressed$" # Excludes the raw 30Hz annotated images, but captures the 5Hz _throttled ones
+      - ".*/depth/compressed$" # Excludes the raw 30Hz depth images, but captures the 5Hz _throttled ones
+      
+  nav_and_controls:
+    topics:
+      - "/imu/.*"
+      - "/filter/.*"
+      - "/gnss.*"
+      - "/odometry"
+      - "/pressure"
+      - "/temperature"
+      - "/rtcm"
+      - "/nmea"
+      - "/dvl/.*"
+      - "/auv_frame/.*"
+      - "/auv_state/.*"
+      - "/controls/.*"
+      - "/propulsion/.*"
