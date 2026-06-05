@@ -20,7 +20,7 @@ class SlalomTask(py_trees.composites.Sequence):
     Params:
         num_layers: Number of pipe layers to navigate (default 3).
         gate_side: Fallback default for which side of the red pipe to pass ("left" or "right").
-                   Overridden at runtime by /gate/side on the blackboard (set by GateTask).
+                   Overridden at runtime by /gate/selected_side on the blackboard (set by GateTask).
         scan_angle_deg: (deg) Angle to scan left/right from center during the scan phase.
         scan_pause_time: (s) Seconds to pause after each scan rotation for vision.
         collinearity_threshold: (m) Max perpendicular distance for pipe triplet matching.
@@ -39,6 +39,7 @@ class SlalomTask(py_trees.composites.Sequence):
         self,
         num_layers: int = 3,
         gate_side: str = "right",
+        yaw_inward_offset_deg: float = 10.0,
         scan_angle_deg: float = 60.0,
         scan_pause_time: float = 1.0,
         collinearity_threshold: float = 0.5,
@@ -103,6 +104,7 @@ class SlalomTask(py_trees.composites.Sequence):
             layer = SlalomLayer(
                 layer_num=i + 1,
                 gate_side=gate_side,
+                yaw_inward_offset_deg=yaw_inward_offset_deg,
                 scan_angle_deg=scan_angle_deg,
                 scan_pause_time=scan_pause_time,
                 collinearity_threshold=collinearity_threshold,
