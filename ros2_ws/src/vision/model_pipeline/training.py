@@ -195,6 +195,8 @@ def train_rfdetr(args):
     model_kwargs = {}
     if args.custom_model:
         model_kwargs["pretrain_weights"] = args.custom_model
+        
+    model_kwargs["resolution"] = 512
 
     model = RFDETRModel(**model_kwargs)
 
@@ -209,6 +211,26 @@ def train_rfdetr(args):
         progress_bar="tqdm",          # Show per-step progress in terminal
         tensorboard=not args.no_tensorboard,  # TensorBoard ON by default
     )
+    
+    if not args.unity:
+        # Custom Augmentation for Real Data: Heavy color variance for daylight/clouds, minimal geometric variance
+        train_kwargs["aug_config"] = {
+            "HorizontalFlip": {"p": 0.5},
+            "ColorJitter": {
+                "brightness": 0.3,
+                "contrast": 0.3,
+                "saturation": 0.4,
+                "hue": 0.15,
+                "p": 0.8
+            },
+            "GaussianBlur": {"blur_limit": [3, 5], "p": 0.2}
+        }
+    else:
+        # For synthetic data, it has already been heavily augmented offline by augment_dataset.py
+        # We just do a basic flip here to avoid double-augmenting into oblivion
+        train_kwargs["aug_config"] = {
+            "HorizontalFlip": {"p": 0.5}
+        }
 
     if args.resume:
         train_kwargs["resume"] = args.resume
@@ -319,7 +341,7 @@ Examples:
     parser.add_argument(
         "--unity",
         action="store_true",
-        help="Use training parameters for unity dataset — YOLO only"
+        help="Use training parameters tailored for synthetic Unity datasets (avoids double-augmenting for RF-DETR)"
     )
 
     # --- RF-DETR specific arguments ---
