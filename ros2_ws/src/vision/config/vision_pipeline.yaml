@@ -383,7 +383,7 @@ object_map:
     # Refinement: make use of other detections to improve tracking of certain objects
     gate_midpoint: true # Uses search_rescue/survey_repair panel detections to refine the gate pose
     board_icon: true # Uses board icons to refine the board pose and make yaw face the AUV
-    refinement_plausibility_radius: 5.0 # Max distance in meters for a refinement to be considered plausible
+    refinement_plausibility_radius: 3.0 # Max distance in meters for a refinement to be considered plausible
   
     z_axis_locking: 
       enable: true # Forces specific unique objects to snap to pool floor/surface Z coordinates

@@ -677,6 +677,14 @@ void ObjectTracker::apply_board_physical_constraints() {
         return;
     }
 
+    Eigen::Vector3d board_pos = board_track->kf.state();
+
+    // Filter out noisy icons that are physically too far from the board's current estimate
+    if (ambulance_track && (ambulance_track->kf.state() - board_pos).norm() > refinement_plausibility_radius) ambulance_track = nullptr;
+    if (firetruck_track && (firetruck_track->kf.state() - board_pos).norm() > refinement_plausibility_radius) firetruck_track = nullptr;
+    if (blood_track && (blood_track->kf.state() - board_pos).norm() > refinement_plausibility_radius) blood_track = nullptr;
+    if (fire_track && (fire_track->kf.state() - board_pos).norm() > refinement_plausibility_radius) fire_track = nullptr;
+
     const bool has_vehicle_pair = ambulance_track && firetruck_track;
     const bool has_hazard_pair = fire_track && blood_track;
     // if neither pair exists, we have no basis for icon refinement, so skip entire process

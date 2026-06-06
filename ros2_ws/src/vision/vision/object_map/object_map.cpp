@@ -525,7 +525,17 @@ void ObjectMapNode::detection_callback(const auv_msgs::msg::VisionDetectionFrame
         Eigen::Matrix3d cov_camera = covariance_from_ros_pose(detection.pose_camera.covariance);
         Eigen::Matrix3d cov_world =
             camera_to_world_rotation * cov_camera * camera_to_world_rotation.transpose();
-        cov_world += Eigen::Matrix3d::Identity() * 0.3;
+            
+        // Calculate dynamic noise based on distance and physical object size
+        double distance = pos_camera.norm();
+        double max_physical_size = 0.5; // Default fallback size
+        if (object_sizes_map.count(label)) {
+            max_physical_size = object_sizes_map.at(label).maxCoeff();
+        }
+        
+        // Base noise 0.1m + 10% of distance + 20% of the max physical size
+        double dynamic_noise = 0.1 + (0.1 * distance) + (0.2 * max_physical_size);
+        cov_world += Eigen::Matrix3d::Identity() * dynamic_noise;
 
         filtered_measurements.push_back(pos_world);
         filtered_covariances.push_back(cov_world);
