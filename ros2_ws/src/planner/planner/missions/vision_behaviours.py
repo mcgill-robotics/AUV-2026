@@ -539,11 +539,13 @@ class CircleAroundToFindBehaviour(py_trees.behaviour.Behaviour):
                                 self.node.get_logger().info(f"[{self.name}] Completed a full circle. Starting attempt {self.current_attempt + 1}/{self.max_circling_attempts}.")
                                 self.action_status = ActionStatus.NOT_SENT
                                 self.sent_goal = False
+                                self.phase = CircleAroundPhases.PAUSING
                                 return py_trees.common.Status.RUNNING
                         else:
                             self.node.get_logger().info(f"[{self.name}] Starting circle step {self.circle_step + 1}/{self.num_circle_steps}.")
                             self.action_status = ActionStatus.NOT_SENT
                             self.sent_goal = False
+                            self.phase = CircleAroundPhases.PAUSING
                             return py_trees.common.Status.RUNNING
                     case ActionStatus.FAILED:
                         self.node.get_logger().error(f"[{self.name}] Failed to circle to next position. Step {self.circle_step}/{self.num_circle_steps}, Attempt {self.current_attempt}/{self.max_circling_attempts}. Navigation result message: {self.result_message}")
