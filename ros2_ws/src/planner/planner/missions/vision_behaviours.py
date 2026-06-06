@@ -497,8 +497,6 @@ class CircleAroundToFindBehaviour(py_trees.behaviour.Behaviour):
                             target_z=self.z_reference,
                             reference_x=self.reference_position.x,
                             reference_y=self.reference_position.y,
-                            current_x=auv_2D_position.x,
-                            current_y=auv_2D_position.y,
                             position_tolerance=self.position_tolerance,  # (m)
                             yaw_tolerance=self.yaw_tolerance_rad,  # (rad)
                             hold_time=self.turn_hold_time_s,   # (s)
@@ -583,8 +581,6 @@ class CircleAroundToFindBehaviour(py_trees.behaviour.Behaviour):
                             target_z=self.z_reference,
                             reference_x=self.reference_position.x,
                             reference_y=self.reference_position.y,
-                            current_x=auv_2D_position.x,
-                            current_y=auv_2D_position.y,
                             position_tolerance=self.position_tolerance,  # (m)
                             yaw_tolerance=self.yaw_tolerance_rad,  # (rad)
                             hold_time=self.turn_hold_time_s,   # (s)

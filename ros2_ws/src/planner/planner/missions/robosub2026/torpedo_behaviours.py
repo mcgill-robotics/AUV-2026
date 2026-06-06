@@ -173,7 +173,7 @@ class TorpedoStrategySelector(py_trees.composites.Selector):
             reference_class="board",
             z_reference=-1.0,
             target_classes={"blood":1, "fire":1, "ambulance":1, "firetruck":1},
-            reference_distance=5,
+            reference_distance=3.0,
             num_circle_steps=6,
             max_circling_attempts=2,
             step_timeout=self.ss_time,
