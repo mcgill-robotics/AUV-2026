@@ -222,6 +222,21 @@ class TorpedoStrategySelector(py_trees.composites.Selector):
             ]
         )
         return distance_strategy
+    
+    def build_find_board_orientation_sequence(self)->py_trees.composites.Sequence:
+        """
+        Build a sequence to find the board orientation and align to it. Used to save a stable version of the board orientatio for downstream alignments when approaching the board
+
+        returns py_trees.composites.Sequence
+        """
+        find_board_orientation_sequence = py_trees.composites.Sequence("Find Board Orientation Sequence", memory=True)
+        find_board_orientation_and_align = FindBoardOrientationAndAlign()
+        find_board_orientation_sequence.add_children(
+            [
+                find_board_orientation_and_align,
+            ]
+        )
+        return find_board_orientation_sequence
 
     def node_base_case(self)->py_trees.composites.Sequence:
         """
@@ -246,7 +261,21 @@ class TorpedoStrategySelector(py_trees.composites.Selector):
         return node_base_case
 
 
+
+
 ### Actions:
+
+class FindBoardOrientationAndAlign(Action):
+    """
+    Action to find the orientation of the board and align to it. This will be used in the align to board sequence node.
+    1. Find the board and its orientation using vision
+    2. Align to the board using the orientation information
+    """
+    def __init__(
+            self,
+        ):
+        super().__init__("Find Board Orientation and Align")
+
 
 class MoveAndAlignToBoard(Action):
     """
