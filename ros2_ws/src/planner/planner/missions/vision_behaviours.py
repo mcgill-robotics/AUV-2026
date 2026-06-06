@@ -489,7 +489,7 @@ class CircleAroundToFindBehaviour(py_trees.behaviour.Behaviour):
                         goal_vector = auv_to_ref.normalized() * self.reference_distance
                         goal_position = self.reference_position - goal_vector  # we want to be behind the reference
                         
-                        self.node.get_logger().info(f"[{self.name}] AUV current 2D position: {auv_2D_position}, reference position: {self.reference_position}, AUV to reference vector: {auv_to_ref}, goal position for approach: {goal_position}.")
+                        # self.node.get_logger().info(f"[{self.name}] AUV current 2D position: {auv_2D_position}, reference position: {self.reference_position}, AUV to reference vector: {auv_to_ref}, goal position for approach: {goal_position}.")
 
                         goal = move_to_and_look_at(
                             target_x=goal_position.x,
@@ -551,10 +551,9 @@ class CircleAroundToFindBehaviour(py_trees.behaviour.Behaviour):
                     case ActionStatus.PENDING:
                         return py_trees.common.Status.RUNNING
                     case ActionStatus.NOT_SENT:
-                        # TODO true should return success
                         if self._check_targets_found():
                             self.node.get_logger().info(f"[{self.name}] Found all target objects: {self.found_targets}.")
-                            return py_trees.common.Status.RUNNING
+                            return py_trees.common.Status.SUCCESS
                         self.reference_position = self._find_reference_position()
                         if self.reference_position is None:
                             self.node.get_logger().warn(f"[{self.name}] Lost sight of reference object '{self.reference_class}' during circling. Unable to continue.")
@@ -574,7 +573,7 @@ class CircleAroundToFindBehaviour(py_trees.behaviour.Behaviour):
                             self.node.get_logger().error(f"[{self.name}] Failed to compute circle goal position. Reference position: {self.reference_position}, Radius: {self.reference_distance}, Arc angle (rad): {self.angle_rad_per_circle_step * self.circle_step}")
                             return py_trees.common.Status.FAILURE
                         self.node.get_logger().info(f"[{self.name}] Step {self.circle_step+1}/{self.num_circle_steps} Circling to new goal position: {goal_position} around reference at {self.reference_position}. Goal angle from start: {math.degrees(self.angle_rad_per_circle_step * (self.circle_step+1)):.1f}°/360°.")
-                        self.node.get_logger().info(f"[{self.name}] AUV current 2D position: {auv_2D_position}, reference position: {self.reference_position}, goal position for circling: {goal_position}.")
+                        # self.node.get_logger().info(f"[{self.name}] AUV current 2D position: {auv_2D_position}, reference position: {self.reference_position}, goal position for circling: {goal_position}.")
                         goal = move_to_and_look_at(
                             target_x=goal_position.x,
                             target_y=goal_position.y,
