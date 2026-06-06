@@ -51,10 +51,14 @@ def load_model(model_path: str, logger):
                         logger.info(f"Deleted outdated cache: {os.path.basename(engine_file)}")
                     except Exception as e:
                         logger.warning(f"Failed to delete {engine_file}: {e}")
-                
-                with open(hash_path, "w") as f:
-                    f.write(file_hash)
-                logger.info("Saved new ONNX hash for future runs.")
+                try:
+                    with open(hash_path, "w") as f:
+                        f.write(file_hash)
+                    logger.info("Saved new ONNX hash for future runs.")
+                except PermissionError:
+                    logger.warning("Permission denied when saving ONNX hash. Read-only installation detected. Proceeding with in-memory execution...")
+                except Exception as e:
+                    logger.warning(f"Failed to save ONNX hash: {e}")
         except Exception as e:
             logger.warning(f"Failed to perform MD5 hash check: {e}")
 

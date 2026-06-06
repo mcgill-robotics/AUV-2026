@@ -106,9 +106,7 @@ file(RELATIVE_PATH REL_PATH_TO_MODELS
 install(CODE "
   file(MAKE_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/share/${PROJECT_NAME}\")
   file(REMOVE_RECURSE \"\${CMAKE_INSTALL_PREFIX}/share/${PROJECT_NAME}/models\")
-  execute_process(
-    COMMAND ln -sf \"${REL_PATH_TO_MODELS}\" \"\${CMAKE_INSTALL_PREFIX}/share/${PROJECT_NAME}/models\"
-  )
+  file(CREATE_LINK \"${REL_PATH_TO_MODELS}\" \"\${CMAKE_INSTALL_PREFIX}/share/${PROJECT_NAME}/models\" SYMBOLIC)
   message(STATUS \"Created relative symlink for models: share/${PROJECT_NAME}/models -> ${REL_PATH_TO_MODELS}\")
 ")
 
