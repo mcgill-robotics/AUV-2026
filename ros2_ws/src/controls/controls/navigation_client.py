@@ -3,8 +3,8 @@ import rclpy
 from rclpy.action import ActionClient
 from rclpy.node import Node
 from auv_msgs.action import AUVNavigate
-from . import goal_helpers
 from std_msgs.msg import String
+from action_msgs.msg import GoalStatus
 
 class NavigationClient(Node):
         """ A client for interacting with the navigation action server. """
@@ -84,7 +84,8 @@ class NavigationClient(Node):
 
                 # Perform the custom goal result, if provided by the user
                 if custom_goal_result != None:
-                        custom_goal_result(goal_success=result)
+                        is_success = (result.status == GoalStatus.STATUS_SUCCEEDED)
+                        custom_goal_result(goal_success=is_success)
                 # Clear the current goal handle since the goal is completed
                 self.current_goal_handle = None
         

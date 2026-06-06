@@ -11,44 +11,7 @@
   "playbackConfig": {
     "speed": 1
   },
-  "layout": {
-    "first": "Tab!images",
-    "second": {
-      "first": {
-        "first": {
-          "first": "CallService!startCollection",
-          "second": "CallService!aprxzk",
-          "direction": "row"
-        },
-        "second": {
-          "first": {
-            "first": "CallService!stopCollection",
-            "second": "CallService!1nbfksc",
-            "direction": "row"
-          },
-          "second": {
-            "first": "CallService!2mchwjt",
-            "second": "CallService!2aw7m5n",
-            "direction": "row"
-          },
-          "direction": "column",
-          "splitPercentage": 46.63790004720733
-        },
-        "direction": "column",
-        "splitPercentage": 33.9622642276062
-      },
-      "second": {
-        "first": "Publish!3wvumo2",
-        "second": "RawMessages!3im8qvp",
-        "direction": "column",
-        "splitPercentage": 44.918435919519034
-      },
-      "direction": "column",
-      "splitPercentage": 66.62897063144871
-    },
-    "direction": "row",
-    "splitPercentage": 79.28786359077232
-  },
+  "layout": "Tab!images",
   "configById": {
     "Image!yolo": {
       "cameraTopic": "/vision/debug_image",
@@ -240,7 +203,7 @@
       },
       "topics": {
         "/foxglove/scene_spheres": {
-          "visible": true,
+          "visible": false,
           "computeVertexNormals": true
         },
         "/state/pose": {
@@ -261,11 +224,12 @@
         "poseEstimateThetaDeviation": 0.26179939
       },
       "imageMode": {
-        "imageTopic": "/vision/front_cam/detection_frame/annotated/compressed",
+        "imageTopic": "/vision/front_cam/detection_frame/annotated/compressed_throttled",
         "rectifyImage": true,
         "flipHorizontal": false,
         "flipVertical": false,
-        "rotation": 0
+        "rotation": 0,
+        "calibrationTopic": "/vision/front_cam/detection_frame/camera_info"
       },
       "synchronize": false
     },
@@ -319,26 +283,29 @@
         "poseEstimateThetaDeviation": 0.26179939
       },
       "imageMode": {
-        "imageTopic": "/vision/down_cam/detections/annotated/compressed",
+        "imageTopic": "/vision/down_cam/detections/annotated/compressed_throttled",
         "gradient": [
-          "#ffffffff",
-          "#000000ff"
+          "#ef0404ff",
+          "#0080ffff"
         ],
         "minValue": 0,
-        "maxValue": 25
+        "colorMode": "colormap",
+        "colorMap": "turbo",
+        "maxValue": 15,
+        "calibrationTopic": "/down_cam/camera_info"
       },
       "synchronize": false
     },
     "3D!38qyra4": {
       "cameraState": {
         "perspective": true,
-        "distance": 15.475618749996581,
-        "phi": 49.51945968270573,
-        "thetaOffset": 87.34153659675235,
+        "distance": 16.290124999966014,
+        "phi": 52.60564256619985,
+        "thetaOffset": 94.81678140033989,
         "targetOffset": [
-          6.383285642656123,
-          0.8007567831598266,
-          -7.146753147924151e-10
+          -0.05854341790254109,
+          -0.22072564865989125,
+          5.235663847975776e-8
         ],
         "target": [
           0,
@@ -351,17 +318,17 @@
           0,
           1
         ],
-        "fovy": 45,
+        "fovy": 40.5,
         "near": 0.5,
         "far": 5000,
         "logDepth": false
       },
-      "followMode": "follow-heading",
+      "followMode": "follow-position",
       "followTf": "auv_link",
       "scene": {
         "syncCamera": true,
         "enableStats": false,
-        "labelScaleFactor": 1.4,
+        "labelScaleFactor": 1.2,
         "ignoreColladaUpAxis": false,
         "meshUpAxis": "y_up",
         "transforms": {
@@ -482,11 +449,45 @@
           "visible": true
         },
         "/vision/front_cam/detection_frame/annotated/compressed": {
-          "visible": true,
+          "visible": false,
           "cameraInfoTopic": "/vision/front_cam/detection_frame/camera_info",
           "projectionFrameId": "pool_link",
           "renderMode": "default",
           "planarProjectionFactor": 0
+        },
+        "/vision/down_cam/detections/annotated/compressed": {
+          "visible": false,
+          "cameraInfoTopic": "/down_cam/camera_info",
+          "projectionFrameId": "pool_link",
+          "distance": 1,
+          "renderMode": "default"
+        },
+        "/down_cam/camera_info": {
+          "visible": true
+        },
+        "/vision/front_cam/detection_frame/depth": {
+          "visible": false,
+          "frameLocked": true,
+          "cameraInfoTopic": "/vision/front_cam/detection_frame/camera_info",
+          "distance": 1,
+          "planarProjectionFactor": 0,
+          "renderMode": "pointCloud",
+          "projectionFrameId": "pool_link",
+          "color": "#ffffff",
+          "rectifyImage": true,
+          "pointSize": 1.5,
+          "syncModeEnabled": false
+        },
+        "/foxglove/scene_objects": {
+          "visible": true,
+          "showOutlines": false,
+          "computeVertexNormals": true
+        },
+        "/down_cam/image_raw/compressed": {
+          "visible": false
+        },
+        "/vision/front_cam/detection_frame/camera_info": {
+          "visible": true
         }
       },
       "layers": {
@@ -526,8 +527,252 @@
       "synchronize": false,
       "fixedFrame": "pool_link"
     },
+    "Stack!3ndws3g": {
+      "panels": [
+        {
+          "panelId": "CallService!14ku6lm",
+          "size": 0.3015111669821424
+        },
+        {
+          "panelId": "CallService!42t3u4z",
+          "size": 0.3350241545893714
+        },
+        {
+          "panelId": "CallService!1kpos7",
+          "size": 0.13599033816425093
+        }
+      ]
+    },
+    "Stack!16hgnhq": {
+      "panels": [
+        {
+          "panelId": "CallService!32ms6h1",
+          "size": 0.3021739130434778
+        },
+        {
+          "panelId": "CallService!3esnxit",
+          "size": 0.3359903381642516
+        },
+        {
+          "panelId": "CallService!14tcol0",
+          "size": 0.13502415458937184
+        }
+      ]
+    },
+    "CallService!14ku6lm": {
+      "requestPayload": "{ \"data\": true , \"time_interval\": 1}",
+      "layout": "vertical",
+      "timeoutSeconds": 10,
+      "serviceName": "/vision/front_cam/toggle_collection",
+      "foxglovePanelTitle": "Start front collection",
+      "buttonText": "Start front collection",
+      "buttonTooltip": "hi"
+    },
+    "CallService!42t3u4z": {
+      "requestPayload": "{\"data\": false,\n  \"time_interval\": 1 }",
+      "layout": "vertical",
+      "timeoutSeconds": 10,
+      "serviceName": "/vision/front_cam/toggle_collection",
+      "foxglovePanelTitle": "Stop front collection",
+      "buttonText": "Stop front collection"
+    },
+    "CallService!1kpos7": {
+      "requestPayload": "{}",
+      "layout": "vertical",
+      "timeoutSeconds": 10,
+      "serviceName": "/vision/front_cam/toggle_annotated_image",
+      "foxglovePanelTitle": "Toggle front annotations",
+      "buttonText": "Toggle front annotations",
+      "editingMode": false
+    },
+    "CallService!32ms6h1": {
+      "requestPayload": "{ \"data\": true , \"time_interval\": 1}",
+      "layout": "vertical",
+      "timeoutSeconds": 10,
+      "serviceName": "/vision/down_cam/toggle_collection",
+      "foxglovePanelTitle": "Start down collection",
+      "buttonText": "Start down collection",
+      "buttonTooltip": "hi again"
+    },
+    "CallService!3esnxit": {
+      "requestPayload": "{\"data\": false,\n \"time_interval\": 1 }",
+      "layout": "vertical",
+      "timeoutSeconds": 10,
+      "serviceName": "/vision/down_cam/toggle_collection",
+      "foxglovePanelTitle": "Stop down collection",
+      "buttonText": "Stop down collection"
+    },
+    "CallService!14tcol0": {
+      "requestPayload": "{}",
+      "layout": "vertical",
+      "timeoutSeconds": 10,
+      "serviceName": "/vision/down_cam/toggle_annotated_image",
+      "foxglovePanelTitle": "Toggle down annotations",
+      "buttonText": "Toggle down annotations",
+      "editingMode": false
+    },
+    "Table!1tr9jz4": {
+      "topicPath": "/vision/foxglove_table"
+    },
+    "Parameters!68s8k8": {},
+    "Image!7rhem8": {
+      "cameraState": {
+        "distance": 20,
+        "perspective": true,
+        "phi": 60,
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOffset": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "thetaOffset": 60,
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "scene": {},
+      "transforms": {},
+      "topics": {},
+      "layers": {},
+      "publish": {
+        "type": "point",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "synchronize": false,
+      "imageMode": {
+        "imageTopic": "/vision/front_cam/detection_frame/annotated/compressed",
+        "calibrationTopic": "/vision/front_cam/detection_frame/camera_info"
+      }
+    },
+    "3D!3m45izj": {
+      "cameraState": {
+        "perspective": true,
+        "distance": 13.268408625768243,
+        "phi": 54.81014681871022,
+        "thetaOffset": 101.20841898600618,
+        "targetOffset": [
+          0,
+          0,
+          0
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "followTf": "auv_link",
+      "fixedFrame": "pool_link",
+      "scene": {
+        "transforms": {
+          "showLabel": false
+        }
+      },
+      "transforms": {},
+      "topics": {
+        "/foxglove/scene_objects": {
+          "visible": true
+        }
+      },
+      "layers": {
+        "grid": {
+          "visible": true,
+          "drawBehind": false,
+          "instanceId": "eb0c98dd-7645-46fa-825b-05e96c14591e",
+          "layerId": "foxglove.Grid",
+          "size": 50,
+          "divisions": 50,
+          "lineWidth": 1,
+          "color": "#248eff",
+          "position": [
+            0,
+            0,
+            -2.1
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "frameId": "pool_link"
+        }
+      },
+      "publish": {
+        "type": "point",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "synchronize": false,
+      "imageMode": {}
+    },
+    "Publish!3wvumo2": {
+      "topicName": "/mission_selector",
+      "datatype": "std_msgs/Int32",
+      "value": "{\n  \"data\": 1\n}",
+      "advancedView": true
+    },
+    "py-trees-foxglove-viewer.py-trees-viewer!3g2bfba": {},
+    "RosOut!peb0ff": {
+      "minLogLevel": 1,
+      "preload": true,
+      "searchTerms": [
+        "planner_root_tree",
+        "navigation_server"
+      ],
+      "nameFilter": {},
+      "fontSize": 12,
+      "showLevel": true,
+      "showDate": true,
+      "showTime": true,
+      "showTimezone": true,
+      "showName": true,
+      "showSourceLocation": false
+    },
+    "CallService!1irzzk4": {
+      "requestPayload": "{\n  \"action\": 0,\n  \"bag_name\": \"test-sim-planner2\",\n  \"profile\": \"all\"\n}",
+      "layout": "vertical",
+      "timeoutSeconds": 10,
+      "serviceName": "/rosbag_manager/control"
+    },
+    "CallService!2mthctm": {
+      "requestPayload": "{\n  \"action\": 1,\n  \"bag_name\": \"\",\n  \"profile\": \"\"\n}",
+      "layout": "vertical",
+      "timeoutSeconds": 10,
+      "serviceName": "/rosbag_manager/control"
+    },
     "Tab!images": {
-      "activeTabIdx": 3,
+      "activeTabIdx": 6,
       "tabs": [
         {
           "title": "YOLO Debug",
@@ -549,67 +794,61 @@
               "second": "Image!3y48a7n",
               "direction": "column"
             },
-            "second": "3D!38qyra4",
+            "second": {
+              "first": "3D!38qyra4",
+              "second": {
+                "first": "Stack!3ndws3g",
+                "second": "Stack!16hgnhq",
+                "direction": "row"
+              },
+              "direction": "row",
+              "splitPercentage": 75.05126452494872
+            },
             "direction": "row",
-            "splitPercentage": 49.06145230805546
+            "splitPercentage": 26.629889669007024
+          }
+        },
+        {
+          "title": "Object map table",
+          "layout": "Table!1tr9jz4"
+        },
+        {
+          "title": "Parameters",
+          "layout": "Parameters!68s8k8"
+        },
+        {
+          "title": "Planner Dashboard",
+          "layout": {
+            "first": {
+              "first": "Image!7rhem8",
+              "second": {
+                "first": "3D!3m45izj",
+                "second": "Publish!3wvumo2",
+                "direction": "column",
+                "splitPercentage": 74.79351448722592
+              },
+              "direction": "column",
+              "splitPercentage": 38.725398027014265
+            },
+            "second": {
+              "first": "py-trees-foxglove-viewer.py-trees-viewer!3g2bfba",
+              "second": "RosOut!peb0ff",
+              "direction": "column",
+              "splitPercentage": 69.09090880489617
+            },
+            "direction": "row",
+            "splitPercentage": 26.049453709028175
+          }
+        },
+        {
+          "title": "ROS Bag manager",
+          "layout": {
+            "first": "CallService!1irzzk4",
+            "second": "CallService!2mthctm",
+            "direction": "row"
           }
         }
       ]
-    },
-    "CallService!startCollection": {
-      "serviceName": "/vision/front_cam/toggle_collection",
-      "requestPayload": "{ \"data\": true , \"time_interval\": 1}",
-      "buttonText": "Start Collection",
-      "layout": "vertical",
-      "timeoutSeconds": 10,
-      "editingMode": true,
-      "foxglovePanelTitle": ""
-    },
-    "CallService!aprxzk": {
-      "requestPayload": "{ \"data\": true , \"time_interval\": 1}",
-      "layout": "vertical",
-      "timeoutSeconds": 10,
-      "serviceName": "/vision/down_cam/toggle_collection",
-      "buttonText": "Start Collection"
-    },
-    "CallService!stopCollection": {
-      "serviceName": "/vision/front_cam/toggle_collection",
-      "requestPayload": "{\n  \"data\": false,\n  \"time_interval\": 1\n}",
-      "buttonText": "Stop Collection",
-      "layout": "vertical",
-      "timeoutSeconds": 10
-    },
-    "CallService!1nbfksc": {
-      "requestPayload": "{\n  \"data\": false,\n  \"time_interval\": 1\n}",
-      "layout": "vertical",
-      "timeoutSeconds": 10,
-      "serviceName": "/vision/down_cam/toggle_collection",
-      "buttonText": "Stop Collection"
-    },
-    "CallService!2mchwjt": {
-      "requestPayload": "{}",
-      "layout": "vertical",
-      "timeoutSeconds": 10,
-      "serviceName": "/vision/front_cam/toggle_annotated_image",
-      "foxglovePanelTitle": "Call service /vision/front_cam/toggle_annotated_image",
-      "buttonText": "Toggle annotation on front feed"
-    },
-    "CallService!2aw7m5n": {
-      "requestPayload": "{}",
-      "layout": "vertical",
-      "timeoutSeconds": 10,
-      "serviceName": "/vision/down_cam/toggle_annotated_image",
-      "buttonText": "Toggle annotation on down feed",
-      "editingMode": true
-    },
-    "Publish!3wvumo2": {
-      "topicName": "/mission_selector",
-      "datatype": "std_msgs/Int32",
-      "value": "{\n  \"data\": 8\n}"
-    },
-    "RawMessages!3im8qvp": {
-      "topicPath": "/power/batteries/voltage",
-      "defaultExpanded": false
     }
   }
 }
