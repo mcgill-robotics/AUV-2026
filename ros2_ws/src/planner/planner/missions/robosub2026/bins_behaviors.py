@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from planner.missions.mission_behaviour_components import BasicActionBehaviour
 import py_trees
 import math
 import planner.missions.vision_behaviours as vision_behaviours
@@ -51,8 +52,9 @@ class BinInfo:
 
 # TODO: don't fail if it only finds one bin
 class GetClosestBins(py_trees.behaviour.Behaviour):
-    def __init__(self):
+    def __init__(self, num_bins: int = 2):
         super().__init__("GetClosestBins")
+        self.num_bins = num_bins
         self.blackboard = self.attach_blackboard_client(name=self.name)
         self.success = False
 
@@ -86,10 +88,14 @@ class GetClosestBins(py_trees.behaviour.Behaviour):
                 elif distance < bin_2_distance:
                     bin_2 = object
                     bin_2_distance = distance
-        
-        if bin_1 is not None and bin_2 is not None:
-            self.blackboard.bins_task.closest_bins = [BinInfo(pose=bin_1.pose.position), BinInfo(pose=bin_2.pose.position)]
-            self.success = True
+        if self.num_bins >= 2:
+            if bin_1 is not None and bin_2 is not None:
+                self.blackboard.bins_task.closest_bins = [BinInfo(pose=bin_1.pose.position), BinInfo(pose=bin_2.pose.position)]
+                self.success = True
+        elif self.num_bins == 1:
+            if bin_1 is not None:
+                self.blackboard.bins_task.closest_bins = [BinInfo(pose=bin_1.pose.position)]
+                self.success = True
 
     def update(self) -> py_trees.common.Status:
         return py_trees.common.Status.SUCCESS if self.success else py_trees.common.Status.FAILURE
@@ -119,8 +125,11 @@ class AlignBinsAttempt(py_trees.composites.Sequence):
         super().__init__("AlignBinsAttempt", memory=True)
         self.bins_params = bins_params or {}
         # just run it twice, works with visited logic
-        get_bins = GetClosestBins()
-        align_bins = TryAlignBothBins(self.bins_params)
+        get_bins = GetClosestBins(self.bins_params['num_bins'])
+        if self.bins_params['num_bins'] >= 2:
+            align_bins = TryAlignBothBins(self.bins_params)
+        else:
+            align_bins = AlignClosestBin(self.bins_params)
 
         self.add_children([get_bins, align_bins])
 
@@ -138,7 +147,9 @@ class AlignOtherSideBin(py_trees.composites.Sequence):
         super().__init__("AlignOtherSideBin", memory=True)
         self.bins_params = bins_params or {}
         go_to_other_side = GoToOtherSide(self.bins_params)
-        align_bins_attempt = AlignBinsAttempt(self.bins_params)
+        bins_params_other_side = bins_params.copy()
+        bins_params_other_side['num_bins'] -= 2
+        align_bins_attempt = AlignBinsAttempt(bins_params_other_side)
 
         self.add_children([go_to_other_side, align_bins_attempt])
     
@@ -147,7 +158,10 @@ class AlignCorrectBin(py_trees.composites.Selector):
         super().__init__("AlignCorrectBin", memory=True)
         self.bins_params = bins_params or {}
         align_bin_first_side = AlignBinsAttempt(self.bins_params)
-        align_other_bin = AlignOtherSideBin(self.bins_params)
+        if self.bins_params['num_bins'] > 2:
+            align_other_bin = AlignOtherSideBin(self.bins_params)
+        else:
+            align_other_bin = py_trees.behaviours.Failure(name="SkipOtherBinAlignment")
 
         self.blackboard = self.attach_blackboard_client(name=self.name)
 
@@ -301,6 +315,7 @@ class GoToBlackboardBinStructure(py_trees.behaviour.Behaviour):
         self.node = kwargs['node']
         self.navigation_client = kwargs['shared_nav_client']
         self.blackboard.register_key("/bins_task/structure_pos", py_trees.common.Access.READ)
+        self.blackboard.register_key("/bins_task/closest_bins", py_trees.common.Access.READ)
 
     def on_server_goal_response(self, goal_response: bool):
         if not goal_response:
@@ -319,7 +334,14 @@ class GoToBlackboardBinStructure(py_trees.behaviour.Behaviour):
             return py_trees.common.Status.FAILURE
         
         structure_pos = self.blackboard.bins_task.structure_pos
-        self.goal = move_global(structure_pos.x, structure_pos.y, structure_pos.z + self.height_offset, hold_time=0.0)
+
+        bins = self.blackboard.bins_task.closest_bins
+
+        bins_midpoint = (bins[0].pose.x + bins[1].pose.x) / 2, (bins[0].pose.y + bins[1].pose.y) / 2
+
+        yaw = math.atan2(structure_pos.y - bins_midpoint[1], structure_pos.x - bins_midpoint[0])
+        
+        self.goal = move_global(structure_pos.x, structure_pos.y, structure_pos.z + self.height_offset, yaw=yaw, hold_time=0.0)
 
     def update(self):
         if self.action_status is ActionStatus.NOT_SENT:
@@ -340,9 +362,10 @@ class GoToOtherSide(py_trees.composites.Sequence):
         switch_height = self.bins_params['switch_sides_height']
         get_bin_structure_pos = GetBinStructurePos(bins_params)
         go_up = GoToBlackboardBinStructure(height_offset=switch_height, bins_params=bins_params)
+        go_forward = BasicActionBehaviour(name="GoForwardForSwitchSides", goal=move_robot_centric(forward=2.0, hold_time=0.0))
         switch_sides = SwitchSides(self.bins_params)
 
-        self.add_children([get_bin_structure_pos, go_up, switch_sides])
+        self.add_children([get_bin_structure_pos, go_up, go_forward, switch_sides])
 
 class FollowDowncamBin(py_trees.behaviour.Behaviour):
     def __init__(self, bins_params: dict = None):
