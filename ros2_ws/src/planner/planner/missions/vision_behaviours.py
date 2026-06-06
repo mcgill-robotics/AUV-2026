@@ -370,6 +370,7 @@ class CircleAroundToFindBehaviour(py_trees.behaviour.Behaviour):
     """
     Circles around a reference point while facing it, attempting at the same time to find a target object in vision.
     This behaviour is mostly intended for the torpedo board, circling around the board to find the icons and thus confirming we are facing the right direction to shoot torpedoes.
+    Behaviour assumes there is only one instance of the reference class visible in vision at a time, and that it is visible from the start of the behaviour. If multiple instances of the reference class are visible, it will use the first one in the object map array, which may be arbritrary.
     
     reference_class: The vision class of the reference point to circle around (e.g. "torpedo_board").
     z_reference: (m) The depth to maintain while circling (e.g. the depth of the center of the board).
@@ -379,10 +380,10 @@ class CircleAroundToFindBehaviour(py_trees.behaviour.Behaviour):
     max_circling_attempts: The number of full circles (360-degree sweeps) to attempt before giving up.
     step_timeout: (s) Seconds to pause after each turn step to let vision stabilize.
     clockwise: Whether to circle in a clockwise direction (True) or counterclockwise (False).
-    look_at_on_success: Whether to do a final "look at" turn towards the reference point after finding the target object(s) to better center it in view.
-    yaw_tolerance_rad: (rad) Yaw convergence threshold for each turn step.
-    turn_hold_time_s: (s) Hold time before declaring turn step SUCCESS.
-    turn_timeout_s: (s) Timeout before declaring turn step FAILURE.
+    position_tolerance: (m) Position convergence threshold for each turn step. Used in navigation client
+    yaw_tolerance_rad: (rad) Yaw convergence threshold for each turn step. Used in navigation client.
+    turn_hold_time_s: (s) Hold time before declaring turn step SUCCESS. Used in navigation client.
+    turn_timeout_s: (s) Timeout before declaring turn step FAILURE. Used in navigation client.
     """
     def __init__(
         self,
@@ -394,7 +395,7 @@ class CircleAroundToFindBehaviour(py_trees.behaviour.Behaviour):
         max_circling_attempts: int = 2,
         step_timeout: float = 2.0,
         clockwise: bool = False,
-        look_at_on_success: bool = True,
+        position_tolerance: float = 0.5,                     # (m) position convergence threshold for each turn step
         yaw_tolerance_rad: float = math.radians(30.0),  # (rad) yaw convergence threshold per turn step
         turn_hold_time_s: float = 0.1,                   # (s) hold time before turn step SUCCESS
         turn_timeout_s: float = 30.0,                    # (s) timeout before turn step FAILURE
@@ -410,7 +411,7 @@ class CircleAroundToFindBehaviour(py_trees.behaviour.Behaviour):
         self.max_circling_attempts: int = max_circling_attempts
         self.step_timeout: float = step_timeout
         self.clockwise: bool = clockwise
-        self.look_at_on_success: bool = look_at_on_success
+        self.position_tolerance: float = position_tolerance
         self.yaw_tolerance_rad: float = yaw_tolerance_rad
         self.turn_hold_time_s: float = turn_hold_time_s
         self.turn_timeout_s: float = turn_timeout_s
@@ -418,18 +419,19 @@ class CircleAroundToFindBehaviour(py_trees.behaviour.Behaviour):
         # State tracking
         self.phase: CircleAroundPhases = CircleAroundPhases.APPROACH
         self.current_attempt: int = 0
-        self.current_step: int = 0
+        self.circle_step: int = 0
         self.action_status: ActionStatus = ActionStatus.NOT_SENT
         self.reference_position: Optional[Vector2D] = None
-
+        
+        self.angle_rad_per_circle_step = (2 * math.pi) / float(num_circle_steps)
+        if self.clockwise:
+            self.angle_rad_per_circle_step = -self.angle_rad_per_circle_step
         
         self.blackboard = self.attach_blackboard_client(name=self.name)
         # Pause tracking        
         self.pause_start_time: float = 0.0
         self.is_pausing: bool = False
-
-        # Absolute angle tracking
-        self.start_yaw: Optional[float] = None
+        self.result_message=""
         
         # Target found tracking
         self.found_targets: dict[str, int] = {cls: 0 for cls in target_classes.keys()}
@@ -437,6 +439,7 @@ class CircleAroundToFindBehaviour(py_trees.behaviour.Behaviour):
     def setup(self, **kwargs):
         self.node = kwargs['node']
         self.navigation_client = kwargs['shared_nav_client']
+        self.result_message=""
         self.navigation_client.client_wait_for_server(timeout_sec=5.0) 
         self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
@@ -445,35 +448,33 @@ class CircleAroundToFindBehaviour(py_trees.behaviour.Behaviour):
         # Reset state when this behavior starts
         self.phase = CircleAroundPhases.APPROACH
         self.current_attempt = 0
-        self.current_step = 0
+        self.circle_step = 0
         self.action_status = ActionStatus.NOT_SENT
         self.sent_goal = False
         self.is_pausing = False
-        self.start_yaw = None
-        self.found_targets = {cls: 0 for cls in self.target_classes.keys()}
         self.reference_position = None
         
     def update(self):
+        # self.node.get_logger().info(f"[{self.name}] Current phase: {self.phase}, action status: {self.action_status}, current attempt: {self.current_attempt}, circle step: {self.circle_step}, found targets: {self.found_targets}",throttle_duration_sec=1.0)
         match self.phase:
             case CircleAroundPhases.APPROACH:
                 match self.action_status:
                     case ActionStatus.SUCCEEDED:  # Approach -> Pause
-                        self.node.get_logger().info(f"[{self.name}] Approach complete. AUV facing {self.reference_class} reference point at {self.reference_distance}m away.")
+                        self.node.get_logger().info(f"[{self.name}] Approach complete. AUV facing {self.reference_class} reference point at {self.reference_distance}m away. Navigation result message: {self.result_message}")
                         self.phase = CircleAroundPhases.PAUSING
                         self.action_status = ActionStatus.NOT_SENT
                         self.sent_goal = False
                         return py_trees.common.Status.RUNNING
                     case ActionStatus.FAILED:
-                        self.node.get_logger().error(f"[{self.name}] Initial face towards reference failed.")
+                        self.node.get_logger().error(f"[{self.name}] Initial face towards reference failed. Navigation result message: {self.result_message}")
                         return py_trees.common.Status.FAILURE
                     case ActionStatus.PENDING:
                         return py_trees.common.Status.RUNNING
                     case ActionStatus.NOT_SENT:
-                        reference_obj_list = self._find_object_in_map(self.reference_class)
-                        if not reference_obj_list:
-                            self.node.get_logger().warn(f"[{self.name}] Reference object '{self.reference_class}' not found in vision. Unable to start circle around.")
+                        self.reference_position = self._find_reference_position()
+                        if self.reference_position is None:
+                            self.node.get_logger().warn(f"[{self.name}] Lost sight of reference object '{self.reference_class}' during initial approach. Unable to continue.")
                             return py_trees.common.Status.FAILURE
-                        self.reference_position = Vector2D.from_point(reference_obj_list[0].pose.position)
                         self.node.get_logger().info(f"[{self.name}] Found reference object '{self.reference_class}' at position {self.reference_position}. Starting facing towards it.")
                         auv_pose = self._determine_auv_pose()
                         if auv_pose is None:
@@ -488,9 +489,7 @@ class CircleAroundToFindBehaviour(py_trees.behaviour.Behaviour):
                         goal_vector = auv_to_ref.normalized() * self.reference_distance
                         goal_position = self.reference_position - goal_vector  # we want to be behind the reference
                         
-                        self.node.get_logger().info(f"[{self.name}] AUV current 2D position: {auv_2D_position}, reference position: {self.reference_position}, AUV to reference vector: ({auv_to_ref.x}, {auv_to_ref.y}), goal position for approach: ({goal_position.x}, {goal_position.y}).")
-                        
-                        
+                        self.node.get_logger().info(f"[{self.name}] AUV current 2D position: {auv_2D_position}, reference position: {self.reference_position}, AUV to reference vector: {auv_to_ref}, goal position for approach: {goal_position}.")
 
                         goal = move_to_and_look_at(
                             target_x=goal_position.x,
@@ -500,13 +499,16 @@ class CircleAroundToFindBehaviour(py_trees.behaviour.Behaviour):
                             reference_y=self.reference_position.y,
                             current_x=auv_2D_position.x,
                             current_y=auv_2D_position.y,
-                            position_tolerance=self.yaw_tolerance_rad,  # (rad)
+                            position_tolerance=self.position_tolerance,  # (m)
+                            yaw_tolerance=self.yaw_tolerance_rad,  # (rad)
                             hold_time=self.turn_hold_time_s,   # (s)
                             timeout=self.turn_timeout_s,       # (s)
                         )
                         self.navigation_client.send_navigation_goal(goal, self.name, self.on_server_goal_response, self.on_server_goal_result)
                         self.action_status = ActionStatus.PENDING
-                return py_trees.common.Status.RUNNING
+                        self.sent_goal = True
+                        return py_trees.common.Status.RUNNING
+
             case CircleAroundPhases.PAUSING:
                 elapsed = (self.node.get_clock().now().nanoseconds / 1e9) - self.pause_start_time
                 # check if this is the first tick of the pause phase to log and start the timer
@@ -515,6 +517,7 @@ class CircleAroundToFindBehaviour(py_trees.behaviour.Behaviour):
                     self.pause_start_time = self.node.get_clock().now().nanoseconds / 1e9
                     self.node.get_logger().info(f"[{self.name}] Pausing for {self.step_timeout}s to stabilize vision before circling.")
                 elif elapsed >= self.step_timeout:
+                    # Transition to circling phase after pause
                     self.phase = CircleAroundPhases.CIRCLING
                     # sanity reset
                     self.action_status = ActionStatus.NOT_SENT
@@ -522,9 +525,85 @@ class CircleAroundToFindBehaviour(py_trees.behaviour.Behaviour):
                 return py_trees.common.Status.RUNNING
 
             case CircleAroundPhases.CIRCLING:
-                return py_trees.common.Status.SUCCESS  # Placeholder for now  
+                match self.action_status:
+                    case ActionStatus.SUCCEEDED:
+                        self.node.get_logger().info(f"[{self.name}] Circle step {self.circle_step} complete. Navigation result message: {self.result_message}")
+                        self.circle_step += 1
+                        # full rotation
+                        if self.circle_step >= self.num_circle_steps:
+                            self.circle_step = 0
+                            self.current_attempt += 1
+                            # exceeded max attempts
+                            if self.current_attempt >= self.max_circling_attempts:
+                                self.node.get_logger().info(f"[{self.name}] Max circling attempts reached ({self.max_circling_attempts}). Target objects not found: {self.found_targets}.")
+                                return py_trees.common.Status.FAILURE
+                            else:
+                                self.node.get_logger().info(f"[{self.name}] Completed a full circle. Starting attempt {self.current_attempt + 1}/{self.max_circling_attempts}.")
+                                self.action_status = ActionStatus.NOT_SENT
+                                self.sent_goal = False
+                                return py_trees.common.Status.RUNNING
+                        else:
+                            self.node.get_logger().info(f"[{self.name}] Starting circle step {self.circle_step + 1}/{self.num_circle_steps}.")
+                            self.action_status = ActionStatus.NOT_SENT
+                            self.sent_goal = False
+                            return py_trees.common.Status.RUNNING
+                    case ActionStatus.FAILED:
+                        self.node.get_logger().error(f"[{self.name}] Failed to circle to next position. Step {self.circle_step}/{self.num_circle_steps}, Attempt {self.current_attempt}/{self.max_circling_attempts}. Navigation result message: {self.result_message}")
+                        return py_trees.common.Status.FAILURE
+                    case ActionStatus.PENDING:
+                        return py_trees.common.Status.RUNNING
+                    case ActionStatus.NOT_SENT:
+                        # TODO true should return success
+                        if self._check_targets_found():
+                            self.node.get_logger().info(f"[{self.name}] Found all target objects: {self.found_targets}.")
+                            return py_trees.common.Status.RUNNING
+                        self.reference_position = self._find_reference_position()
+                        if self.reference_position is None:
+                            self.node.get_logger().warn(f"[{self.name}] Lost sight of reference object '{self.reference_class}' during circling. Unable to continue.")
+                            return py_trees.common.Status.FAILURE
+                        auv_pose = self._determine_auv_pose()
+                        if auv_pose is None:
+                            self.node.get_logger().warn(f"[{self.name}] Waiting for /sensors/pose to determine current position for circling.")
+                            return py_trees.common.Status.RUNNING
+                        auv_2D_position, _, _ = auv_pose
+                        goal_position = self._compute_circle_goal(
+                            current_position=auv_2D_position,
+                            center=self.reference_position,
+                            radius=self.reference_distance,
+                            arc_angle_rad_offset=self.angle_rad_per_circle_step
+                        )
+                        if goal_position is None:
+                            self.node.get_logger().error(f"[{self.name}] Failed to compute circle goal position. Reference position: {self.reference_position}, Radius: {self.reference_distance}, Arc angle (rad): {self.angle_rad_per_circle_step * self.circle_step}")
+                            return py_trees.common.Status.FAILURE
+                        self.node.get_logger().info(f"[{self.name}] Step {self.circle_step+1}/{self.num_circle_steps} Circling to new goal position: {goal_position} around reference at {self.reference_position}. Goal angle from start: {math.degrees(self.angle_rad_per_circle_step * (self.circle_step+1)):.1f}°/360°.")
+                        self.node.get_logger().info(f"[{self.name}] AUV current 2D position: {auv_2D_position}, reference position: {self.reference_position}, goal position for circling: {goal_position}.")
+                        goal = move_to_and_look_at(
+                            target_x=goal_position.x,
+                            target_y=goal_position.y,
+                            target_z=self.z_reference,
+                            reference_x=self.reference_position.x,
+                            reference_y=self.reference_position.y,
+                            current_x=auv_2D_position.x,
+                            current_y=auv_2D_position.y,
+                            position_tolerance=self.position_tolerance,  # (m)
+                            yaw_tolerance=self.yaw_tolerance_rad,  # (rad)
+                            hold_time=self.turn_hold_time_s,   # (s)
+                            timeout=self.turn_timeout_s,       # (s)
+                        )
+                        self.navigation_client.send_navigation_goal(goal, self.name, self.on_server_goal_response, self.on_server_goal_result)
+                        self.action_status = ActionStatus.PENDING
+                        self.sent_goal = True
+                        return py_trees.common.Status.RUNNING
                 
-
+    def _find_reference_position(self) -> Optional[Vector2D]:
+        """Helper function to find the reference point position from the vision object map on the blackboard."""
+        potential_refs = self._find_object_in_map(self.reference_class)
+        if potential_refs:
+            # there should only be one reference object. If there are multiple, we'll use the first one.
+            ref_obj = potential_refs[0]
+            return Vector2D.from_point(ref_obj.pose.position)
+        return None
+    
     def _find_object_in_map(self,class_name: str)-> List[VisionObject]:
         """Helper function to find all objects of a given class in the vision object map on the blackboard."""
         
@@ -535,7 +614,20 @@ class CircleAroundToFindBehaviour(py_trees.behaviour.Behaviour):
                     objects.append(obj)
         return objects
     
-        
+    def _check_targets_found(self) -> bool:
+        """Helper function to check how many of each target class have been found in the vision object map on the blackboard, and return True if we have found at least the required count of each class."""
+        if hasattr(self.blackboard, 'vision') and self.blackboard.vision.object_map is not None:
+            for obj in self.blackboard.vision.object_map.array:
+                if obj.label in self.target_classes.keys():
+                    # store all found targets, even if they exceed the required count, for logging purposes
+                    self.found_targets[obj.label] += 1
+        for class_name, count in self.found_targets.items():
+            self.node.get_logger().info(f"[{self.name}] Found {count}/{self.target_classes[class_name]} of target class '{class_name}'.")
+        for class_name, count in self.target_classes.items():
+            if self.found_targets[class_name] < count:
+                return False
+        return True
+    
     def _determine_auv_pose(self) -> Optional[Tuple[Vector2D, float, float]]:
         """Helper function to determine the AUV's current position and yaw from the blackboard. Returns (x, y, z, yaw) or None if pose is not available."""
         
@@ -548,11 +640,22 @@ class CircleAroundToFindBehaviour(py_trees.behaviour.Behaviour):
         auv_yaw = yaw_from_quaternion(current_quat)
         return (Vector2D(auv_x, auv_y), auv_z, auv_yaw)
 
+    def _compute_circle_goal(self, current_position: Vector2D, center: Vector2D, radius: float, arc_angle_rad_offset: float) -> Optional[Vector2D]:
+        """Helper function to compute the XY goal position based on center, radius and arc angle. Returned position is the point on the circle defined by center and radius at the given arc angle from the reference point."""
+        if center is None or radius is None or radius <= 0 or arc_angle_rad_offset is None:
+            return None
+        # compute the angle from the reference point to the current position, then add the arc angle offset to get the goal position on the circle
+        arc_angle_rad =  math.atan2(current_position.y - center.y, current_position.x - center.x) + arc_angle_rad_offset
+        goal_x = center.x + radius * math.cos(arc_angle_rad)
+        goal_y = center.y + radius * math.sin(arc_angle_rad)
+        return Vector2D(goal_x, goal_y)
+
     def on_server_goal_response(self, goal_response: bool):
         if not goal_response:
             self.action_status = ActionStatus.FAILED
-            
-    def on_server_goal_result(self, goal_success: bool):
+
+    def on_server_goal_result(self, goal_success: bool, message: str):
+        self.result_message = message
         if goal_success:
             self.action_status = ActionStatus.SUCCEEDED
         else:

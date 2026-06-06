@@ -272,7 +272,7 @@ def move_to_and_look_at(
     current_x: float,
     current_y: float,
     position_tolerance: float = _DEFAULT_POS_TOL,
-    yaw_tolerance: float = _DEFAULT_YAW_TOL,
+    yaw_tolerance: float = _DEFAULT_ANGULAR_TOL,
     hold_time: float = _DEFAULT_HOLD,
     timeout: float = _DEFAULT_TIMEOUT,
 ) -> AUVNavigate.Goal:
@@ -285,7 +285,7 @@ def move_to_and_look_at(
         target_pose=pose,
         do_x=True, do_y=True, do_z=True, do_yaw=True,
         position_tolerance=position_tolerance,
-        yaw_tolerance=yaw_tolerance,
+        angular_tolerance=yaw_tolerance,
         hold_time=hold_time,
         timeout=timeout,
     )
