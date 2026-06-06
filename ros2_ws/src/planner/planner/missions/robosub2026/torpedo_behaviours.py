@@ -1,7 +1,7 @@
 import py_trees
 import py_trees_ros
 from time import sleep
-from ..vision_behaviours import SearchSweepBehaviour
+from ..vision_behaviours import SearchSweepBehaviour, CircleAroundToFindBehaviour
 from enum import Enum
 
 class Season(Enum):
@@ -164,71 +164,26 @@ class TorpedoStrategySelector(py_trees.composites.Selector):
             step_timeout=self.ss_time,
             clockwise=False,
             look_at_on_success=True,
-            yaw_tolerance_rad=self.yaw_tolerance_rad,
             turn_hold_time_s=self.hold_time,
             turn_timeout_s=self.timeout,
             name="Search Sweep for Board"
         )
         
-        ss_blood = SearchSweepBehaviour(
-            target_class="blood",
-            num_steps=5,
-            max_attempts=2,
+        circle_board = CircleAroundToFindBehaviour(
+            reference_class="board",
+            z_reference=-1.0,
+            target_classes={"blood":1, "fire":1, "ambulance":1, "firetruck":1},
+            reference_distance=5,
+            num_circle_steps=6,
+            max_circling_attempts=2,
             step_timeout=self.ss_time,
             clockwise=False,
-            look_at_on_success=True,
             yaw_tolerance_rad=self.yaw_tolerance_rad,
-            turn_hold_time_s=self.hold_time,
-            turn_timeout_s=self.timeout,
-            name="Search Sweep for Blood"
-        )
-        
-        ss_fire = SearchSweepBehaviour(
-            target_class="fire",
-            num_steps=5,
-            max_attempts=2,
-            step_timeout=self.ss_time,
-            clockwise=False,
-            look_at_on_success=True,
-            yaw_tolerance_rad=self.yaw_tolerance_rad,
-            turn_hold_time_s=self.hold_time,
-            turn_timeout_s=self.timeout,
-            name="Search Sweep for Fire"
-        )
-        
-        ss_ambulance = SearchSweepBehaviour(
-            target_class="ambulance",
-            num_steps=5,
-            max_attempts=2,
-            step_timeout=self.ss_time,
-            clockwise=False,
-            look_at_on_success=True,
-            yaw_tolerance_rad=self.yaw_tolerance_rad,
-            turn_hold_time_s=self.hold_time,
-            turn_timeout_s=self.timeout,
-            name="Search Sweep for Ambulance"
-        )
-        
-        ss_firetruck = SearchSweepBehaviour(
-            target_class="firetruck",
-            num_steps=5,
-            max_attempts=2,
-            step_timeout=self.ss_time,
-            clockwise=False,
-            look_at_on_success=True,
-            yaw_tolerance_rad=self.yaw_tolerance_rad,
-            turn_hold_time_s=self.hold_time,
-            turn_timeout_s=self.timeout,
-            name="Search Sweep for Firetruck"
-        )
-                
+        ) 
         board_align.add_children(
             [
                 ss_board,
-                ss_blood,
-                ss_fire,
-                ss_ambulance,
-                ss_firetruck,
+                circle_board,
                 self.distance_strategy_selector()
             ]
         )
@@ -258,6 +213,7 @@ class TorpedoStrategySelector(py_trees.composites.Selector):
         Build a distance strategy based on the distance from the board
         """
         distance_strategy = py_trees.composites.Sequence(f"Distance Strategy {distance_from_board}m", memory=True)
+
         move_and_align = MoveAndAlignToBoard(distance_from_board)
         # TODO add navigation to board position here
         distance_strategy.add_children(
