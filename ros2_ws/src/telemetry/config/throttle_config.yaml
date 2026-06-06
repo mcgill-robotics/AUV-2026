@@ -15,6 +15,6 @@ down_rgb_throttler:
 front_depth_throttler:
   ros__parameters:
     throttle_type: "messages"
-    msgs_per_sec: 5.0
+    msgs_per_sec: 1.0
     input_topic: "/vision/front_cam/detection_frame/depth"
     output_topic: "/vision/front_cam/detection_frame/depth_throttled"

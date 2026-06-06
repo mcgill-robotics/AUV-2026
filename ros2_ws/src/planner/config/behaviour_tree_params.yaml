@@ -3,6 +3,11 @@ planner_root_tree:
     tick_rate       : 3.0
     sim             : false
     use_ground_truth: false
+    
+    # Force tree to broadcast its state and blackboard to the network continuously
+    default_snapshot_stream: true
+    default_snapshot_blackboard_data: true
+    default_snapshot_period: 1.0
 
     pre_qual:
       yaw_tolerance: 0.5

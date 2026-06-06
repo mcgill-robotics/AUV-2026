@@ -2,6 +2,7 @@
 import os
 import time
 import subprocess
+import signal
 import rclpy
 from rclpy.node import Node
 from auv_msgs.srv import RosbagControl
@@ -26,11 +27,14 @@ class RosbagManagerNode(Node):
         self.declare_parameter('profiles_file', default_config)
         config_path = self.get_parameter('profiles_file').get_parameter_value().string_value
 
-        # Load profiles
+        # Load profiles and config
         self.profiles = {}
+        self.save_dir = os.path.expanduser('~/AUV-2026/rosbags') # Default
         try:
             with open(config_path, 'r') as f:
                 config = yaml.safe_load(f)
+                if 'save_dir' in config:
+                    self.save_dir = os.path.expanduser(config['save_dir'])
                 if 'profiles' in config:
                     self.profiles = config['profiles']
         except Exception as e:
@@ -47,8 +51,7 @@ class RosbagManagerNode(Node):
         self.status_pub = self.create_publisher(String, '~/status', 10)
         self.timer = self.create_timer(1.0, self.publish_status)
 
-        # Base save directory
-        self.save_dir = os.path.expanduser('~/AUV-2026/rosbags')
+        # Create directory
         os.makedirs(self.save_dir, exist_ok=True)
 
     def control_callback(self, request, response):
@@ -59,10 +62,10 @@ class RosbagManagerNode(Node):
             response.success, response.message = self.start_recording(profile_name, request.bag_name)
         elif action == RosbagControl.Request.STOP_RECORD:
             response.success, response.message = self.stop_recording()
-        elif action == RosbagControl.Request.PLAY_BAG:
+        elif action == RosbagControl.Request.PLAY_BAG: # For future if needed
             response.success = False
             response.message = 'Playing is not yet implemented in this manager node.'
-        elif action == RosbagControl.Request.STOP_PLAY:
+        elif action == RosbagControl.Request.STOP_PLAY: # For future if needed
             response.success = False
             response.message = 'Stop playing is not yet implemented.'
         else:
@@ -128,8 +131,13 @@ class RosbagManagerNode(Node):
             return False, 'No recording is currently in progress.'
         
         try:
-            self.recorder_process.terminate()
-            self.recorder_process.wait(timeout=5)
+            self.recorder_process.send_signal(signal.SIGINT)
+            try:
+                self.recorder_process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                self.get_logger().warning("Rosbag record didn't stop cleanly, forcing termination...")
+                self.recorder_process.terminate()
+                self.recorder_process.wait(timeout=10)
             self.recorder_process = None
             return True, 'Successfully stopped recording.'
         except Exception as e:

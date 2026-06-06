@@ -80,3 +80,44 @@ scp jetson@ubuntu.local:~/AUV-2026/data_front_cam/* .
 
 ```
 
+## Rosbag Recording
+
+The `telemetry` package includes a `rosbag_manager_node` that provides a service interface to start and stop high-performance `mcap` bag recordings with `zstd_fast` compression. It works alongside `topic_tools throttle` nodes to provide 5Hz image streams for recording without consuming massive disk space.
+
+Configuration for profiles and the base save directory is handled in `config/rosbag_profiles.yaml`.
+
+### Recording Profiles
+
+Profiles dictate which topics are included or excluded via regex.
+- `all`: Records everything. Excludes raw 30Hz images/depth and relies on the 5Hz throttled streams.
+- `all_no_vision`: Records everything except vision and ZED topics.
+- `vision`: Records only vision and ZED topics (using throttled images).
+- `nav_and_controls`: Records core navigation, IMU, DVL, and propulsion data.
+
+### CLI Recording Commands
+
+Start recording a bag (e.g., using the `all` profile):
+```bash
+ros2 service call /rosbag_manager/control auv_msgs/srv/RosbagControl "{action: 0, bag_name: '', profile: 'all'}"
+```
+*(If `bag_name` is left empty, it will auto-generate a timestamped folder name).*
+
+Stop the current recording:
+```bash
+ros2 service call /rosbag_manager/control auv_msgs/srv/RosbagControl "{action: 1}"
+```
+
+> **Note**: To playback a recorded `.mcap` bag, we highly recommend simply dragging and dropping the file directly into Foxglove Studio. This allows for instant timeline scrubbing without network bottlenecks or topic collisions.
+
+If you need to playback the bag into the live ROS network for Software-in-the-Loop (SITL) testing (e.g. running the perception or planning nodes against recorded sensor data), run this in a terminal:
+
+```bash
+# Play a bag, publish the /clock topic for simulation time, and loop endlessly
+ros2 bag play rosbags/<bag_name> --clock --loop
+```
+*(Make sure to set `use_sim_time:=true` on any nodes you run against the playback data).*
+
+> **Behavior Tree Playback Gotcha**: The `py_trees_ros_viewer` GUI relies on active ROS Services to connect to a running tree. Since rosbags only play back topics, the GUI will show up empty during playback. To view a recorded behavior tree, use the command-line watcher instead, which taps directly into the recorded snapshot topic:
+```bash
+py-trees-tree-watcher /planner_root_tree/snapshots -b
+```

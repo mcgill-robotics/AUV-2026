@@ -105,7 +105,7 @@ front_cam_object_detection:
     publish_annotated_rate: 1 # publish annotated image every N detection frames
     publish_depth: true # publish raw 32FC1 depth map image
     publish_depth_compressed: false # publish depth map as compressed 16-bit PNG
-    publish_depth_rate: 5 # publish depth image every N frames
+    publish_depth_every_n_frames: 10 # publish depth image every N frames
     stream_ip: "127.0.1.1" # may be used by ZED ROS Wrapper or ZED SDK directly
     stream_port: 30000 # may be used by ZED ROS Wrapper or ZED SDK directly
 
