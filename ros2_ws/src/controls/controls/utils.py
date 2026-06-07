@@ -70,6 +70,16 @@ def compute_mean_orientation(orientations: list[Quaternion]) -> Quaternion:
     mean_orientation.w /= n
     return mean_orientation
 
+def quaternion_distance(q1: Quaternion, q2: Quaternion) -> float:
+    """Compute a naive distance between two quaternions as the Euclidean distance in quaternion space. This is not a true geodesic distance, but is sufficient for outlier rejection as long as the quaternions are close together."""
+    distance = math.sqrt(
+        (q1.x - q2.x) ** 2 +
+        (q1.y - q2.y) ** 2 +
+        (q1.z - q2.z) ** 2 +
+        (q1.w - q2.w) ** 2
+    )
+    return distance
+
 def is_quaternion_outlier(new_orientation: Quaternion, samples: list[Quaternion], rejection_threshold: float) -> bool:
     """Determine if a new quaternion orientation is an outlier compared to a list of samples."""
     if len(samples) == 0:
@@ -81,13 +91,8 @@ def is_quaternion_outlier(new_orientation: Quaternion, samples: list[Quaternion]
 
     # Compute distance between new orientation and mean orientation (also naive Euclidean distance in quaternion space, not a true geodesic distance)
     # TODO use angular distance instead
-    distance = math.sqrt(
-        (mean_orientation.x - new_orientation.x) ** 2 +
-        (mean_orientation.y - new_orientation.y) ** 2 +
-        (mean_orientation.z - new_orientation.z) ** 2 +
-        (mean_orientation.w - new_orientation.w) ** 2
-    )
-
+    distance = quaternion_distance(new_orientation, mean_orientation)
+    
     return distance > rejection_threshold
 @dataclass
 class Vector2D:

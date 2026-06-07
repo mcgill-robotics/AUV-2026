@@ -3,7 +3,7 @@ import py_trees_ros
 from time import sleep
 from ..vision_behaviours import SearchSweepBehaviour, CircleAroundToFindBehaviour
 from ..action_status_enum import ActionStatus
-from controls.utils import is_quaternion_outlier, compute_mean_orientation, find_normal_to_quaternion, Vector2D
+from controls.utils import is_quaternion_outlier, compute_mean_orientation, find_normal_to_quaternion, Vector2D, quaternion_distance
 from controls.goal_helpers import move_to_pose
 from enum import Enum
 from geometry_msgs.msg import Pose
@@ -121,175 +121,32 @@ class TorpedoNodeFactory:
         )
         return node_go_to_animal
 
-class TorpedoStrategySelector(py_trees.composites.Selector):
-    """
-    High Level Strategy Selector for Torpedo Task. Depending on if we find the board
-    1. Try to get highest points by finding board, aligning with board, and firing torpedos through the correct holes
-    2. If we fail to find the board or find a path to the front of the board such that we are aligned, try to get partial points by just firing torpedos at random
-    """
-    
-    def __init__(
-            self,
-            initial_distance_from_board: float = 3.0,
-            z_reference: float = -1.0,
-            scan_pause_time: float = 1.0,
-            yaw_tolerance_rad: float = 0.3,
-            hold_time: float = 0.5,
-            timeout: float = 45.0,
-        ):
-        super().__init__("Torpedo Strategy", memory=True)
-        self.factory = TorpedoNodeFactory()
-        self.ss_time = scan_pause_time
-        self.yaw_tolerance_rad = yaw_tolerance_rad
-        self.hold_time = hold_time
-        self.timeout = timeout
-        self.add_children(
-            [
-                self.board_strategy(),
-                self.node_base_case()
-            ]
-        )
-        self.initial_distance_from_board = initial_distance_from_board
-        self.z_reference = z_reference
-        # convert initial distance from board to 2D distance from board for circling behaviour
-        self.initial_distance_from_board_2d = (initial_distance_from_board**2 - z_reference**2)**0.5 
-
-    def tick_tree(self):
-        pass
-
-    # This is the first node in the torpedo BT
-    def board_strategy(self)->py_trees.composites.Sequence:
-        """
-        Subtree to align to board and fire into board
-        1. Search Sweep to find board
-        2. Determine Distance Strategy
-
-        returns py_trees.composites.Sequence
-        """
-        board_align:py_trees.composites.Sequence = py_trees.composites.Sequence("Board Strategy", memory=True)
-        ss_board = SearchSweepBehaviour(
-            target_class="board",
-            num_steps=5,
-            max_attempts=2,
-            step_timeout=self.ss_time,
-            clockwise=False,
-            look_at_on_success=True,
-            turn_hold_time_s=self.hold_time,
-            turn_timeout_s=self.timeout,
-            name="Search Sweep for Board"
-        )
-        
-        circle_board = CircleAroundToFindBehaviour(
-            reference_class="board",
-            z_reference=self.z_reference,
-            target_classes={"blood":1, "fire":1, "ambulance":1, "firetruck":1},
-            reference_distance=self.initial_distance_from_board_2d,
-            num_circle_steps=6,
-            max_circling_attempts=2,
-            step_timeout=self.ss_time,
-            clockwise=False,
-            yaw_tolerance_rad=self.yaw_tolerance_rad,
-        ) 
-        board_align.add_children(
-            [
-                ss_board,
-                circle_board,
-                self.distance_strategy_selector()
-            ]
-        )
-
-        return board_align
-    
-    def distance_strategy_selector(self)->py_trees.composites.Selector:
-        """
-        Distance from board
-        1. Farther: 0.46m away
-        2. Far: 0.3m away
-        3. Close: <0.3m away, just stick torpedo up to board and hope for the best
-        """
-        distance_strategy_selector = py_trees.composites.Selector("Distance Strategy Selector", memory=True)
-        distance_strategy_selector.add_children(
-            [
-                self.build_distance_strategy(0.46),
-                self.build_distance_strategy(0.3),
-                self.build_distance_strategy(0.1)
-            ]
-         )
-        return distance_strategy_selector
-
-
-    def build_distance_strategy(self, distance_from_board: float)->py_trees.composites.Sequence:
-        """
-        Build a distance strategy based on the distance from the board
-        """
-        distance_strategy = py_trees.composites.Sequence(f"Distance Strategy {distance_from_board}m", memory=True)
-
-        move_and_align = MoveAndAlignToBoard(distance_from_board)
-        # TODO add navigation to board position here
-        distance_strategy.add_children(
-            [
-                move_and_align,
-            ]
-        )
-        return distance_strategy
-    
-    def build_find_board_orientation_sequence(self)->py_trees.composites.Sequence:
-        """
-        Build a sequence to find the board orientation and align to it. Used to save a stable version of the board orientatio for downstream alignments when approaching the board
-
-        returns py_trees.composites.Sequence
-        """
-        find_board_orientation_sequence = py_trees.composites.Sequence("Find Board Orientation Sequence", memory=True)
-        # find_board_orientation_and_align = FindBoardOrientationAndAlign()
-        find_board_orientation_sequence.add_children(
-            [
-                find_board_orientation_and_align,
-            ]
-        )
-        return find_board_orientation_sequence
-
-    def node_base_case(self)->py_trees.composites.Sequence:
-        """
-        Base case subtree that will just try to fire the torpedos without finding or aligning to board
-        
-        returns py_trees.composites.Sequence
-        """
-
-        node_base_case = py_trees.composites.Sequence("base_case", memory=True)
-        check_torpedo_count1 = Action("check_torpedo_count1")
-        check_torpedo_count2 = Action("check_torpedo_count2")
-        fire_torpedo1 = Action("fire_torpedo1")
-        fire_torpedo2 = Action("fire_torpedo2") 
-        node_base_case.add_children(
-            [
-                check_torpedo_count1,
-                fire_torpedo1,
-                check_torpedo_count2,
-                fire_torpedo2
-            ]
-        )
-        return node_base_case
-
 
 ### Actions:
 class FindBoardOrientation(Action):
     """
     Action to find the orientation of the board and write it to the blackboard. This will be used for downstream alignment to the board when we are close to the board and can no longer rely on vision to find the orientation of the board.
     This is necessary for orientation in particular since position averaging is already handled by a Kalman Filter in the vision pipeline, whereas orientation is inferred based on the icons on the board, and is more susceptible to noise and outliers.
+    n_samples: number of orientation samples to collect before computing mean orientation
+    sample_every_n_ticks: how often to sample the board orientation in ticks. For example, if the tree is ticking at 10Hz and sample_every_n_ticks is 10, then we will sample the board orientation every 1 second.
+    rejection_threshold: threshold for rejecting outlier orientation samples.
+    compare_measurement_with_blackboard: if True, instead of writing to the blackboard, compare the computed mean orientation with the orientation on the blackboard and return SUCCESS if they are within the rejection threshold, and FAILURE if they are not. This can be used as a consistency check if our stable estimate of the board orientation is good enough
     """
     def __init__(
             self,
             n_samples: int = 5,
             sample_every_n_ticks: int = 1,
             rejection_threshold: float = 0.2,
+            compare_measurement_with_blackboard: bool = False
         ):
-        super().__init__("Find Board Orientation" + (f" sampling {n_samples} times"))
+        super().__init__("Find Board Orientation sampling" + (" once" if n_samples == 1 else f" {n_samples} times") + (f" for consistency validation" if compare_measurement_with_blackboard else ""))
         self.orientation_samples_number = n_samples
         self.sample_rate = sample_every_n_ticks
         self.rejection_threshold = rejection_threshold
         self.blackboard = self.attach_blackboard_client(name=self.name)
         self.sample_count = 0
         self.tick_counter = 0
+        self.compare_measurement_with_blackboard = compare_measurement_with_blackboard
         self.orientation_samples = []
         
     def setup(self, **kwargs):
@@ -330,6 +187,14 @@ class FindBoardOrientation(Action):
         if self.sample_count >= self.orientation_samples_number:
             # Compute mean orientation and write to blackboard
             mean_orientation = compute_mean_orientation(self.orientation_samples)
+            if self.compare_measurement_with_blackboard and hasattr(self.blackboard, 'board') and self.blackboard.board.orientation is not None:
+                if quaternion_distance(mean_orientation, self.blackboard.board.orientation) > self.rejection_threshold:
+                    self.logger.warning(f"[{self.name}] Computed mean orientation is too different from blackboard orientation.")
+                    return py_trees.common.Status.FAILURE
+                else:
+                    self.logger.info(f"[{self.name}] Computed mean orientation is consistent with blackboard orientation.")
+                    return py_trees.common.Status.SUCCESS
+            
             self.blackboard.board.orientation = mean_orientation
             self.logger.info(f"[{self.name}] Finalized board orientation: {mean_orientation}")
         
