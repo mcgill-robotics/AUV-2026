@@ -180,15 +180,18 @@ class FindBoardOrientation(Action):
         
     def setup(self, **kwargs):
         self.node = kwargs['node']
+        # self.node.get_logger().info(f"[{self.name}] Setting up with sample_every_n_ticks={self.sample_rate}")
         self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/board/orientation", access=py_trees.common.Access.WRITE)
         
     def initialise(self):
         self.orientation_samples = []
         self.sample_count = 0
+        self.tick_counter = 0
             
     def update(self):
         self.tick_counter += 1
+        # self.node.get_logger().info(f"[{self.name}] Tick {self.tick_counter}/{self.sample_rate}. Sample count: {self.sample_count}/{self.orientation_samples_number}")
         if self.tick_counter % self.sample_rate != 0:
             return py_trees.common.Status.RUNNING
         if not hasattr(self.blackboard, 'vision') or self.blackboard.vision.object_map is None:
@@ -212,7 +215,7 @@ class FindBoardOrientation(Action):
                 return py_trees.common.Status.RUNNING
         self.orientation_samples.append(orientation)
         self.sample_count += 1
-        self.node.get_logger().info(f"[{self.name}] Collected orientation sample {self.sample_count}/{self.orientation_samples_number}: {orientation}")
+        self.node.get_logger().debug(f"[{self.name}] Collected orientation sample {self.sample_count}/{self.orientation_samples_number}: {orientation}")
         
         if self.sample_count >= self.orientation_samples_number:
             # Compute mean orientation and write to blackboard

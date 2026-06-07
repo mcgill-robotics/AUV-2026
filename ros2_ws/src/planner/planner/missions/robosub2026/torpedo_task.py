@@ -110,7 +110,7 @@ class TorpedoTask(py_trees.composites.Sequence):
         find_board_orientation_one_sample = FindBoardOrientation (
             n_samples=1,
             sample_every_n_ticks=1,
-            rejection_threshold=self.yaw_tolerance_rad,
+            rejection_threshold=self.refinement_rejection_threshold_rad,
             compare_measurement_with_blackboard=False
         )
         
@@ -149,7 +149,7 @@ class TorpedoTask(py_trees.composites.Sequence):
 
         returns py_trees.composites.Selector
         """
-        find_board_orientation_selector = py_trees.composites.Selector("Find Board Orientation Strategy Selector", memory=True)
+        find_board_orientation_selector = py_trees.composites.Selector("Find Board Orientation Refinement Attempt Selector", memory=True)
         
         find_board_orientation_seqs = []
         for i in range(self.refinement_attempts):
@@ -167,23 +167,32 @@ class TorpedoTask(py_trees.composites.Sequence):
 
         returns py_trees.composites.Sequence
         """
-        find_board_orientation_sequence = py_trees.composites.Sequence(f"Refinement Board Orientation Sequence {count}/{self.alignments_per_attempt}", memory=False)
+        find_board_orientation_sequence = py_trees.composites.Sequence(f"Refinement Board Orientation Sequence {count}/{self.alignments_per_attempt}", memory=True)
         
         find_and_aligns = []
-        for i in range(self.samples_per_alignment):
+        for _ in range(self.alignments_per_attempt):
             find_board_orientation = FindBoardOrientation (
                 n_samples=self.samples_per_alignment,
                 sample_every_n_ticks=self.refinement_sample_every_n_ticks,
                 rejection_threshold=self.refinement_rejection_threshold_rad,
+                compare_measurement_with_blackboard=False
+            )
+            find_and_aligns.append(find_board_orientation)
+            align_to_board = AlignToBoard(
+                position_tolerance=0.5,
+                orientation_tolerance_rad=self.yaw_tolerance_rad,
+                hold_time=self.hold_time,
+                timeout=self.timeout
+            )
+            find_and_aligns.append(align_to_board)
+        consistency_check = FindBoardOrientation (
+                n_samples=1,
+                sample_every_n_ticks=1,
+                rejection_threshold=self.refinement_rejection_threshold_rad,
                 compare_measurement_with_blackboard=True
             )
-        
-        
-        
-        
-        
-        # find_board_orientation_sequence.add_children(
-        # )
+        find_and_aligns.append(consistency_check)
+        find_board_orientation_sequence.add_children(find_and_aligns)
         return find_board_orientation_sequence
     
     def distance_strategy_selector(self)->py_trees.composites.Selector:
