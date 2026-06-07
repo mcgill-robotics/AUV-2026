@@ -34,3 +34,12 @@ planner_root_tree:
       scan_angular_tolerance_deg: 30.0 # (deg) Yaw tolerance for scan/sweep turn steps
       scan_hold_time: 0.1          # (s) Hold time before scan turn step SUCCESS
       scan_timeout: 30.0           # (s) Timeout before scan turn step FAILURE
+
+    torpedo:
+      initial_distance_from_board: 2.0  # (m) Initial "safe" distance from the board during rough positioning
+      z_reference: -1.0                 # (m) Depth to maintain during torpedo task
+      scan_pause_time: 1.0                 # (s) Seconds to pause after each scan rotation
+      position_tolerance: 0.3              # (m) Position convergence threshold for board alignment
+      yaw_tolerance_deg: 5.0              # (deg) Yaw convergence threshold for board alignment
+      hold_time: 0.5                      # (s) Seconds to hold navigation within tolerance before SUCCESS
+      timeout: 30.0                       # (s) Seconds before navigation steps fail with FAILURE

@@ -460,7 +460,7 @@ class CircleAroundToFindBehaviour(py_trees.behaviour.Behaviour):
             case CircleAroundPhases.APPROACH:
                 match self.action_status:
                     case ActionStatus.SUCCEEDED:  # Approach -> Pause
-                        self.node.get_logger().info(f"[{self.name}] Approach complete. AUV facing {self.reference_class} reference point at {self.reference_distance}m away. Navigation result message: {self.result_message}")
+                        self.node.get_logger().info(f"[{self.name}] Approach complete. AUV facing {self.reference_class} reference point at {self.reference_distance:0.2f}m away. Navigation result message: {self.result_message}")
                         self.phase = CircleAroundPhases.PAUSING
                         self.action_status = ActionStatus.NOT_SENT
                         self.sent_goal = False

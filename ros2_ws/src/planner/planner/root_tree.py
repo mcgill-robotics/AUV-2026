@@ -10,6 +10,7 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.qos import QoSProfile, ReliabilityPolicy
 import geometry_msgs.msg
 import auv_msgs.msg
+from rclpy.parameter import Parameter
 
 # AUV dependencies
 from controls import navigation_client
@@ -64,6 +65,15 @@ def main():
     node.declare_parameter("slalom.scan_angular_tolerance_deg", 30.0)
     node.declare_parameter("slalom.scan_hold_time", 0.1)
     node.declare_parameter("slalom.scan_timeout", 30.0)
+    
+    # Torpedo task parameters
+    node.declare_parameter("torpedo.initial_distance_from_board", Parameter.Type.DOUBLE)
+    node.declare_parameter("torpedo.z_reference", Parameter.Type.DOUBLE)
+    node.declare_parameter("torpedo.scan_pause_time", Parameter.Type.DOUBLE)
+    node.declare_parameter("torpedo.position_tolerance", Parameter.Type.DOUBLE)
+    node.declare_parameter("torpedo.yaw_tolerance_deg", Parameter.Type.DOUBLE)
+    node.declare_parameter("torpedo.hold_time", Parameter.Type.DOUBLE)
+    node.declare_parameter("torpedo.timeout", Parameter.Type.DOUBLE)
 
     slalom_params = {
         "num_layers": node.get_parameter("slalom.num_layers").get_parameter_value().integer_value,
@@ -81,6 +91,16 @@ def main():
         "scan_angular_tolerance_rad": math.radians(node.get_parameter("slalom.scan_angular_tolerance_deg").get_parameter_value().double_value),  # deg -> rad
         "scan_hold_time": node.get_parameter("slalom.scan_hold_time").get_parameter_value().double_value,
         "scan_timeout": node.get_parameter("slalom.scan_timeout").get_parameter_value().double_value,
+    }
+    
+    torpedo_params = {
+        "initial_distance_from_board": node.get_parameter("torpedo.initial_distance_from_board").get_parameter_value().double_value,
+        "z_reference": node.get_parameter("torpedo.z_reference").get_parameter_value().double_value,
+        "scan_pause_time": node.get_parameter("torpedo.scan_pause_time").get_parameter_value().double_value,
+        "position_tolerance": node.get_parameter("torpedo.position_tolerance").get_parameter_value().double_value,
+        "yaw_tolerance_rad": math.radians(node.get_parameter("torpedo.yaw_tolerance_deg").get_parameter_value().double_value),  # deg -> rad
+        "hold_time": node.get_parameter("torpedo.hold_time").get_parameter_value().double_value,
+        "timeout": node.get_parameter("torpedo.timeout").get_parameter_value().double_value,
     }
 
     # Set the root of the tree
@@ -144,6 +164,7 @@ def main():
         orbit_pre_qual_hold_time_initial=orbit_pre_qual_hold_time_initial,
         orbit_pre_qual_hold_time_segments=orbit_pre_qual_hold_time_segments,
         slalom_params=slalom_params,
+        torpedo_params=torpedo_params
     )
 
     # Add children to root
