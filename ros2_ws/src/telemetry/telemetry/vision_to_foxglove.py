@@ -77,6 +77,9 @@ class SceneConverterNode(Node):
         self.declare_parameter('auv_model_z', 0.0)
         self.auv_model_z = self.get_parameter('auv_model_z').get_parameter_value().double_value
         
+        self.declare_parameter('publish_auv_model', True)
+        self.publish_auv_model = self.get_parameter('publish_auv_model').get_parameter_value().bool_value
+        
         # Load lane boundaries from vision_pipeline.yaml
         self.draw_lane_boundary = False
         try:
@@ -298,51 +301,52 @@ class SceneConverterNode(Node):
             scene_update.entities.append(lane_entity)
 
         # Add the AUV 3D Model
-        auv_entity = SceneEntity()
-        auv_entity.id = "auv_3d_model"
-        auv_entity.timestamp = msg.header.stamp
-        
-        auv_model = ModelPrimitive()
-        
-        # Base pose in AUV frame
-        auv_pose = Pose()
-        auv_pose.position.x = self.auv_model_x
-        auv_pose.position.y = self.auv_model_y
-        auv_pose.position.z = self.auv_model_z
+        if self.publish_auv_model:
+            auv_entity = SceneEntity()
+            auv_entity.id = "auv_3d_model"
+            auv_entity.timestamp = msg.header.stamp
+            
+            auv_model = ModelPrimitive()
+            
+            # Base pose in AUV frame
+            auv_pose = Pose()
+            auv_pose.position.x = self.auv_model_x
+            auv_pose.position.y = self.auv_model_y
+            auv_pose.position.z = self.auv_model_z
 
-        # Compute quaternion from Euler angles using tf_transformations
-        q = quaternion_from_euler(self.auv_model_roll, self.auv_model_pitch, self.auv_model_yaw)
-        auv_pose.orientation.x = q[0]
-        auv_pose.orientation.y = q[1]
-        auv_pose.orientation.z = q[2]
-        auv_pose.orientation.w = q[3]
+            # Compute quaternion from Euler angles using tf_transformations
+            q = quaternion_from_euler(self.auv_model_roll, self.auv_model_pitch, self.auv_model_yaw)
+            auv_pose.orientation.x = q[0]
+            auv_pose.orientation.y = q[1]
+            auv_pose.orientation.z = q[2]
+            auv_pose.orientation.w = q[3]
 
-        if transform is not None:
-            try:
-                # Lookup transform from auv_link -> pool_link
-                auv_to_pool_tf = self.tf_buffer.lookup_transform(
-                    frame_id,          # Target (pool_link)
-                    self.auv_frame_id, # Source (auv_link)
-                    rclpy.time.Time()
-                )
-                
-                # Transform from auv_link to pool_link
-                transformed_pose = tf2_geometry_msgs.do_transform_pose(auv_pose, auv_to_pool_tf)
-                auv_model.pose = transformed_pose
-                auv_entity.frame_id = frame_id
-            except tf2_ros.TransformException:
+            if transform is not None:
+                try:
+                    # Lookup transform from auv_link -> pool_link
+                    auv_to_pool_tf = self.tf_buffer.lookup_transform(
+                        frame_id,          # Target (pool_link)
+                        self.auv_frame_id, # Source (auv_link)
+                        rclpy.time.Time()
+                    )
+                    
+                    # Transform from auv_link to pool_link
+                    transformed_pose = tf2_geometry_msgs.do_transform_pose(auv_pose, auv_to_pool_tf)
+                    auv_model.pose = transformed_pose
+                    auv_entity.frame_id = frame_id
+                except tf2_ros.TransformException:
+                    auv_model.pose = auv_pose
+                    auv_entity.frame_id = self.auv_frame_id
+            else:
                 auv_model.pose = auv_pose
                 auv_entity.frame_id = self.auv_frame_id
-        else:
-            auv_model.pose = auv_pose
-            auv_entity.frame_id = self.auv_frame_id
-        
-        auv_model.scale = Vector3(x=1.0, y=1.0, z=1.0)
-        auv_model.url = self.auv_model_url
-        auv_model.override_color = False
-        
-        auv_entity.models.append(auv_model)
-        scene_update.entities.append(auv_entity)
+            
+            auv_model.scale = Vector3(x=1.0, y=1.0, z=1.0)
+            auv_model.url = self.auv_model_url
+            auv_model.override_color = False
+            
+            auv_entity.models.append(auv_model)
+            scene_update.entities.append(auv_entity)
 
         self.table_publisher.publish(table_msg)
         self.scene_publisher.publish(scene_update)
