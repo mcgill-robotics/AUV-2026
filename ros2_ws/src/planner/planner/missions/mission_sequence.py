@@ -132,7 +132,7 @@ class MissionSpawner(py_trees.behaviour.Behaviour):
                 GateTask(p['position_tolerance'], p['hold_time'], p['timeout']),
                 SlalomTask(**slalom),
                 BinsTask(p['position_tolerance'], p['hold_time'], p['timeout']),
-                TorpedoTask(p['position_tolerance'], p['hold_time'], p['timeout']),
+                TorpedoTask(**torpedo),
                 TableOctagonTask(p['position_tolerance'], p['hold_time'], p['timeout']),
             ])
             return full_run

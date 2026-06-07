@@ -11,6 +11,7 @@ without manually setting boolean flags. Example usage::
 """
 
 import math
+from typing import Optional
 from geometry_msgs.msg import Pose, Point, Quaternion
 from auv_msgs.action import AUVNavigate
 from controls.utils import quaternion_from_yaw
@@ -195,9 +196,9 @@ def set_global_yaw(
     )
 
 def set_attitude(
-    roll: float = None,
-    pitch: float = None,
-    yaw: float = None,
+    roll: Optional[float] = None,
+    pitch: Optional[float] = None,
+    yaw: Optional[float] = None,
     tolerance: float = _DEFAULT_ANGULAR_TOL,
     hold_time: float = _DEFAULT_HOLD,
     timeout: float = _DEFAULT_TIMEOUT,
@@ -231,6 +232,30 @@ def set_attitude(
         do_roll=do_roll,
         do_pitch=do_pitch,
         do_yaw=do_yaw,
+        angular_tolerance=tolerance,
+        hold_time=hold_time,
+        timeout=timeout,
+    )
+    
+def set_attitude_quaternion(
+    orientation: Quaternion,
+    tolerance: float = _DEFAULT_ANGULAR_TOL,
+    hold_time: float = _DEFAULT_HOLD,
+    timeout: float = _DEFAULT_TIMEOUT,
+) -> AUVNavigate.Goal:
+    """Set the AUV attitude using a full quaternion. Position is unaffected.
+
+    Args:
+        orientation: Target orientation as a geometry_msgs/Quaternion.
+        tolerance: Angular convergence threshold in radians.
+        hold_time: Seconds to hold within tolerance before SUCCESS.
+        timeout: Seconds before FAILURE (0 = no timeout).
+    """
+    pose = Pose()
+    pose.orientation = orientation
+    return _make_goal(
+        target_pose=pose,
+        do_roll=True, do_pitch=True, do_yaw=True,
         angular_tolerance=tolerance,
         hold_time=hold_time,
         timeout=timeout,

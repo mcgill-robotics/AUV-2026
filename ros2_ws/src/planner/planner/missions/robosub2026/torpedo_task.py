@@ -1,5 +1,5 @@
 import py_trees
-from .torpedo_behaviours import MoveToFrontOfBoardAndAlign, FindBoardOrientation
+from .torpedo_behaviours import MoveToFrontOfBoard, AlignToBoard, FindBoardOrientation
 from ..vision_behaviours import SearchSweepBehaviour, CircleAroundToFindBehaviour
 
 class TorpedoTask(py_trees.composites.Sequence):
@@ -19,6 +19,7 @@ class TorpedoTask(py_trees.composites.Sequence):
             hold_time: float = 0.5,
             timeout: float = 45.0,
             refinement_rejection_threshold_rad: float = 0.1,
+            refinement_attempts: int = 3,
             alignments_per_attempt: int = 3,
             samples_per_alignment: int = 5,
             refinement_sample_every_n_ticks: int = 3
@@ -41,6 +42,7 @@ class TorpedoTask(py_trees.composites.Sequence):
 
         # refinement parameters
         self.refinement_rejection_threshold_rad:float = refinement_rejection_threshold_rad
+        self.refinement_attempts:int = refinement_attempts
         self.alignments_per_attempt:int = alignments_per_attempt
         self.samples_per_alignment:int = samples_per_alignment
         self.refinement_sample_every_n_ticks:int = refinement_sample_every_n_ticks
@@ -112,9 +114,16 @@ class TorpedoTask(py_trees.composites.Sequence):
             compare_measurement_with_blackboard=False
         )
         
-        align_to_board = MoveToFrontOfBoardAndAlign(
+        move_to_front_of_board = MoveToFrontOfBoard(
             distance_from_board=self.initial_distance_from_board,
             z_reference=self.z_reference,
+            position_tolerance=self.position_tolerance,
+            orientation_tolerance_rad=self.yaw_tolerance_rad,
+            hold_time=self.hold_time,
+            timeout=self.timeout
+        )
+        
+        align_to_board = AlignToBoard(
             position_tolerance=0.5,
             orientation_tolerance_rad=self.yaw_tolerance_rad,
             hold_time=self.hold_time,
@@ -126,6 +135,7 @@ class TorpedoTask(py_trees.composites.Sequence):
                 ss_board,
                 circle_board,
                 find_board_orientation_one_sample,
+                move_to_front_of_board,
                 align_to_board
             ]
         )
@@ -142,7 +152,7 @@ class TorpedoTask(py_trees.composites.Sequence):
         find_board_orientation_selector = py_trees.composites.Selector("Find Board Orientation Strategy Selector", memory=True)
         
         find_board_orientation_seqs = []
-        for i in range(self.alignments_per_attempt):
+        for i in range(self.refinement_attempts):
             find_board_orientation_and_align = self.board_orientation_refinement_sequence(i)
             find_board_orientation_seqs.append(find_board_orientation_and_align)
         find_board_orientation_selector.add_children(find_board_orientation_seqs)

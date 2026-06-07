@@ -5,15 +5,10 @@ from time import sleep
 from ..action_status_enum import ActionStatus
 import controls.utils as geometry
 from controls.utils import Vector2D
-from controls.goal_helpers import move_to_pose
+from controls.goal_helpers import set_attitude_quaternion,move_global
 from enum import Enum
 from geometry_msgs.msg import Pose, Quaternion
 
-class Season(Enum):
-    SPRING = 1
-    SUMMER = 2
-    AUTUMN = 3
-    WINTER = 4
 TORPEDO_COUNT = 2
 
 """
@@ -42,6 +37,39 @@ class Action(py_trees.behaviour.Behaviour):
 
     def terminate(self, new_status):
         self.logger.debug(f"Action::terminate {self.name} to {new_status}")
+
+class Navigation(Action):
+    """Base class for any Action that involve navigation client. Defines convenience functions for navigation callbacks"""
+    
+    def __init__(self, name:str, position_tolerance: float, orientation_tolerance_rad: float, timeout: float, hold_time: float):
+        super(Navigation, self).__init__(name)
+        self.position_tolerance = position_tolerance
+        self.orientation_tolerance_rad = orientation_tolerance_rad
+        self.timeout = timeout
+        self.hold_time = hold_time
+        self.result_message: str = ""
+        
+        self.action_status:ActionStatus = ActionStatus.NOT_SENT
+        
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.navigation_client = kwargs['shared_nav_client']
+        
+    def initialise(self, **kwargs):
+        super().initialise(**kwargs)
+        self.action_status = ActionStatus.NOT_SENT
+        self.result_message: str = ""
+    
+    def on_server_goal_response(self, goal_response: bool):
+        if not goal_response:
+            self.action_status = ActionStatus.FAILED
+
+    def on_server_goal_result(self, goal_success: bool, message: str):
+        self.result_message = message
+        if goal_success:
+            self.action_status = ActionStatus.SUCCEEDED
+        else:
+            self.action_status = ActionStatus.FAILED
 
 class Condition(py_trees.behaviour.Behaviour):
     def __init__(self, name):
@@ -205,9 +233,9 @@ class FindBoardOrientation(Action):
         else:
             return py_trees.common.Status.RUNNING
         
-class MoveToFrontOfBoardAndAlign(Action):
+class MoveToFrontOfBoard(Navigation):
     """
-    Action to align to the board based on the orientation found in the FindBoardOrientation action.
+    Action to move to the front of the board based on the orientation found in the FindBoardOrientation action.
     """
     def __init__(
             self,
@@ -218,35 +246,25 @@ class MoveToFrontOfBoardAndAlign(Action):
             timeout: float = 30.0,
             hold_time: float = 0.5,
         ):
-        super().__init__("Move to Front of Board and Align")
+        super().__init__("Move to Front of Board and Align", position_tolerance, orientation_tolerance_rad, timeout, hold_time)
         self.distance_from_board = distance_from_board
         self.z_reference = z_reference
-        self.position_tolerance = position_tolerance
-        self.orientation_tolerance_rad = orientation_tolerance_rad
-        self.timeout = timeout
-        self.hold_time = hold_time
         self.blackboard = self.attach_blackboard_client(name=self.name)
-        self.result_message: str = ""
-        
-        self.action_status:ActionStatus = ActionStatus.NOT_SENT
-        self.sent_goal = False
-        
+                
     def setup(self, **kwargs):
-        self.node = kwargs['node']
-        self.navigation_client = kwargs['shared_nav_client']
+        super().setup(**kwargs)
         self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/board/orientation", access=py_trees.common.Access.READ)
-        self.result_message: str = ""
 
-    
+
     def update(self):
         match self.action_status:
             case ActionStatus.SUCCEEDED:
-                self.node.get_logger().info(f"[{self.name}] Successfully moved to front of board and aligned. {self.result_message}")
+                self.node.get_logger().info(f"[{self.name}] Successfully moved to front of board. {self.result_message}")
                 return py_trees.common.Status.SUCCESS
             case ActionStatus.FAILED:
-                self.node.get_logger().error(f"[{self.name}] Failed to move to front of board and align. {self.result_message}")
+                self.node.get_logger().error(f"[{self.name}] Failed to moved to front of board. {self.result_message}")
                 return py_trees.common.Status.FAILURE
             case ActionStatus.PENDING:
                 return py_trees.common.Status.RUNNING
@@ -286,38 +304,74 @@ class MoveToFrontOfBoardAndAlign(Action):
                 # compute target point at desired distance from board along normal
                 target_xy = board_center_xy + board_normal.normalized() * self.distance_from_board
                 
-                target_pose = Pose()
-                target_pose.position.x = target_xy.x
-                target_pose.position.y = target_xy.y
-                target_pose.position.z = self.z_reference
-                # we want the AUV to face the board, since the board faces us, we want to flip the board orientation by 180 degrees in yaw
-                board_yaw = geometry.rotate_quaternion(board_orientation, 0, 0, math.pi)
-                target_pose.orientation = board_yaw
 
-                goal = move_to_pose(
-                    pose=target_pose,
+                goal = move_global(
+                    x=target_xy.x,
+                    y=target_xy.y,
+                    z=self.z_reference,
                     tolerance=self.position_tolerance,
                     angular_tolerance=self.orientation_tolerance_rad,
+                    hold_time=self.hold_time,
                     timeout=self.timeout,
-                    hold_time=self.hold_time
                 )
-                
                 self.navigation_client.send_navigation_goal(goal, self.name, self.on_server_goal_response, self.on_server_goal_result)
                 self.action_status = ActionStatus.PENDING
                 return py_trees.common.Status.RUNNING
         return py_trees.common.Status.SUCCESS
-    
-    def on_server_goal_response(self, goal_response: bool):
-        if not goal_response:
-            self.action_status = ActionStatus.FAILED
 
-    def on_server_goal_result(self, goal_success: bool, message: str):
-        self.result_message = message
-        if goal_success:
-            self.action_status = ActionStatus.SUCCEEDED
-        else:
-            self.action_status = ActionStatus.FAILED
+
+class AlignToBoard(Navigation):
+    def __init__(self,
+        position_tolerance: float = 0.1,
+        orientation_tolerance_rad: float = 0.1,
+        timeout: float = 30.0,
+        hold_time: float = 0.5,
+    ):
+        super().__init__("Align to Board", position_tolerance, orientation_tolerance_rad, timeout, hold_time)
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+        
+    def setup(self, **kwargs):
+        super().setup(**kwargs)
+        self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/board/orientation", access=py_trees.common.Access.READ)
+        
+    def update(self):
+        match self.action_status:
+            case ActionStatus.SUCCEEDED:
+                self.node.get_logger().info(f"[{self.name}] Successfully aligned to board. {self.result_message}")
+                return py_trees.common.Status.SUCCESS
+            case ActionStatus.FAILED:
+                self.node.get_logger().error(f"[{self.name}] Failed to align to board. {self.result_message}")
+                return py_trees.common.Status.FAILURE
+            case ActionStatus.PENDING:
+                return py_trees.common.Status.RUNNING
+            case ActionStatus.NOT_SENT:
+                if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.pose is None:
+                    self.node.get_logger().warn(f"[{self.name}] Waiting for /sensors/pose to determine AUV yaw.")
+                    return py_trees.common.Status.RUNNING
+                if not hasattr(self.blackboard, 'board') or self.blackboard.board.orientation is None:
+                    self.node.get_logger().error(f"[{self.name}] No board orientation available on blackboard.")
+                    return py_trees.common.Status.FAILURE
+                # get current AUV yaw from sensors                auv_pose = self.blackboard.sensors.pose
+                board_orientation = self.blackboard.board.orientation
+                # we want the AUV to face the board, since the board faces us, we want to flip the board orientation by 180 degrees in yaw
+                target_orientation = geometry.rotate_quaternion(board_orientation, 0, 0, math.pi)
                 
+                goal = set_attitude_quaternion(
+                    orientation=target_orientation,
+                    tolerance=self.orientation_tolerance_rad,
+                    hold_time=self.hold_time,
+                    timeout=self.timeout,
+                )
+                self.navigation_client.send_navigation_goal(goal, self.name, self.on_server_goal_response, self.on_server_goal_result)
+                self.action_status = ActionStatus.PENDING
+                return py_trees.common.Status.RUNNING
+        return py_trees.common.Status.SUCCESS
+                
+                
+                
+        
+        
 class DetermineBoardType(Action):
     """
     
