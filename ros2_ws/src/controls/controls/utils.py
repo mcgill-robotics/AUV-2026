@@ -47,6 +47,55 @@ def normalize_angle(angle: float) -> float:
     """
     return math.remainder(angle, 2.0 * math.pi)
 
+def hamiltonian_product(q1: Quaternion, q2: Quaternion) -> Quaternion:
+    """Compute the Hamiltonian product of two quaternions, i.e. distance"""
+    w1, x1, y1, z1 = q1.w, q1.x, q1.y, q1.z
+    w2, x2, y2, z2 = q2.w, q2.x, q2.y, q2.z
+    return Quaternion(
+        w = w1*w2 - x1*x2 - y1*y2 - z1*z2,
+        x = w1*x2 + x1*w2 + y1*z2 - z1*y2,
+        y = w1*y2 - x1*z2 + y1*w2 + z1*x2,
+        z = w1*z2 + x1*y2 - y1*x2 + z1*w2,
+    )
+
+def compute_mean_orientation(orientations: list[Quaternion]) -> Quaternion:
+    """Compute the mean orientation from a list of quaternions, as a naive average. This is not a true mean, but is a good approximation as long as the quaternions are close together."""
+    mean_orientation = Quaternion(x=0, y=0, z=0, w=0)
+    canonical_orientation = orientations[0]  # Use the first sample as a reference for hemisphere
+    for sample in orientations:
+        # correct for double cover issue by ensuring quaternions are in the same hemisphere
+        if hamiltonian_product(canonical_orientation, sample).w < 0:
+            sample = Quaternion(x=-sample.x, y=-sample.y, z=-sample.z, w=-sample.w)
+        mean_orientation.x += sample.x
+        mean_orientation.y += sample.y
+        mean_orientation.z += sample.z
+        mean_orientation.w += sample.w
+    n = len(orientations)
+    mean_orientation.x /= n
+    mean_orientation.y /= n
+    mean_orientation.z /= n
+    mean_orientation.w /= n
+    return mean_orientation
+
+def is_quaternion_outlier(new_orientation: Quaternion, samples: list[Quaternion], rejection_threshold: float) -> bool:
+    """Determine if a new quaternion orientation is an outlier compared to a list of samples."""
+    if len(samples) == 0:
+        return False  # No samples to compare against, so can't be an outlier
+
+    # compute naive average orientation from samples (not a true mean, but good enough if all samples are close together)
+    # TODO use geometric medoid instead
+    mean_orientation = compute_mean_orientation(samples)
+
+    # Compute distance between new orientation and mean orientation (also naive Euclidean distance in quaternion space, not a true geodesic distance)
+    # TODO use angular distance instead
+    distance = math.sqrt(
+        (mean_orientation.x - new_orientation.x) ** 2 +
+        (mean_orientation.y - new_orientation.y) ** 2 +
+        (mean_orientation.z - new_orientation.z) ** 2 +
+        (mean_orientation.w - new_orientation.w) ** 2
+    )
+
+    return distance > rejection_threshold
 @dataclass
 class Vector2D:
     x: float

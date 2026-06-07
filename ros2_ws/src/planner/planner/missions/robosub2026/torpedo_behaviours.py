@@ -2,6 +2,7 @@ import py_trees
 import py_trees_ros
 from time import sleep
 from ..vision_behaviours import SearchSweepBehaviour, CircleAroundToFindBehaviour
+from controls.utils import is_quaternion_outlier, compute_mean_orientation
 from enum import Enum
 
 class Season(Enum):
@@ -126,6 +127,8 @@ class TorpedoStrategySelector(py_trees.composites.Selector):
     
     def __init__(
             self,
+            initial_distance_from_board: float = 3.0,
+            z_reference: float = -1.0,
             scan_pause_time: float = 1.0,
             yaw_tolerance_rad: float = 0.3,
             hold_time: float = 0.5,
@@ -143,6 +146,10 @@ class TorpedoStrategySelector(py_trees.composites.Selector):
                 self.node_base_case()
             ]
         )
+        self.initial_distance_from_board = initial_distance_from_board
+        self.z_reference = z_reference
+        # convert initial distance from board to 2D distance from board for circling behaviour
+        self.initial_distance_from_board_2d = (initial_distance_from_board**2 - z_reference**2)**0.5 
 
     def tick_tree(self):
         pass
@@ -171,9 +178,9 @@ class TorpedoStrategySelector(py_trees.composites.Selector):
         
         circle_board = CircleAroundToFindBehaviour(
             reference_class="board",
-            z_reference=-1.0,
+            z_reference=self.z_reference,
             target_classes={"blood":1, "fire":1, "ambulance":1, "firetruck":1},
-            reference_distance=3.0,
+            reference_distance=self.initial_distance_from_board_2d,
             num_circle_steps=6,
             max_circling_attempts=2,
             step_timeout=self.ss_time,
@@ -230,7 +237,7 @@ class TorpedoStrategySelector(py_trees.composites.Selector):
         returns py_trees.composites.Sequence
         """
         find_board_orientation_sequence = py_trees.composites.Sequence("Find Board Orientation Sequence", memory=True)
-        find_board_orientation_and_align = FindBoardOrientationAndAlign()
+        # find_board_orientation_and_align = FindBoardOrientationAndAlign()
         find_board_orientation_sequence.add_children(
             [
                 find_board_orientation_and_align,
@@ -261,23 +268,82 @@ class TorpedoStrategySelector(py_trees.composites.Selector):
         return node_base_case
 
 
-
-
 ### Actions:
-
-class FindBoardOrientationAndAlign(Action):
+class FindBoardOrientation(Action):
     """
-    Action to find the orientation of the board and align to it. This will be used in the align to board sequence node.
-    1. Find the board and its orientation using vision
-    2. Align to the board using the orientation information
+    Action to find the orientation of the board and write it to the blackboard. This will be used for downstream alignment to the board when we are close to the board and can no longer rely on vision to find the orientation of the board.
+    """
+    def __init__(
+            self,
+            n_samples: int = 5,
+            sample_every_n_ticks: int = 1,
+            rejection_threshold: float = 0.2,
+        ):
+        super().__init__("Find Board Orientation" + (f" sampling {n_samples} times"))
+        self.orientation_samples_number = n_samples
+        self.sample_rate = sample_every_n_ticks
+        self.rejection_threshold = rejection_threshold
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+        self.sample_count = 0
+        self.tick_counter = 0
+        self.orientation_samples = []
+        
+    def setup(self, **kwargs):
+        self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/board/orientation", access=py_trees.common.Access.WRITE)
+        
+    def initialise(self):
+        self.orientation_samples = []
+        self.sample_count = 0
+            
+    def update(self):
+        self.tick_counter += 1
+        if self.tick_counter % self.sample_rate != 0:
+            return py_trees.common.Status.RUNNING
+        if not hasattr(self.blackboard, 'vision') or self.blackboard.vision.object_map is None:
+            self.logger.error(f"[{self.name}] No object map available.")
+            return py_trees.common.Status.FAILURE
+        
+        board_vo = None
+        for vision_object in self.blackboard.vision.object_map.array:
+            if vision_object.label == "board":
+                board_vo = vision_object
+                break
+
+        if board_vo is None:
+            self.logger.error(f"[{self.name}] Board not found in vision.")
+            return py_trees.common.Status.FAILURE
+        
+        orientation = board_vo.pose.orientation
+        if len(self.orientation_samples) > 0:
+            if is_quaternion_outlier(orientation, self.orientation_samples, self.rejection_threshold):
+                self.logger.warning(f"[{self.name}] Rejected outlier orientation sample: {orientation}")
+                return py_trees.common.Status.RUNNING
+        self.orientation_samples.append(orientation)
+        self.sample_count += 1
+        self.logger.info(f"[{self.name}] Collected orientation sample {self.sample_count}/{self.orientation_samples_number}: {orientation}")
+        
+        if self.sample_count >= self.orientation_samples_number:
+            # Compute mean orientation and write to blackboard
+            mean_orientation = compute_mean_orientation(self.orientation_samples)
+            self.blackboard.board.orientation = mean_orientation
+            self.logger.info(f"[{self.name}] Finalized board orientation: {mean_orientation}")
+        
+            return py_trees.common.Status.SUCCESS
+        else:
+            return py_trees.common.Status.RUNNING
+        
+class MoveToFrontOfBoardAndAlign(Action):
+    """
+    Action to align to the board based on the orientation found in the FindBoardOrientation action.
     """
     def __init__(
             self,
         ):
-        super().__init__("Find Board Orientation and Align")
+        super().__init__("Move to Front of Board and Align")
+        
 
-
-class MoveAndAlignToBoard(Action):
+class DetermineBoardType(Action):
     """
     
     """
@@ -293,13 +359,8 @@ class MoveAndAlignToBoard(Action):
         self.blackboard.register_key(key="/board/type", access=py_trees.common.Access.WRITE)
         
     def update(self):
-        # 1. Get AUV Pose
-        if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.pose is None:
-            self.node.get_logger().warn(f"[{self.name}] Waiting for /sensors/pose.")
-            return py_trees.common.Status.RUNNING
-        auv_pose = self.blackboard.sensors.pose.pose
         
-        # 2. Get board and icon position from blackboard
+        # Get board and icon position from blackboard
         if not hasattr(self.blackboard, 'vision') or self.blackboard.vision.object_map is None:
             self.node.get_logger().error(f"[{self.name}] No object map available.")
             return py_trees.common.Status.FAILURE
