@@ -18,6 +18,10 @@ class TorpedoTask(py_trees.composites.Sequence):
             yaw_tolerance_rad: float = 0.3,
             hold_time: float = 0.5,
             timeout: float = 45.0,
+            refinement_rejection_threshold_rad: float = 0.1,
+            alignments_per_attempt: int = 3,
+            samples_per_alignment: int = 5,
+            refinement_sample_every_n_ticks: int = 3
         ):
         super().__init__("Torpedo Task", memory=True)
         # TODO: Implement Torpedo Task
@@ -34,6 +38,12 @@ class TorpedoTask(py_trees.composites.Sequence):
         self.timeout = timeout
         self.initial_distance_from_board = initial_distance_from_board
         self.z_reference = z_reference
+
+        # refinement parameters
+        self.refinement_rejection_threshold_rad:float = refinement_rejection_threshold_rad
+        self.alignments_per_attempt:int = alignments_per_attempt
+        self.samples_per_alignment:int = samples_per_alignment
+        self.refinement_sample_every_n_ticks:int = refinement_sample_every_n_ticks
         
         # convert initial distance from board to 2D distance from board for circling behaviour
         self.initial_distance_from_board_2d = (initial_distance_from_board**2 - z_reference**2)**0.5 
@@ -56,7 +66,7 @@ class TorpedoTask(py_trees.composites.Sequence):
         board_strategy.add_children(
             [
                 self.board_rough_position_sequence(),
-                self.board_orientation_refinment_selector(attempts=3, alignments_per_attempt=2),
+                self.board_orientation_refinment_selector(),
                 # TODO add firing torpedo behaviours here
             ]
          )
@@ -123,7 +133,7 @@ class TorpedoTask(py_trees.composites.Sequence):
     
     
     
-    def board_orientation_refinment_selector(self, attempts:int, alignments_per_attempt:int)->py_trees.composites.Selector:
+    def board_orientation_refinment_selector(self)->py_trees.composites.Selector:
         """
         Subtree containing "<attempts>" sequences to find the board orientation. Every sequence will try to find the board orientation and align to it, with an extra check at the end to see if orientation has stabilized. This is to save a stable version of the board orientatio for downstream alignments when approaching the board. 
 
@@ -131,14 +141,14 @@ class TorpedoTask(py_trees.composites.Sequence):
         """
         find_board_orientation_selector = py_trees.composites.Selector("Find Board Orientation Strategy Selector", memory=True)
         
-        find_board_orientations = []
-        for _ in range(attempts):
-            find_board_orientation_and_align = self.board_orientation_refinement_sequence(alignments_per_attempt)
-            find_board_orientations.append(find_board_orientation_and_align)
-        find_board_orientation_selector.add_children(find_board_orientations)
+        find_board_orientation_seqs = []
+        for i in range(self.alignments_per_attempt):
+            find_board_orientation_and_align = self.board_orientation_refinement_sequence(i)
+            find_board_orientation_seqs.append(find_board_orientation_and_align)
+        find_board_orientation_selector.add_children(find_board_orientation_seqs)
         return find_board_orientation_selector
     
-    def board_orientation_refinement_sequence(self, alignments: int)->py_trees.composites.Sequence:
+    def board_orientation_refinement_sequence(self, count:int)->py_trees.composites.Sequence:
         """
         Subtree to find the board orientation and align to it.
         1. Find board orientation with multiple samples rejecting outliers, to get a more stable estimate of the board orientation
@@ -147,7 +157,19 @@ class TorpedoTask(py_trees.composites.Sequence):
 
         returns py_trees.composites.Sequence
         """
-        find_board_orientation_sequence = py_trees.composites.Sequence("Find Board Orientation Sequence", memory=False)
+        find_board_orientation_sequence = py_trees.composites.Sequence(f"Refinement Board Orientation Sequence {count}/{self.alignments_per_attempt}", memory=False)
+        
+        find_and_aligns = []
+        for i in range(self.samples_per_alignment):
+            find_board_orientation = FindBoardOrientation (
+                n_samples=self.samples_per_alignment,
+                sample_every_n_ticks=self.refinement_sample_every_n_ticks,
+                rejection_threshold=self.refinement_rejection_threshold_rad,
+                compare_measurement_with_blackboard=True
+            )
+        
+        
+        
         
         
         # find_board_orientation_sequence.add_children(

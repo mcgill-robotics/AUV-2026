@@ -74,6 +74,11 @@ def main():
     node.declare_parameter("torpedo.yaw_tolerance_deg", Parameter.Type.DOUBLE)
     node.declare_parameter("torpedo.hold_time", Parameter.Type.DOUBLE)
     node.declare_parameter("torpedo.timeout", Parameter.Type.DOUBLE)
+    node.declare_parameter("torpedo.refinement.rejection_threshold_deg", Parameter.Type.DOUBLE)
+    node.declare_parameter("torpedo.refinement.attempts", Parameter.Type.INTEGER)
+    node.declare_parameter("torpedo.refinement.alignments_per_attempt", Parameter.Type.INTEGER)
+    node.declare_parameter("torpedo.refinement.samples_per_alignment", Parameter.Type.DOUBLE)
+    node.declare_parameter("torpedo.refinement.sample_every_n_ticks", Parameter.Type.DOUBLE)
 
     slalom_params = {
         "num_layers": node.get_parameter("slalom.num_layers").get_parameter_value().integer_value,
@@ -101,6 +106,11 @@ def main():
         "yaw_tolerance_rad": math.radians(node.get_parameter("torpedo.yaw_tolerance_deg").get_parameter_value().double_value),  # deg -> rad
         "hold_time": node.get_parameter("torpedo.hold_time").get_parameter_value().double_value,
         "timeout": node.get_parameter("torpedo.timeout").get_parameter_value().double_value,
+        "refinement_rejection_threshold_rad": math.radians(node.get_parameter("torpedo.refinement.rejection_threshold_deg").get_parameter_value().double_value),  # deg -> rad
+        "refinement_attempts" : node.get_parameter("torpedo.refinement.attempts").get_parameter_value().integer_value,
+        "alignments_per_attempt": node.get_parameter("torpedo.refinement.alignments_per_attempt").get_parameter_value().integer_value,
+        "samples_per_alignment": node.get_parameter("torpedo.refinement.samples_per_alignment").get_parameter_value().integer_value,
+        "refinement_sample_every_n_ticks": node.get_parameter("torpedo.refinement.sample_every_n_ticks").get_parameter_value().double_value,
     }
 
     # Set the root of the tree

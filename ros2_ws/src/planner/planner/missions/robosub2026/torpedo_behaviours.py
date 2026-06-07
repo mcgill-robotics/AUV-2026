@@ -151,6 +151,7 @@ class FindBoardOrientation(Action):
         self.orientation_samples = []
         
     def setup(self, **kwargs):
+        self.node = kwargs['node']
         self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/board/orientation", access=py_trees.common.Access.WRITE)
         
@@ -163,7 +164,7 @@ class FindBoardOrientation(Action):
         if self.tick_counter % self.sample_rate != 0:
             return py_trees.common.Status.RUNNING
         if not hasattr(self.blackboard, 'vision') or self.blackboard.vision.object_map is None:
-            self.logger.error(f"[{self.name}] No object map available.")
+            self.node.get_logger().error(f"[{self.name}] No object map available.")
             return py_trees.common.Status.FAILURE
         
         board_vo = None
@@ -173,31 +174,32 @@ class FindBoardOrientation(Action):
                 break
 
         if board_vo is None:
-            self.logger.error(f"[{self.name}] Board not found in vision.")
+            self.node.get_logger().error(f"[{self.name}] Board not found in vision.")
             return py_trees.common.Status.FAILURE
         
         orientation = board_vo.pose.orientation
         if len(self.orientation_samples) > 0:
             if geometry.is_quaternion_outlier(orientation, self.orientation_samples, self.rejection_threshold):
-                self.logger.warning(f"[{self.name}] Rejected outlier orientation sample: {orientation}")
+                self.node.get_logger().warning(f"[{self.name}] Rejected outlier orientation sample: {orientation}")
                 return py_trees.common.Status.RUNNING
         self.orientation_samples.append(orientation)
         self.sample_count += 1
-        self.logger.info(f"[{self.name}] Collected orientation sample {self.sample_count}/{self.orientation_samples_number}: {orientation}")
+        self.node.get_logger().info(f"[{self.name}] Collected orientation sample {self.sample_count}/{self.orientation_samples_number}: {orientation}")
         
         if self.sample_count >= self.orientation_samples_number:
             # Compute mean orientation and write to blackboard
             mean_orientation = geometry.compute_mean_orientation(self.orientation_samples)
             if self.compare_measurement_with_blackboard and hasattr(self.blackboard, 'board') and self.blackboard.board.orientation is not None:
                 if geometry.quaternion_distance(mean_orientation, self.blackboard.board.orientation) > self.rejection_threshold:
-                    self.logger.warning(f"[{self.name}] Computed mean orientation is too different from blackboard orientation.")
+                    self.node.get_logger().warning(f"[{self.name}] Computed mean orientation is too different from blackboard orientation.")
                     return py_trees.common.Status.FAILURE
                 else:
-                    self.logger.info(f"[{self.name}] Computed mean orientation is consistent with blackboard orientation.")
+                    self.node.get_logger().info(f"[{self.name}] Computed mean orientation is consistent with blackboard orientation.")
                     return py_trees.common.Status.SUCCESS
             
             self.blackboard.board.orientation = mean_orientation
-            self.logger.info(f"[{self.name}] Finalized board orientation: {mean_orientation}")
+            euler_angles_degrees = [math.degrees(angle) for angle in geometry.quaternion_to_euler(mean_orientation)]
+            self.node.get_logger().info(f"[{self.name}] Finalized board orientation: {[f'{angle:.2f}' for angle in euler_angles_degrees]} (Euler angles)")
         
             return py_trees.common.Status.SUCCESS
         else:
