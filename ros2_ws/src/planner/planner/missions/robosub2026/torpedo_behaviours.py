@@ -2,8 +2,11 @@ import py_trees
 import py_trees_ros
 from time import sleep
 from ..vision_behaviours import SearchSweepBehaviour, CircleAroundToFindBehaviour
-from controls.utils import is_quaternion_outlier, compute_mean_orientation
+from ..action_status_enum import ActionStatus
+from controls.utils import is_quaternion_outlier, compute_mean_orientation, find_normal_to_quaternion, Vector2D
+from controls.goal_helpers import move_to_pose
 from enum import Enum
+from geometry_msgs.msg import Pose
 
 class Season(Enum):
     SPRING = 1
@@ -272,6 +275,7 @@ class TorpedoStrategySelector(py_trees.composites.Selector):
 class FindBoardOrientation(Action):
     """
     Action to find the orientation of the board and write it to the blackboard. This will be used for downstream alignment to the board when we are close to the board and can no longer rely on vision to find the orientation of the board.
+    This is necessary for orientation in particular since position averaging is already handled by a Kalman Filter in the vision pipeline, whereas orientation is inferred based on the icons on the board, and is more susceptible to noise and outliers.
     """
     def __init__(
             self,
@@ -339,10 +343,106 @@ class MoveToFrontOfBoardAndAlign(Action):
     """
     def __init__(
             self,
+            distance_from_board: float,
+            z_reference: float,
+            position_tolerance: float = 0.1,
+            orientation_tolerance_rad: float = 0.1,
+            timeout: float = 30.0,
+            hold_time: float = 0.5,
         ):
         super().__init__("Move to Front of Board and Align")
+        self.distance_from_board = distance_from_board
+        self.z_reference = z_reference
+        self.position_tolerance = position_tolerance
+        self.orientation_tolerance_rad = orientation_tolerance_rad
+        self.timeout = timeout
+        self.hold_time = hold_time
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+        self.result_message = ""
         
+        self.action_status:ActionStatus = ActionStatus.NOT_SENT
+        self.sent_goal = False
+        
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.navigation_client = kwargs['navigation_client']
+        self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/board/orientation", access=py_trees.common.Access.READ)
+        self.result_message = ""
 
+    
+    def update(self):
+        match self.action_status:
+            case ActionStatus.SUCCEEDED:
+                self.node.get_logger().info(f"[{self.name}] Successfully moved to front of board and aligned. {self.result_message}")
+                return py_trees.common.Status.SUCCESS
+            case ActionStatus.FAILED:
+                self.node.get_logger().error(f"[{self.name}] Failed to move to front of board and align. {self.result_message}")
+                return py_trees.common.Status.FAILURE
+            case ActionStatus.PENDING:
+                return py_trees.common.Status.RUNNING
+            case ActionStatus.NOT_SENT:  
+                if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.pose is None:
+                    self.node.get_logger().warn(f"[{self.name}] Waiting for /sensors/pose to determine AUV yaw.")
+                    return py_trees.common.Status.RUNNING
+                if not hasattr(self.blackboard, 'board') or self.blackboard.board.orientation is None:
+                    self.node.get_logger().error(f"[{self.name}] No board orientation available on blackboard.")
+                    return py_trees.common.Status.FAILURE
+                if not hasattr(self.blackboard, 'vision') or self.blackboard.vision.object_map is None:
+                    self.node.get_logger().error(f"[{self.name}] No object map available to determine board position.")
+                    return py_trees.common.Status.FAILURE
+                # get board position from vision
+                board_vo = None
+                for vision_object in self.blackboard.vision.object_map.array:
+                    if vision_object.label == "board":
+                        board_vo = vision_object
+                        break
+                if board_vo is None:
+                    self.node.get_logger().error(f"[{self.name}] Board not found in vision.")
+                    return py_trees.common.Status.FAILURE
+                
+                # get board orientation from blackboard
+                board_orientation = self.blackboard.board.orientation
+                
+                # orientation computed by object map is always normal pointing towards the AUV, so we simply take a point at the desired distance in front of the board along the orientation normal as our target point
+                
+                # recover normal from yaw of board orientation
+                board_normal = find_normal_to_quaternion(board_orientation)
+                
+                # compute target point at desired distance from board along normal
+                target_xy = Vector2D.from_point(board_vo.pose.position) + board_normal.normalized() * self.distance_from_board
+                
+                target_pose = Pose()
+                target_pose.position.x = target_xy.x
+                target_pose.position.y = target_xy.y
+                target_pose.position.z = self.z_reference
+                target_pose.orientation = board_orientation # we want to match the orientation of the board 
+                
+                goal = move_to_pose(
+                    pose=target_pose,
+                    tolerance=self.position_tolerance,
+                    angular_tolerance=self.orientation_tolerance_rad,
+                    timeout=self.timeout,
+                    hold_time=self.hold_time
+                )
+                
+                self.navigation_client.send_goal(goal, self.on_server_goal_response, self.on_server_goal_result)
+                self.action_status = ActionStatus.PENDING
+                return py_trees.common.Status.RUNNING
+        return py_trees.common.Status.SUCCESS
+    
+    def on_server_goal_response(self, goal_response: bool):
+        if not goal_response:
+            self.action_status = ActionStatus.FAILED
+
+    def on_server_goal_result(self, goal_success: bool, message: str):
+        self.result_message = message
+        if goal_success:
+            self.action_status = ActionStatus.SUCCEEDED
+        else:
+            self.action_status = ActionStatus.FAILED
+                
 class DetermineBoardType(Action):
     """
     
@@ -359,7 +459,6 @@ class DetermineBoardType(Action):
         self.blackboard.register_key(key="/board/type", access=py_trees.common.Access.WRITE)
         
     def update(self):
-        
         # Get board and icon position from blackboard
         if not hasattr(self.blackboard, 'vision') or self.blackboard.vision.object_map is None:
             self.node.get_logger().error(f"[{self.name}] No object map available.")

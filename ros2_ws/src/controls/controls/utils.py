@@ -47,16 +47,9 @@ def normalize_angle(angle: float) -> float:
     """
     return math.remainder(angle, 2.0 * math.pi)
 
-def hamiltonian_product(q1: Quaternion, q2: Quaternion) -> Quaternion:
-    """Compute the Hamiltonian product of two quaternions, i.e. distance"""
-    w1, x1, y1, z1 = q1.w, q1.x, q1.y, q1.z
-    w2, x2, y2, z2 = q2.w, q2.x, q2.y, q2.z
-    return Quaternion(
-        w = w1*w2 - x1*x2 - y1*y2 - z1*z2,
-        x = w1*x2 + x1*w2 + y1*z2 - z1*y2,
-        y = w1*y2 - x1*z2 + y1*w2 + z1*x2,
-        z = w1*z2 + x1*y2 - y1*x2 + z1*w2,
-    )
+def dot_product(q1: Quaternion, q2: Quaternion) -> float:
+    """Compute the dot product of two quaternions. This is used to determine if two quaternions are in the same hemisphere, which is necessary for averaging quaternions."""
+    return q1.w*q2.w + q1.x*q2.x + q1.y*q2.y + q1.z*q2.z
 
 def compute_mean_orientation(orientations: list[Quaternion]) -> Quaternion:
     """Compute the mean orientation from a list of quaternions, as a naive average. This is not a true mean, but is a good approximation as long as the quaternions are close together."""
@@ -64,7 +57,7 @@ def compute_mean_orientation(orientations: list[Quaternion]) -> Quaternion:
     canonical_orientation = orientations[0]  # Use the first sample as a reference for hemisphere
     for sample in orientations:
         # correct for double cover issue by ensuring quaternions are in the same hemisphere
-        if hamiltonian_product(canonical_orientation, sample).w < 0:
+        if dot_product(canonical_orientation, sample) < 0:
             sample = Quaternion(x=-sample.x, y=-sample.y, z=-sample.z, w=-sample.w)
         mean_orientation.x += sample.x
         mean_orientation.y += sample.y
@@ -139,3 +132,11 @@ class Vector2D:
     @staticmethod
     def from_point(point: Point) -> "Vector2D":
         return Vector2D(x=point.x, y=point.y)
+    
+    
+def find_normal_to_quaternion(q: Quaternion) -> Vector2D:
+    """Find the normal vector in the XY plane corresponding to a given quaternion orientation."""
+    # Rotate the forward vector (1, 0, 0) by the quaternion to get the normal vector
+    r = Rotation.from_quat([q.x, q.y, q.z, q.w])
+    normal_vector = r.apply([1, 0, 0])
+    return Vector2D(x=normal_vector[0], y=normal_vector[1])
