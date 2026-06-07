@@ -1,12 +1,13 @@
+import math
 import py_trees
 import py_trees_ros
 from time import sleep
-from ..vision_behaviours import SearchSweepBehaviour, CircleAroundToFindBehaviour
 from ..action_status_enum import ActionStatus
-from controls.utils import is_quaternion_outlier, compute_mean_orientation, find_normal_to_quaternion, Vector2D, quaternion_distance
+import controls.utils as geometry
+from controls.utils import Vector2D
 from controls.goal_helpers import move_to_pose
 from enum import Enum
-from geometry_msgs.msg import Pose
+from geometry_msgs.msg import Pose, Quaternion
 
 class Season(Enum):
     SPRING = 1
@@ -177,7 +178,7 @@ class FindBoardOrientation(Action):
         
         orientation = board_vo.pose.orientation
         if len(self.orientation_samples) > 0:
-            if is_quaternion_outlier(orientation, self.orientation_samples, self.rejection_threshold):
+            if geometry.is_quaternion_outlier(orientation, self.orientation_samples, self.rejection_threshold):
                 self.logger.warning(f"[{self.name}] Rejected outlier orientation sample: {orientation}")
                 return py_trees.common.Status.RUNNING
         self.orientation_samples.append(orientation)
@@ -186,9 +187,9 @@ class FindBoardOrientation(Action):
         
         if self.sample_count >= self.orientation_samples_number:
             # Compute mean orientation and write to blackboard
-            mean_orientation = compute_mean_orientation(self.orientation_samples)
+            mean_orientation = geometry.compute_mean_orientation(self.orientation_samples)
             if self.compare_measurement_with_blackboard and hasattr(self.blackboard, 'board') and self.blackboard.board.orientation is not None:
-                if quaternion_distance(mean_orientation, self.blackboard.board.orientation) > self.rejection_threshold:
+                if geometry.quaternion_distance(mean_orientation, self.blackboard.board.orientation) > self.rejection_threshold:
                     self.logger.warning(f"[{self.name}] Computed mean orientation is too different from blackboard orientation.")
                     return py_trees.common.Status.FAILURE
                 else:
@@ -223,18 +224,18 @@ class MoveToFrontOfBoardAndAlign(Action):
         self.timeout = timeout
         self.hold_time = hold_time
         self.blackboard = self.attach_blackboard_client(name=self.name)
-        self.result_message = ""
+        self.result_message: str = ""
         
         self.action_status:ActionStatus = ActionStatus.NOT_SENT
         self.sent_goal = False
         
     def setup(self, **kwargs):
         self.node = kwargs['node']
-        self.navigation_client = kwargs['navigation_client']
+        self.navigation_client = kwargs['shared_nav_client']
         self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/board/orientation", access=py_trees.common.Access.READ)
-        self.result_message = ""
+        self.result_message: str = ""
 
     
     def update(self):
@@ -270,20 +271,27 @@ class MoveToFrontOfBoardAndAlign(Action):
                 # get board orientation from blackboard
                 board_orientation = self.blackboard.board.orientation
                 
-                # orientation computed by object map is always normal pointing towards the AUV, so we simply take a point at the desired distance in front of the board along the orientation normal as our target point
+                # shift by half of size to get board center
+                board_center_xy:Vector2D = Vector2D (
+                    x = board_vo.pose.position.x + 0.5 * board_vo.size.x,
+                    y = board_vo.pose.position.y + 0.5 * board_vo.size.y
+                )
                 
+                ### orientation computed by object map is always normal pointing towards the AUV, so we simply take a point at the desired distance in front of the board along the orientation normal as our target point
                 # recover normal from yaw of board orientation
-                board_normal = find_normal_to_quaternion(board_orientation)
+                board_normal = geometry.find_normal_to_quaternion(board_orientation)
                 
                 # compute target point at desired distance from board along normal
-                target_xy = Vector2D.from_point(board_vo.pose.position) + board_normal.normalized() * self.distance_from_board
+                target_xy = board_center_xy + board_normal.normalized() * self.distance_from_board
                 
                 target_pose = Pose()
                 target_pose.position.x = target_xy.x
                 target_pose.position.y = target_xy.y
                 target_pose.position.z = self.z_reference
-                target_pose.orientation = board_orientation # we want to match the orientation of the board 
-                
+                # we want the AUV to face the board, since the board faces us, we want to flip the board orientation by 180 degrees in yaw
+                board_yaw = geometry.rotate_quaternion(board_orientation, 0, 0, math.pi)
+                target_pose.orientation = board_yaw
+
                 goal = move_to_pose(
                     pose=target_pose,
                     tolerance=self.position_tolerance,
@@ -292,7 +300,7 @@ class MoveToFrontOfBoardAndAlign(Action):
                     hold_time=self.hold_time
                 )
                 
-                self.navigation_client.send_goal(goal, self.on_server_goal_response, self.on_server_goal_result)
+                self.navigation_client.send_navigation_goal(goal, self.name, self.on_server_goal_response, self.on_server_goal_result)
                 self.action_status = ActionStatus.PENDING
                 return py_trees.common.Status.RUNNING
         return py_trees.common.Status.SUCCESS

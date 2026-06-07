@@ -35,6 +35,22 @@ def quaternion_from_yaw(yaw: float) -> Quaternion:
     q_arr = r.as_quat()
     return Quaternion(x=q_arr[0], y=q_arr[1], z=q_arr[2], w=q_arr[3])
 
+def rotate_quaternion(q: Quaternion, roll_offset: float, pitch_offset: float, yaw_offset: float) -> Quaternion:
+    """Rotate a quaternion by the specified offsets.
+
+    Args:
+        q: The original quaternion.
+        roll_offset: Roll offset in radians.
+        pitch_offset: Pitch offset in radians.
+        yaw_offset: Yaw offset in radians.
+
+    Returns:
+        The rotated quaternion.
+    """
+    r = Rotation.from_quat([q.x, q.y, q.z, q.w])
+    r = r * Rotation.from_euler('XYZ', [roll_offset, pitch_offset, yaw_offset], degrees=False)
+    q_arr = r.as_quat()
+    return Quaternion(x=q_arr[0], y=q_arr[1], z=q_arr[2], w=q_arr[3])
 
 def normalize_angle(angle: float) -> float:
     """Normalize an angle to [-pi, pi].
@@ -53,7 +69,7 @@ def dot_product(q1: Quaternion, q2: Quaternion) -> float:
 
 def compute_mean_orientation(orientations: list[Quaternion]) -> Quaternion:
     """Compute the mean orientation from a list of quaternions, as a naive average. This is not a true mean, but is a good approximation as long as the quaternions are close together."""
-    mean_orientation = Quaternion(x=0, y=0, z=0, w=0)
+    mean_orientation = Quaternion(x=0.0, y=0.0, z=0.0, w=0.0)
     canonical_orientation = orientations[0]  # Use the first sample as a reference for hemisphere
     for sample in orientations:
         # correct for double cover issue by ensuring quaternions are in the same hemisphere

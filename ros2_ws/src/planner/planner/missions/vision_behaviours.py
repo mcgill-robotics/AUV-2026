@@ -66,6 +66,7 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
 
     def setup(self, **kwargs):
         self.node = kwargs['node']
+        self.node.get_logger().info(f"[{self.name}] Turn Hold Time: {self.turn_hold_time_s}s, Turn Timeout: {self.turn_timeout_s}s step timeout: {self.step_timeout}s")
         self.navigation_client = kwargs['shared_nav_client']
         self.navigation_client.client_wait_for_server(timeout_sec=5.0) 
         self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
