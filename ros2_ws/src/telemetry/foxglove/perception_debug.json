@@ -224,7 +224,7 @@
         "poseEstimateThetaDeviation": 0.26179939
       },
       "imageMode": {
-        "imageTopic": "/vision/front_cam/detection_frame/annotated/compressed_throttled",
+        "imageTopic": "/vision/front_cam/detection_frame/annotated/compressed",
         "rectifyImage": true,
         "flipHorizontal": false,
         "flipVertical": false,
@@ -261,7 +261,8 @@
       },
       "followMode": "follow-pose",
       "scene": {
-        "enableStats": false
+        "enableStats": false,
+        "ignoreColladaUpAxis": false
       },
       "transforms": {},
       "topics": {
@@ -283,7 +284,7 @@
         "poseEstimateThetaDeviation": 0.26179939
       },
       "imageMode": {
-        "imageTopic": "/vision/down_cam/detections/annotated/compressed_throttled",
+        "imageTopic": "/vision/front_cam/detection_frame/depth/compressed",
         "gradient": [
           "#ef0404ff",
           "#0080ffff"
@@ -291,26 +292,28 @@
         "minValue": 0,
         "colorMode": "colormap",
         "colorMap": "turbo",
-        "maxValue": 15,
-        "calibrationTopic": "/down_cam/camera_info"
+        "maxValue": 15000,
+        "calibrationTopic": "/vision/front_cam/detection_frame/camera_info",
+        "imageSchemaName": "sensor_msgs/msg/Image",
+        "annotations": {},
+        "rectifyImage": true
       },
       "synchronize": false
     },
     "3D!38qyra4": {
       "cameraState": {
+        "distance": 24.554753263034453,
         "perspective": true,
-        "distance": 16.290124999966014,
-        "phi": 52.60564256619985,
-        "thetaOffset": 94.81678140033989,
-        "targetOffset": [
-          -0.05854341790254109,
-          -0.22072564865989125,
-          5.235663847975776e-8
-        ],
+        "phi": 38.76929782509668,
         "target": [
           0,
           0,
           0
+        ],
+        "targetOffset": [
+          -0.16376409262350639,
+          0.06344220562641045,
+          -0.00004689503067064742
         ],
         "targetOrientation": [
           0,
@@ -318,6 +321,7 @@
           0,
           1
         ],
+        "thetaOffset": 133.17304593603257,
         "fovy": 40.5,
         "near": 0.5,
         "far": 5000,
@@ -484,10 +488,19 @@
           "computeVertexNormals": true
         },
         "/down_cam/image_raw/compressed": {
-          "visible": false
+          "visible": false,
+          "cameraInfoTopic": "/down_cam/camera_info",
+          "projectionFrameId": "pool_link"
         },
         "/vision/front_cam/detection_frame/camera_info": {
           "visible": true
+        },
+        "/vision/front_cam/detection_frame/depth/compressedDepth": {
+          "visible": false,
+          "cameraInfoTopic": "/vision/front_cam/detection_frame/camera_info",
+          "projectionFrameId": "pool_link",
+          "renderMode": "pointCloud",
+          "siblingRgbTopic": "/vision/front_cam/detection_frame/annotated/compressed"
         }
       },
       "layers": {
@@ -664,9 +677,9 @@
     "3D!3m45izj": {
       "cameraState": {
         "perspective": true,
-        "distance": 13.268408625768243,
-        "phi": 54.81014681871022,
-        "thetaOffset": 101.20841898600618,
+        "distance": 7.169718448159055,
+        "phi": 42.41104629560372,
+        "thetaOffset": 146.24004011858824,
         "targetOffset": [
           0,
           0,
@@ -698,6 +711,9 @@
       "transforms": {},
       "topics": {
         "/foxglove/scene_objects": {
+          "visible": true
+        },
+        "/foxglove/pose_setpoint": {
           "visible": true
         }
       },
@@ -739,10 +755,10 @@
     "Publish!3wvumo2": {
       "topicName": "/mission_selector",
       "datatype": "std_msgs/Int32",
-      "value": "{\n  \"data\": 1\n}",
+      "value": "{\n  \"data\": 8\n}",
       "advancedView": true
     },
-    "py-trees-foxglove-viewer.py-trees-viewer!3g2bfba": {},
+    "foxglove-py-trees-viewer.py-trees-viewer!ncilxo": {},
     "RosOut!peb0ff": {
       "minLogLevel": 1,
       "preload": true,
@@ -760,7 +776,7 @@
       "showSourceLocation": false
     },
     "CallService!1irzzk4": {
-      "requestPayload": "{\n  \"action\": 0,\n  \"bag_name\": \"test-sim-planner2\",\n  \"profile\": \"all\"\n}",
+      "requestPayload": "{\n  \"action\": 0,\n  \"bag_name\": \"pooltest-1_2026-06-10\",\n  \"profile\": \"all\"\n}",
       "layout": "vertical",
       "timeoutSeconds": 10,
       "serviceName": "/rosbag_manager/control"
@@ -772,7 +788,7 @@
       "serviceName": "/rosbag_manager/control"
     },
     "Tab!images": {
-      "activeTabIdx": 6,
+      "activeTabIdx": 7,
       "tabs": [
         {
           "title": "YOLO Debug",
@@ -805,7 +821,7 @@
               "splitPercentage": 75.05126452494872
             },
             "direction": "row",
-            "splitPercentage": 26.629889669007024
+            "splitPercentage": 30.49147442326981
           }
         },
         {
@@ -831,7 +847,7 @@
               "splitPercentage": 38.725398027014265
             },
             "second": {
-              "first": "py-trees-foxglove-viewer.py-trees-viewer!3g2bfba",
+              "first": "foxglove-py-trees-viewer.py-trees-viewer!ncilxo",
               "second": "RosOut!peb0ff",
               "direction": "column",
               "splitPercentage": 69.09090880489617

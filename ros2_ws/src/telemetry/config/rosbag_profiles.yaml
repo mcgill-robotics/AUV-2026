@@ -10,8 +10,7 @@ profiles:
       - ".*"
     exclude:
       - ".*/annotated/compressed$" # Excludes the 30Hz annotated images, keeping the 5Hz _throttled versions
-      - ".*/depth$" # Excludes the 30Hz compressed depth images, keeping the 5Hz _throttled versions
-      # - ".*/depth/compressed$" # Excludes the 30Hz compressed depth images, keeping the 5Hz _throttled versions
+      # - ".*/depth/compressed$" # Depth is already happening at 5Hz, so it's fine
 
   all_no_vision:
     topics:

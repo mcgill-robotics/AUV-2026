@@ -86,6 +86,9 @@ class NavigationClient(Node):
                 if custom_goal_result != None:
                         is_success = (result.status == GoalStatus.STATUS_SUCCEEDED)
                         custom_goal_result(goal_success=is_success)
+                        # Change to this when merging into planner missions
+                        # msg = result.result.message if result.result else ""
+                        # custom_goal_result(goal_success=is_success, message=msg)
                 # Clear the current goal handle since the goal is completed
                 self.current_goal_handle = None
         
