@@ -2,6 +2,7 @@ import math
 import py_trees
 import py_trees_ros
 from time import sleep
+from typing import Optional
 from ..action_status_enum import ActionStatus
 import controls.utils as geometry
 from controls.utils import Vector2D
@@ -238,7 +239,7 @@ class FindBoardOrientation(Action):
         
 class MoveToFrontOfBoard(Navigation):
     """
-    Action to move to the front of the board based on the orientation found in the FindBoardOrientation action.
+    Navigation Action to move to the front of the board based on the orientation found in the FindBoardOrientation action.
     """
     def __init__(
             self,
@@ -324,6 +325,10 @@ class MoveToFrontOfBoard(Navigation):
 
 
 class AlignToBoard(Navigation):
+    """
+    Navigation Action to align to the board based on the orientation found in the FindBoardOrientation action.
+    """
+    
     def __init__(self,
         position_tolerance: float = 0.1,
         orientation_tolerance_rad: float = 0.1,
@@ -377,11 +382,10 @@ class AlignToBoard(Navigation):
         
 class DetermineBoardType(Action):
     """
-    
+    Action to determine board type, either type 1 with fire on top left, or type 2 with blood on top left, based on the relative positions of the icons on the board.
     """
-    def __init__(self, distance_from_board):
-        super().__init__("Move and Align to Board")
-        self.distance_from_board = distance_from_board
+    def __init__(self):
+        super().__init__("Determine Board Type")
 
     def setup(self, **kwargs):
         super().setup(**kwargs)
@@ -426,26 +430,34 @@ class DetermineBoardType(Action):
             self.node.get_logger().error(f"[{self.name}] Missing hazard and vehicle vision object pairs in board. Unable to determine board type.")
             return py_trees.common.Status.FAILURE
         
-
+        hazard_board_type: Optional[BoardType]  = None
+        vehicle_board_type: Optional[BoardType] = None
         if hazard_pair_found:
+            # just to satisfy the type checker, we know these are not None since hazard_pair_found is true
+            assert blood_vo is not None and fire_vo is not None
             # fire is above blood for board type 1, blood is above fire for board type 2
             if fire_vo.pose.position.z > blood_vo.pose.position.z:
-                hazard_board_type: BoardType = BoardType.FIRE_TOP_LEFT
+                hazard_board_type = BoardType.FIRE_TOP_LEFT
             else:
-                hazard_board_type: BoardType = BoardType.BLOOD_TOP_LEFT
+                hazard_board_type = BoardType.BLOOD_TOP_LEFT
                 
         if vehicle_pair_found:
+            # just to satisfy the type checker, we know these are not None since vehicle_pair_found is true
+            assert ambulance_vo is not None and firetruck_vo is not None
             # firetruck is above ambulance for board type 1, ambulance is above firetruck for board type 2
             if firetruck_vo.pose.position.z > ambulance_vo.pose.position.z:
-                vehicle_board_type: BoardType = BoardType.FIRE_TOP_LEFT
+                vehicle_board_type = BoardType.FIRE_TOP_LEFT
             else:
-                vehicle_board_type: BoardType = BoardType.BLOOD_TOP_LEFT
-                
+                vehicle_board_type = BoardType.BLOOD_TOP_LEFT
+
         if hazard_pair_found and vehicle_pair_found and hazard_board_type != vehicle_board_type:
             self.node.get_logger().error(f"[{self.name}] Inconsistent board type between hazard and vehicle vision objects.")
             return py_trees.common.Status.FAILURE
         else:
-            board_type = hazard_board_type if hazard_pair_found else vehicle_board_type
+            assert hazard_board_type is not None or vehicle_board_type is not None
+            board_type: Optional[BoardType] = hazard_board_type if hazard_pair_found else vehicle_board_type
+            # just to satisfy the type checker, we know board_type is not None since at least one of the pairs is found
+            assert board_type is not None
             self.blackboard.board.type = board_type.value
             self.node.get_logger().info(f"[{self.name}] Detected board type: {board_type.name}")
         

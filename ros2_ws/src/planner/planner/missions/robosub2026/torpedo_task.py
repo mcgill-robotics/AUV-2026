@@ -1,5 +1,5 @@
 import py_trees
-from .torpedo_behaviours import MoveToFrontOfBoard, AlignToBoard, FindBoardOrientation
+from .torpedo_behaviours import MoveToFrontOfBoard, AlignToBoard, FindBoardOrientation, DetermineBoardType
 from ..vision_behaviours import SearchSweepBehaviour, CircleAroundToFindBehaviour
 
 class TorpedoTask(py_trees.composites.Sequence):
@@ -65,10 +65,13 @@ class TorpedoTask(py_trees.composites.Sequence):
         returns py_trees.composites.Sequence
         """
         board_strategy = py_trees.composites.Sequence("Board Strategy", memory=True)
+        board_type = DetermineBoardType()
         board_strategy.add_children(
             [
                 self.board_rough_position_sequence(),
-                self.board_orientation_refinment_selector(),
+                self.board_orientation_refinement_selector(),
+                board_type,
+                self.distance_strategy_selector(),
                 # TODO add firing torpedo behaviours here
             ]
          )
@@ -143,7 +146,7 @@ class TorpedoTask(py_trees.composites.Sequence):
     
     
     
-    def board_orientation_refinment_selector(self)->py_trees.composites.Selector:
+    def board_orientation_refinement_selector(self)->py_trees.composites.Selector:
         """
         Subtree containing "<attempts>" sequences to find the board orientation. Every sequence will try to find the board orientation and align to it, with an extra check at the end to see if orientation has stabilized. This is to save a stable version of the board orientatio for downstream alignments when approaching the board. 
 
@@ -219,11 +222,10 @@ class TorpedoTask(py_trees.composites.Sequence):
         """
         distance_strategy = py_trees.composites.Sequence(f"Distance Strategy {distance_from_board}m", memory=True)
 
-        move_and_align = MoveAndAlignToBoard(distance_from_board)
         # TODO add navigation to board position here
         distance_strategy.add_children(
             [
-                move_and_align,
+                py_trees.behaviours.Success(name=f"Placeholder for navigating to {distance_from_board}m from board")
             ]
         )
         return distance_strategy
