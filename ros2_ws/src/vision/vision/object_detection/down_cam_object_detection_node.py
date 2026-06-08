@@ -12,6 +12,7 @@ from cv_bridge import CvBridge
 import rclpy
 from rclpy.node import Node
 from rclpy.parameter import Parameter
+from rcl_interfaces.msg import SetParametersResult
 import copy
 from sensor_msgs.msg import CameraInfo, CompressedImage, Image
 from std_srvs.srv import Trigger
@@ -32,6 +33,28 @@ class DownCamObjectDetectorNode():
     Opens the camera via cv2.VideoCapture and runs inference in a tight
     threaded grab loop, mirroring the front-cam ZED pattern.
     """
+
+    # V4L2 control name --> OpenCV CAP_PROP mapping
+    # Controls with a direct OpenCV constant are applied via cap.set();
+    # the rest are applied via v4l2-ctl subprocess.
+    V4L2_OPENCV_CONTROLS = (
+        ("brightness",               cv2.CAP_PROP_BRIGHTNESS),
+        ("contrast",                 cv2.CAP_PROP_CONTRAST),
+        ("saturation",               cv2.CAP_PROP_SATURATION),
+        ("hue",                      cv2.CAP_PROP_HUE),
+        ("sharpness",                cv2.CAP_PROP_SHARPNESS),
+        ("gamma",                    cv2.CAP_PROP_GAMMA),
+        ("auto_white_balance",       cv2.CAP_PROP_AUTO_WB),
+        ("white_balance_temperature", cv2.CAP_PROP_WB_TEMPERATURE),
+        ("auto_focus",               cv2.CAP_PROP_AUTOFOCUS),
+        ("focus_absolute",           cv2.CAP_PROP_FOCUS),
+        ("auto_exposure",            cv2.CAP_PROP_AUTO_EXPOSURE),
+        ("exposure_time_absolute",   cv2.CAP_PROP_EXPOSURE),
+    )
+    V4L2_ONLY_CONTROLS = (
+        "power_line_frequency",
+        "backlight_compensation",
+    )
 
     def __init__(self, node: Node):
         self.node = node
@@ -141,6 +164,11 @@ class DownCamObjectDetectorNode():
             '/vision/down_cam/toggle_annotated_image',
             self._toggle_annotated_image_callback,
         )
+        self.node.create_service(
+            Trigger,
+            '/vision/down_cam/get_camera_settings',
+            self._get_camera_settings_callback,
+        )
 
         self.compressed = self.node.get_parameter('compressed').get_parameter_value().bool_value
         input_format = CompressedImage if self.compressed else Image
@@ -201,28 +229,47 @@ class DownCamObjectDetectorNode():
             )
 
         self.node.get_logger().info(f"{self.node.get_name()} initialized.")
+        self.node.add_on_set_parameters_callback(self._parameter_callback)
+
+    def _parameter_callback(self, params):
+        if not hasattr(self, 'cap') or not self.cap.isOpened():
+            return SetParametersResult(successful=True)
+            
+        success = True
+        
+        cv_param_map = {name: prop for name, prop in self.V4L2_OPENCV_CONTROLS}
+        
+        for param in params:
+            if param.name in cv_param_map:
+                cv_prop = cv_param_map[param.name]
+                if param.type_ == Parameter.Type.BOOL:
+                    val = int(param.value)
+                else:
+                    val = param.value
+                    
+                ok = self.cap.set(cv_prop, val)
+                if not ok:
+                    success = False
+                    self.node.get_logger().warn(f"Failed to dynamically set {param.name}={val}")
+                else:
+                    self.node.get_logger().info(f"Dynamically updated {param.name}={val}")
+            
+            elif param.name in self.V4L2_ONLY_CONTROLS:
+                try:
+                    subprocess.run(
+                        ["v4l2-ctl", "-d", self.video_device, "--set-ctrl", f"{param.name}={param.value}"],
+                        check=True, capture_output=True, timeout=5,
+                    )
+                    self.node.get_logger().info(f"Dynamically updated v4l2 {param.name}={param.value}")
+                except Exception as e:
+                    self.node.get_logger().warn(f"v4l2-ctl {param.name} failed: {e}")
+                    success = False
+                    
+        return SetParametersResult(successful=success)
 
     # ──────────────────────────────────────────────────────────────
     # Camera helpers
     # ──────────────────────────────────────────────────────────────
-
-    # V4L2 control name → OpenCV CAP_PROP mapping
-    # Controls with a direct OpenCV constant are applied via cap.set();
-    # the rest are applied via v4l2-ctl subprocess.
-    V4L2_OPENCV_CONTROLS = (
-        ("brightness",               cv2.CAP_PROP_BRIGHTNESS),
-        ("contrast",                 cv2.CAP_PROP_CONTRAST),
-        ("saturation",               cv2.CAP_PROP_SATURATION),
-        ("hue",                      cv2.CAP_PROP_HUE),
-        ("sharpness",                cv2.CAP_PROP_SHARPNESS),
-        ("gamma",                    cv2.CAP_PROP_GAMMA),
-        ("auto_white_balance",       cv2.CAP_PROP_AUTO_WB),
-        ("white_balance_temperature", cv2.CAP_PROP_WB_TEMPERATURE),
-        ("auto_focus",               cv2.CAP_PROP_AUTOFOCUS),
-        ("focus_absolute",           cv2.CAP_PROP_FOCUS),
-        ("auto_exposure",            cv2.CAP_PROP_AUTO_EXPOSURE),
-        ("exposure_time_absolute",   cv2.CAP_PROP_EXPOSURE),
-    )
 
     def _open_camera(self) -> cv2.VideoCapture:
         """Open the USB camera with configured resolution/fps."""
@@ -282,11 +329,8 @@ class DownCamObjectDetectorNode():
                 applied.append(f"{param_name}={value}")
 
         # Controls without OpenCV constants — apply via v4l2-ctl
-        v4l2_only_controls = [
-            ("power_line_frequency", self.node.get_parameter('power_line_frequency').get_parameter_value().integer_value),
-            ("backlight_compensation", self.node.get_parameter('backlight_compensation').get_parameter_value().integer_value),
-        ]
-        for ctrl_name, ctrl_value in v4l2_only_controls:
+        for ctrl_name in self.V4L2_ONLY_CONTROLS:
+            ctrl_value = self.node.get_parameter(ctrl_name).get_parameter_value().integer_value
             try:
                 subprocess.run(
                     ["v4l2-ctl", "-d", self.video_device,
@@ -337,6 +381,36 @@ class DownCamObjectDetectorNode():
             f"Annotated image {'enabled' if self.annotated_image_enabled else 'disabled'}"
         )
         self.node.get_logger().info(response.message)
+        return response
+
+    def _get_camera_settings_callback(self, request, response):
+        del request
+        if not hasattr(self, 'cap') or not self.cap.isOpened():
+            response.success = False
+            response.message = "Camera not opened."
+            return response
+            
+        current_settings = {}
+        for param_name, cv_prop in self.V4L2_OPENCV_CONTROLS:
+            val = self.cap.get(cv_prop)
+            current_settings[param_name] = val
+            
+        for ctrl_name in self.V4L2_ONLY_CONTROLS:
+            try:
+                res = subprocess.run(
+                    ["v4l2-ctl", "-d", self.video_device, "--get-ctrl", ctrl_name],
+                    check=True, capture_output=True, text=True, timeout=5,
+                )
+                output = res.stdout.strip()
+                if ":" in output:
+                    current_settings[ctrl_name] = output.split(":")[-1].strip()
+                else:
+                    current_settings[ctrl_name] = output
+            except Exception as e:
+                current_settings[ctrl_name] = f"ERROR {e}"
+                
+        response.success = True
+        response.message = " | ".join(f"{k}: {v}" for k, v in current_settings.items())
         return response
 
     def _process_frame(self, img, frame_stamp):

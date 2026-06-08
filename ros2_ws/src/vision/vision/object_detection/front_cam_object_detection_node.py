@@ -21,7 +21,7 @@ except ImportError:
     sl = None
     ZED_SDK_AVAILABLE = False
 import rclpy
-from rcl_interfaces.msg import ParameterDescriptor
+from rcl_interfaces.msg import ParameterDescriptor, SetParametersResult
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rclpy.qos import qos_profile_sensor_data
@@ -192,6 +192,7 @@ class FrontCamObjectDetectorNode():
         self.node.create_service(AutomaticCapture, '/vision/front_cam/toggle_collection', partial(toggle_collection_callback_util, self))
         self.node.create_service(Trigger, '/vision/front_cam/toggle_annotated_image', self._toggle_annotated_image_callback)
         self.node.create_service(Trigger, '/vision/front_cam/reset_vio_pose', self._reset_vio_pose_callback)
+        self.node.create_service(Trigger, '/vision/front_cam/get_camera_settings', self._get_camera_settings_callback)
         self.class_names = list(self.node.get_parameter('model_class_names').get_parameter_value().string_array_value)
         self.node.get_logger().info(f"Class names: {self.class_names}")
         model_path = self.node.get_parameter('model_path').get_parameter_value().string_value
@@ -604,6 +605,38 @@ class FrontCamObjectDetectorNode():
                 queue_size
             )
 
+        self.node.add_on_set_parameters_callback(self._parameter_callback)
+
+    def _parameter_callback(self, params):
+        if not self.has_zed_sdk or not hasattr(self, 'zed') or not self.zed.is_opened():
+            return SetParametersResult(successful=True)
+            
+        success = True
+        
+        zed_param_map = {name: setting for name, setting in self.ZED_RUNTIME_CAMERA_SETTINGS}
+        zed_param_map["zed_image_white_balance_temperature"] = sl.VIDEO_SETTINGS.WHITEBALANCE_TEMPERATURE
+        zed_param_map["zed_image_exposure"] = sl.VIDEO_SETTINGS.EXPOSURE
+        
+        for param in params:
+            if param.name in zed_param_map:
+                setting = zed_param_map[param.name]
+                if param.name in {"zed_image_auto_exposure", "zed_image_auto_white_balance"}:
+                    if param.type_ == Parameter.Type.BOOL:
+                        val = int(param.value)
+                    else:
+                        val = param.value
+                else:
+                    val = param.value
+                
+                err = self.zed.set_camera_settings(setting, val)
+                if err != sl.ERROR_CODE.SUCCESS:
+                    success = False
+                    self.node.get_logger().error(f"Failed to dynamically set {param.name}={val}: {err}")
+                else:
+                    self.node.get_logger().info(f"Dynamically updated ZED setting {param.name}={val}")
+                    
+        return SetParametersResult(successful=success)
+
     def _apply_zed_camera_controls(self):
         applied_settings = []
         for parameter_name, setting in self.ZED_RUNTIME_CAMERA_SETTINGS:
@@ -675,6 +708,30 @@ class FrontCamObjectDetectorNode():
         self.node.get_logger().info(response.message)
         return response
         
+    def _get_camera_settings_callback(self, request, response):
+        del request
+        if not self.has_zed_sdk or not hasattr(self, 'zed') or not self.zed.is_opened():
+            response.success = False
+            response.message = "ZED camera not available."
+            return response
+            
+        settings_to_query = list(self.ZED_RUNTIME_CAMERA_SETTINGS) + [
+            ("zed_image_white_balance_temperature", sl.VIDEO_SETTINGS.WHITEBALANCE_TEMPERATURE),
+            ("zed_image_exposure", sl.VIDEO_SETTINGS.EXPOSURE)
+        ]
+        
+        current_settings = {}
+        for param_name, setting in settings_to_query:
+            err, value = self.zed.get_camera_settings(setting)
+            if err == sl.ERROR_CODE.SUCCESS:
+                current_settings[param_name] = value
+            else:
+                current_settings[param_name] = f"ERROR {err}"
+                
+        response.success = True
+        response.message = " | ".join(f"{k}: {v}" for k, v in current_settings.items())
+        return response
+
     def _reset_vio_pose_callback(self, request, response):
         del request
         if self.has_zed_sdk and self.enable_vio:
