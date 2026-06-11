@@ -83,6 +83,29 @@ def main():
         "scan_timeout": node.get_parameter("slalom.scan_timeout").get_parameter_value().double_value,
     }
 
+    # Gate task parameters
+    node.declare_parameter("gate.position_tolerance", 0.3)
+    node.declare_parameter("gate.hold_time", 1.0)
+    node.declare_parameter("gate.timeout", 30.0)
+    node.declare_parameter("gate.desired_role", "survey_repair")
+    node.declare_parameter("gate.search_attempts", 2)
+    node.declare_parameter("gate.scan_angle_deg", 35.0)
+    node.declare_parameter("gate.scan_pause_time", 1.0)
+    node.declare_parameter("gate.approach_distance", 1.0)
+    node.declare_parameter("gate.pass_distance", 1.0)
+
+    gate_params = {
+        "position_tolerance": node.get_parameter("gate.position_tolerance").get_parameter_value().double_value,
+        "hold_time": node.get_parameter("gate.hold_time").get_parameter_value().double_value,
+        "timeout": node.get_parameter("gate.timeout").get_parameter_value().double_value,
+        "desired_role": node.get_parameter("gate.desired_role").get_parameter_value().string_value,
+        "search_attempts": node.get_parameter("gate.search_attempts").get_parameter_value().integer_value,
+        "scan_angle_deg": node.get_parameter("gate.scan_angle_deg").get_parameter_value().double_value,
+        "scan_pause_time": node.get_parameter("gate.scan_pause_time").get_parameter_value().double_value,
+        "approach_distance": node.get_parameter("gate.approach_distance").get_parameter_value().double_value,
+        "pass_distance": node.get_parameter("gate.pass_distance").get_parameter_value().double_value,
+    }
+
     # Set the root of the tree
     root = py_trees.composites.Parallel("Root", policy=py_trees.common.ParallelPolicy.SuccessOnAll(synchronise=False))
 
@@ -144,6 +167,7 @@ def main():
         orbit_pre_qual_hold_time_initial=orbit_pre_qual_hold_time_initial,
         orbit_pre_qual_hold_time_segments=orbit_pre_qual_hold_time_segments,
         slalom_params=slalom_params,
+        gate_params=gate_params,
     )
 
     # Add children to root
