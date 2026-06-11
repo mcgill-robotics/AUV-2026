@@ -64,13 +64,14 @@ real_parameters = TrainingParameters (
     degrees = 20.0
 )
 
-def get_model_weights(model_version: str, size: str) -> str:
+def get_model_weights(model_version: str, size: str, task: str) -> str:
     """Get the pretrained weights file for the specified YOLO version and size."""
+    seg_suffix = "-seg" if task == "segment" else ""
     if model_version == "v8":
-        return f"yolov8{size}.pt"
+        return f"yolov8{size}{seg_suffix}.pt"
     elif model_version == "v11":
         # v11 uses 'yolo11' prefix
-        return f"yolo11{size}.pt"
+        return f"yolo11{size}{seg_suffix}.pt"
     else:
         raise ValueError(f"Unknown model version: {model_version}. Use 'v8' or 'v11'.")
 
@@ -88,16 +89,18 @@ def train_yolo(args):
         return
     
     # Model setup
+    run_name_suffix = "-seg" if args.task == "segment" else ""
+    
     if (args.custom_model):
         model = YOLO(args.custom_model)
-        run_name = "yolo11s"
+        run_name = f"yolo11s{run_name_suffix}"
     else:
-        weights = get_model_weights(args.model, args.size)
+        weights = get_model_weights(args.model, args.size, args.task)
         print(f"\n{'='*50}")
         print(f"Training YOLO{args.model}{args.size} ({weights})")
         print(f"{'='*50}")
         
-        run_name = f"yolo{args.model}{args.size}"
+        run_name = f"yolo{args.model}{args.size}{run_name_suffix}"
         model = YOLO(weights)
     
     # Training parameters
@@ -114,7 +117,7 @@ def train_yolo(args):
         imgsz = args.imgsz,
         batch = args.batch,
         pretrained = True,
-        task = "detect",
+        task = args.task,
         cache = args.cache,
         workers = args.workers,
         name = run_name,
@@ -134,8 +137,11 @@ def train_yolo(args):
     )
     
     # Copy best weights to a convenient location
-    best_weights_src = SCRIPT_DIR / "runs" / "detect" / run_name / "weights" / "best.pt"
-    best_weights_dst = SCRIPT_DIR / f"best_yolo{args.model}{args.size}_model.pt"
+    # Note: For segmentation, ultralytics saves under 'segment' instead of 'detect'
+    task_dir = "segment" if args.task == "segment" else "detect"
+    best_weights_src = SCRIPT_DIR / "runs" / task_dir / run_name / "weights" / "best.pt"
+    
+    best_weights_dst = SCRIPT_DIR / f"best_{run_name}_model.pt"
     
     if best_weights_src.exists():
         shutil.copy2(best_weights_src, best_weights_dst)
@@ -162,13 +168,21 @@ def train_rfdetr(args):
     # Output directory
     output_dir = args.output_dir or str(SCRIPT_DIR / "runs" / "rfdetr")
 
-    # Determine model class based on size
-    rfdetr_models = {
-        "n": ("rfdetr", "RFDETRNano", "RF-DETR-Nano"),
-        "s": ("rfdetr", "RFDETRSmall", "RF-DETR-Small"),
-        "m": ("rfdetr", "RFDETRMedium", "RF-DETR-Medium"),
-        "l": ("rfdetr", "RFDETRLarge", "RF-DETR-Large"),
-    }
+    # Determine model class based on size and task
+    if args.task == "segment":
+        rfdetr_models = {
+            "n": ("rfdetr", "RFDETRSegNano", "RF-DETR-Seg-Nano"),
+            "s": ("rfdetr", "RFDETRSegSmall", "RF-DETR-Seg-Small"),
+            "m": ("rfdetr", "RFDETRSegMedium", "RF-DETR-Seg-Medium"),
+            "l": ("rfdetr", "RFDETRSegLarge", "RF-DETR-Seg-Large"),
+        }
+    else:
+        rfdetr_models = {
+            "n": ("rfdetr", "RFDETRNano", "RF-DETR-Nano"),
+            "s": ("rfdetr", "RFDETRSmall", "RF-DETR-Small"),
+            "m": ("rfdetr", "RFDETRMedium", "RF-DETR-Medium"),
+            "l": ("rfdetr", "RFDETRLarge", "RF-DETR-Large"),
+        }
 
     size = args.size
     if size not in rfdetr_models:
@@ -196,7 +210,7 @@ def train_rfdetr(args):
     if args.custom_model:
         model_kwargs["pretrain_weights"] = args.custom_model
         
-    model_kwargs["resolution"] = 512
+    model_kwargs["resolution"] = args.imgsz
 
     model = RFDETRModel(**model_kwargs)
 
@@ -292,6 +306,13 @@ Examples:
         help="Model to train: v8, v11, or rfdetr (default: v8)"
     )
     parser.add_argument(
+        "--task", "-t",
+        type=str,
+        choices=["detect", "segment"],
+        default="detect",
+        help="Training task type: detect or segment (YOLO only)"
+    )
+    parser.add_argument(
         "--size", "-s",
         type=str,
         choices=["n", "s", "m", "l", "x"],
@@ -318,8 +339,8 @@ Examples:
     parser.add_argument(
         "--imgsz",
         type=int,
-        default=640,
-        help="Image size for training — YOLO only (default: 640)"
+        default=None,
+        help="Image size for training (default: 640 for YOLO, 512 for RF-DETR detect, 384 for RF-DETR segment)"
     )
     parser.add_argument(
         "--workers",
@@ -400,6 +421,16 @@ Examples:
     # Apply model-specific learning rate defaults
     if args.learning_rate is None:
         args.learning_rate = 1e-4 if args.model == "rfdetr" else 0.0003
+
+    # Apply default image sizes if not provided
+    if args.imgsz is None:
+        if args.model == "rfdetr":
+            if args.task == "segment":
+                args.imgsz = 384
+            else:
+                args.imgsz = 512
+        else:
+            args.imgsz = 640
 
     # Apply sensible RF-DETR batch default (instead of YOLO's -1 auto)
     if args.model == "rfdetr" and args.batch == -1:
