@@ -170,7 +170,7 @@ class Vector2D:
         return Vector2D(x=point.x, y=point.y)
     
     
-def find_normal_to_quaternion(q: Quaternion) -> Vector2D:
+def find_normal_from_quaternion(q: Quaternion) -> Vector2D:
     """Find the normal vector in the XY plane corresponding to a given quaternion orientation."""
     # Rotate the forward vector (1, 0, 0) by the quaternion to get the normal vector
     r = Rotation.from_quat([q.x, q.y, q.z, q.w])

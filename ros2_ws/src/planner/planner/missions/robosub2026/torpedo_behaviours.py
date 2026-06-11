@@ -1,14 +1,14 @@
 import math
 import py_trees
 import py_trees_ros
-from time import sleep
 from typing import Optional
 from ..action_status_enum import ActionStatus
 import controls.utils as geometry
 from controls.utils import Vector2D
 from controls.goal_helpers import set_attitude_quaternion,move_global
 from enum import Enum
-from geometry_msgs.msg import Pose, Quaternion
+from auv_msgs.msg import VisionObject
+from geometry_msgs.msg import Quaternion
 
 TORPEDO_COUNT = 2
 
@@ -89,6 +89,20 @@ class Condition(py_trees.behaviour.Behaviour):
 
     def terminate(self, new_status):
         self.logger.debug(f"Condition::terminate {self.name} to {new_status}")
+
+def compute_target_in_front_of_point_on_board(point: Vector2D, board_orientation: Quaternion, distance_from_point: float) -> Vector2D:
+    """
+    Torpedo-specific utility function:
+    Compute a target point in front of a point based on the board orientation and desired distance from the object.
+    point: position of the vision object in the XY plane
+    board_orientation: orientation of the board as a quaternion
+    distance_from_point: desired distance from the point to the target point along the normal direction
+    """
+    # orientation computed by object map is always normal pointing towards the AUV, so we simply take a point at the desired distance in front of the icon along the orientation normal as our target point
+    # recover normal from yaw of board orientation
+    board_normal = geometry.find_normal_from_quaternion(board_orientation)
+    # compute target point at desired distance from point along normal
+    return point + board_normal.normalized() * distance_from_point
 
 class TorpedoNodeFactory:
     """
@@ -292,22 +306,13 @@ class MoveToFrontOfBoard(Navigation):
                     self.node.get_logger().error(f"[{self.name}] Board not found in vision.")
                     return py_trees.common.Status.FAILURE
                 
-                # get board orientation from blackboard
-                board_orientation = self.blackboard.board.orientation
-                
                 # shift by half of size to get board center
                 board_center_xy:Vector2D = Vector2D (
                     x = board_vo.pose.position.x + 0.5 * board_vo.size.x,
                     y = board_vo.pose.position.y + 0.5 * board_vo.size.y
                 )
                 
-                ### orientation computed by object map is always normal pointing towards the AUV, so we simply take a point at the desired distance in front of the board along the orientation normal as our target point
-                # recover normal from yaw of board orientation
-                board_normal = geometry.find_normal_to_quaternion(board_orientation)
-                
-                # compute target point at desired distance from board along normal
-                target_xy = board_center_xy + board_normal.normalized() * self.distance_from_board
-                
+                target_xy = compute_target_in_front_of_point_on_board(board_center_xy, self.blackboard.board.orientation, self.distance_from_board)
 
                 goal = move_global(
                     x=target_xy.x,
@@ -340,7 +345,6 @@ class AlignToBoard(Navigation):
         
     def setup(self, **kwargs):
         super().setup(**kwargs)
-        self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/board/orientation", access=py_trees.common.Access.READ)
         
     def update(self):
@@ -354,13 +358,9 @@ class AlignToBoard(Navigation):
             case ActionStatus.PENDING:
                 return py_trees.common.Status.RUNNING
             case ActionStatus.NOT_SENT:
-                if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.pose is None:
-                    self.node.get_logger().warn(f"[{self.name}] Waiting for /sensors/pose to determine AUV yaw.")
-                    return py_trees.common.Status.RUNNING
                 if not hasattr(self.blackboard, 'board') or self.blackboard.board.orientation is None:
                     self.node.get_logger().error(f"[{self.name}] No board orientation available on blackboard.")
                     return py_trees.common.Status.FAILURE
-                # get current AUV yaw from sensors                auv_pose = self.blackboard.sensors.pose
                 board_orientation = self.blackboard.board.orientation
                 # we want the AUV to face the board, since the board faces us, we want to flip the board orientation by 180 degrees in yaw
                 target_orientation = geometry.rotate_quaternion(board_orientation, 0, 0, math.pi)
@@ -464,3 +464,91 @@ class DetermineBoardType(Action):
 
         # # 2. Move to distance from board while aligning to board
         return py_trees.common.Status.SUCCESS
+
+
+class BoardIcon(Enum):
+    FIRE = "fire"
+    BLOOD = "blood"
+    AMBULANCE = "ambulance"
+    FIRETRUCK = "firetruck"
+    
+class MoveToFrontOfIcon(Navigation):
+    """
+    Navigation Action to move to the front of a specific icon on the board based on the vision information.
+    Alignment based on the orientation found in the FindBoardOrientation action.
+    use_icon_z: if True, use the z position of the icon as the z reference for the navigation goal, if False, use a fixed z reference provided by z_reference parameter.
+    """
+    def __init__(
+            self,
+            target_icon: BoardIcon,
+            distance_from_icon: float,
+            use_icon_z: bool = True,
+            z_reference: Optional[float] = None,
+            position_tolerance: float = 0.1,
+            orientation_tolerance_rad: float = 0.1,
+            timeout: float = 30.0,
+            hold_time: float = 0.5,
+        ):
+        super().__init__(f"Move {distance_from_icon} in Front of {target_icon.value.capitalize()}", position_tolerance, orientation_tolerance_rad, timeout, hold_time)
+        self.target_icon = target_icon
+        self.distance_from_icon = distance_from_icon
+        if not use_icon_z and z_reference is None:
+            raise ValueError("z_reference must be provided when use_icon_z is False")
+        self.use_icon_z = use_icon_z
+        self.z_reference = z_reference
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+        
+    def setup(self, **kwargs):
+        super().setup(**kwargs)
+        self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/board/orientation", access=py_trees.common.Access.READ)
+        
+    def update(self):
+        match self.action_status:
+            case ActionStatus.SUCCEEDED:
+                self.node.get_logger().info(f"[{self.name}] Successfully moved to front of {self.target_icon.value}. {self.result_message}")
+                return py_trees.common.Status.SUCCESS
+            case ActionStatus.FAILED:
+                self.node.get_logger().error(f"[{self.name}] Failed to moved to front of {self.target_icon.value}. {self.result_message}")
+                return py_trees.common.Status.FAILURE
+            case ActionStatus.PENDING:
+                return py_trees.common.Status.RUNNING
+            case ActionStatus.NOT_SENT:  
+                if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.pose is None:
+                    self.node.get_logger().warn(f"[{self.name}] Waiting for /sensors/pose to determine AUV yaw.")
+                    return py_trees.common.Status.RUNNING
+                if not hasattr(self.blackboard, 'board') or self.blackboard.board.orientation is None:
+                    self.node.get_logger().error(f"[{self.name}] No board orientation available on blackboard.")
+                    return py_trees.common.Status.FAILURE
+                if not hasattr(self.blackboard, 'vision') or self.blackboard.vision.object_map is None:
+                    self.node.get_logger().error(f"[{self.name}] No object map available to determine icon position.")
+                    return py_trees.common.Status.FAILURE
+                # get target icon position from vision
+                target_icon_vo = None
+                for vision_object in self.blackboard.vision.object_map.array:
+                    if vision_object.label == self.target_icon.value:
+                        target_icon_vo = vision_object
+                        break
+                if target_icon_vo is None:
+                    self.node.get_logger().error(f"[{self.name}] Target icon {self.target_icon.value} not found in vision.")
+                    return py_trees.common.Status.FAILURE
+                
+                target_xy = compute_target_in_front_of_point_on_board(Vector2D.from_point(target_icon_vo.pose.position), self.blackboard.board.orientation, self.distance_from_icon)
+                
+                target_z = target_icon_vo.pose.position.z if self.use_icon_z else self.z_reference
+                
+                goal = move_global(
+                    x=target_xy.x,
+                    y=target_xy.y,
+                    z=target_z,
+                    tolerance=self.position_tolerance,
+                    angular_tolerance=self.orientation_tolerance_rad,
+                    hold_time=self.hold_time,
+                    timeout=self.timeout,
+                )
+                self.navigation_client.send_navigation_goal(goal, self.name, self.on_server_goal_response, self.on_server_goal_result)
+                self.action_status = ActionStatus.PENDING
+                return py_trees.common.Status.RUNNING
+        return py_trees.common.Status.SUCCESS
+                
