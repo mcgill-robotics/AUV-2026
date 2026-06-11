@@ -40,19 +40,21 @@ class TableOctagonTask(py_trees.composites.Sequence):
         #4 Surface inside Octagon and align with table while at the surface 
 
         #4 Go above the table, with the more accurate position of the table 
-        go_above_table_1m_away.add_child(go_above_table)
+        #go_above_table_1m_away.add_child(go_above_table)
 
         # 2. Surface inside Octagon
         # 3. Locate Resupply table and items
         # 4. Pick up role-specific items
         # 5. Deliver to correct basket
         # 6. Optional: Face correct icons and perform rotations
-        surface_action = BasicActionBehaviour(
-            name="Surface in Octagon", 
-            goal=set_depth(z=0.0, tolerance=position_tolerance, hold_time=hold_time, timeout=timeout)
-        )
+        # surface_action = BasicActionBehaviour(
+        #     name="Surface in Octagon", 
+        #     goal=set_depth(z=0.0, tolerance=position_tolerance, hold_time=hold_time, timeout=timeout)
+        # )
 
         self.add_children([
-            surface_action,
+            go_shallow_depth,
+            search_for_table,
+            go_above_table,
             py_trees.behaviours.Success(name="Placeholder Table & Octagon Success")
         ])
