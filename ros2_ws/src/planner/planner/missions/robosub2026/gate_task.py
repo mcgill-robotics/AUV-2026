@@ -108,6 +108,9 @@ class PlanGateTraversalBehaviour(py_trees.behaviour.Behaviour):
         role_x = selected_role_obj.pose.position.x
         role_y = selected_role_obj.pose.position.y
 
+        #the gate track is the center of the full structure, while the role
+        # panel sits on one half of the opening. the midpoint is a
+        #approximation of the center of the chosen half of the gate
         target_base_x = 0.5 * (gate_x + role_x)
         target_base_y = 0.5 * (gate_y + role_y)
 
@@ -238,7 +241,8 @@ class NavigateThroughGateBehaviour(py_trees.behaviour.Behaviour):
         self.timeout = timeout
         self.blackboard = self.attach_blackboard_client(name=self.name)
         self.action_status = ActionStatus.NOT_SENT
-        self.result_message = ''
+        self.current_phase = "approach"
+        self.result_message = ""
 
     def setup(self, **kwargs):
         self.node = kwargs["node"]
@@ -250,15 +254,34 @@ class NavigateThroughGateBehaviour(py_trees.behaviour.Behaviour):
 
     def initialise(self):
         self.action_status = ActionStatus.NOT_SENT
-        self.result_message = ''
+        self.current_phase = "approach"
+        self.result_message = ""
 
     def update(self):
         if self.action_status == ActionStatus.SUCCEEDED:
-            self.node.get_logger().info(f"[{self.name}] Cleared the gate. {self.result_message}")
+            if self.current_phase == "approach":
+                self.node.get_logger().info(
+                    f"[{self.name}] Reached gate approach point. {self.result_message}"
+                )
+                self.current_phase = "pass"
+                self.action_status = ActionStatus.NOT_SENT
+                self.result_message = ""
+                return py_trees.common.Status.RUNNING
+
+            self.node.get_logger().info(
+                f"[{self.name}] Cleared the gate. {self.result_message}"
+            )
             return py_trees.common.Status.SUCCESS
 
         if self.action_status == ActionStatus.FAILED:
-            self.node.get_logger().error(f"[{self.name}] Failed to pass through the gate. {self.result_message}")
+            if self.current_phase == "approach":
+                self.node.get_logger().error(
+                    f"[{self.name}] Failed to reach gate approach point. {self.result_message}"
+                )
+            else:
+                self.node.get_logger().error(
+                    f"[{self.name}] Failed to pass through the gate. {self.result_message}"
+                )
             return py_trees.common.Status.FAILURE
 
         if self.action_status == ActionStatus.PENDING:
@@ -286,6 +309,7 @@ class NavigateThroughGateBehaviour(py_trees.behaviour.Behaviour):
             goal, self.name, self._on_goal_response, self._on_goal_result
         )
         self.action_status = ActionStatus.PENDING
+        self.result_message = ""
         return py_trees.common.Status.RUNNING
 
     def _on_goal_response(self, goal_response: bool):
@@ -294,10 +318,7 @@ class NavigateThroughGateBehaviour(py_trees.behaviour.Behaviour):
 
     def _on_goal_result(self, goal_success, message):
         self.result_message = message
-        if goal_success:
-            self.action_status = ActionStatus.SUCCEEDED
-        else:
-            self.action_status = ActionStatus.FAILED
+        self.action_status = ActionStatus.SUCCEEDED if goal_success else ActionStatus.FAILED
 
     def terminate(self, new_status):
         if new_status == py_trees.common.Status.INVALID:
@@ -307,16 +328,15 @@ class NavigateThroughGateBehaviour(py_trees.behaviour.Behaviour):
 
 class GateTask(py_trees.composites.Sequence):
     """
-    Sequence for the RoboSub 2026 Gate Task (Begin Assessment).
+    sequence for the RoboSub 2026 Gate Task (Begin Assessment).
 
-    The AUV:
-    - dives to a simple working depth
-    - searches for the gate
+    - dives to working depth
+    - sets a forward yaw
+    - searches for gate
     - scans to populate the role-panel detections
-    - chooses the requested role side
-    - drives through that half of the gate
-
-    Optional style maneuvers are intentionally omitted for now.
+    - chooses the role side
+    - moves to a point in front of that side
+    - drives through it
     """
 
     def __init__(
