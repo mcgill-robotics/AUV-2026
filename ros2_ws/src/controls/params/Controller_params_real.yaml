@@ -1,24 +1,24 @@
 attitude_controller:
   ros__parameters:
     control_loop_hz: 50.0
-    P_ex_large: 6.0
-    P_ey_large: 6.0
-    P_ez_large: 6.0
-    P_wx_large: 1.0
-    P_wy_large: 1.0
+    P_ex_large: 0.01
+    P_ey_large: 0.01
+    P_ez_large: 3.5
+    P_wx_large: 0.1
+    P_wy_large: 0.1
     P_wz_large: 2.0
 
-    P_ex_sas: 10.0
-    P_ey_sas: 10.0
-    P_ez_sas: 10.0
-    P_wx_sas: 2.0
-    P_wy_sas: 2.0
+    P_ex_sas: 0.01
+    P_ey_sas: 0.01
+    P_ez_sas: 3.5
+    P_wx_sas: 0.1
+    P_wy_sas: 0.1
     P_wz_sas: 2.0
 
-    sas_switch_deg: 5.0
-    buoyancy: 265.17 # [N]
+    sas_switch_deg: 5.0 # could be slightly smaller
+    buoyancy: 0.0 #265.17 # [N]
     r_bv_v: [0.0, 0.0, 0.005523] # [m] From CAD Model    
-    enabled: false
+    enabled: true
 
 depth_controller:
     ros__parameters:
@@ -28,25 +28,25 @@ depth_controller:
         KI: 0.0
         I_MAX: 10.0
         net_buoyancy: 14.5 # Newtons.
-        enabled: false
+        enabled: true
 
 x_controller:
     ros__parameters:
         control_loop_hz: 10.0
-        KP: 15.0
-        KD: 60.0
+        KP: 10.0 # prev at 7
+        KD: 6.0 # could make higher
         KI: 0.0
         I_MAX: 10.0
-        enabled: false
+        enabled: true
 
 y_controller:
     ros__parameters:
         control_loop_hz: 10.0
-        KP: 15.0
-        KD: 60.0
+        KP: 10.0 # prev at 7
+        KD: 6.0 # could make higher
         KI: 0.0
         I_MAX: 10.0
-        enabled: false
+        enabled: true
 
 superimposer:
     ros__parameters:
