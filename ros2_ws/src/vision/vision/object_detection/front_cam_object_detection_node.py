@@ -148,6 +148,7 @@ class FrontCamObjectDetectorNode():
         self.node.declare_parameter('gate_top_crop.enable', Parameter.Type.BOOL)
         self.node.declare_parameter('gate_top_crop.ratio', Parameter.Type.DOUBLE)
         self.node.declare_parameter('border_exclusion.enable', Parameter.Type.BOOL)
+        self.node.declare_parameter('border_exclusion.mode', Parameter.Type.STRING)
         self.node.declare_parameter('border_exclusion.margin_px', Parameter.Type.INTEGER)
         self.node.declare_parameter('border_exclusion.labels', Parameter.Type.STRING_ARRAY)
         self.node.declare_parameter('global_frame_id', Parameter.Type.STRING)
@@ -330,6 +331,7 @@ class FrontCamObjectDetectorNode():
         self.enable_gate_top_crop = self.node.get_parameter('gate_top_crop.enable').get_parameter_value().bool_value
         self.gate_top_crop_ratio = self.node.get_parameter('gate_top_crop.ratio').get_parameter_value().double_value
         self.enable_border_exclusion = self.node.get_parameter('border_exclusion.enable').get_parameter_value().bool_value
+        self.border_exclusion_mode = self.node.get_parameter('border_exclusion.mode').get_parameter_value().string_value
         self.border_exclusion_margin_px = self.node.get_parameter('border_exclusion.margin_px').get_parameter_value().integer_value
         self.border_exclusion_labels = list(self.node.get_parameter('border_exclusion.labels').get_parameter_value().string_array_value)
         self.global_frame_id = self.node.get_parameter('global_frame_id').get_parameter_value().string_value
@@ -1145,8 +1147,14 @@ class FrontCamObjectDetectorNode():
                 
                 if label in self.border_exclusion_labels:
                     x1, y1, x2, y2 = tracked_detections.xyxy[i]
-                    if (x1 <= margin or x2 >= img_w - margin or
-                        y1 <= margin or y2 >= img_h - margin):
+                    exclude = False
+                    if self.border_exclusion_mode in ["both", "horizontal"]:
+                        if x1 <= margin or x2 >= img_w - margin:
+                            exclude = True
+                    if self.border_exclusion_mode in ["both", "vertical"]:
+                        if y1 <= margin or y2 >= img_h - margin:
+                            exclude = True
+                    if exclude:
                         mask[i] = False
             tracked_detections = tracked_detections[mask]
 
