@@ -35,10 +35,15 @@ front_cam_object_detection:
     # ZED SDK parameters
     zed_resolution:
       sim: SVGA # resolution for Unity/stream input
-      real: VGA # wrapper-aligned starting point for the real ZED 2i
+      real: HD720 # open at HD720 for higher-quality depth, images are retrieved at zed_retrieval_* resolution
     zed_fps:
       sim: 30 # FPS for Unity/stream input
       real: 30 # FPS for the real ZED 2i
+    # Retrieval resolution (non-sim only). The ZED SDK grabs at zed_resolution.real
+    # but retrieve_image/retrieve_measure downscale to this size for inference & publishing.
+    # Set both to 0 to retrieve at native grab resolution (no downscale).
+    zed_retrieval_width: 672
+    zed_retrieval_height: 376
     zed_positional_tracking_mode:
       sim: GEN_1
       real: GEN_3

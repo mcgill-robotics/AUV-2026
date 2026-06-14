@@ -108,6 +108,8 @@ class FrontCamObjectDetectorNode():
         self.node.declare_parameter("zed_resolution.real", Parameter.Type.STRING)
         self.node.declare_parameter("zed_fps.sim", Parameter.Type.INTEGER)
         self.node.declare_parameter("zed_fps.real", Parameter.Type.INTEGER)
+        self.node.declare_parameter("zed_retrieval_width", 0)
+        self.node.declare_parameter("zed_retrieval_height", 0)
         self.node.declare_parameter(
             "zed_flip_mode",
             "OFF",
@@ -248,6 +250,7 @@ class FrontCamObjectDetectorNode():
             self.node.get_parameter('zed_depth_stabilization').get_parameter_value().integer_value
         )
         sim = self.node.get_parameter('sim').get_parameter_value().bool_value
+        self.sim = sim
         
         self.node.declare_parameter("zed_positional_tracking_mode.sim", "GEN_1")
         self.node.declare_parameter("zed_positional_tracking_mode.real", "GEN_3")
@@ -285,6 +288,12 @@ class FrontCamObjectDetectorNode():
         ).get_parameter_value().string_value
         self.zed_camera_fps = self.node.get_parameter(
             'zed_fps.sim' if sim else 'zed_fps.real'
+        ).get_parameter_value().integer_value
+        self.zed_retrieval_width = self.node.get_parameter(
+            'zed_retrieval_width'
+        ).get_parameter_value().integer_value
+        self.zed_retrieval_height = self.node.get_parameter(
+            'zed_retrieval_height'
         ).get_parameter_value().integer_value
         self.zed_camera_flip_mode_name = self.node.get_parameter(
             'zed_flip_mode'
@@ -452,6 +461,28 @@ class FrontCamObjectDetectorNode():
                 raise RuntimeError("Failed to open ZED camera after 5 attempts.")
 
             self._apply_zed_camera_controls()
+
+            # Retrieval scaling: open at high resolution for better depth,
+            # retrieve at a lower resolution for inference & publishing.
+            # Only applies to real camera — sim streams at a fixed resolution.
+            if not self.sim and self.zed_retrieval_width > 0 and self.zed_retrieval_height > 0:
+                native_res = self.zed.get_camera_information().camera_configuration.camera_resolution
+                self.retrieval_resolution = sl.Resolution(self.zed_retrieval_width, self.zed_retrieval_height)
+                self.native_width = int(native_res.width)
+                self.native_height = int(native_res.height)
+                self.bbox_scale_x = self.native_width / self.zed_retrieval_width
+                self.bbox_scale_y = self.native_height / self.zed_retrieval_height
+                self.node.get_logger().info(
+                    f"Retrieval scaling enabled: grab {self.native_width}x{self.native_height} "
+                    f"-> retrieve {self.zed_retrieval_width}x{self.zed_retrieval_height} "
+                    f"(bbox scale {self.bbox_scale_x:.3f}x, {self.bbox_scale_y:.3f}x)"
+                )
+            else:
+                self.retrieval_resolution = None
+                self.bbox_scale_x = 1.0
+                self.bbox_scale_y = 1.0
+                self.native_width = 0
+                self.native_height = 0
 
             if self.enable_vio:
                 # Enable Positional Tracking
@@ -821,7 +852,23 @@ class FrontCamObjectDetectorNode():
         fy = float(calibration.fy)
         cx = float(calibration.cx)
         cy = float(calibration.cy)
-        
+
+        # When retrieval scaling is active, scale the intrinsics to match
+        # the lower retrieval resolution so that CameraInfo, published images,
+        # and geometric projection math all use consistent pixel coordinates.
+        if self.retrieval_resolution is not None:
+            sx = 1.0 / self.bbox_scale_x  # retrieval_width / native_width
+            sy = 1.0 / self.bbox_scale_y  # retrieval_height / native_height
+            fx *= sx
+            fy *= sy
+            cx *= sx
+            cy *= sy
+            pub_width = self.zed_retrieval_width
+            pub_height = self.zed_retrieval_height
+        else:
+            pub_width = int(resolution.width)
+            pub_height = int(resolution.height)
+
         # Save intrinsics for custom depth projection
         self.cam_fx = fx
         self.cam_fy = fy
@@ -830,8 +877,8 @@ class FrontCamObjectDetectorNode():
         
         distortion = list(calibration.disto)
 
-        camera_info.width = int(resolution.width)
-        camera_info.height = int(resolution.height)
+        camera_info.width = pub_width
+        camera_info.height = pub_height
         camera_info.distortion_model = "plumb_bob"
         camera_info.d = [float(value) for value in distortion]
         camera_info.k = [
@@ -889,7 +936,10 @@ class FrontCamObjectDetectorNode():
             if health.low_lighting:
                 self.node.get_logger().warn("Low lighting conditions", throttle_duration_sec=5.0)
 
-            self.zed.retrieve_image(self.image_buffer, sl.VIEW.LEFT)
+            if self.retrieval_resolution:
+                self.zed.retrieve_image(self.image_buffer, sl.VIEW.LEFT, sl.MEM.CPU, self.retrieval_resolution)
+            else:
+                self.zed.retrieve_image(self.image_buffer, sl.VIEW.LEFT)
             img = cv2.cvtColor(self.image_buffer.get_data(), cv2.COLOR_RGBA2RGB)
             self._frame_counter += 1
 
@@ -904,7 +954,10 @@ class FrontCamObjectDetectorNode():
                                (self.collect_depth_image and is_collection_frame)
             
             if should_get_depth:
-                self.zed.retrieve_measure(self.depth_buffer, sl.MEASURE.DEPTH)
+                if self.retrieval_resolution:
+                    self.zed.retrieve_measure(self.depth_buffer, sl.MEASURE.DEPTH, sl.MEM.CPU, self.retrieval_resolution)
+                else:
+                    self.zed.retrieve_measure(self.depth_buffer, sl.MEASURE.DEPTH)
                 depth = self.depth_buffer.get_data() # sl.UNIT.METER, shape (H,W) with NaNs
             else:
                 depth = None
@@ -1194,12 +1247,23 @@ class FrontCamObjectDetectorNode():
                         h = y2 - y1
                         y2 = y1 + h * self.gate_top_crop_ratio
 
-                    # Clamp to image bounds (PyZED requires unsigned int arrays)
-                    img_h, img_w = img.shape[:2]
-                    x1_c = min(img_w - 1, max(0, int(x1)))
-                    y1_c = min(img_h - 1, max(0, int(y1)))
-                    x2_c = min(img_w - 1, max(0, int(x2)))
-                    y2_c = min(img_h - 1, max(0, int(y2)))
+                    # Upscale bbox from retrieval resolution to native grab resolution.
+                    # ingest_custom_box_objects requires coordinates in the native
+                    # left-rectified image space for correct depth extraction.
+                    x1_n = x1 * self.bbox_scale_x
+                    y1_n = y1 * self.bbox_scale_y
+                    x2_n = x2 * self.bbox_scale_x
+                    y2_n = y2 * self.bbox_scale_y
+
+                    # Clamp to native image bounds (PyZED requires unsigned int arrays)
+                    if self.native_width > 0:
+                        clamp_w, clamp_h = self.native_width, self.native_height
+                    else:
+                        clamp_h, clamp_w = img.shape[:2]
+                    x1_c = min(clamp_w - 1, max(0, int(x1_n)))
+                    y1_c = min(clamp_h - 1, max(0, int(y1_n)))
+                    x2_c = min(clamp_w - 1, max(0, int(x2_n)))
+                    y2_c = min(clamp_h - 1, max(0, int(y2_n)))
 
                     # Format ZED requires: top-left, top-right, bottom-right, bottom-left
                     box.bounding_box_2d = np.array([
