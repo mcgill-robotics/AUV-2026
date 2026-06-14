@@ -50,3 +50,12 @@ planner_root_tree:
         alignments_per_attempt: 2         # Number of alignment attempts to perform before validating orientation
         samples_per_alignment: 3          # Number of orientation samples to collect for mean orientation estimation
         sample_every_n_ticks: 2           # Sample orientation every N ticks (to allow for some movement between samples)
+
+      auv_to_torpedos:
+        left: [-0.1204, -0.0167, -0.1624]   # (m) AUV to left torpedo center offset in AUV body frame
+        right: [-0.1174, 0.0167, -0.1624]   # (m) AUV to right torpedo center offset in AUV body frame
+
+      torpedo_trajectory_coefficients:
+        x: [0.0, 1.35, -1.44, 0.701, -0.117]       # Coefficients for polynomial trajectory to torpedo target in forward direction (relative to AUV)
+        y: [0.0, 0.0, 0.0, 0.0, 0.0]               # Coefficients for polynomial trajectory to torpedo target in lateral direction (relative to AUV)
+        z: [0.0, -0.0181, 0.241, -0.172, 0.0332]   # Coefficients for polynomial trajectory to torpedo target in vertical direction (relative to AUV)

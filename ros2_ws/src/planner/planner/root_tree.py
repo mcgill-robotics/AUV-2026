@@ -111,6 +111,15 @@ def main():
         "alignments_per_attempt": node.get_parameter("torpedo.refinement.alignments_per_attempt").get_parameter_value().integer_value,
         "samples_per_alignment": node.get_parameter("torpedo.refinement.samples_per_alignment").get_parameter_value().integer_value,
         "refinement_sample_every_n_ticks": node.get_parameter("torpedo.refinement.sample_every_n_ticks").get_parameter_value().integer_value,
+        "auv_to_torpedos": {
+            "left": node.get_parameter("torpedo.auv_to_torpedos.left").get_parameter_value().double_array_value,
+            "right": node.get_parameter("torpedo.auv_to_torpedos.right").get_parameter_value().double_array_value
+        },
+        "torpedo_trajectory_coefficients": {
+            "x": node.get_parameter("torpedo.torpedo_trajectory_coefficients.x").get_parameter_value().double_array_value,
+            "y": node.get_parameter("torpedo.torpedo_trajectory_coefficients.y").get_parameter_value().double_array_value,
+            "z": node.get_parameter("torpedo.torpedo_trajectory_coefficients.z").get_parameter_value().double_array_value
+        }
     }
 
     # Set the root of the tree

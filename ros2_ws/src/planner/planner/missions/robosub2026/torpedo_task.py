@@ -1,13 +1,13 @@
 import py_trees
+from numpy.polynomial.polynomial import Polynomial
 from .torpedo_behaviours import MoveToFrontOfBoard, AlignToBoard, FindBoardOrientation, DetermineBoardType
 from ..vision_behaviours import SearchSweepBehaviour, CircleAroundToFindBehaviour
 
 class TorpedoTask(py_trees.composites.Sequence):
     """
-    Sequence for the RoboSub 2026 Torpedo Task (Deploy).
-    AUV fires torpedoes through openings in a board.
-    Targets match role (Fire/Firetruck vs Blood/Ambulance).
-    Sequence: Large opening then Small opening.
+    Torpedo Task Tree
+    
+    
     """
     def __init__(
             self,
@@ -22,7 +22,16 @@ class TorpedoTask(py_trees.composites.Sequence):
             refinement_attempts: int = 3,
             alignments_per_attempt: int = 3,
             samples_per_alignment: int = 5,
-            refinement_sample_every_n_ticks: int = 3
+            refinement_sample_every_n_ticks: int = 3,
+            auv_to_torpedos: dict[str, list[float]] = {
+                "left": [-0.1204,-0.0167, -0.1624],
+                "right": [-0.1174,0.0167, -0.1624]
+            },
+            torpedo_trajectory_coefficients: dict[str, list[float]] = {
+                "x": [0.0, 1.35, -1.44, 0.701, -0.117],
+                "y": [0.0, 0.0, 0.0, 0.0, 0.0],
+                "z": [0.0, -0.0181, 0.241, -0.172, 0.0332]
+            }
         ):
         super().__init__("Torpedo Task", memory=True)
         # TODO: Implement Torpedo Task
@@ -54,7 +63,22 @@ class TorpedoTask(py_trees.composites.Sequence):
             self.node_base_case(),
             py_trees.behaviours.Success(name="Placeholder Torpedo Success")
         ])
+        
+        # trajectory parameters
+        self.auv_to_torpedos = auv_to_torpedos
+        self.torpedo_trajectory_forward_poly_coefficients:Polynomial = Polynomial(torpedo_trajectory_coefficients["x"])
+        self.torpedo_trajectory_lateral_poly_coefficients:Polynomial = Polynomial(torpedo_trajectory_coefficients["y"])
+        self.torpedo_trajectory_vertical_poly_coefficients:Polynomial = Polynomial(torpedo_trajectory_coefficients["z"])
+        
+        # distance thresholds from torpedo board
+        self.farther_distance_threshold = 0.46
+        self.far_distance_threshold = 0.3
 
+    def setup(self, **kwargs):
+        """Setup called here purely for accessing the node for logging purposes"""
+        super().setup(**kwargs)
+        self.node = kwargs['node']
+    
     def tick_tree(self):
         pass
 
@@ -208,8 +232,10 @@ class TorpedoTask(py_trees.composites.Sequence):
         distance_strategy_selector = py_trees.composites.Selector("Distance Strategy Selector", memory=True)
         distance_strategy_selector.add_children(
             [
-                self.build_distance_strategy(0.46),
-                self.build_distance_strategy(0.3),
+                # farther is 0.46m, add 4cm buffer
+                self.build_distance_strategy(0.5),
+                # far is 0.3m, add 5cm buffer since it's riskier to be too close than too far
+                self.build_distance_strategy(0.35),
                 self.build_distance_strategy(0.1)
             ]
          )
