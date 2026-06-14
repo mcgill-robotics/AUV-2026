@@ -77,6 +77,7 @@ class Condition(py_trees.behaviour.Behaviour):
         super(Condition, self).__init__(name)
 
     def setup(self, **kwargs):
+        self.node = kwargs['node']
         self.logger.debug(f"Condition::setup {self.name}")
         self.blackboard = self.attach_blackboard_client(name=self.name)
 
@@ -96,7 +97,7 @@ def compute_target_in_front_of_point_on_board(point: Vector2D, board_orientation
     Compute a target point in front of a point based on the board orientation and desired distance from the object.
     point: position of the vision object in the XY plane
     board_orientation: orientation of the board as a quaternion
-    distance_from_point: desired distance from the point to the target point along the normal direction
+    distance_from_point: desired 2D distance from the point to the target point along the normal direction
     """
     # orientation computed by object map is always normal pointing towards the AUV, so we simply take a point at the desired distance in front of the icon along the orientation normal as our target point
     # recover normal from yaw of board orientation
@@ -376,10 +377,7 @@ class AlignToBoard(Navigation):
                 return py_trees.common.Status.RUNNING
         return py_trees.common.Status.SUCCESS
                 
-                
-                
-        
-        
+
 class DetermineBoardType(Action):
     """
     Action to determine board type, either type 1 with fire on top left, or type 2 with blood on top left, based on the relative positions of the icons on the board.
@@ -462,9 +460,31 @@ class DetermineBoardType(Action):
             self.node.get_logger().info(f"[{self.name}] Detected board type: {board_type.name}")
         
 
-        # # 2. Move to distance from board while aligning to board
+        # 2. Move to distance from board while aligning to board
         return py_trees.common.Status.SUCCESS
 
+class CheckBoardType(Condition):
+    """
+    Condition to check if the board type on the blackboard matches the expected board type.
+    """
+    def __init__(self, board_type: BoardType):
+        super().__init__(f"Check Board Type {board_type.name}")
+        self.expected_board_type = board_type
+        
+    def setup(self, **kwargs):
+        super().setup(**kwargs)
+        self.blackboard.register_key(key="/board/type", access=py_trees.common.Access.READ)
+        
+    def update(self):
+        if not hasattr(self.blackboard, 'board') or self.blackboard.board.type is None:
+            self.node.get_logger().error(f"[{self.name}] No board type available on blackboard.")
+            return py_trees.common.Status.FAILURE
+        if self.blackboard.board.type == self.expected_board_type.value:
+            self.node.get_logger().info(f"[{self.name}] Board type {self.blackboard.board.type} matches expected {self.expected_board_type.name}.")
+            return py_trees.common.Status.SUCCESS
+        else:
+            self.node.get_logger().info(f"[{self.name}] Board type {self.blackboard.board.type} does not match expected {self.expected_board_type.name}.")
+            return py_trees.common.Status.FAILURE
 
 class BoardIcon(Enum):
     FIRE = "fire"
@@ -477,11 +497,12 @@ class MoveToFrontOfIcon(Navigation):
     Navigation Action to move to the front of a specific icon on the board based on the vision information.
     Alignment based on the orientation found in the FindBoardOrientation action.
     use_icon_z: if True, use the z position of the icon as the z reference for the navigation goal, if False, use a fixed z reference provided by z_reference parameter.
+    distance_from_icon: 2D distance from the icon to the target point in front of the icon, if None, will maintain current distance from the icon and just move in front of it
     """
     def __init__(
             self,
             target_icon: BoardIcon,
-            distance_from_icon: float,
+            distance_from_icon: Optional[float],
             use_icon_z: bool = True,
             z_reference: Optional[float] = None,
             position_tolerance: float = 0.1,
@@ -524,6 +545,8 @@ class MoveToFrontOfIcon(Navigation):
                 if not hasattr(self.blackboard, 'vision') or self.blackboard.vision.object_map is None:
                     self.node.get_logger().error(f"[{self.name}] No object map available to determine icon position.")
                     return py_trees.common.Status.FAILURE
+                
+                auv_2d_position = Vector2D.from_point(self.blackboard.sensors.pose.position)
                 # get target icon position from vision
                 target_icon_vo = None
                 for vision_object in self.blackboard.vision.object_map.array:
@@ -534,7 +557,16 @@ class MoveToFrontOfIcon(Navigation):
                     self.node.get_logger().error(f"[{self.name}] Target icon {self.target_icon.value} not found in vision.")
                     return py_trees.common.Status.FAILURE
                 
-                target_xy = compute_target_in_front_of_point_on_board(Vector2D.from_point(target_icon_vo.pose.position), self.blackboard.board.orientation, self.distance_from_icon)
+                target_2d_position = Vector2D.from_point(target_icon_vo.pose.position)
+                
+                if self.distance_from_icon is None:
+                    self.distance_from_icon = geometry.plane_point_distance(
+                        point=target_2d_position,
+                        plane_point=auv_2d_position,
+                        plane_normal=geometry.find_normal_from_quaternion(self.blackboard.board.orientation)
+                    )
+                self.node.get_logger().info(f"[{self.name}] Distance from AUV to icon: {self.distance_from_icon:.2f}m")
+                target_xy = compute_target_in_front_of_point_on_board(target_2d_position, self.blackboard.board.orientation, self.distance_from_icon)
                 
                 target_z = target_icon_vo.pose.position.z if self.use_icon_z else self.z_reference
                 

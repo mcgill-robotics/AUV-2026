@@ -176,3 +176,19 @@ def find_normal_from_quaternion(q: Quaternion) -> Vector2D:
     r = Rotation.from_quat([q.x, q.y, q.z, q.w])
     normal_vector = r.apply([1, 0, 0])
     return Vector2D(x=normal_vector[0], y=normal_vector[1])
+
+def plane_point_distance(point: Vector2D, plane_point: Vector2D, plane_normal: Vector2D) -> float:
+    """Compute the distance from a point to a plane defined by a point and a normal vector.
+    In 2D this can be interpreted as the distance from a point to a line defined by a point and a normal vector.
+    """
+    # first get vector from plane point to point
+    plane_to_plane_point = point - plane_point
+    # project down onto plane normal
+    plane_to_plane_point_projected_onto_normal = plane_to_plane_point.dot(plane_normal)
+    # length of the projection
+    point_plane_distance = abs(plane_to_plane_point_projected_onto_normal)
+    # but we need to divide by the norm of the normal vector to get the actual distance
+    if plane_normal.norm() == 0:
+        raise ValueError("Normal vector cannot be zero")
+    point_plane_distance /= plane_normal.norm()
+    return point_plane_distance
