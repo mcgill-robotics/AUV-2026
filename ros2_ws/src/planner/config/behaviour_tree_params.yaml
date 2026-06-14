@@ -4,6 +4,17 @@ planner_root_tree:
     sim             : false
     use_ground_truth: false
 
+    gate:
+      position_tolerance: 0.3      # (m)
+      hold_time: 1.0               # (s)
+      timeout: 30.0                # (s)
+      desired_role: "search_rescue" # [survey_repair | search_rescue]
+      search_attempts: 2
+      scan_angle_deg: 35.0
+      scan_pause_time: 1.0
+      approach_distance: 1.0
+      pass_distance: 1.0
+
     pre_qual:
       angular_tolerance: 0.5         # (rad) TODO: convert to deg for consistency
       positional_tolerance: 0.3  # (m)
