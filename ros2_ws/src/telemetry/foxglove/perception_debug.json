@@ -41,13 +41,13 @@
         "first": "Publish!3wvumo2",
         "second": "RawMessages!3im8qvp",
         "direction": "column",
-        "splitPercentage": 44.918435919519034
+        "splitPercentage": 45.71580460448091
       },
       "direction": "column",
       "splitPercentage": 66.62897063144871
     },
     "direction": "row",
-    "splitPercentage": 79.28786359077232
+    "splitPercentage": 84.72041612483746
   },
   "configById": {
     "Image!yolo": {
@@ -265,7 +265,8 @@
         "rectifyImage": true,
         "flipHorizontal": false,
         "flipVertical": false,
-        "rotation": 0
+        "rotation": 0,
+        "calibrationTopic": "/vision/front_cam/detection_frame/camera_info"
       },
       "synchronize": false
     },
@@ -319,26 +320,29 @@
         "poseEstimateThetaDeviation": 0.26179939
       },
       "imageMode": {
-        "imageTopic": "/vision/down_cam/detections/annotated/compressed",
+        "imageTopic": "/vision/front_cam/detection_frame/depth",
         "gradient": [
-          "#ffffffff",
-          "#000000ff"
+          "#ef0404ff",
+          "#0080ffff"
         ],
         "minValue": 0,
-        "maxValue": 25
+        "colorMode": "colormap",
+        "colorMap": "turbo",
+        "maxValue": 15,
+        "calibrationTopic": "/vision/front_cam/detection_frame/camera_info"
       },
       "synchronize": false
     },
     "3D!38qyra4": {
       "cameraState": {
         "perspective": true,
-        "distance": 15.475618749996581,
-        "phi": 49.51945968270573,
-        "thetaOffset": 87.34153659675235,
+        "distance": 7.547072050705698,
+        "phi": 81.3784429628047,
+        "thetaOffset": 106.43049683489615,
         "targetOffset": [
-          6.383285642656123,
-          0.8007567831598266,
-          -7.146753147924151e-10
+          -0.03660900221344522,
+          -0.07968130957633565,
+          2.922600187422713e-12
         ],
         "target": [
           0,
@@ -356,7 +360,7 @@
         "far": 5000,
         "logDepth": false
       },
-      "followMode": "follow-heading",
+      "followMode": "follow-position",
       "followTf": "auv_link",
       "scene": {
         "syncCamera": true,
@@ -482,11 +486,14 @@
           "visible": true
         },
         "/vision/front_cam/detection_frame/annotated/compressed": {
-          "visible": true,
+          "visible": false,
           "cameraInfoTopic": "/vision/front_cam/detection_frame/camera_info",
           "projectionFrameId": "pool_link",
           "renderMode": "default",
           "planarProjectionFactor": 0
+        },
+        "/vision/down_cam/detections/annotated/compressed": {
+          "visible": true
         }
       },
       "layers": {
@@ -526,6 +533,10 @@
       "synchronize": false,
       "fixedFrame": "pool_link"
     },
+    "Table!1tr9jz4": {
+      "topicPath": "/vision/foxglove_table"
+    },
+    "Parameters!68s8k8": {},
     "Tab!images": {
       "activeTabIdx": 3,
       "tabs": [
@@ -551,8 +562,16 @@
             },
             "second": "3D!38qyra4",
             "direction": "row",
-            "splitPercentage": 49.06145230805546
+            "splitPercentage": 41.57611788500896
           }
+        },
+        {
+          "title": "Object map table",
+          "layout": "Table!1tr9jz4"
+        },
+        {
+          "title": "Parameters",
+          "layout": "Parameters!68s8k8"
         }
       ]
     },
@@ -605,7 +624,7 @@
     "Publish!3wvumo2": {
       "topicName": "/mission_selector",
       "datatype": "std_msgs/Int32",
-      "value": "{\n  \"data\": 8\n}"
+      "value": "{\n  \"data\": 9\n}"
     },
     "RawMessages!3im8qvp": {
       "topicPath": "/power/batteries/voltage",

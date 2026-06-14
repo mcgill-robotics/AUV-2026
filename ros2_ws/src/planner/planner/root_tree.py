@@ -10,6 +10,7 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.qos import QoSProfile, ReliabilityPolicy
 import geometry_msgs.msg
 import auv_msgs.msg
+from vision_msgs.msg import Detection2DArray
 
 # AUV dependencies
 from controls import navigation_client
@@ -83,6 +84,49 @@ def main():
         "scan_timeout": node.get_parameter("slalom.scan_timeout").get_parameter_value().double_value,
     }
 
+    # Bins task parameters
+    node.declare_parameter("bins.downcam_fov_horizontal", 59.7)
+    node.declare_parameter("bins.downcam_fov_vertical", 47.6)
+    node.declare_parameter("bins.downcam_image_width", 640)
+    node.declare_parameter("bins.downcam_image_height", 480)
+    node.declare_parameter("bins.search_sweep_steps", 8)
+    node.declare_parameter("bins.search_sweep_step_timeout", 0.5)
+    node.declare_parameter("bins.bin_moving_average_weight", 0.5)
+    node.declare_parameter("bins.bin_structure_distance", 2.0)
+    node.declare_parameter("bins.go_above_bin_structure_height", 0.5)
+    node.declare_parameter("bins.go_above_bin_height", 0.7)
+    node.declare_parameter("bins.switch_sides_height", 1.2)
+    node.declare_parameter("bins.wrong_task_type_threshold", 5)
+    node.declare_parameter("bins.task_completion_threshold", 5)
+    node.declare_parameter("bins.bin_lined_up_threshold", 10)
+    node.declare_parameter("bins.num_required_markers", 2)
+    node.declare_parameter("bins.num_bins", 4)
+    node.declare_parameter("bins.bins_to_bin_structure", 0.3)
+    node.declare_parameter("bins.force_fallback_search", False)
+    node.declare_parameter("bins.force_fallback_alignment", False)
+
+    bins_params = {
+        "downcam_fov_horizontal": node.get_parameter("bins.downcam_fov_horizontal").get_parameter_value().double_value,
+        "downcam_fov_vertical": node.get_parameter("bins.downcam_fov_vertical").get_parameter_value().double_value,
+        "downcam_image_width": node.get_parameter("bins.downcam_image_width").get_parameter_value().integer_value,
+        "downcam_image_height": node.get_parameter("bins.downcam_image_height").get_parameter_value().integer_value,
+        "search_sweep_steps": node.get_parameter("bins.search_sweep_steps").get_parameter_value().integer_value,
+        "search_sweep_step_timeout": node.get_parameter("bins.search_sweep_step_timeout").get_parameter_value().double_value,
+        "bin_moving_average_weight": node.get_parameter("bins.bin_moving_average_weight").get_parameter_value().double_value,
+        "bin_structure_distance": node.get_parameter("bins.bin_structure_distance").get_parameter_value().double_value,
+        "go_above_bin_structure_height": node.get_parameter("bins.go_above_bin_structure_height").get_parameter_value().double_value,
+        "go_above_bin_height": node.get_parameter("bins.go_above_bin_height").get_parameter_value().double_value,
+        "switch_sides_height": node.get_parameter("bins.switch_sides_height").get_parameter_value().double_value,
+        "wrong_task_type_threshold": node.get_parameter("bins.wrong_task_type_threshold").get_parameter_value().integer_value,
+        "task_completion_threshold": node.get_parameter("bins.task_completion_threshold").get_parameter_value().integer_value,
+        "bin_lined_up_threshold": node.get_parameter("bins.bin_lined_up_threshold").get_parameter_value().integer_value,
+        "num_required_markers": node.get_parameter("bins.num_required_markers").get_parameter_value().integer_value,
+        "num_bins": node.get_parameter("bins.num_bins").get_parameter_value().integer_value,
+        "bins_to_bin_structure": node.get_parameter("bins.bins_to_bin_structure").get_parameter_value().double_value,
+        "force_fallback_search": node.get_parameter("bins.force_fallback_search").get_parameter_value().bool_value,
+        "force_fallback_alignment": node.get_parameter("bins.force_fallback_alignment").get_parameter_value().bool_value,
+    }
+
     # Set the root of the tree
     root = py_trees.composites.Parallel("Root", policy=py_trees.common.ParallelPolicy.SuccessOnAll(synchronise=False))
 
@@ -133,6 +177,15 @@ def main():
         qos_profile=qos,
     )
 
+    down_cam_subscriber = py_trees_ros.subscribers.ToBlackboard(
+        name="DownCamSubscriber",
+        topic_name="/vision/down_cam/detections",
+        topic_type=Detection2DArray,
+        blackboard_variables={"/vision/down_cam/detections": None},
+        initialise_variables={"/vision/down_cam/detections": None},
+        qos_profile=qos,
+    )
+
     # Mission Sequence
     missions = DynamicMissionSequence(
         position_tolerance=pre_qual_positional_tolerance,
@@ -144,10 +197,11 @@ def main():
         orbit_pre_qual_hold_time_initial=orbit_pre_qual_hold_time_initial,
         orbit_pre_qual_hold_time_segments=orbit_pre_qual_hold_time_segments,
         slalom_params=slalom_params,
+        bins_params=bins_params,
     )
 
     # Add children to root
-    root.add_children([pose_subscriber, twist_subscriber, object_map_subscriber, missions])
+    root.add_children([pose_subscriber, twist_subscriber, object_map_subscriber, down_cam_subscriber, missions])
 
     # Create the behaviour tree and setup
     tree = py_trees_ros.trees.BehaviourTree(root=root, unicode_tree_debug=True)

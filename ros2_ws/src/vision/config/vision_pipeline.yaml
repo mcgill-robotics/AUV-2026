@@ -5,7 +5,7 @@ front_cam_object_detection:
     image_topic: /zed/zed_node/rgb/color/rect/image # this will be the input topic if sim=true and no zed sdk is available, this will be set to front_image_enhancement.ros__parameters.output_topic if enhance_images is set to true
     detection_frame_topic: /vision/front_cam/detection_frame # synchronized camera-frame detections + A
     has_zed_sdk: true
-    model_relative_path: models/rfdetr_onnx # inference-models package directory
+    model_relative_path: models/rfdetr_onnx_frontcam # inference-models package directory
     # WARNING: These class names MUST be manually maintained when changing models to have new classes. 
     # You must also update the `class_names.txt` file in the model package.
     # A mismatch here can crash the vision node.
@@ -90,6 +90,10 @@ front_cam_object_detection:
     camera_center_to_detection:
       xyz: [0.0, 0.06, 0.0]
       rpy: [0.0, 0.0, 0.0]
+
+    # Distance correction parameters
+    depth_scale: 1.0
+    depth_offset: 0.0
     
     # Detection-time filters / heuristics
     gate_top_crop: # Removes bottom X% of bounding box for gate to ignore legs/pool floor noise
@@ -120,7 +124,7 @@ front_cam_object_detection:
     collection_image_dir: front_cam_collection # directory for direct-to-disk RGB image saving (toggled via service)
     enable_depth_collection: true
     collection_depth_dir: depth_collection # directory for direct-to-disk depth image saving (toggled via service)    # Logging
-    log_level: debug
+    log_level: info
 
 
 down_cam_object_detection:
@@ -158,30 +162,41 @@ down_cam_object_detection:
     auto_focus: false                    # default true; when true, focus_absolute is ignored
     focus_absolute: 7                    # [0..21]    only used when auto_focus is false; default 16
     
-    model_relative_path: models/rfdetr_onnx
+    model_relative_path: models/rfdetr_onnx_downcam
     model_detection_threshold: 0.40
     # WARNING: These class names MUST be manually maintained when changing models to have new classes. 
     # You must also update the `class_names.txt` file in the model package.
     # A mismatch here can crash the vision node.
     model_class_names:
-      - "gate"
-      - "lane_marker"
-      - "red_pipe"
-      - "white_pipe"
-      - "octagon"
-      - "table"
-      - "bin"
-      - "board"
-      - "survey_repair"
-      - "search_rescue"
-      - "compass"
-      - "tools"
-      - "lifebuoy"
-      - "sos"
-      - "ambulance"
-      - "firetruck"
+      # - "gate"
+      # - "lane_marker"
+      # - "red_pipe"
+      # - "white_pipe"
+      # - "octagon"
+      # - "table"
+      # - "bin"
+      # - "board"
+      # - "survey_repair"
+      # - "search_rescue"
+      # - "compass"
+      # - "tools"
+      # - "lifebuoy"
+      # - "sos"
+      # - "ambulance"
+      # - "firetruck"
+      # - "blood"
+      # - "fire"
+      # - "bin_structure"
       - "blood"
       - "fire"
+      - "lane_marker"
+      - "pill"
+      - "nutbolt"
+      - "electric"
+      - "bandaid"
+      - "table"
+      - "warning"
+      - "redcross_helmet"
       - "bin_structure"
     queue_size: 10
     
@@ -232,14 +247,16 @@ object_map:
     semi_persistent_conf_to_tent_threshold: 300
 
 
-    floor_objects: 
-      - "bin_structure"
-      - "table"
-      - "lane_marker"
-      - "board"
-    surface_objects: 
-      - "gate"
-      - "octagon"
+    floor_objects:
+      - "placeholder"
+      # - "bin_structure"
+      # - "table"
+      # - "lane_marker"
+      # - "board"
+    surface_objects:
+      - "placeholder"
+      # - "gate"
+      # - "octagon"
 
     max_per_class:
       gate: 1

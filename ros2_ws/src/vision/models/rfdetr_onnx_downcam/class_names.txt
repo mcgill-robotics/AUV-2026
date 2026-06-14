@@ -1,0 +1,11 @@
+blood
+fire
+lane_marker
+pill
+nutbolt
+electric
+bandaid
+table
+warning
+redcross_helmet
+bin_structure

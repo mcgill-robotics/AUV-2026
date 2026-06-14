@@ -1,6 +1,6 @@
 import math
 import py_trees
-from controls.goal_helpers import set_global_yaw, look_at
+from controls.goal_helpers import set_global_yaw, look_at, move_global, _DEFAULT_POS_TOL, _DEFAULT_HOLD#, _DEFAULT_TIMEOUT,_DEFAULT_YAW_TOL, POSITION_EPSILON
 from controls.utils import yaw_from_quaternion, normalize_angle
 from .action_status_enum import ActionStatus
 
@@ -96,6 +96,7 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
                             self.action_status = ActionStatus.NOT_SENT
                             self.sent_goal = False
                             # Continue update() to send the look_at goal immediately
+
                         else:
                             return py_trees.common.Status.SUCCESS
         
@@ -353,9 +354,92 @@ class ScanBehaviour(py_trees.behaviour.Behaviour):
         self.result_message = message
         self.action_status = ActionStatus.SUCCEEDED if goal_success else ActionStatus.FAILED
 
+class GoNearObject(py_trees.behaviour.Behaviour):
+    def __init__(self, target_class: str, target_distance: float, height_offset: float | None = None, tolerance_meters: float=_DEFAULT_POS_TOL, hold_time: float=_DEFAULT_HOLD):
+        super().__init__(f"GoNear{target_class}")
+        self.target_class = target_class
+        self.target_distance = target_distance
+        self.height_offset = height_offset
+        self.tolerance_meters = tolerance_meters
+        self.hold_time = hold_time
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+        self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
+        self.action_status = ActionStatus.NOT_SENT
 
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.navigation_client = kwargs['shared_nav_client']
+        self.navigation_client.client_wait_for_server(timeout_sec=5.0) 
 
+    def initialise(self):
+        # Find the target in object map
+        if hasattr(self.blackboard, 'vision') and self.blackboard.vision.object_map is not None \
+           and hasattr(self.blackboard, 'sensors') and self.blackboard.sensors.pose is not None:
+            target_obj = None
+            auv_pose = self.blackboard.sensors.pose.pose.position
+            min_distance = float('inf')
+            for obj in self.blackboard.vision.object_map.array:
+                if obj.label == self.target_class:
+                    distance = math.sqrt((obj.pose.position.x - auv_pose.x) ** 2 + (obj.pose.position.y - auv_pose.y) ** 2)
+                    if distance < min_distance:
+                        target_obj = obj
+                        min_distance = distance
+            
+            if target_obj is None:
+                self.node.get_logger().error(f"[{self.name}] Target '{self.target_class}' not found in vision during setup!")
+                return py_trees.common.Status.FAILURE
+            
+            target_x = target_obj.pose.position.x
+            target_y = target_obj.pose.position.y
 
+            current_pose = self.blackboard.sensors.pose.pose.position
 
+            direction_vector = (target_x - current_pose.x, target_y - current_pose.y)
+            magnitude = math.sqrt(direction_vector[0]**2 + direction_vector[1]**2)
 
+            # if magnitude <= self.target_distance:
+            #     self.node.get_logger().info(f"[{self.name}] Already within target distance of {self.target_class}. No movement needed.")
+            #     return py_trees.common.Status.SUCCESS
+            
+            normalized_direction = (direction_vector[0]/magnitude, direction_vector[1]/magnitude)
 
+            goal_x = target_x - normalized_direction[0] * self.target_distance
+            goal_y = target_y - normalized_direction[1] * self.target_distance
+
+            if self.height_offset is None:
+                goal = move_global(goal_x, goal_y, do_z=False, tolerance=self.tolerance_meters, hold_time=self.hold_time)
+            else:
+                goal_z = target_obj.pose.position.z + self.height_offset
+                goal = move_global(goal_x, goal_y, goal_z, do_z=True, tolerance=self.tolerance_meters, hold_time=self.hold_time)
+
+            self.navigation_client.send_navigation_goal(goal, self.name, custom_goal_response=self.on_server_goal_response, custom_goal_result=self.on_server_goal_result)
+
+            self.action_status = ActionStatus.PENDING
+
+            return py_trees.common.Status.RUNNING
+
+        else: return py_trees.common.Status.FAILURE
+
+    def on_server_goal_response(self, goal_response: bool):
+        if not goal_response:
+            self.node.get_logger().error(f"[{self.name}] Failed to send goal to navigation server.")
+            self.action_status = ActionStatus.FAILED
+    
+    def on_server_goal_result(self, goal_success: bool, message: str):
+        if goal_success:
+            self.node.get_logger().info(f"[{self.name}] Reached target distance from {self.target_class}. {message}")
+            self.action_status = ActionStatus.SUCCEEDED
+        else:
+            self.node.get_logger().error(f"[{self.name}] Failed to reach target distance from {self.target_class}. {message}")
+            self.action_status = ActionStatus.FAILED
+        
+    def update(self):
+        if self.action_status == ActionStatus.SUCCEEDED:
+            self.node.get_logger().info(f"[{self.name}] Returning SUCCESS.")
+            return py_trees.common.Status.SUCCESS
+        elif self.action_status == ActionStatus.FAILED:
+            self.node.get_logger().info(f"[{self.name}] Returning FAILURE.")
+            return py_trees.common.Status.FAILURE
+        else:
+            return py_trees.common.Status.RUNNING
