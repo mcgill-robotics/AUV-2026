@@ -65,7 +65,7 @@ class Navigation(Action):
         if not goal_response:
             self.action_status = ActionStatus.FAILED
 
-    def on_server_goal_result(self, goal_success: bool, message: str):
+    def on_server_goal_result(self, goal_success: bool, message: str = "Server result callback received with no message."):
         self.result_message = message
         if goal_success:
             self.action_status = ActionStatus.SUCCEEDED
@@ -502,7 +502,7 @@ class MoveToFrontOfIcon(Navigation):
     def __init__(
             self,
             target_icon: BoardIcon,
-            distance_from_icon: Optional[float],
+            distance_from_icon: Optional[float] = None,
             use_icon_z: bool = True,
             z_reference: Optional[float] = None,
             position_tolerance: float = 0.1,
@@ -510,7 +510,7 @@ class MoveToFrontOfIcon(Navigation):
             timeout: float = 30.0,
             hold_time: float = 0.5,
         ):
-        super().__init__(f"Move {distance_from_icon} in Front of {target_icon.value.capitalize()}", position_tolerance, orientation_tolerance_rad, timeout, hold_time)
+        super().__init__(f"Move in Front of {target_icon.value.capitalize()} " + (f"at {distance_from_icon}m away" if distance_from_icon is not None else "maintaining current distance"), position_tolerance, orientation_tolerance_rad, timeout, hold_time)
         self.target_icon = target_icon
         self.distance_from_icon = distance_from_icon
         if not use_icon_z and z_reference is None:
@@ -546,7 +546,7 @@ class MoveToFrontOfIcon(Navigation):
                     self.node.get_logger().error(f"[{self.name}] No object map available to determine icon position.")
                     return py_trees.common.Status.FAILURE
                 
-                auv_2d_position = Vector2D.from_point(self.blackboard.sensors.pose.position)
+                auv_2d_position = Vector2D.from_point(self.blackboard.sensors.pose.pose.position)
                 # get target icon position from vision
                 target_icon_vo = None
                 for vision_object in self.blackboard.vision.object_map.array:
@@ -584,3 +584,26 @@ class MoveToFrontOfIcon(Navigation):
                 return py_trees.common.Status.RUNNING
         return py_trees.common.Status.SUCCESS
                 
+class CheckTorpedoCount(Condition):
+    """
+    Condition to check if torpedo count matches expected count.
+    """
+    def __init__(self, expected_count: int = TORPEDO_COUNT):
+        super().__init__("Check Torpedo Count: " + str(expected_count))
+        self.expected_count = expected_count
+
+    def setup(self, **kwargs):
+        super().setup(**kwargs)
+        # self.blackboard.register_key(key="/torpedo/count", access=py_trees.common.Access.READ)
+        
+    def update(self):
+        return py_trees.common.Status.SUCCESS
+        # if not hasattr(self.blackboard, 'torpedo') or self.blackboard.torpedo.count is None:
+        #     self.node.get_logger().error(f"[{self.name}] No torpedo count available on blackboard.")
+        #     return py_trees.common.Status.FAILURE
+        # if self.blackboard.torpedo.count == self.expected_count:
+        #     self.node.get_logger().info(f"[{self.name}] Torpedo count is correct.")
+        #     return py_trees.common.Status.SUCCESS
+        # else:
+        #     self.node.get_logger().error(f"[{self.name}] Torpedo count is incorrect.")
+        #     return py_trees.common.Status.FAILURE

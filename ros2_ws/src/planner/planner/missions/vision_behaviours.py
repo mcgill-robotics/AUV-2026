@@ -220,7 +220,7 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
         if not goal_response:
             self.action_status = ActionStatus.FAILED
 
-    def on_server_goal_result(self, goal_success: bool, message: str):
+    def on_server_goal_result(self, goal_success: bool, message: str = "Server result callback received with no message."):
         self.result_message = message
         if goal_success:
             self.action_status = ActionStatus.SUCCEEDED
@@ -354,7 +354,7 @@ class ScanBehaviour(py_trees.behaviour.Behaviour):
         if not goal_response:
             self.action_status = ActionStatus.FAILED
 
-    def _on_goal_result(self, goal_success: bool, message: str):
+    def _on_goal_result(self, goal_success: bool, message: str = "Server result callback received with no message."):
         self.result_message = message
         self.action_status = ActionStatus.SUCCEEDED if goal_success else ActionStatus.FAILED
 
@@ -402,6 +402,7 @@ class CircleAroundToFindBehaviour(py_trees.behaviour.Behaviour):
         turn_timeout_s: float = 30.0,                    # (s) timeout before turn step FAILURE
         name="CircleAroundToFind",
     ):
+        # TODO add attempts to find objects to avoid needless scan rotations
         super().__init__(name)
         
         self.reference_class: str = reference_class
@@ -652,7 +653,7 @@ class CircleAroundToFindBehaviour(py_trees.behaviour.Behaviour):
         if not goal_response:
             self.action_status = ActionStatus.FAILED
 
-    def on_server_goal_result(self, goal_success: bool, message: str):
+    def on_server_goal_result(self, goal_success: bool, message: str = "Server result callback received with no message."):
         self.result_message = message
         if goal_success:
             self.action_status = ActionStatus.SUCCEEDED
