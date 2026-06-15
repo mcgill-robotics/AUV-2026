@@ -11,6 +11,7 @@ from std_srvs.srv import Trigger
 
 # AUV dependencies
 from auv_msgs.action import AUVNavigate
+from auv_msgs.srv import RosbagControl
 
 # Planner dependencies
 from .action_status_enum import ActionStatus
@@ -334,3 +335,56 @@ class TimerBehaviour(py_trees.behaviour.Behaviour):
                         return py_trees.common.Status.SUCCESS
                 
                 return py_trees.common.Status.RUNNING
+
+class RosbagRecordingDecorator(py_trees.decorators.Decorator):
+    """
+    A decorator that automatically starts a rosbag recording when the decorated mission
+    starts, and stops the recording when the mission ends (whether success, failure, or interrupted).
+    """
+    def __init__(self, child: py_trees.behaviour.Behaviour, profile: str = "all", bag_name: str = "", service_path: str = "/rosbag_manager/control") -> None:
+        super().__init__(name="Rosbag Recording Decorator", child=child)
+        self.profile = profile
+        self.bag_name = bag_name
+        self.service_path = service_path
+        self.started_recording = False
+        
+    def setup(self, **kwargs) -> None:
+        self.node = kwargs['node']
+        self.service_client = self.node.create_client(RosbagControl, self.service_path)
+        
+    def initialise(self) -> None:
+        if self.service_client.wait_for_service(timeout_sec=1.0):
+            req = RosbagControl.Request()
+            req.action = RosbagControl.Request.START_RECORD
+            req.profile = self.profile
+            req.bag_name = self.bag_name
+            
+            self.node.get_logger().info(f"[{self.name}] Starting auto-recording (profile: {self.profile}, bag: {self.bag_name})...")
+            future = self.service_client.call_async(req)
+            
+            def done_callback(f):
+                try:
+                    response = f.result()
+                    if response.success:
+                        self.started_recording = True
+                    else:
+                        self.node.get_logger().info(f"[{self.name}] Auto-record didn't start: {response.message} (Is a bag already recording?)")
+                except Exception as e:
+                    self.node.get_logger().error(f"[{self.name}] Service call failed: {e}")
+                    
+            future.add_done_callback(done_callback)
+        else:
+            self.node.get_logger().warn(f"[{self.name}] {self.service_path} service not available. Skipping auto-record.")
+            
+    def update(self) -> py_trees.common.Status:
+        return self.decorated.status
+        
+    def terminate(self, new_status: py_trees.common.Status) -> None:
+        if new_status != py_trees.common.Status.RUNNING and self.started_recording:
+            if self.service_client.wait_for_service(timeout_sec=1.0):
+                req = RosbagControl.Request()
+                req.action = RosbagControl.Request.STOP_RECORD
+                
+                self.node.get_logger().info(f"[{self.name}] Stopping auto-recording...")
+                self.service_client.call_async(req)
+            self.started_recording = False

@@ -80,8 +80,12 @@ class RosbagManagerNode(Node):
             return False, 'Already recording a bag.'
 
         # Determine bag name
+        timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
         if not bag_name:
-            bag_name = f'bag_{time.strftime("%Y-%m-%d_%H-%M-%S")}'
+            bag_name = f'bag_{timestamp}'
+        else:
+            bag_name = f'{bag_name}_{timestamp}'
+            
         bag_path = os.path.join(self.save_dir, bag_name)
 
         if os.path.exists(bag_path):

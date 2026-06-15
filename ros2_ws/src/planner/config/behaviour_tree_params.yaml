@@ -9,6 +9,14 @@ planner_root_tree:
     default_snapshot_blackboard_data: true
     default_snapshot_period: 1.0
 
+    # Auto-recording configuration
+    auto_record:
+      enabled: true
+      # Profiles are defined in: src/telemetry/config/rosbag_profiles.yaml
+      profile: "all"
+      bag_prefix: "mission_"
+      service_path: "/rosbag_manager/control"
+
     pre_qual:
       yaw_tolerance: 0.5
       positional_tolerance: 0.2

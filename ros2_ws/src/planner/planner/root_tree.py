@@ -47,6 +47,18 @@ def main():
     orbit_pre_qual_hold_time_initial = node.get_parameter("pre_qual.orbit.hold_time_initial").get_parameter_value().double_value
     orbit_pre_qual_hold_time_segments = node.get_parameter("pre_qual.orbit.hold_time_segments").get_parameter_value().double_value
 
+    node.declare_parameter("auto_record.enabled", True)
+    node.declare_parameter("auto_record.profile", "all")
+    node.declare_parameter("auto_record.bag_prefix", "mission_")
+    node.declare_parameter("auto_record.service_path", "/rosbag_manager/control")
+
+    auto_record_params = {
+        'enabled': node.get_parameter("auto_record.enabled").get_parameter_value().bool_value,
+        'profile': node.get_parameter("auto_record.profile").get_parameter_value().string_value,
+        'bag_prefix': node.get_parameter("auto_record.bag_prefix").get_parameter_value().string_value,
+        'service_path': node.get_parameter("auto_record.service_path").get_parameter_value().string_value
+    }
+
     # Set the root of the tree
     root = py_trees.composites.Parallel("Root", policy=py_trees.common.ParallelPolicy.SuccessOnAll(synchronise=False))
 
@@ -106,7 +118,8 @@ def main():
         orbit_pre_qual_yaw_tolerance_scale=orbit_pre_qual_yaw_tolerance_scale,
         orbit_pre_qual_positional_tolerance_scale=orbit_pre_qual_positional_tolerance_scale,
         orbit_pre_qual_hold_time_initial=orbit_pre_qual_hold_time_initial,
-        orbit_pre_qual_hold_time_segments=orbit_pre_qual_hold_time_segments
+        orbit_pre_qual_hold_time_segments=orbit_pre_qual_hold_time_segments,
+        auto_record_params=auto_record_params
     )
 
     # Add children to root
