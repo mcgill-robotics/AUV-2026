@@ -18,29 +18,12 @@ class TableOctagonTask(py_trees.composites.Sequence):
 
         # 1. Go to a set depth to view the table better. The table is best seen at a shallow depth, since we get to
         # see the top of the table, whereas at a lower depth there is a lot of empty space
-        go_shallow_depth = BasicActionBehaviour(
-            name="Octagon: Go Shallow Depth",
-            goal=set_depth(z=-0.5, tolerance=position_tolerance, hold_time=hold_time, timeout=timeout)
-        )
-
-        # 2. Look for the table 
-        search_for_table = vision_behaviours.SearchSweepBehaviour(
-            target_class="table",
-            num_steps=5,
-            step_timeout=0.5)
-        
-
         #3 Go up to table 
         go_above_table = GoAboveTable(
             position_tolerance=position_tolerance,
             hold_time=hold_time,
             timeout=timeout
         )
-
-        #4 Surface inside Octagon and align with table while at the surface 
-
-        #4 Go above the table, with the more accurate position of the table 
-        #go_above_table_1m_away.add_child(go_above_table)
 
         # 2. Surface inside Octagon
         # 3. Locate Resupply table and items
@@ -53,8 +36,6 @@ class TableOctagonTask(py_trees.composites.Sequence):
         # )
 
         self.add_children([
-            go_shallow_depth,
-            search_for_table,
             go_above_table,
             py_trees.behaviours.Success(name="Placeholder Table & Octagon Success")
         ])
