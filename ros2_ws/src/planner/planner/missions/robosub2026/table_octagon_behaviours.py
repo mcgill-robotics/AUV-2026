@@ -17,7 +17,7 @@ class GoAboveTable(py_trees.composites.Sequence):
 
         # Initialize the expected table items, this list will get truncated as objects are placed
         # in their respective bins
-        self.blackboard.missions.octagon.expected_table_items = ["table", "pill", "nut", "electric", "bandaid"]
+        self.blackboard.missions.octagon.expected_table_items = ["table", "pill", "nutbolt", "electric", "bandaid"]
 
         # 1. Go to a set depth to view the table better. The table is best seen at a shallow depth, since we get to
         # see the top of the table, whereas at a lower depth there is a lot of empty space
@@ -67,7 +67,7 @@ class GoAboveTable(py_trees.composites.Sequence):
         #5 Surface octagon
         surface_octagon = BasicActionBehaviour(
             name="Surface in Octagon", 
-            goal=set_depth(z=1000.0, tolerance=position_tolerance, hold_time=hold_time, timeout=timeout)
+            goal=set_depth(z=0.0, tolerance=position_tolerance, hold_time=hold_time, timeout=timeout)
         )
 
         self.add_children([
@@ -103,7 +103,7 @@ class GoTillTableSeen(py_trees.composites.Parallel):
         super().__init__("Navigate towards table until it is seen under", policy=py_trees.common.ParallelPolicy.SuccessOnOne())
 
         # 1 Stop if we can detect the table underneath us
-        #stop_if_see_table = StopTableBelow() # Is buggy rn, sends in eternal loop of preemption and sending goal, need to add another behaviour check, im lazy
+        stop_if_see_table = StopTableBelow() # Is buggy rn, sends in eternal loop of preemption and sending goal, need to add another behaviour check, im lazy
 
         # 2 Send an object-map based goal to go to the table
         go_to_table = vision_behaviours.GoNearObject(
@@ -114,7 +114,9 @@ class GoTillTableSeen(py_trees.composites.Parallel):
             hold_time=3.0
         )
 
-        self.add_children([
+        # 3 TODO: Fallback for when no table after, think of naive moving again in straight line and hope #1 gets it
+
+        self.add_children([stop_if_see_table,
                           go_to_table])
 
 class StopTableBelow(py_trees.behaviour.Behaviour):
@@ -151,7 +153,7 @@ class StopTableBelow(py_trees.behaviour.Behaviour):
         # see it in the down cam view
         current_position = self.blackboard.sensors.pose.pose.position 
         goal_position = self.blackboard.vision.last_goal_pose.target_pose.position
-        if math.sqrt( (current_position.x - goal_position.x)**2 + ((current_position.y - goal_position.y)**2)) < 0.5:
+        if math.sqrt( (current_position.x - goal_position.x)**2 + ((current_position.y - goal_position.y)**2)) < 1.0:
             return py_trees.common.Status.RUNNING 
 
         # Look if we can see a table in down cam detections
@@ -201,6 +203,8 @@ class GoTablePrematurelySeen(py_trees.behaviour.Behaviour):
         elif self.action_status == ActionStatus.FAILED:
             self.node.get_logger().info(f"[{self.name}] Returning FAILURE.")
             return py_trees.common.Status.FAILURE
+        elif self.action_status == ActionStatus.PENDING:
+            return py_trees.common.Status.RUNNING
         
 
         #pose_at_premature_seen_table = self.blackboard.missions.octagon.pose_at_premature_seen_table
@@ -209,7 +213,9 @@ class GoTablePrematurelySeen(py_trees.behaviour.Behaviour):
             position_at_premature_seen_table = pose_at_premature_seen_table
             print(position_at_premature_seen_table)
             goal = move_global(x=position_at_premature_seen_table.x, y=position_at_premature_seen_table.y, do_z=False, tolerance=self.tolerance_meters, hold_time=self.hold_time)
-            self.navigation_client.send_navigation_goal(goal, self.name)
+            self.navigation_client.send_navigation_goal(goal, self.name, custom_goal_response=self.on_server_goal_response, 
+                custom_goal_result=self.on_server_goal_result)
+            self.action_status = ActionStatus.PENDING
             return py_trees.common.Status.RUNNING
         else:
             return py_trees.common.Status.SUCCESS
@@ -228,9 +234,15 @@ class AlignWithTable(py_trees.composites.Selector):
         # upon success, 
         loop_align_check = LoopTableAlignCheck()
 
+        retry_loop_align_check = py_trees.decorators.Retry(
+            name="Retry",
+            child=loop_align_check,
+            num_failures=5
+        )
+
         self.add_children([
             check_above_table,
-            loop_align_check
+            retry_loop_align_check
         ])
 
 class CheckAboveTable(py_trees.behaviour.Behaviour):
@@ -268,8 +280,12 @@ class CheckAboveTable(py_trees.behaviour.Behaviour):
                 if hypothesis.class_id == "table":
                     self.blackboard.mission.octagon_task.view_table = detection # Extract the table since needed for alignment
                 self.seen_items.append(hypothesis.class_id)
-                
-        self.node.get_logger().info("f{self.seen_items} {self.blackboard.missions.octagon.expected_table_items}")
+        seen_items_str = ""
+        for i in range(len(self.seen_items)):
+            seen_items_str += self.seen_items[i]
+        if len(self.seen_items) > 3:
+            self.node.get_logger().info(f"Seen: {seen_items_str}")
+
         if set(self.blackboard.missions.octagon.expected_table_items).issubset(self.seen_items):
             return py_trees.common.Status.SUCCESS
         else:
@@ -277,7 +293,7 @@ class CheckAboveTable(py_trees.behaviour.Behaviour):
 
 class LoopTableAlignCheck(py_trees.composites.Sequence):
     def __init__(self, position_tolerance: float = 0.2, hold_time: float = 1.0, timeout: float = 30.0):
-        super().__init__("Align with Table", memory=False)
+        super().__init__("Align with Table", memory=True)
 
         self.blackboard = self.attach_blackboard_client(name="AlignWithTable Blackboard")
 
@@ -341,11 +357,17 @@ class CenterTable(py_trees.behaviour.Behaviour):
             self.node.get_logger().error("Blackboard down cam detection key is not set up or detections is None")
             return py_trees.common.Status.FAILURE
         
+        self.node.get_logger().info("PASS1")
+        
         if self.action_status == ActionStatus.SUCCEEDED:
+            self.node.get_logger().info("PASS1.3")
             return py_trees.common.Status.SUCCESS
     
         if self.action_status == ActionStatus.PENDING:
+            self.node.get_logger().info("PASS1.5")
             return py_trees.common.Status.RUNNING
+        
+        self.node.get_logger().info("PASS2")
         
         table = self.blackboard.mission.octagon_task.view_table
         # Find the general direction of the table by looking at which corner the table BB is in.
@@ -390,9 +412,10 @@ class CenterTable(py_trees.behaviour.Behaviour):
         x = -math.tan(x_angle) * height_to_table/2
         y = math.tan(y_angle) * height_to_table/2
 
-        goal = move_robot_centric(forward=x, sway=y, heave=-1 * self.blackboard.sensors.pose.pose.position.z - 0.1, hold_time=1.0)
+        goal = move_robot_centric(forward=x, sway=y, heave=-1 * self.blackboard.sensors.pose.pose.position.z - 0.1, hold_time=3.0)
 
-        self.navigation_client.send_navigation_goal(goal, self.name)
+        self.navigation_client.send_navigation_goal(goal, self.name, custom_goal_response=self.on_server_goal_response, 
+                custom_goal_result=self.on_server_goal_result)
         self.action_status = ActionStatus.PENDING
 
         return py_trees.common.Status.RUNNING
