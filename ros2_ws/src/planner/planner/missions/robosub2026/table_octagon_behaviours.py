@@ -252,6 +252,7 @@ class CheckAboveTable(py_trees.behaviour.Behaviour):
         self.number_of_items_to_check = number_of_items_to_check
         self.discovery_distance = discovery_distance
         self.table = False
+        self.pool_depth = 2.1 
 
     def setup(self, **kwargs):
         self.node = kwargs['node']
@@ -259,8 +260,10 @@ class CheckAboveTable(py_trees.behaviour.Behaviour):
         self.navigation_client.client_wait_for_server(timeout_sec=5.0)
         
         self.blackboard.register_key('/vision/down_cam/detections', access=py_trees.common.Access.READ)
+        self.blackboard.register_key('/sensors/pose', access=py_trees.common.Access.READ)
         self.blackboard.register_key('/missions/octagon/expected_table_items', access=py_trees.common.Access.READ)
         self.blackboard.register_key('/mission/octagon_task/view_table', access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key('/mission/octagon_task/height_table', access=py_trees.common.Access.WRITE)
         
     def initialise(self) -> None:
         self.table = None
@@ -272,6 +275,7 @@ class CheckAboveTable(py_trees.behaviour.Behaviour):
             return py_trees.common.Status.FAILURE
 
         self.seen_items = []
+        potential_pill_detection = None
         # Verify in detections if there are at least number_of_items_to_check items in the down cam detections 
         # to certify we are above the table (not neccesarily centered)
         for detection in self.blackboard.vision.down_cam.detections.detections:
@@ -279,7 +283,10 @@ class CheckAboveTable(py_trees.behaviour.Behaviour):
             if hypothesis.class_id in self.blackboard.missions.octagon.expected_table_items:
                 if hypothesis.class_id == "table":
                     self.blackboard.mission.octagon_task.view_table = detection # Extract the table since needed for alignment
+                elif hypothesis.class_id == "pill":
+                    potential_pill_detection = detection # Extract the table since needed for alignment
                 self.seen_items.append(hypothesis.class_id)
+
         seen_items_str = ""
         for i in range(len(self.seen_items)):
             seen_items_str += self.seen_items[i]
@@ -287,6 +294,11 @@ class CheckAboveTable(py_trees.behaviour.Behaviour):
             self.node.get_logger().info(f"Seen: {seen_items_str}")
 
         if set(self.blackboard.missions.octagon.expected_table_items).issubset(self.seen_items):
+            area_pill = potential_pill_detection.bbox.size_x * potential_pill_detection.bbox.size_y
+            
+            # From inverse proportionality with area and distance 
+            height_to_pill = self.known_height_to_pill * math.sqrt(self.known_pill_area/area_pill)
+            self.blackboard.mission.octagon_task.height_table = self.pool_depth - height_to_pill - (-1 * self.blackboard.sensors.pose.pose.position.z)
             return py_trees.common.Status.SUCCESS
         else:
             return py_trees.common.Status.FAILURE
@@ -419,5 +431,46 @@ class CenterTable(py_trees.behaviour.Behaviour):
         self.action_status = ActionStatus.PENDING
 
         return py_trees.common.Status.RUNNING
+
+# ---------------------------------------------------------------------------------------------------------------------
+# ---------------------------------------------------------------------------------------------------------------------
+# ---------------------------------------------------------------------------------------------------------------------
+
+class DropItemInBasket(py_trees.composites.Sequence):
+    def __init__(self, item_to_grab="pill"):
+        super().__init__(f"Drop Item {item_to_grab}", memory=True)
+
+        # 1. Go to object 
+        go_object_vicinity = vision_behaviours.GoNearObject(
+            target_class=item_to_grab,
+            target_distance=4.0,
+            tolerance_meters=0.1,
+            height_offset=0.1,
+            hold_time=3.0
+        )
+
+        # 2. Align properly on object Center (make this a 2 parter, one for rotation, useful for rectangle items, one for translation)
+
+        # 3. Grab object and surface (verify that the object is still in grabber)
+
+        # 4. Go to respective bin 
+
+        # 5. Drop the item
+
+        # 6. Go back to center table and surface
+
+
+class DropItemsInBasket(py_trees.behaviour.Behaviour):
+    def __init__(self, name="Drop Item in Basket", item_to_grab="pill"):
+        super().__init__(name)
+        self.blackboard = self.attach_blackboard_client(name="Drop Item in Basket BB")
+        self.item_to_grab = item_to_grab
+
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.navigation_client = kwargs['shared_nav_client']
+        self.navigation_client.client_wait_for_server(timeout_sec=5.0)
+
+        self.blackboard.register_key('/gate/selected_role', access=py_trees.common.Access.READ)
 
 
