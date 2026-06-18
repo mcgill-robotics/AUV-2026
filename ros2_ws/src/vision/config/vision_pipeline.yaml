@@ -108,19 +108,27 @@ front_cam_object_detection:
     depth_estimation:
       # mode_by_label: Determines how 3D depth is calculated for each object.
       # Available modes:
-      #  - "zed_3d": Uses the ZED SDK's default 3D bounding box (Default if unlisted).
+      #  - "depth_map_median": Median depth of valid pixels in bounding box (Default if unlisted).
+      #  - "depth_map_nearest": 15th percentile depth of valid pixels in bounding box.
+      #  - "zed_3d": Uses the ZED SDK's default 3D bounding box.
       #  - "known_height": Uses pinhole math based on actual object height.
       #  - "{pixel}_to_{plane}": Projects a ray to intersect a known horizontal plane.
       #      - pixel: "top" (top edge), "center" (center of bbox) or "bottom" (bottom edge of bbox)
       #      - plane: any plane defined in `known_planes` (e.g. "surface", "floor")
       mode_by_label:
         octagon: "center_to_surface"
-        table: "bottom_to_floor" #"zed_3d"
-        bin_structure: "zed_3d" #"bottom_to_floor"
-        board: "zed_3d" #"bottom_to_floor"
-        gate: "zed_3d" #"top_to_surface"
-        white_pipe: "zed_3d" #"known_height"
-        red_pipe: "zed_3d" #"known_height"
+        table: "depth_map_nearest"
+        bin_structure: "depth_map_median"
+        board: "depth_map_nearest"
+        gate: "depth_map_nearest"
+        white_pipe: "depth_map_nearest"
+        red_pipe: "depth_map_nearest"
+      
+      # Depth map extraction parameters
+      depth_map_shrink_ratio: 0.8          # Shrink bbox by 20% on each side to reduce background (median only)
+      depth_map_nearest_percentile: 10.0   # Percentile for depth_map_nearest mode
+      depth_map_min_valid_fraction: 0.25    # Minimum valid depth pixels fraction to accept extraction
+      
       known_planes:
         surface: 0.0
         # NOTE: 'floor' is dynamically overridden in the launch file by object_map.ros__parameters.z_axis_locking.pool_floor_z to keep a single source of truth
@@ -141,13 +149,13 @@ front_cam_object_detection:
       enable: false
       mode: "horizontal" # "both", "horizontal", "vertical"
       margin_px: 20 # The number of pixels to exclude from the border
-      labels: ["white_pipe", "red_pipe"] # List of labels to apply border exclusion to
+      labels: ["white_pipe", "red_pipe", "gate"] # List of labels to apply border exclusion to
 
     publish_camera_info: true # publish CameraInfo for the front camera feed using ZED left-camera intrinsics
     publish_annotated: true # publishes the front camera feed topic at detection_frame_topic + /annotated, toggled raw/annotated at runtime via service
     publish_annotated_every_n_frames: 1 # publish annotated image every N detection frames
     publish_depth: true # publish raw 32FC1 depth map image
-    publish_depth_compressed: false # publish depth map as compressed 16-bit PNG
+    publish_depth_compressed: true # publish depth map as compressed 16-bit PNG
     publish_depth_every_n_frames: 5 # publish depth image every N frames
     stream_ip: "127.0.1.1" # may be used by ZED ROS Wrapper or ZED SDK directly
     stream_port: 30000 # may be used by ZED ROS Wrapper or ZED SDK directly

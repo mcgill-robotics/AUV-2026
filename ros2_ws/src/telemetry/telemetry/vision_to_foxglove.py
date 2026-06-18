@@ -133,6 +133,12 @@ class SceneConverterNode(Node):
     def listener_callback(self, msg):
         scene_update = SceneUpdate()
         
+        # 1. Send an explicit "Delete All Entities" command to clear previous frame's objects
+        wipe_cmd = SceneEntityDeletion()
+        wipe_cmd.timestamp = msg.header.stamp
+        wipe_cmd.type = SceneEntityDeletion().ALL # 1 = ALL (Delete all existing entities on the same topic)
+        scene_update.deletions.append(wipe_cmd)
+
         table_msg = FoxgloveObjectArray()
         table_msg.header = msg.header
         
@@ -232,13 +238,13 @@ class SceneConverterNode(Node):
             scene_update.entities.append(entity)
 
         # 1. Send explicit deletions ONLY for entities that disappeared
-        deleted_ids = self.published_entity_ids - current_frame_ids
-        for del_id in deleted_ids:
-            wipe_cmd = SceneEntityDeletion()
-            wipe_cmd.timestamp = msg.header.stamp
-            wipe_cmd.type = SceneEntityDeletion.MATCHING_ID
-            wipe_cmd.id = del_id
-            scene_update.deletions.append(wipe_cmd)
+        # deleted_ids = self.published_entity_ids - current_frame_ids
+        # for del_id in deleted_ids:
+        #     wipe_cmd = SceneEntityDeletion()
+        #     wipe_cmd.timestamp = msg.header.stamp
+        #     wipe_cmd.type = SceneEntityDeletion.MATCHING_ID
+        #     wipe_cmd.id = del_id
+        #     scene_update.deletions.append(wipe_cmd)
             
         self.published_entity_ids = current_frame_ids
         
