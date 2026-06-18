@@ -21,6 +21,17 @@ namespace controls
         this->declare_parameter<double>("P_wy_sas", 2.0);
         this->declare_parameter<double>("P_wz_sas", 2.0);
 
+        // Integral gains
+        this->declare_parameter<double>("I_ex_large", 0.0);
+        this->declare_parameter<double>("I_ey_large", 0.0);
+        this->declare_parameter<double>("I_ez_large", 0.0);
+        this->declare_parameter<double>("I_ex_sas", 0.0);
+        this->declare_parameter<double>("I_ey_sas", 0.0);
+        this->declare_parameter<double>("I_ez_sas", 0.0);
+
+        this->declare_parameter<double>("I_max", 3.0);
+        this->declare_parameter<double>("integral_activation_deg", 10.0);
+
         this->declare_parameter<double>("buoyancy", 278.0); // [N]
         this->declare_parameter<std::vector<double>>("r_bv_v", {0.0, 0.0, 0.023}); // [m] From CAD model
         this->declare_parameter<double>("control_loop_hz", 100.0); //Control loop frequency
@@ -43,6 +54,16 @@ namespace controls
         this->get_parameter("P_wy_sas", P_wy_sas_);
         this->get_parameter("P_wz_sas", P_wz_sas_);
 
+        this->get_parameter("I_ex_large", I_ex_large_);
+        this->get_parameter("I_ey_large", I_ey_large_);
+        this->get_parameter("I_ez_large", I_ez_large_);
+        this->get_parameter("I_ex_sas", I_ex_sas_);
+        this->get_parameter("I_ey_sas", I_ey_sas_);
+        this->get_parameter("I_ez_sas", I_ez_sas_);
+
+        this->get_parameter("I_max", I_max_);
+        this->get_parameter("integral_activation_deg", integral_activation_deg_);
+
         this->get_parameter("buoyancy", buoyancy_); 
         this->get_parameter("r_bv_v", r_bv_v_);
         this->get_parameter("control_loop_hz", control_loop_hz_);
@@ -54,6 +75,7 @@ namespace controls
         q_iv_ = quatd::Identity(); // Initial orientation: identity quaternion
         w_iv_v = Vec3::Zero(); // Initial angular velocity: zero vector
         q_iv2_ = quatd::Identity(); // Initial target orientation: identity quaternion
+        integral_error_ = Vec3::Zero(); // Initial integral error
 
         P_e_large_ << P_ex_large_, 0, 0,
                     0, P_ey_large_, 0,
@@ -70,6 +92,14 @@ namespace controls
         P_w_sas_ << P_wx_sas_, 0, 0,
                     0, P_wy_sas_, 0,
                     0, 0, P_wz_sas_;
+
+        I_e_large_ << I_ex_large_, 0, 0,
+                      0, I_ey_large_, 0,
+                      0, 0, I_ez_large_;
+
+        I_e_sas_ << I_ex_sas_, 0, 0,
+                    0, I_ey_sas_, 0,
+                    0, 0, I_ez_sas_;
 
 
         pub_effort_ = this->create_publisher<wrench_msg>("/controls/attitude_effort", rclcpp::SensorDataQoS().keep_last(1));
@@ -113,12 +143,22 @@ namespace controls
 
     void AttitudeController::target_attitude_callback(const auv_msgs::msg::AttitudeReference::SharedPtr msg)
     {
-        q_iv2_ = quatd(
+        quatd new_q_iv2 = quatd(
             msg->orientation.w,
             msg->orientation.x,
             msg->orientation.y,
             msg->orientation.z
         );
+        
+        // Reset integral error if setpoint changes significantly
+        constexpr double SETPOINT_RESET_QUAT_DOT = 0.999;
+        double dot_prod = std::abs(q_iv2_.dot(new_q_iv2));
+        if (dot_prod < SETPOINT_RESET_QUAT_DOT) {
+            integral_error_ = Vec3::Zero();
+        }
+        
+        q_iv2_ = new_q_iv2;
+
         w_ref_v = Vec3(
             msg->angular_velocity.x,
             msg->angular_velocity.y,
@@ -139,12 +179,12 @@ namespace controls
                 double theta = 2.0 * std::acos(std::clamp(q_error.w(), -1.0, 1.0));
                 Vec3 axis_error = q_error.vec().normalized();
                 Vec3 error_vec = theta * axis_error;
-                feedback = P_e_large_ * error_vec - P_w_large_ * (w_iv_v - w_ref_v);
+                feedback = P_e_large_ * error_vec + I_e_large_ * integral_error_ - P_w_large_ * (w_iv_v - w_ref_v);
                 break;
             }
             case ControlMode::SAS:
             {
-                feedback = P_e_sas_ * Vec3(q_error.x(), q_error.y(), q_error.z()) - P_w_sas_ * w_iv_v; // Small-angle approximation: use vector part of quaternion error directly
+                feedback = P_e_sas_ * Vec3(q_error.x(), q_error.y(), q_error.z()) + I_e_sas_ * integral_error_ - P_w_sas_ * w_iv_v; 
                 break;
             }
         }
@@ -176,6 +216,23 @@ namespace controls
         else
         {
             mode = ControlMode::LARGE_ERROR;
+        }
+
+        // Conditional integration and anti-windup
+        if (angle_error < (integral_activation_deg_ * M_PI / 180.0))
+        {
+            double dt = 1.0 / control_loop_hz_;
+            Vec3 error_vec;
+            if (mode == ControlMode::SAS) {
+                error_vec = Vec3(q_error.x(), q_error.y(), q_error.z());
+            } else {
+                Vec3 axis_error = q_error.vec().normalized();
+                error_vec = angle_error * axis_error;
+            }
+            integral_error_ += error_vec * dt;
+            
+            // Anti-windup
+            integral_error_ = integral_error_.cwiseMax(-I_max_).cwiseMin(I_max_);
         }
 
         Vec3 feedback = feedback_effort(q_error, mode);
