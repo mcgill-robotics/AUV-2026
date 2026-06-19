@@ -474,7 +474,7 @@ class FrontCamObjectDetectorNode():
             # retrieve at a lower resolution for inference & publishing.
             # Only applies to real camera — sim streams at a fixed resolution.
             if not self.sim and self.zed_retrieval_width > 0 and self.zed_retrieval_height > 0:
-                native_res = self.zed.get_camera_information().camera_configuration.camera_resolution
+                native_res = self.zed.get_camera_information().camera_configuration.resolution
                 self.retrieval_resolution = sl.Resolution(self.zed_retrieval_width, self.zed_retrieval_height)
                 self.native_width = int(native_res.width)
                 self.native_height = int(native_res.height)
