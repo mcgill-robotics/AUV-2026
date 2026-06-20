@@ -49,14 +49,26 @@ namespace controls
                 double P_wy_sas_;
                 double P_wz_sas_;
 
+                double I_ex_large_;
+                double I_ey_large_;
+                double I_ez_large_;
+                double I_ex_sas_;
+                double I_ey_sas_;
+                double I_ez_sas_;
+
+                double I_max_;
+                double integral_activation_deg_;
+
                 double sas_switch_deg_;
                 double sas_switch_;
 
                 Mat3 P_e_large_;
                 Mat3 P_w_large_;
+                Mat3 I_e_large_;
 
                 Mat3 P_e_sas_;
                 Mat3 P_w_sas_;
+                Mat3 I_e_sas_;
 
                 enum class ControlMode
                 {
@@ -82,6 +94,9 @@ namespace controls
                 //Target state variables
                 quatd q_iv2_; 
                 Vec3 w_ref_v; // Target (reference) angular velocity vector in the inertial frame, expressed in the body frame
+
+                // Integral error state
+                Vec3 integral_error_;
 
 
 

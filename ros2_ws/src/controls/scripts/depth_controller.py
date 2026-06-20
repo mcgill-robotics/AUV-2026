@@ -34,6 +34,7 @@ class DepthController(Node):
         self.declare_parameter("KD", 0.0)
         self.declare_parameter("KI", 0.0)
         self.declare_parameter("I_MAX", 0.0)
+        self.declare_parameter("integral_activation_threshold", 0.5)
         self.declare_parameter("net_buoyancy", 0.0)
         self.declare_parameter("enabled", False)
 
@@ -43,12 +44,13 @@ class DepthController(Node):
         self.KD = float(self.get_parameter("KD").value)
         self.KI = float(self.get_parameter("KI").value)
         self.I_MAX = float(self.get_parameter("I_MAX").value)
+        self.integral_activation_threshold = float(self.get_parameter("integral_activation_threshold").value)
         self.net_buoyancy = float(self.get_parameter("net_buoyancy").value)
         self.enabled = bool(self.get_parameter("enabled").value)
 
         self.parameter_callback_handle = self.add_on_set_parameters_callback(self.parameters_callback)
 
-        self.pid = PID(self.KP, self.KD, self.KI, self.I_MAX)
+        self.pid = PID(self.KP, self.KD, self.KI, self.I_MAX, self.integral_activation_threshold)
 
         self.setpoint_depth = 0.25  # Desired depth in meters. TODO: Change default value to AUV float depth
         self.current_depth = 0.0   # Current depth in meters

@@ -15,6 +15,15 @@ attitude_controller:
     P_wy_sas: 0.1
     P_wz_sas: 2.0
 
+    I_ex_large: 0.0
+    I_ey_large: 0.0
+    I_ez_large: 0.5
+    I_ex_sas: 0.0
+    I_ey_sas: 0.0
+    I_ez_sas: 0.5
+    I_max: 3.0
+    integral_activation_deg: 25.0
+
     sas_switch_deg: 5.0 # could be slightly smaller
     buoyancy: 0.0 #265.17 # [N]
     r_bv_v: [0.0, 0.0, 0.005523] # [m] From CAD Model    
@@ -27,6 +36,7 @@ depth_controller:
         KD: 60.0
         KI: 0.0
         I_MAX: 10.0
+        integral_activation_threshold: 0.5 # in case we need KI != 0
         net_buoyancy: 14.5 # Newtons.
         enabled: true
 
@@ -35,8 +45,9 @@ x_controller:
         control_loop_hz: 10.0
         KP: 10.0 # prev at 7
         KD: 6.0 # could make higher
-        KI: 0.0
+        KI: 0.5
         I_MAX: 10.0
+        integral_activation_threshold: 1.0
         enabled: true
 
 y_controller:
@@ -44,8 +55,9 @@ y_controller:
         control_loop_hz: 10.0
         KP: 10.0 # prev at 7
         KD: 6.0 # could make higher
-        KI: 0.0
+        KI: 0.5
         I_MAX: 10.0
+        integral_activation_threshold: 1.0
         enabled: true
 
 superimposer:
