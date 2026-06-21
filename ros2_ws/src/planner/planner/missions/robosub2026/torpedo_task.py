@@ -8,8 +8,6 @@ class HoleType(Enum):
 class TorpedoTask(py_trees.composites.Sequence):
     """
     Torpedo Task Tree
-    
-    
     """
     def __init__(
             self,
@@ -242,14 +240,6 @@ class TorpedoTask(py_trees.composites.Sequence):
                 self.board_type_selector(HoleType.SMALL)
             ]
         )
-        small_then_large = py_trees.composites.Sequence("Small then Large Strategy", memory=True)
-        small_then_large.add_children(
-            [
-                CheckTorpedoCount(expected_count=2),
-                self.board_type_selector(HoleType.SMALL),
-                self.board_type_selector(HoleType.LARGE)
-            ]
-        )
         large_only = py_trees.composites.Sequence("Large Only Strategy", memory=True)
         small_only = py_trees.composites.Sequence("Small Only Strategy", memory=True)
         small_only.add_children(
@@ -268,7 +258,6 @@ class TorpedoTask(py_trees.composites.Sequence):
         firing_order_selector.add_children(
             [
                 large_then_small,
-                small_then_large,
                 large_only,
                 small_only
             ]
@@ -354,7 +343,6 @@ class TorpedoTask(py_trees.composites.Sequence):
             [
                 self.distance_strategy(self.farther_distance_threshold,icon),
                 self.distance_strategy(self.far_distance_threshold,icon),
-                self.distance_strategy(0.1,icon)
             ]
          )
         return distance_strategy_selector
