@@ -5,6 +5,7 @@ import cv2
 import numpy as np
 import hashlib
 import glob
+import math
 import supervision as sv
 from inference_models import AutoModel, BackendType
 from vision_msgs.msg import Detection2DArray, Detection2D, ObjectHypothesisWithPose
@@ -304,3 +305,39 @@ def bbox_from_zed_corners(corners) -> tuple[float, float, float, float]:
     xs = [float(point[0]) for point in corners]
     ys = [float(point[1]) for point in corners]
     return bbox_from_xyxy(min(xs), min(ys), max(xs), max(ys))
+
+def apply_snells_law_lateral(z_true, u, v, fx, fy, n_w=1.333):
+    """
+    Applies exact Snell's Law un-projection to convert distorted pixel angles
+    (due to flat port refraction) into true physical lateral metric distances.
+    
+    Explanation of the math:
+    1. The pixel ratios (u/fx) and (v/fy) represent the Tangent of the horizontal and 
+       vertical angles of the light ray inside the air-filled camera housing.
+    2. r_air = sqrt((u/fx)^2 + (v/fy)^2) computes the Tangent of the total diagonal angle when
+       choosing an arbitrary z_plane=1, where u/fx = tan(angle_in_air) = r_x_air/1.
+    3. sin(angle_in_air) = r_air/sqrt(1^2+r_air^2)
+    4. We convert this Tangent into Sine (sin_a) to use Snell's Law (sin_w = sin_a / n_w),
+       giving us the true angle of the light ray when it was outside in the water.
+    5. We convert the true water Sine back into a Tangent (tan_w).
+    6. cos_w = sqrt(1^2 - sin_w^2) --> tan_w = sin_w / cos_w --> tan_w = sin_w / sqrt(1 - sin_w^2)
+    7. r_true = z_true * tan_w calculates the true physical radial distance in the XY plane.
+    8. Finally, we split that true radial distance back into X and Y components using the 
+       original pixel ratios, since a flat port only bends light straight outward radially.
+    """
+    if fx == 0 or fy == 0:
+        return 0.0, 0.0
+        
+    r_a = math.sqrt((u / fx)**2 + (v / fy)**2)
+    if r_a < 1e-5:
+        return (u / fx) * z_true, (v / fy) * z_true
+        
+    sin_a = r_a / math.sqrt(1.0 + r_a**2)
+    sin_w = sin_a / n_w
+    tan_w = sin_w / math.sqrt(1.0 - sin_w**2)
+    
+    r_true = z_true * tan_w
+    x_m = r_true * (u / fx) / r_a
+    y_m = r_true * (v / fy) / r_a
+    return x_m, y_m
+

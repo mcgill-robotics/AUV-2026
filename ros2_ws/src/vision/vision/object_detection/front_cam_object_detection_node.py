@@ -41,6 +41,7 @@ from vision.object_detection.utils import (
     load_model,
     publish_annotated_image_util,
     toggle_collection_callback_util,
+    apply_snells_law_lateral,
 )
 
 class FrontCamObjectDetectorNode():
@@ -1036,11 +1037,6 @@ class FrontCamObjectDetectorNode():
             
             calc_mode = mode
             
-            # Apply depth scale to the focal lengths to correct for water refraction
-            # This corrects the distance geometrically while preserving plane constraints!
-            fx_scaled = self.cam_fx * depth_scale
-            fy_scaled = self.cam_fy * depth_scale
-            
             if calc_mode in ("depth_map_median", "depth_map_nearest") and depth is not None:
                 # Shrink bbox only for median mode to reduce background contamination.
                 # Nearest mode doesn't need shrinking — the low percentile naturally selects
@@ -1072,8 +1068,9 @@ class FrontCamObjectDetectorNode():
                         z_raw = float(np.percentile(valid, self.depth_map_nearest_percentile))
                     
                     z_m = z_raw * depth_scale + depth_offset
-                    x_m = (bbox_cx - self.cam_cx) * z_m / fx_scaled
-                    y_m = (bbox_cy - self.cam_cy) * z_m / fy_scaled
+                    u = bbox_cx - self.cam_cx
+                    v = bbox_cy - self.cam_cy
+                    x_m, y_m = apply_snells_law_lateral(z_m, u, v, self.cam_fx, self.cam_fy)
                     cam_pos_vec = np.array([z_m, -x_m, -y_m])
                     
                     # Covariance from depth variance in ROI
@@ -1090,14 +1087,20 @@ class FrontCamObjectDetectorNode():
                 
                 # Only use known_height if the box is fully visible and the AUV is relatively flat
                 if not is_touching_top_down_border and abs(math.degrees(auv_pitch)) <= max_pitch and abs(math.degrees(auv_roll)) <= max_roll:
-                    # Use pinhole camera model: Z = f_y * real_height / pixel_height
+                    # Apply Snell's law to the vertical angle
                     h_m = self.known_heights[label_str]
-                    z_m = (fy_scaled * h_m) / bbox_h
-                    if z_m > 0:
-                        x_m = (bbox_cx - self.cam_cx) * z_m / fx_scaled
-                        y_m = (bbox_cy - self.cam_cy) * z_m / fy_scaled
-                        # We can still apply depth_offset linearly here since known_height has no rigid plane constraint
+                    tan_a_half = (bbox_h / 2.0) / self.cam_fy
+                    sin_a_half = tan_a_half / math.sqrt(1.0 + tan_a_half**2)
+                    sin_w_half = sin_a_half / 1.333
+                    tan_w_half = sin_w_half / math.sqrt(1.0 - sin_w_half**2)
+                    
+                    if tan_w_half > 0:
+                        z_m = h_m / (2.0 * tan_w_half)
                         z_m += depth_offset
+                        
+                        u = bbox_cx - self.cam_cx
+                        v = bbox_cy - self.cam_cy
+                        x_m, y_m = apply_snells_law_lateral(z_m, u, v, self.cam_fx, self.cam_fy)
                         cam_pos_vec = np.array([z_m, -x_m, -y_m])
                     
             # 1b. Ray-Plane Intersection
@@ -1122,13 +1125,13 @@ class FrontCamObjectDetectorNode():
                         
                     if px_y is not None:
                         # Ray generation in Standard ROS Frame (X forward, Y left, Z up).
-                        # Instead of using an _optical TF frame, we manually "twist" the optical ray
-                        # into a standard ROS ray. A point (u,v) with depth Z=1 in an image translates to:
-                        # X (Forward) = Depth (1.0)
-                        # Y (Left)    = -X_optical
-                        # Z (Up)      = -Y_optical
-                        # This allows us to safely multiply by the standard base T_W_C transform.
-                        v_c_ros = np.array([1.0, -(px_x - self.cam_cx)/fx_scaled, -(px_y - self.cam_cy)/fy_scaled, 0.0])
+                        u = px_x - self.cam_cx
+                        v = px_y - self.cam_cy
+                        
+                        # Apply Snell's Law to get true ray vector components at depth Z=1
+                        x_ray, y_ray = apply_snells_law_lateral(1.0, u, v, self.cam_fx, self.cam_fy)
+                        
+                        v_c_ros = np.array([1.0, -x_ray, -y_ray, 0.0])
                         
                         # Transform ray and camera origin to the world frame
                         v_w_ros = np.dot(T_W_C, v_c_ros)
