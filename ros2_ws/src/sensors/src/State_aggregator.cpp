@@ -82,18 +82,21 @@ namespace sensors
     // IMU callback
     void State_aggregator::imu_callback(const imu_msg::SharedPtr imu_in)
     {
+        // Update current orientation from IMU
         current_orientation_imu_ = imu_in->orientation;
     }
 
     // Depth callback
     void State_aggregator::depth_callback(const float64_msg::SharedPtr depth_in)
     {
+        // Update current depth from Depth sensor
         current_depth_ = depth_in->data;
     }
 
     // DVL position callback
     void State_aggregator::dvl_position_callback(const geometry_msgs::msg::PointStamped::SharedPtr position_in)
     {
+        // Update current position from DVL
         current_position_dvl_(0) = position_in->point.x;
         current_position_dvl_(1) = position_in->point.y;
         current_position_dvl_(2) = position_in->point.z;
@@ -102,6 +105,7 @@ namespace sensors
     // DVL velocity callback
     void State_aggregator::dvl_velocity_callback(const geometry_msgs::msg::TwistStamped::SharedPtr velocity_in)
     {
+        // Update current velocity from DVL
         current_velocity_(0) = velocity_in->twist.linear.x;
         current_velocity_(1) = velocity_in->twist.linear.y;
         current_velocity_(2) = velocity_in->twist.linear.z;

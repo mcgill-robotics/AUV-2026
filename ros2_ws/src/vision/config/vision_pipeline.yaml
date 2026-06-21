@@ -80,7 +80,7 @@ front_cam_object_detection:
     # Positional tracking and pose publication parameters
     pose_source: auv_pose # auv_pose uses state/pose for synchronized detection frames; zed_vio uses the front ZED VIO estimate
     auv_pose_topic: state/pose # official aggregated AUV pose used for synchronized detection frames when pose_source=auv_pose
-    enable_vio_pose: true # if false, skip ZED positional tracking and do not publish vision VIO pose/TF
+    enable_vio_pose: false # if false, skip ZED positional tracking and do not publish vision VIO pose/TF
     vio_pose_topic: /vision/vio_pose # optional topic for publishing the ZED VIO pose estimate; only used if pose.vio.enable is true
     broadcast_vio_tf: true # if true and pose.vio.enable is true, publish pool_link -> auv_vio_link TF for visualization/debugging
 

@@ -2,15 +2,17 @@ import math
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
 import tf2_ros
 import tf2_geometry_msgs
 from tf_transformations import quaternion_from_euler
 import yaml
 import os
 from ament_index_python.packages import get_package_share_directory
-from auv_msgs.msg import FoxgloveObject, FoxgloveObjectArray, VisionObjectArray
+from auv_msgs.msg import FoxgloveObject, FoxgloveObjectArray, VisionObjectArray, VisionDetectionFrame
 from foxglove_msgs.msg import (
     CubePrimitive,
+    SpherePrimitive,
     LinePrimitive,
     SceneEntity,
     SceneEntityDeletion,
@@ -18,7 +20,9 @@ from foxglove_msgs.msg import (
     TextPrimitive,
     ModelPrimitive,
 )
-from geometry_msgs.msg import PointStamped, Pose, Vector3, Point
+from geometry_msgs.msg import PointStamped, Pose, Vector3, Point, PoseStamped
+from tf_transformations import quaternion_matrix, concatenate_matrices, translation_matrix, euler_matrix, inverse_matrix, quaternion_from_matrix
+import numpy as np
 
 
 class SceneConverterNode(Node):
@@ -80,8 +84,9 @@ class SceneConverterNode(Node):
         self.declare_parameter('publish_auv_model', True)
         self.publish_auv_model = self.get_parameter('publish_auv_model').get_parameter_value().bool_value
         
-        # Load lane boundaries from vision_pipeline.yaml
+        # Load lane boundaries and extrinsics from vision_pipeline.yaml
         self.draw_lane_boundary = False
+        self.T_cam_to_auv = None
         try:
             vision_config_path = os.path.join(get_package_share_directory('vision'), 'config', 'vision_pipeline.yaml')
             with open(vision_config_path, 'r') as f:
@@ -95,8 +100,27 @@ class SceneConverterNode(Node):
                 self.lane_y_min = float(lane_config.get('y_min', -7.5))
                 self.lane_y_max = float(lane_config.get('y_max', 7.5))
                 self.get_logger().info(f"Lane boundaries enabled: X[{self.lane_x_min}, {self.lane_x_max}], Y[{self.lane_y_min}, {self.lane_y_max}]")
+                
+            # Load front cam extrinsics to manually transform raw detections
+            front_cam_config = vision_config.get('front_cam_object_detection', {}).get('ros__parameters', {})
+            import numpy as np
+            from tf_transformations import euler_matrix, translation_matrix, concatenate_matrices
+            
+            # auv -> camera_center
+            xyz_c = front_cam_config.get('auv_to_camera_center', {}).get('xyz', [0.148, 0.0, 0.0])
+            rpy_c = front_cam_config.get('auv_to_camera_center', {}).get('rpy', [0.0, 0.0, 0.0])
+            T_auv_to_center = concatenate_matrices(translation_matrix(xyz_c), euler_matrix(*rpy_c))
+            
+            # camera_center -> detection
+            xyz_d = front_cam_config.get('camera_center_to_detection', {}).get('xyz', [0.0, 0.06, 0.0])
+            rpy_d = front_cam_config.get('camera_center_to_detection', {}).get('rpy', [0.0, 0.0, 0.0])
+            T_center_to_det = concatenate_matrices(translation_matrix(xyz_d), euler_matrix(*rpy_d))
+            
+            T_auv_to_cam = concatenate_matrices(T_auv_to_center, T_center_to_det)
+            self.T_cam_to_auv = T_auv_to_cam
+            
         except Exception as e:
-            self.get_logger().warning(f"Could not load lane boundaries from vision_pipeline.yaml: {e}")
+            self.get_logger().warning(f"Could not load config from vision_pipeline.yaml: {e}")
 
         # Subscriptions
         self.subscription = self.create_subscription(
@@ -114,21 +138,123 @@ class SceneConverterNode(Node):
             '/vision/foxglove_table',
             10)
 
-        # TF2 listener for pool_link -> auv_link transform (published by state_aggregator)
-        self.tf_buffer = tf2_ros.Buffer()
-        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
+        # Raw Detections Sub/Pub
+        self.raw_det_subscription = self.create_subscription(
+            VisionDetectionFrame,
+            '/vision/front_cam/detection_frame',
+            self.raw_detection_callback,
+            10)
+        
+        self.raw_scene_publisher = self.create_publisher(SceneUpdate, '/foxglove/front_cam_detections', 10)
+
+        # TF2 listener replaced with direct subscription to /state/pose for lower latency
+        self.latest_auv_pose = None
+        self.pose_subscription = self.create_subscription(
+            PoseStamped,
+            '/state/pose',
+            self.pose_callback,
+            qos_profile_sensor_data)
         
         self.get_logger().info(f"Vision to Foxglove converter started.")
         self.get_logger().info(f"Subscribed to  : {input_topic}")
         self.get_logger().info(f"Publishing to  : /foxglove/scene_objects, /vision/foxglove_table")
         self.get_logger().info(f"Using frame_id : {self.frame_id}")
 
-    def _transform_point_to_auv(self, position, transform):
-        """Transform a point from pool_link frame to auv_link frame using tf2."""
-        point_stamped = PointStamped()
-        point_stamped.point = position
-        transformed = tf2_geometry_msgs.do_transform_point(point_stamped, transform)
-        return transformed.point
+    def pose_callback(self, msg):
+        self.latest_auv_pose = msg.pose
+
+    def _get_T_world_to_cam(self, auv_pose):
+        if self.T_cam_to_auv is None or auv_pose is None:
+            return None
+        
+        # AUV pose in world (pool_link)
+        pos = auv_pose.position
+        quat = auv_pose.orientation
+        
+        # Check if quaternion is uninitialized (all zeros, e.g. from an old rosbag)
+        if quat.x == 0.0 and quat.y == 0.0 and quat.z == 0.0 and quat.w == 0.0:
+            return None
+            
+        T_world_to_auv = quaternion_matrix([quat.x, quat.y, quat.z, quat.w])
+        T_world_to_auv[0:3, 3] = [pos.x, pos.y, pos.z]
+        
+        T_world_to_cam = concatenate_matrices(T_world_to_auv, self.T_cam_to_auv)
+        return T_world_to_cam
+
+    def raw_detection_callback(self, msg):
+        scene_update = SceneUpdate()
+        
+        # Clear previous raw detections
+        wipe_cmd = SceneEntityDeletion()
+        wipe_cmd.timestamp = msg.header.stamp
+        wipe_cmd.type = SceneEntityDeletion().ALL
+        scene_update.deletions.append(wipe_cmd)
+        
+        frame_id = self.frame_id # Output in global frame
+        
+        # Calculate T_world_to_cam to place detections in the global map
+        T_W_C = self._get_T_world_to_cam(msg.auv_pose.pose)
+        
+        for i, det in enumerate(msg.detections):
+            entity = SceneEntity()
+            entity.id = f"raw_det_{det.label}_{i}"
+            entity.frame_id = frame_id
+            entity.timestamp = msg.header.stamp
+            
+            # Transform position to global frame
+            cam_p = det.pose_camera.pose.position
+            cam_pos_vec = np.array([cam_p.x, cam_p.y, cam_p.z, 1.0])
+            
+            if T_W_C is not None:
+                world_pos_vec = np.dot(T_W_C, cam_pos_vec)
+                global_pose = Pose()
+                global_pose.position.x = float(world_pos_vec[0])
+                global_pose.position.y = float(world_pos_vec[1])
+                global_pose.position.z = float(world_pos_vec[2])
+                global_pose.orientation = det.pose_camera.pose.orientation
+                global_pose.orientation.w = 1.0
+            else:
+                # Fallback to local frame if auv_pose is missing/uninitialized
+                entity.frame_id = "front_cam_link"
+                global_pose = det.pose_camera.pose
+                
+            color_map = self.CATEGORY_COLORS.get(det.label, {'r': 1.0, 'g': 0.0, 'b': 1.0, 'a': 0.8})
+            
+            # Sphere for the detection
+            sphere = SpherePrimitive()
+            sphere.pose = global_pose
+            sphere.size = Vector3(x=0.15, y=0.15, z=0.15)
+            
+            sphere.color.r = color_map['r']
+            sphere.color.g = color_map['g']
+            sphere.color.b = color_map['b']
+            sphere.color.a = color_map['a'] 
+            entity.spheres.append(sphere)
+            
+            # Text label
+            text_label = TextPrimitive()
+            text_pose = Pose()
+            text_pose.position.x = global_pose.position.x
+            text_pose.position.y = global_pose.position.y
+            text_pose.position.z = global_pose.position.z + 0.15
+            text_pose.orientation = global_pose.orientation
+            
+            text_label.pose = text_pose
+            text_label.billboard = True
+            text_label.font_size = 0.1
+            text_label.scale_invariant = False
+            
+            text_label.color.r = 1.0
+            text_label.color.g = 1.0
+            text_label.color.b = 1.0
+            text_label.color.a = 0.6
+            
+            text_label.text = f"{det.label} ({int(det.confidence*100)}%)"
+            entity.texts.append(text_label)
+            
+            scene_update.entities.append(entity)
+            
+        self.raw_scene_publisher.publish(scene_update)
 
     def listener_callback(self, msg):
         scene_update = SceneUpdate()
@@ -144,16 +270,14 @@ class SceneConverterNode(Node):
         
         frame_id = msg.header.frame_id if msg.header.frame_id else self.frame_id
         
-        # Lookup transform from pool_link -> auv_link (published by state_aggregator in sensors)
-        transform = None
-        try:
-            transform = self.tf_buffer.lookup_transform(
-                self.auv_frame_id,
-                frame_id,
-                rclpy.time.Time()
-            )
-        except tf2_ros.TransformException:
-            pass
+        # Calculate T_world_to_auv and its inverse to find relative distance
+        T_auv_to_world_inv = None
+        if self.latest_auv_pose is not None:
+            pos = self.latest_auv_pose.position
+            quat = self.latest_auv_pose.orientation
+            T_world_to_auv = quaternion_matrix([quat.x, quat.y, quat.z, quat.w])
+            T_world_to_auv[0:3, 3] = [pos.x, pos.y, pos.z]
+            T_auv_to_world_inv = inverse_matrix(T_world_to_auv)
 
         # Track IDs for this frame
         current_frame_ids = set()
@@ -168,11 +292,12 @@ class SceneConverterNode(Node):
             fobj.y_abs = float(round(obj.pose.position.y, 2))
             fobj.z_abs = float(round(obj.pose.position.z, 2))
             
-            if transform is not None:
-                p_rel = self._transform_point_to_auv(obj.pose.position, transform)
-                fobj.x_rel = float(round(p_rel.x, 2))
-                fobj.y_rel = float(round(p_rel.y, 2))
-                fobj.z_rel = float(round(p_rel.z, 2))
+            if T_auv_to_world_inv is not None:
+                p_world = np.array([obj.pose.position.x, obj.pose.position.y, obj.pose.position.z, 1.0])
+                p_rel = np.dot(T_auv_to_world_inv, p_world)
+                fobj.x_rel = float(round(p_rel[0], 2))
+                fobj.y_rel = float(round(p_rel[1], 2))
+                fobj.z_rel = float(round(p_rel[2], 2))
             else:
                 fobj.x_rel = float(round(fobj.x_abs, 2))
                 fobj.y_rel = float(round(fobj.y_abs, 2))
@@ -327,22 +452,32 @@ class SceneConverterNode(Node):
             auv_pose.orientation.z = q[2]
             auv_pose.orientation.w = q[3]
 
-            if transform is not None:
-                try:
-                    # Lookup transform from auv_link -> pool_link
-                    auv_to_pool_tf = self.tf_buffer.lookup_transform(
-                        frame_id,          # Target (pool_link)
-                        self.auv_frame_id, # Source (auv_link)
-                        rclpy.time.Time()
-                    )
-                    
-                    # Transform from auv_link to pool_link
-                    transformed_pose = tf2_geometry_msgs.do_transform_pose(auv_pose, auv_to_pool_tf)
-                    auv_model.pose = transformed_pose
-                    auv_entity.frame_id = frame_id
-                except tf2_ros.TransformException:
-                    auv_model.pose = auv_pose
-                    auv_entity.frame_id = self.auv_frame_id
+            if self.latest_auv_pose is not None:
+                # AUV in World
+                quat_auv = self.latest_auv_pose.orientation
+                T_world_to_auv = quaternion_matrix([quat_auv.x, quat_auv.y, quat_auv.z, quat_auv.w])
+                T_world_to_auv[0:3, 3] = [self.latest_auv_pose.position.x, self.latest_auv_pose.position.y, self.latest_auv_pose.position.z]
+                
+                # Model in AUV
+                T_auv_to_model = quaternion_matrix([q[0], q[1], q[2], q[3]])
+                T_auv_to_model[0:3, 3] = [self.auv_model_x, self.auv_model_y, self.auv_model_z]
+                
+                # Model in World
+                T_world_to_model = concatenate_matrices(T_world_to_auv, T_auv_to_model)
+                
+                global_pose = Pose()
+                global_pose.position.x = float(T_world_to_model[0, 3])
+                global_pose.position.y = float(T_world_to_model[1, 3])
+                global_pose.position.z = float(T_world_to_model[2, 3])
+                
+                q_world = quaternion_from_matrix(T_world_to_model)
+                global_pose.orientation.x = float(q_world[0])
+                global_pose.orientation.y = float(q_world[1])
+                global_pose.orientation.z = float(q_world[2])
+                global_pose.orientation.w = float(q_world[3])
+                
+                auv_model.pose = global_pose
+                auv_entity.frame_id = frame_id
             else:
                 auv_model.pose = auv_pose
                 auv_entity.frame_id = self.auv_frame_id
