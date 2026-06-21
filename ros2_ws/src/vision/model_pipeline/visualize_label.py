@@ -8,6 +8,7 @@ Usage:
     python3 visualize_label.py --folder data/processed/test/images
     python3 visualize_label.py --folder /path/to/images --model-type rfdetr --model best_rf_detr_small_model.pth
     python3 visualize_label.py --folder data/raw_import/images --from-label
+    python3 visualize_label.py --folder data/raw_import/images --from-label --task segment
 
 Controls:
     - Press any key to load the next random image
@@ -24,7 +25,7 @@ from ultralytics import YOLO
 import numpy as np
 
 import supervision as sv
-from rfdetr import RFDETRSmall
+from rfdetr import RFDETRSmall, RFDETRSegSmall
 from PIL import Image as PILImage
 
 # BASE DIR for paths
@@ -69,6 +70,13 @@ def main():
         help="Type of model to use (yolo or rfdetr)"
     )
     parser.add_argument(
+        "--task",
+        type=str,
+        choices=["detect", "segment"],
+        default="detect",
+        help="Task type: detect (bounding boxes) or segment (polygons)"
+    )
+    parser.add_argument(
         "--model", "-m",
         type=str,
         default=str(BASE_DIR / "best_yolov11s_model.pt"),
@@ -99,7 +107,10 @@ def main():
         class_names = load_classes()
     else:
         if args.model_type == 'rfdetr':
-            model = RFDETRSmall(pretrain_weights=args.model)
+            if args.task == "segment":
+                model = RFDETRSegSmall(pretrain_weights=args.model)
+            else:
+                model = RFDETRSmall(pretrain_weights=args.model)
             class_names = load_classes()
         else:
             model = YOLO(args.model)
@@ -107,6 +118,8 @@ def main():
         
     box_annotator = sv.BoxAnnotator(thickness=2)
     label_annotator = sv.LabelAnnotator(smart_position=True, text_thickness=1, text_scale=0.3, text_padding=5)
+    mask_annotator = sv.MaskAnnotator()
+    polygon_annotator = sv.PolygonAnnotator(thickness=2)
 
     print(f"Loaded {args.model_type} model: {args.model}")
     
@@ -126,6 +139,7 @@ def main():
 
         # Load and run inference
         img = cv2.imread(str(img_path))
+        h, w = img.shape[:2]
         
         if args.from_label:
             # locate corresponding label file
@@ -155,11 +169,11 @@ def main():
                     class_id=np.empty((0,), dtype=int)
                 )
             else:
-                # parse YOLO label file (class x_center y_center width height) normalized
-                h, w = img.shape[:2]
                 boxes = []
                 confidences = []
                 class_ids = []
+                masks = []
+                
                 with open(label_path, 'r', encoding='utf-8') as lf:
                     for line in lf:
                         parts = line.strip().split()
@@ -167,28 +181,62 @@ def main():
                             continue
                         try:
                             cls = int(parts[0])
-                            x_c = float(parts[1]) * w
-                            y_c = float(parts[2]) * h
-                            bw = float(parts[3]) * w
-                            bh = float(parts[4]) * h
+                            
+                            if args.task == "detect":
+                                if len(parts) >= 5:
+                                    x_c = float(parts[1]) * w
+                                    y_c = float(parts[2]) * h
+                                    bw = float(parts[3]) * w
+                                    bh = float(parts[4]) * h
+
+                                    x1 = x_c - bw / 2.0
+                                    y1 = y_c - bh / 2.0
+                                    x2 = x_c + bw / 2.0
+                                    y2 = y_c + bh / 2.0
+                                    boxes.append([x1, y1, x2, y2])
+                                    confidences.append(1.0)
+                                    class_ids.append(cls)
+                                    
+                            elif args.task == "segment":
+                                if len(parts) >= 7:
+                                    coords = [float(x) for x in parts[1:]]
+                                    pts = []
+                                    for i in range(0, len(coords), 2):
+                                        pts.append([coords[i]*w, coords[i+1]*h])
+                                        
+                                    pts_arr = np.array(pts, dtype=np.int32)
+                                    
+                                    # Create bbox from polygon
+                                    x_min, y_min = np.min(pts_arr, axis=0)
+                                    x_max, y_max = np.max(pts_arr, axis=0)
+                                    boxes.append([x_min, y_min, x_max, y_max])
+                                    
+                                    # Create boolean mask
+                                    mask = np.zeros((h, w), dtype=np.uint8)
+                                    cv2.fillPoly(mask, [pts_arr], 1)
+                                    masks.append(mask.astype(bool))
+                                    
+                                    confidences.append(1.0)
+                                    class_ids.append(cls)
+                                    
                         except Exception:
                             print(f"Skipping invalid label line in {label_path}: {line.strip()}")
                             continue
 
-                        x1 = x_c - bw / 2.0
-                        y1 = y_c - bh / 2.0
-                        x2 = x_c + bw / 2.0
-                        y2 = y_c + bh / 2.0
-                        boxes.append([x1, y1, x2, y2])
-                        confidences.append(1.0)
-                        class_ids.append(cls)
-
                 if boxes:
-                    detections = sv.Detections(
-                        xyxy=np.array(boxes),
-                        confidence=np.array(confidences),
-                        class_id=np.array(class_ids, dtype=int),
-                    )
+                    if args.task == "segment" and masks:
+                        detections = sv.Detections(
+                            xyxy=np.array(boxes),
+                            mask=np.array(masks),
+                            confidence=np.array(confidences),
+                            class_id=np.array(class_ids, dtype=int),
+                        )
+                    else:
+                        detections = sv.Detections(
+                            xyxy=np.array(boxes),
+                            confidence=np.array(confidences),
+                            class_id=np.array(class_ids, dtype=int),
+                        )
                 else:
                     detections = sv.Detections(
                         xyxy=np.empty((0, 4)),
@@ -207,7 +255,13 @@ def main():
             f"{class_names[class_id] if class_id < len(class_names) else str(class_id)} {confidence:.2f}"
             for class_id, confidence in zip(detections.class_id, detections.confidence)
         ]
-        annotated = box_annotator.annotate(scene=annotated, detections=detections)
+        
+        if args.task == "segment":
+            annotated = mask_annotator.annotate(scene=annotated, detections=detections)
+            annotated = polygon_annotator.annotate(scene=annotated, detections=detections)
+        else:
+            annotated = box_annotator.annotate(scene=annotated, detections=detections)
+            
         annotated = label_annotator.annotate(scene=annotated, detections=detections, labels=labels)
 
         # Show

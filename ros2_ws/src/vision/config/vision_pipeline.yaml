@@ -224,7 +224,7 @@ down_cam_object_detection:
     auto_focus: false                    # default true; when true, focus_absolute is ignored
     focus_absolute: 7                    # [0..21]    only used when auto_focus is false; default 16
     
-    model_relative_path: models/synthetic_down_cam_rfdetr_onnx
+    model_relative_path: models/synthetic_down_cam_rfdetr_seg_onnx
     # model_relative_path: models/real_down_cam_rfdetr_onnx
     model_detection_threshold: 0.60
     # WARNING: These class names MUST be manually maintained when changing models to have new classes. 
@@ -233,16 +233,14 @@ down_cam_object_detection:
     model_class_names:
       - "blood"
       - "fire"
-      - "lane_marker"
-      - "pill"
-      - "nutbolt"
-      - "electric"
-      - "bandaid"
       - "table"
-      - "warning"
+      - "lane_marker"
       - "redcross_helmet"
-      - "bin_structure"
-      - "bin"
+      - "warning"
+      - "bandaid"
+      - "electric"
+      - "nutbolt"
+      - "pill"
     queue_size: 10
     
     publish_annotated: true

@@ -1,0 +1,5 @@
+{
+    "model_architecture": "yolov11",
+    "task_type": "instance-segmentation",
+    "backend_type": "onnx"
+}
