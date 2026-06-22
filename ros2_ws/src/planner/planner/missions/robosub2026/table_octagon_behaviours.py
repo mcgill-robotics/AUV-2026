@@ -17,13 +17,13 @@ class GoAboveTable(py_trees.composites.Sequence):
 
         # Initialize the expected table items, this list will get truncated as objects are placed
         # in their respective bins
-        self.blackboard.missions.octagon.expected_table_items = ["table", "pill", "nutbolt", "electric", "bandaid"]
+        self.blackboard.missions.octagon.expected_table_items = ["table", "pill", "nutbolt", "electric", "bandaid", "warning", "redcross_helmet"]
 
         # 1. Go to a set depth to view the table better. The table is best seen at a shallow depth, since we get to
         # see the top of the table, whereas at a lower depth there is a lot of empty space
         go_shallow_depth = BasicActionBehaviour(
             name="Octagon: Go Shallow Depth",
-            goal=set_depth(z=-0.3, tolerance=position_tolerance, hold_time=hold_time, timeout=timeout)
+            goal=set_depth(z=-0.4, tolerance=position_tolerance, hold_time=hold_time, timeout=timeout)
         )
 
         # 2. Navigate to Octagon by looking for the table 
@@ -32,7 +32,7 @@ class GoAboveTable(py_trees.composites.Sequence):
             num_steps=5,
             step_timeout=0.5)
         
-        # 3. Navigate a meter away from the table to get a better view of the table
+        # 3. Navigate 4 meters away from the table to get a better view of the table
         # With the better view, we get more reliable depth readings of the table, which
         # are needed to go right above it
         go_to_table_1m_away = vision_behaviours.GoNearObject(
@@ -43,7 +43,7 @@ class GoAboveTable(py_trees.composites.Sequence):
             hold_time=3.0
         ) 
 
-        # 3. Navigate a meter away from the table to get a better view of the table
+        # 4. Navigate 2 meters away from the table to get a better view of the table
         # With the better view, we get more reliable depth readings of the table, which
         # are needed to go right above it
         go_to_table2 = vision_behaviours.GoNearObject(
@@ -59,16 +59,20 @@ class GoAboveTable(py_trees.composites.Sequence):
             tolerance_meters=0.2,
             height_offset=None,
             hold_time=3.0
-        )  
+        ) 
 
-        #4 Center around that the table is underneath Dougie
-        alignTable = AlignWithTable()
+        #5 Center around that the table is underneath Dougie
+        align_table = AlignWithTable()
 
-        #5 Surface octagon
+        #6 Surface octagon
         surface_octagon = BasicActionBehaviour(
             name="Surface in Octagon", 
-            goal=set_depth(z=0.0, tolerance=position_tolerance, hold_time=hold_time, timeout=timeout)
+            goal=set_depth(z=-0.1, tolerance=0.1, hold_time=3.0, timeout=timeout)
         )
+
+
+        #7 Scan octagon for images
+        scan_images = ScanOctagonImages(num_steps_per_side=5)
 
         self.add_children([
             go_shallow_depth,
@@ -76,8 +80,9 @@ class GoAboveTable(py_trees.composites.Sequence):
             go_to_table_1m_away,
             go_to_table2,
             go_table,
-            alignTable,
-            surface_octagon
+            align_table,
+            surface_octagon,
+            scan_images,
         ])
 
 
@@ -246,13 +251,16 @@ class AlignWithTable(py_trees.composites.Selector):
         ])
 
 class CheckAboveTable(py_trees.behaviour.Behaviour):
-    def __init__(self, name="Octagon: Check Above Table", number_of_items_to_check: int = 1, discovery_distance: float = 0.3):
+    def __init__(self, name="Octagon: Check Above Table", number_of_items_to_check: int = 1, target_consecutive_ticks_full_set_of_items: int = 10):
         super().__init__(name)
         self.blackboard = self.attach_blackboard_client(name="CheckAboveTable Blackboard")
         self.number_of_items_to_check = number_of_items_to_check
-        self.discovery_distance = discovery_distance
         self.table = False
         self.pool_depth = 2.1 
+        self.known_height_to_pill = 0.745625
+        self.known_pill_area = 16900 # Pixel Area
+        self.consecutive_ticks_full_set_of_items = 0
+        self.target_consecutive_ticks_full_set_of_items = 10
 
     def setup(self, **kwargs):
         self.node = kwargs['node']
@@ -284,7 +292,7 @@ class CheckAboveTable(py_trees.behaviour.Behaviour):
                 if hypothesis.class_id == "table":
                     self.blackboard.mission.octagon_task.view_table = detection # Extract the table since needed for alignment
                 elif hypothesis.class_id == "pill":
-                    potential_pill_detection = detection # Extract the table since needed for alignment
+                    potential_pill_detection = detection # Extract the pill since its BB can help us determine height
                 self.seen_items.append(hypothesis.class_id)
 
         seen_items_str = ""
@@ -296,11 +304,18 @@ class CheckAboveTable(py_trees.behaviour.Behaviour):
         if set(self.blackboard.missions.octagon.expected_table_items).issubset(self.seen_items):
             area_pill = potential_pill_detection.bbox.size_x * potential_pill_detection.bbox.size_y
             
-            # From inverse proportionality with area and distance 
+            # From inverse proportionality with area and distance / TODO: Replace with DVL transducer
+            # beams for altitude because turns out this inverse prop. thing stinks some hot cheeks
             height_to_pill = self.known_height_to_pill * math.sqrt(self.known_pill_area/area_pill)
             self.blackboard.mission.octagon_task.height_table = self.pool_depth - height_to_pill - (-1 * self.blackboard.sensors.pose.pose.position.z)
-            return py_trees.common.Status.SUCCESS
+            
+            self.consecutive_ticks_full_set_of_items += 1
+            if self.consecutive_ticks_full_set_of_items >= self.target_consecutive_ticks_full_set_of_items:  
+                return py_trees.common.Status.SUCCESS
+            else:
+                return py_trees.common.Status.RUNNING
         else:
+            self.consecutive_ticks_full_set_of_items = 0
             return py_trees.common.Status.FAILURE
 
 class LoopTableAlignCheck(py_trees.composites.Sequence):
@@ -345,6 +360,7 @@ class CenterTable(py_trees.behaviour.Behaviour):
         self.blackboard.register_key('/vision/down_cam/detections', access=py_trees.common.Access.READ)
         self.blackboard.register_key('/sensors/pose', access=py_trees.common.Access.READ)
         self.blackboard.register_key('/mission/octagon_task/view_table', access=py_trees.common.Access.READ)
+        self.blackboard.register_key('/mission/octagon_task/height_table', access=py_trees.common.Access.READ)
         
     def initialise(self) -> None:
         self.action_status = None
@@ -357,11 +373,9 @@ class CenterTable(py_trees.behaviour.Behaviour):
     
     def on_server_goal_result(self, goal_success: bool, message: str) -> None:
         if goal_success:
-            # Naive simple controller to get table in the middle 
-            self.discovery_distance = 0.8 * self.discovery_distance
             self.action_status = ActionStatus.SUCCEEDED
         else:
-            self.node.get_logger().error(f"[{self.name}] Failed to go above closest bin. {message}")
+            self.node.get_logger().error(f"[{self.name}] Failed to go center table. {message}")
             self.action_status = ActionStatus.FAILED
             
     def update(self) -> py_trees.common.Status:
@@ -369,17 +383,12 @@ class CenterTable(py_trees.behaviour.Behaviour):
             self.node.get_logger().error("Blackboard down cam detection key is not set up or detections is None")
             return py_trees.common.Status.FAILURE
         
-        self.node.get_logger().info("PASS1")
-        
         if self.action_status == ActionStatus.SUCCEEDED:
-            self.node.get_logger().info("PASS1.3")
             return py_trees.common.Status.SUCCESS
     
         if self.action_status == ActionStatus.PENDING:
             self.node.get_logger().info("PASS1.5")
             return py_trees.common.Status.RUNNING
-        
-        self.node.get_logger().info("PASS2")
         
         table = self.blackboard.mission.octagon_task.view_table
         # Find the general direction of the table by looking at which corner the table BB is in.
@@ -393,44 +402,72 @@ class CenterTable(py_trees.behaviour.Behaviour):
         y_min = cy - h / 2.0
         y_max = cy + h / 2.0
 
-        x_angle = math.radians(cx / self.camera_width * self.downcam_fov_horizontal)
-        y_angle = math.radians(cy / self.camera_height * self.downcam_fov_vertical)
+        x_angle = math.radians( (cx - self.camera_width/2) / self.camera_width * self.downcam_fov_horizontal)
+        y_angle = math.radians( (cy - self.camera_height/2) / self.camera_height * self.downcam_fov_vertical)
 
         height_to_table = 2.1 - (-1 * self.blackboard.sensors.pose.pose.position.z + self.table_avg_height)
         self.node.get_logger().info("sup")
-        self.node.get_logger().info(f"{x_min}, {x_max}, {y_min}, {y_max}")
-        # if x_max >= self.camera_width and y_max >= self.camera_height:
-        #     self.node.get_logger().info("Table is in bottom right corner, moving down and right")
-        #     # move top right
-        #     x_angle = self.downcam_fov_horizontal/2
-        #     y_angle = self.downcam_fov_vertical/2
-        # elif x_max >= self.camera_width and y_min <= 0:
-        #     self.node.get_logger().info("Table is in top right corner, moving up and right")
-        #     # move bottom right
-        #     x_angle = self.downcam_fov_horizontal/2
-        #     y_angle = -self.downcam_fov_vertical/2
-
-        # elif x_min <= 0 and y_max >= self.camera_height:
-        #     self.node.get_logger().info("Table is in bottom left corner, moving down and left")
-        #     # move top left
-        #     x_angle = -self.downcam_fov_horizontal/2
-        #     y_angle = self.downcam_fov_vertical/2
-        # elif x_min <= 0 and y_min <= 0:
-        #     self.node.get_logger().info("Table is in top left corner, moving up and left")
-        #     # move bottom left
-        #     x_angle = -self.downcam_fov_horizontal/2
-        #     y_angle = -self.downcam_fov_vertical/2
         
-        x = -math.tan(x_angle) * height_to_table/2
-        y = math.tan(y_angle) * height_to_table/2
-
-        goal = move_robot_centric(forward=x, sway=y, heave=-1 * self.blackboard.sensors.pose.pose.position.z - 0.1, hold_time=3.0)
+        x = math.tan(x_angle) * height_to_table
+        y = math.tan(y_angle) * height_to_table
+        self.node.get_logger().info(f"forward: {-y}, sway: {-x}")
+        goal = move_robot_centric(forward=-y, sway=-x, heave=-1 * self.blackboard.sensors.pose.pose.position.z - 0.1, tolerance=0.1, hold_time=3.0)
 
         self.navigation_client.send_navigation_goal(goal, self.name, custom_goal_response=self.on_server_goal_response, 
                 custom_goal_result=self.on_server_goal_result)
         self.action_status = ActionStatus.PENDING
 
         return py_trees.common.Status.RUNNING
+
+class ScanOctagonImages(py_trees.composites.Sequence):
+    def __init__(self, num_steps_per_side=5):
+        super().__init__("Scan Octagon Images", memory=True)
+
+        # 1. Scan a 360 deg yaw to find images
+        scan_for_objects = vision_behaviours.ScanBehaviour(turn_hold_time_s=2.0, scan_angle_deg=180, num_steps_per_side=num_steps_per_side)
+
+        # 2. Verify all images are present and log angles to BB
+        verify_images = VerifyOctagonImages()
+
+        self.add_children([
+            scan_for_objects,
+            verify_images
+        ])
+    
+class VerifyOctagonImages(py_trees.behaviour.Behaviour):
+    def __init__(self, name="Verify octagon images", octagon_images=["compass", "tools", "lifebuoy", "sos"]):
+        super().__init__(name)
+        self.blackboard = self.attach_blackboard_client(name="CheckAboveTable Blackboard")
+        self.octagon_images = octagon_images
+
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+
+        self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/mission/octagon_task/octagon_images", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key="/mission/octagon_task/pose_at_scan_image", access=py_trees.common.Access.WRITE)
+
+    def update(self):
+        if hasattr(self.blackboard, 'vision') and self.blackboard.vision.object_map is None:
+            return py_trees.common.Status.FAILURE
+        
+        auv_pose = self.blackboard.sensors.pose.pose.position
+        self.blackboard.mission.octagon_task.pose_at_scan_image = auv_pose
+        self.blackboard.mission.octagon_task.octagon_images = {}
+
+        count_object = len(self.octagon_images)
+        for obj in self.blackboard.vision.object_map.array:
+            self.node.get_logger().info(f"{obj.label}")
+            if obj.label in self.octagon_images:
+                yaw_angle_rad = math.atan2(obj.pose.position.y - auv_pose.y, obj.pose.position.x - auv_pose.x)
+                self.blackboard.mission.octagon_task.octagon_images[obj.label] = yaw_angle_rad
+                count_object -= 1
+        self.node.get_logger().info(f"{self.blackboard.mission.octagon_task.octagon_images}")
+
+        if count_object != 0:
+            return py_trees.common.Status.FAILURE
+        return py_trees.common.Status.SUCCESS
 
 # ---------------------------------------------------------------------------------------------------------------------
 # ---------------------------------------------------------------------------------------------------------------------
@@ -450,6 +487,7 @@ class DropItemInBasket(py_trees.composites.Sequence):
         )
 
         # 2. Align properly on object Center (make this a 2 parter, one for rotation, useful for rectangle items, one for translation)
+        go_object = GoObject(item_to_grab)
 
         # 3. Grab object and surface (verify that the object is still in grabber)
 
@@ -460,17 +498,75 @@ class DropItemInBasket(py_trees.composites.Sequence):
         # 6. Go back to center table and surface
 
 
-class DropItemsInBasket(py_trees.behaviour.Behaviour):
-    def __init__(self, name="Drop Item in Basket", item_to_grab="pill"):
-        super().__init__(name)
-        self.blackboard = self.attach_blackboard_client(name="Drop Item in Basket BB")
+class GoObject(py_trees.behaviour.Behaviour):
+    def __init__(self, item_to_grab):
+        super().__init__(f"Go Item Object: {item_to_grab}")
+        self.blackboard = self.attach_blackboard_client(name="CheckAboveTable Blackboard")
+        self.camera_width = 640
+        self.camera_height = 480
+        self.downcam_fov_horizontal =  49.7        # (deg) Horizontal FOV of down cam while in water
+        self.downcam_fov_vertical = 38.2          # (deg) Vertical FOV of down cam while in water
+        self.table_avg_height = 0.75
+        self.action_status = None 
         self.item_to_grab = item_to_grab
+        self.rotate_for_specific_items = True
 
-    def setup(self, **kwargs):
+    def setup(self, kwargs):
         self.node = kwargs['node']
         self.navigation_client = kwargs['shared_nav_client']
-        self.navigation_client.client_wait_for_server(timeout_sec=5.0)
 
-        self.blackboard.register_key('/gate/selected_role', access=py_trees.common.Access.READ)
+        self.blackboard.register_key('/vision/down_cam/detections', access=py_trees.common.Access.READ)
+        self.blackboard.register_key('/sensors/pose', access=py_trees.common.Access.READ)
+
+    def update(self):
+        if self.action_status == ActionStatus.SUCCEEDED:
+            return py_trees.common.Status.SUCCESS
+    
+        if self.action_status == ActionStatus.PENDING:
+            return py_trees.common.Status.RUNNING
+        
+        if self.action_status == ActionStatus.FAILED:
+            return py_trees.common.Status.FAILURE
+        
+        need_to_rotate = False
+        desired_detection = None
+        if self.item_to_grab in ["bandaid", "electric"] and self.rotate_for_specific_items:
+            need_to_rotate = True
+
+        # Get the detection and go to it 
+        for detection in self.blackboard.vision.down_cam.detections.detections:
+            hypothesis = detection.results[0].hypothesis
+            if hypothesis.class_id == self.item_to_grab:
+                desired_detection = detection
+                break 
+                
+        # Find the general direction of the table by looking at which corner the table BB is in.
+        # Move in that general direction to try to see more of it.
+        cx = desired_detection.bbox.center.position.x
+        cy = desired_detection.bbox.center.position.y
+        w = desired_detection.bbox.size_x
+        h = desired_detection.bbox.size_y
+
+        # TODO: Make a check (maybe other behaviour) to move until center of BB is fully in frame
+        x_min = cx - w / 2.0
+        x_max = cx + w / 2.0
+        y_min = cy - h / 2.0
+        y_max = cy + h / 2.0
+
+        x_angle = math.radians( (cx - self.camera_width/2) / self.camera_width * self.downcam_fov_horizontal)
+        y_angle = math.radians( (cy - self.camera_height/2) / self.camera_height * self.downcam_fov_vertical)
+
+        height_to_table = self.blackboard.mission.octagon_task.height_table
+        
+        x = math.tan(x_angle) * height_to_table/2
+        y = math.tan(y_angle) * height_to_table/2
+
+        goal = move_robot_centric(forward=-x, sway=-y, heave=-height_to_table + 0.1, hold_time=3.0)
+
+        self.navigation_client.send_navigation_goal(goal, self.name, custom_goal_response=self.on_server_goal_response, 
+                custom_goal_result=self.on_server_goal_result)
+        self.action_status = ActionStatus.PENDING
+        return py_trees.common.Status.RUNNING
+    
 
 

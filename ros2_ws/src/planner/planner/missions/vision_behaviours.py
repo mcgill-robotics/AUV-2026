@@ -241,6 +241,7 @@ class ScanBehaviour(py_trees.behaviour.Behaviour):
         turn_hold_time_s: float = 0.1,                   # (s) hold time before turn SUCCESS
         turn_timeout_s: float = 30.0,                    # (s) timeout before turn FAILURE
         name="Scan Pipes",
+        num_steps_per_side: int = 1                      # Number of steps to scan, avoid big swings
     ):
         super().__init__(name)
         self.scan_angle_rad = math.radians(scan_angle_deg)
@@ -248,6 +249,7 @@ class ScanBehaviour(py_trees.behaviour.Behaviour):
         self.angular_tolerance_rad = angular_tolerance_rad
         self.turn_hold_time_s = turn_hold_time_s
         self.turn_timeout_s = turn_timeout_s
+        self.num_steps_per_side = num_steps_per_side
 
         self.blackboard = self.attach_blackboard_client(name=self.name)
 
@@ -276,12 +278,22 @@ class ScanBehaviour(py_trees.behaviour.Behaviour):
 
     def _scan_offsets(self):
         """Returns the sequence of yaw offsets from center to execute.
-        Pattern: left -> right -> center (3 moves covering the full scan range).
+        Pattern: left -> right -> center (3 general moves covering the full scan range).
         Convention: +yaw = counterclockwise (left), -yaw = clockwise (right).
         """
+        ccw_yaw_targets = []
+        cw_yaw_targets = []
+
+        if self.num_steps_per_side <= 0:
+            self.node.get_logger().warn(f"Step number per side invalid: {self.num_steps_per_side}")
+
+        for i in range(self.num_steps_per_side + 1, 1, -1):
+            ccw_yaw_targets.append(+self.scan_angle_rad/i)
+            cw_yaw_targets.append(-self.scan_angle_rad + self.scan_angle_rad/i)
+
         return [
-            +self.scan_angle_rad,   # rotate left (counterclockwise)
-            -self.scan_angle_rad,   # rotate right (sweeps through center)
+            *ccw_yaw_targets,   # rotate left (counterclockwise)
+            *cw_yaw_targets,   # rotate right (sweeps through center)
             0.0,                     # rotate back to center
         ]
 
