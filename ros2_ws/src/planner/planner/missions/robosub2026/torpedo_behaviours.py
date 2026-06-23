@@ -604,7 +604,51 @@ class CheckTorpedoCount(Condition):
         # else:
         #     self.node.get_logger().error(f"[{self.name}] Torpedo count is incorrect.")
         #     return py_trees.common.Status.FAILURE
+
+class DetermineIconPosition(Action):
+    """
+    Action to determine the position of a specific icon on the board and save it to the blackboard.
+    minimum_ticks: 
+    """
+    def __init__(self, target_icon: BoardIcon, attempts : int = 1):
+        super().__init__("Determine Icon Position: " + target_icon.value)
+        self.target_icon = target_icon
+        self.attempts = attempts
+        self.current_attempt = 0
+
+    def setup(self, **kwargs):
+        super().setup(**kwargs)
+        self.node = kwargs['node']
+        self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/torpedo/icon_position", access=py_trees.common.Access.WRITE)
         
+    def initialise(self):
+        super().initialise()
+        self.current_attempt = 0
+
+    def update(self):
+        if not hasattr(self.blackboard, 'vision') or self.blackboard.vision.object_map is None:
+            self.node.get_logger().error(f"[{self.name}] No object map available.")
+            return py_trees.common.Status.FAILURE
+        
+        target_icon_vo = None
+        for vision_object in self.blackboard.vision.object_map.array:
+            if vision_object.label == self.target_icon.value:
+                target_icon_vo = vision_object
+                break
+        
+        if target_icon_vo is None:
+            self.current_attempt += 1
+            if self.current_attempt < self.attempts:
+                self.node.get_logger().warn(f"[{self.name}] Target icon {self.target_icon.value} not found in vision. Retrying...")
+                return py_trees.common.Status.RUNNING
+            else:
+                self.node.get_logger().error(f"[{self.name}] Target icon {self.target_icon.value} not found in vision.")
+                return py_trees.common.Status.FAILURE
+        
+        self.blackboard.torpedo.icon_position = target_icon_vo.pose.position
+        self.node.get_logger().info(f"[{self.name}] Saved position of {self.target_icon.value} icon: {self.blackboard.torpedo.icon_position}")
+        return py_trees.common.Status.SUCCESS    
 class AlignTorpedoToHole(Navigation):
     """
     Navigation Action to align the torpedo to the hole.

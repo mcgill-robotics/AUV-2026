@@ -333,8 +333,10 @@ class TorpedoTask(py_trees.composites.Sequence):
         3. Close: <0.3m away, just stick torpedo up to board and hope for the best
         """
         distance_strategy_selector = py_trees.composites.Selector("Distance Strategy Selector", memory=True)
+        find_icon = DetermineIconPosition(icon, attempts=3)
         distance_strategy_selector.add_children(
             [
+                find_icon,
                 self.distance_strategy(self.farther_distance_threshold,icon),
                 self.distance_strategy(self.far_distance_threshold,icon),
             ]
