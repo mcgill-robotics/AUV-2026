@@ -101,7 +101,12 @@ front_cam_object_detection:
       rpy: [0.0, 0.0, 0.0]
 
     # Distance correction parameters
-    depth_scale: 1.0
+    depth_scale:
+      sim: 1.0
+      real: 1.4
+    lateral_scale:
+      sim: 1.0
+      real: 1.333
     depth_offset: 0.0
 
     # Depth Estimation Configurations
@@ -115,14 +120,18 @@ front_cam_object_detection:
       #  - "{pixel}_to_{plane}": Projects a ray to intersect a known horizontal plane.
       #      - pixel: "top" (top edge), "center" (center of bbox) or "bottom" (bottom edge of bbox)
       #      - plane: any plane defined in `known_planes` (e.g. "surface", "floor")
+      default_mode: "depth_map_median"
       mode_by_label:
         octagon: "center_to_surface"
         table: "depth_map_nearest"
         bin_structure: "depth_map_median"
         board: "depth_map_nearest"
         gate: "depth_map_nearest"
+        survey_repair: "depth_map_nearest"
+        search_rescue: "depth_map_nearest"
         white_pipe: "depth_map_nearest"
         red_pipe: "depth_map_nearest"
+        bin: "zed_3d"
       
       # Depth map extraction parameters
       depth_map_shrink_ratio: 0.8          # Shrink bbox by 20% on each side to reduce background (median only)
@@ -153,7 +162,7 @@ front_cam_object_detection:
 
     publish_camera_info: true # publish CameraInfo for the front camera feed using ZED left-camera intrinsics
     publish_annotated: true # publishes the front camera feed topic at detection_frame_topic + /annotated, toggled raw/annotated at runtime via service
-    publish_annotated_every_n_frames: 1 # publish annotated image every N detection frames
+    publish_annotated_every_n_frames: 5 # publish annotated image every N detection frames
     publish_depth: true # publish raw 32FC1 depth map image
     publish_depth_compressed: true # publish depth map as compressed 16-bit PNG
     publish_depth_every_n_frames: 5 # publish depth image every N frames
@@ -178,10 +187,13 @@ down_cam_object_detection:
   ros__parameters:
     enable_object_detection: true
     image_topic: /down_cam/image_raw # this will be the input topic if sim=true, this will be set to down_image_enhancement.ros__parameters.output_topic if enhance_images is set to true
-    detection_topic: /vision/down_cam/detections
+    detection_topic: /vision/down_cam/detection_frame
     camera_info_topic: /down_cam/camera_info
     base_frame_id: "down_camera"
     camera_frame_id: "down_camera_optical_frame"
+    
+    pose_source: auv_pose
+    auv_pose_topic: state/pose
 
     # Camera intrinsics (calculated from ELP OV5640 60 deg diagonal FOV lens at 640x480)
     # This results in a Horizontal FOV of ~49.6° and a Vertical FOV of ~38.2°
@@ -244,7 +256,7 @@ down_cam_object_detection:
     queue_size: 10
     
     publish_annotated: true
-    publish_annotated_every_n_frames: 1
+    publish_annotated_every_n_frames: 5
     publish_depth: true
     publish_depth_compressed: false
     publish_depth_every_n_frames: 5
@@ -252,7 +264,21 @@ down_cam_object_detection:
     collection_dir: down_cam_collection
     collection_interval_seconds: 2.0
     collection_file_extension: ".png"
-    log_level: debug
+    log_level: info
+
+    # 3D Projection parameters
+    depth_scale:
+      sim: 1.0
+      real: 1.0
+    lateral_scale:
+      sim: 1.0
+      real: 1.333
+    pool_floor_z: -2.1
+    # Down Camera Projection Z-Heights (relative to pool floor)
+    # If a detected object isn't in this list, it is ignored by the down camera tracker
+    down_cam_projection_labels: ["pill", "nutbolt", "electric", "bandaid", "warning", "redcross_helmet", "table", "lane_marker"]
+    down_cam_projection_heights: [0.67, 0.67, 0.67, 0.67, 0.67, 0.67, 0.67, 0.0]
+    border_margin: 10
 
 object_map:
   ros__parameters:
@@ -404,8 +430,9 @@ object_map:
 
     # Down Camera Projection Z-Heights (relative to pool floor)
     # If a detected object isn't in this list, it is ignored by the down camera tracker
-    down_cam_projection_labels: ["pill", "nutbolt", "electric", "bandaid", "warning", "redcross_helmet", "table", "lane_marker"]
-    down_cam_projection_heights: [0.67, 0.67, 0.67, 0.67, 0.67, 0.67, 0.67, 0.0]
+    # MOVING TO down_cam_object_detection NODE
+    # down_cam_projection_labels: ["pill", "nutbolt", "electric", "bandaid", "warning", "redcross_helmet", "table", "lane_marker"]
+    # down_cam_projection_heights: [0.67, 0.67, 0.67, 0.67, 0.67, 0.67, 0.67, 0.0]
 
     # table_octagon_mode: 
     #   - none: no refinement
@@ -420,7 +447,7 @@ object_map:
     new_object_min_distance_threshold: 0.00 # distance in meters between a new detection and existing tracks to be considered a new object and start a new track
 
     front_tracker:
-      gating_threshold: 3.5 # Mahalanobis distance threshold (~3 sigma) for associating detections to tracks
+      gating_threshold: 15.0 # Mahalanobis distance threshold (~3 sigma) for associating detections to tracks
       min_hits: 20 # Consecutive frames a detection must be matched to confirm a new track
       max_age: 8 # Number of frames to keep a lost track alive before deleting it [CURRENTLY UNUSED]      
       max_position_jump: 2.0 # Maximum allowed distance (meters) between predictions and measurements

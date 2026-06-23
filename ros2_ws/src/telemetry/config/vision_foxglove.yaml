@@ -11,4 +11,4 @@ vision_to_foxglove:
     auv_model_x: 0.0
     auv_model_y: 0.0
     auv_model_z: 0.02
-    publish_auv_model: true
+    publish_auv_model: false

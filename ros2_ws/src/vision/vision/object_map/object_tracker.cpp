@@ -410,7 +410,7 @@ void ObjectTracker::update_matched_tracks(
         track.confidence = confidences[meas_idx];
         
         // Don't overwrite the calculated gate orientation with the default measurement orientation
-        if (!track.has_orientation) {
+        if (!track.has_orientation && !std::isnan(orientations[meas_idx])) {
             track.theta_z = orientations[meas_idx]; 
         }
 
@@ -556,7 +556,7 @@ void ObjectTracker::create_new_tracks(
         new_track.consecutive_hits = 1;
         new_track.total_updates = 1;
         new_track.age = 0;
-        new_track.theta_z = orientations[det_idx];
+        new_track.theta_z = std::isnan(orientations[det_idx]) ? 0.0 : orientations[det_idx];
         new_track.confidence = confidences[det_idx];
 
         new_track.kf = create_kf(measurements[det_idx]);

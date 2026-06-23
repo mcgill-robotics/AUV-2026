@@ -64,8 +64,7 @@ private:
         int frames_since_last_seen) const;
 
     void detection_callback(const auv_msgs::msg::VisionDetectionFrame::SharedPtr msg);
-    void down_cam_callback(const vision_msgs::msg::Detection2DArray::SharedPtr msg);
-    void down_cam_info_callback(const sensor_msgs::msg::CameraInfo::SharedPtr msg);
+    void down_cam_detection_callback(const auv_msgs::msg::VisionDetectionFrame::SharedPtr msg);
 
     void publish_object_map(const std::vector<Track>& tracks);
 
@@ -97,16 +96,9 @@ private:
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
-    rclcpp::Subscription<vision_msgs::msg::Detection2DArray>::SharedPtr down_cam_subscriber;
-    rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr down_cam_info_subscriber;
+    rclcpp::Subscription<auv_msgs::msg::VisionDetectionFrame>::SharedPtr down_cam_subscriber;
     
-    // Down camera intrinsics
-    double down_cam_fx;
-    double down_cam_fy;
-    double down_cam_cx;
-    double down_cam_cy;
     double water_refraction_scale;
 
     double table_z;
-    std::unordered_map<std::string, double> down_cam_heights_map;
 };

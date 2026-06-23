@@ -10,17 +10,8 @@ ObjectMapNode::ObjectMapNode() : Node("object_map_node")
         this->declare_parameter<string>("front_cam_detection_frame_topic");
     string down_cam_detection_topic = 
         this->declare_parameter<string>("down_cam_detection_topic");
-    string down_cam_info_topic = 
-        this->declare_parameter<string>("down_cam_info_topic");
     string object_map_topic = this->declare_parameter<string>("object_map_topic");
     auv_frame_id = this->declare_parameter<string>("frame_id_auv");
-    
-    down_cam_fx = 0.0;
-    down_cam_fy = 0.0;
-    down_cam_cx = 0.0;
-    down_cam_cy = 0.0;
-
-
     float new_object_min_distance_threshold =
         this->declare_parameter<float>("new_object_min_distance_threshold");
     bool large_structure_separation_enabled = this->declare_parameter<bool>("large_structure_separation.enable");
@@ -75,13 +66,6 @@ ObjectMapNode::ObjectMapNode() : Node("object_map_node")
 
     for (size_t i = 0; i < object_size_labels.size() && i < object_size_x.size() && i < object_size_y.size() && i < object_size_z.size(); ++i) {
         object_sizes_map[object_size_labels[i]] = Eigen::Vector3d(object_size_x[i], object_size_y[i], object_size_z[i]);
-    }
-
-    std::vector<std::string> down_cam_projection_labels = this->declare_parameter<std::vector<std::string>>("down_cam_projection_labels", std::vector<std::string>());
-    std::vector<double> down_cam_projection_heights = this->declare_parameter<std::vector<double>>("down_cam_projection_heights", std::vector<double>());
-
-    for (size_t i = 0; i < down_cam_projection_labels.size() && i < down_cam_projection_heights.size(); ++i) {
-        down_cam_heights_map[down_cam_projection_labels[i]] = down_cam_projection_heights[i];
     }
 
     front_tracker = ObjectTracker(
@@ -167,16 +151,10 @@ ObjectMapNode::ObjectMapNode() : Node("object_map_node")
             std::bind(&ObjectMapNode::detection_callback, this, std::placeholders::_1));
 
     down_cam_subscriber = 
-        this->create_subscription<vision_msgs::msg::Detection2DArray>(
+        this->create_subscription<auv_msgs::msg::VisionDetectionFrame>(
             down_cam_detection_topic,
             10,
-            std::bind(&ObjectMapNode::down_cam_callback, this, std::placeholders::_1));
-
-    down_cam_info_subscriber = 
-        this->create_subscription<sensor_msgs::msg::CameraInfo>(
-            down_cam_info_topic,
-            10,
-            std::bind(&ObjectMapNode::down_cam_info_callback, this, std::placeholders::_1));
+            std::bind(&ObjectMapNode::down_cam_detection_callback, this, std::placeholders::_1));
 
     RCLCPP_INFO(this->get_logger(), "Using synchronized front-camera detection frames for object mapping.");
 }
@@ -282,157 +260,7 @@ auv_msgs::msg::VisionObject ObjectMapNode::build_object_message(
     return object_msg;
 }
 
-void ObjectMapNode::down_cam_callback(const vision_msgs::msg::Detection2DArray::SharedPtr msg)
-{
-    // Skip if no detections
-    if (msg->detections.empty()) {
-        return;
-    }
 
-    double fx, fy, cx, cy;
-    {
-
-        fx = down_cam_fx;
-        fy = down_cam_fy;
-        cx = down_cam_cx;
-        cy = down_cam_cy;
-    }
-
-    if (fx <= 0.0) {
-        RCLCPP_WARN_THROTTLE(
-            this->get_logger(),
-            *this->get_clock(),
-            5000,
-            "Down camera intrinsics not yet received on camera info topic. Skipping detections.");
-        return;
-    }
-
-    geometry_msgs::msg::TransformStamped camera_to_world_msg;
-    try {
-        camera_to_world_msg = tf_buffer_->lookupTransform(
-            world_frame_id,
-            msg->header.frame_id,
-            tf2::TimePointZero);
-    } catch (const tf2::TransformException& ex) {
-        RCLCPP_WARN(
-            this->get_logger(),
-            "Skipping down cam detection because TF %s -> %s is unavailable: %s",
-            world_frame_id.c_str(),
-            msg->header.frame_id.c_str(),
-            ex.what());
-        return;
-    }
-
-    tf2::Transform tf_world_camera;
-    tf2::fromMsg(camera_to_world_msg.transform, tf_world_camera);
-    tf2::Matrix3x3 world_camera_basis = tf_world_camera.getBasis();
-    
-    Eigen::Vector3d p0(
-        camera_to_world_msg.transform.translation.x,
-        camera_to_world_msg.transform.translation.y,
-        camera_to_world_msg.transform.translation.z);
-
-
-    std::vector<Eigen::Vector3d> new_measurements;
-    std::vector<Eigen::Matrix3d> new_covariances;
-    std::vector<std::string> new_classes;
-    std::vector<double> new_orientations;
-    std::vector<double> new_confidences;
-
-    for (const auto& detection : msg->detections) {
-        if (detection.results.empty()) continue;
-
-        // Find best result
-        double best_score = -1.0;
-        std::string best_class = "";
-        for (const auto& result : detection.results) {
-            if (result.hypothesis.score > best_score) {
-                best_score = result.hypothesis.score;
-                best_class = result.hypothesis.class_id;
-            }
-        }
-        
-        if (best_class.empty()) continue;
-        
-        // Center of bounding box
-        double u = detection.bbox.center.position.x;
-        double v = detection.bbox.center.position.y;
-        
-        // Ray casting in camera optical frame (accounting for flat port water refraction)
-        // NOTE: Because we set z_c = 1.0, this ray is formed in the standard OPTICAL frame 
-        // (Z points into the scene). Therefore, the world_camera_basis matrix MUST come 
-        // from a "..._optical" TF frame, otherwise the ray will shoot straight forward
-        double effective_fx = fx * water_refraction_scale;
-        double effective_fy = fy * water_refraction_scale;
-        double x_c = (u - cx) / effective_fx;
-        double y_c = (v - cy) / effective_fy;
-        double z_c = 1.0;
-        tf2::Vector3 ray_cam(x_c, y_c, z_c);
-        
-        // Ray direction in world frame
-        tf2::Vector3 ray_world = world_camera_basis * ray_cam;
-        
-        // Determine the target projection plane based on the object's configured height from the floor
-        if (!down_cam_heights_map.count(best_class)) {
-            continue; // Skip objects not explicitly configured for down camera projection
-        }
-        double target_z = pool_floor_z + down_cam_heights_map.at(best_class);
-        
-        if (std::abs(ray_world.z()) < 1e-6) {
-            continue; // Ray is horizontal
-        }
-        
-        double t = (target_z - p0.z()) / ray_world.z();
-        if (t <= 0) {
-            continue; // Target plane is behind the camera
-        }
-        
-        Eigen::Vector3d pos_world(
-            p0.x() + t * ray_world.x(),
-            p0.y() + t * ray_world.y(),
-            p0.z() + t * ray_world.z());
-            
-        // Use a generic diagonal covariance for down cam detections
-        Eigen::Matrix3d cov_world = Eigen::Matrix3d::Identity() * 0.2;
-
-        new_measurements.push_back(pos_world);
-        new_covariances.push_back(cov_world);
-        new_classes.push_back(best_class);
-        new_orientations.push_back(0.0);
-        new_confidences.push_back(best_score);
-    }
-    
-    // Provide persistent positions so the down tracker can re-initialize tracks if they re-enter the FOV
-    std::vector<std::pair<std::string, Eigen::Vector3d>> persistent_positions;
-    for (const auto& [label, track] : persistent_objects) {
-        persistent_positions.push_back({label, track.get_position()});
-    }
-
-    // Directly update the independent down camera tracker
-    down_tracker.update(
-        new_measurements,
-        new_covariances,
-        new_classes,
-        new_orientations,
-        new_confidences,
-        p0,   // Observer position (camera center)
-        true, // Has observer position
-        persistent_positions
-    );
-}
-
-void ObjectMapNode::down_cam_info_callback(const sensor_msgs::msg::CameraInfo::SharedPtr msg)
-{
-
-    down_cam_fx = msg->k[0];
-    down_cam_fy = msg->k[4];
-    down_cam_cx = msg->k[2];
-    down_cam_cy = msg->k[5];
-    
-    // Unsubscribe from further camera info updates since intrinsics are static
-    down_cam_info_subscriber.reset();
-    RCLCPP_INFO(this->get_logger(), "Successfully received down camera intrinsics. Unsubscribed from CameraInfo topic.");
-}
 
 void ObjectMapNode::detection_callback(const auv_msgs::msg::VisionDetectionFrame::SharedPtr msg)
 {
@@ -597,6 +425,144 @@ void ObjectMapNode::detection_callback(const auv_msgs::msg::VisionDetectionFrame
     //     d_total, d_tf, d_pre, d_track, d_pub, pipeline_latency.seconds() * 1000.0);
 
     RCLCPP_DEBUG(this->get_logger(), "Object map latency: %.3f ms", d_total);
+}
+
+void ObjectMapNode::down_cam_detection_callback(const auv_msgs::msg::VisionDetectionFrame::SharedPtr msg)
+{
+    auto t0 = std::chrono::high_resolution_clock::now();
+
+    frame_collection_time = rclcpp::Time(msg->header.stamp, this->get_clock()->get_clock_type());
+    world_frame_id = msg->auv_pose.header.frame_id.empty() ? "pool_link" : msg->auv_pose.header.frame_id;
+    const std::string detection_frame_id =
+        msg->header.frame_id.empty() ? "down_camera_optical_frame" : msg->header.frame_id;
+
+    geometry_msgs::msg::TransformStamped camera_to_auv_msg;
+    try {
+        camera_to_auv_msg = tf_buffer_->lookupTransform(
+            auv_frame_id,
+            detection_frame_id,
+            tf2::TimePointZero);
+    } catch (const tf2::TransformException& ex) {
+        RCLCPP_WARN(
+            this->get_logger(),
+            "Skipping detection frame because TF %s -> %s is unavailable: %s",
+            auv_frame_id.c_str(),
+            detection_frame_id.c_str(),
+            ex.what());
+        return;
+    }
+
+    tf2::Transform tf_world_auv;
+    tf2::fromMsg(msg->auv_pose.pose, tf_world_auv);
+
+    tf2::Transform tf_auv_camera;
+    tf2::fromMsg(camera_to_auv_msg.transform, tf_auv_camera);
+
+    tf2::Transform tf_world_camera = tf_world_auv * tf_auv_camera;
+    tf2::Matrix3x3 world_camera_basis = tf_world_camera.getBasis();
+
+    Eigen::Matrix3d camera_to_world_rotation;
+    for (int r = 0; r < 3; ++r) {
+        for (int c = 0; c < 3; ++c) {
+            camera_to_world_rotation(r, c) = world_camera_basis[r][c];
+        }
+    }
+
+    Eigen::Vector3d observer_position = eigen_from_point(msg->auv_pose.pose.position);
+    bool has_observer_position = true;
+
+    std::vector<Eigen::Vector3d> filtered_measurements;
+    std::vector<Eigen::Matrix3d> filtered_covariances;
+    std::vector<std::string> filtered_classes;
+    std::vector<double> filtered_orientations;
+    std::vector<double> filtered_confidences;
+
+    filtered_measurements.reserve(msg->detections.size());
+    filtered_covariances.reserve(msg->detections.size());
+    filtered_classes.reserve(msg->detections.size());
+    filtered_orientations.reserve(msg->detections.size());
+    filtered_confidences.reserve(msg->detections.size());
+
+    for (const auto& detection : msg->detections) {
+        const std::string& label = detection.label;
+
+        Eigen::Vector3d pos_camera = eigen_from_point(detection.pose_camera.pose.position);
+        
+        if (std::isnan(pos_camera.x()) || std::isnan(pos_camera.y()) || std::isnan(pos_camera.z())) {
+            continue; // Skip 3D update if projection failed (but 2D bbox was published)
+        }
+
+        tf2::Vector3 pos_world_tf = tf_world_camera * tf2::Vector3(
+            pos_camera.x(),
+            pos_camera.y(),
+            pos_camera.z());
+        Eigen::Vector3d pos_world(
+            pos_world_tf.x(),
+            pos_world_tf.y(),
+            pos_world_tf.z());
+
+        if (enable_lane_boundary) {
+            if (pos_world.x() < lane_x_min || pos_world.x() > lane_x_max ||
+                pos_world.y() < lane_y_min || pos_world.y() > lane_y_max) {
+                continue;
+            }
+        }
+
+        // Use a generic diagonal covariance for down cam detections
+        Eigen::Matrix3d cov_world = Eigen::Matrix3d::Identity() * 0.2;
+
+        filtered_measurements.push_back(pos_world);
+        filtered_covariances.push_back(cov_world);
+        filtered_classes.push_back(label);
+        double yaw = std::nan("");
+        tf2::Quaternion q_cam;
+        tf2::fromMsg(detection.pose_camera.pose.orientation, q_cam);
+        if (q_cam.length2() > 0.5) {
+            q_cam.normalize();
+            tf2::Quaternion q_world = tf_world_camera.getRotation() * q_cam;
+            double roll, pitch;
+            tf2::Matrix3x3(q_world).getRPY(roll, pitch, yaw);
+            
+            // Normalize yaw to be closest to 0 (forward) to stabilize symmetric objects
+            while (yaw > M_PI / 4.0) yaw -= M_PI / 2.0;
+            while (yaw < -M_PI / 4.0) yaw += M_PI / 2.0;
+        }
+        filtered_orientations.push_back(yaw);
+        filtered_confidences.push_back(detection.confidence);
+    }
+
+    std::vector<std::pair<std::string, Eigen::Vector3d>> persistent_positions;
+    persistent_positions.reserve(persistent_objects.size());
+    for (const auto& [label, track] : persistent_objects) {
+        persistent_positions.emplace_back(label, track.get_position());
+    }
+
+    // Update the independent down camera tracker
+    std::vector<Track> down_tracks = down_tracker.update(
+        filtered_measurements,
+        filtered_covariances,
+        filtered_classes,
+        filtered_orientations,
+        filtered_confidences,
+        observer_position,
+        has_observer_position,
+        persistent_positions);
+
+    // Get the latest tracks from the front camera tracker
+    const std::vector<Track>& front_tracks = front_tracker.get_tracks();
+
+    // Combine tracks from both trackers for publishing and persistence logic
+    std::vector<Track> all_tracks;
+    all_tracks.reserve(front_tracks.size() + down_tracks.size());
+    all_tracks.insert(all_tracks.end(), front_tracks.begin(), front_tracks.end());
+    all_tracks.insert(all_tracks.end(), down_tracks.begin(), down_tracks.end());
+
+    publish_object_map(all_tracks);
+
+    auto t1 = std::chrono::high_resolution_clock::now();
+    auto d_total = std::chrono::duration<double, std::milli>(t1 - t0).count();
+
+    RCLCPP_DEBUG(this->get_logger(), "Down object map latency: %.3f ms", d_total);
 }
 
 void ObjectMapNode::publish_object_map(const std::vector<Track>& tracks)

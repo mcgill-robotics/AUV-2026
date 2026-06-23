@@ -95,8 +95,11 @@ class FrontCamObjectDetectorNode():
         self.node.declare_parameter("has_zed_sdk", Parameter.Type.BOOL)
         self.node.declare_parameter("image_topic", Parameter.Type.STRING)
 
-        self.node.declare_parameter("depth_scale", 1.0)
-        self.node.declare_parameter("depth_offset", 0.0)
+        self.node.declare_parameter("depth_scale.sim", Parameter.Type.DOUBLE)
+        self.node.declare_parameter("depth_scale.real", Parameter.Type.DOUBLE)
+        self.node.declare_parameter("lateral_scale.sim", Parameter.Type.DOUBLE)
+        self.node.declare_parameter("lateral_scale.real", Parameter.Type.DOUBLE)
+        self.node.declare_parameter("depth_offset", Parameter.Type.DOUBLE)
 
         self.node.declare_parameter("model_detection_threshold", Parameter.Type.DOUBLE)
         self.node.declare_parameter("zed_depth_confidence_threshold", Parameter.Type.INTEGER)
@@ -276,10 +279,13 @@ class FrontCamObjectDetectorNode():
 
         self.known_planes = {}
         # Parse known planes
+        self.node.declare_parameter("depth_estimation.default_mode", "depth_map_median")
         self.node.declare_parameter("depth_estimation.known_planes.surface", 0.0)
         self.node.declare_parameter("depth_estimation.known_planes.floor", -4.0)
         self.known_planes["surface"] = self.node.get_parameter("depth_estimation.known_planes.surface").get_parameter_value().double_value
         self.known_planes["floor"] = self.node.get_parameter("depth_estimation.known_planes.floor").get_parameter_value().double_value
+        
+        self.default_depth_mode = self.node.get_parameter("depth_estimation.default_mode").get_parameter_value().string_value
         
         self.node.declare_parameter("depth_estimation.known_height_angle_limits.max_pitch_deg", 20.0)
         self.node.declare_parameter("depth_estimation.known_height_angle_limits.max_roll_deg", 20.0)
@@ -1000,7 +1006,7 @@ class FrontCamObjectDetectorNode():
             t_start=t_start
         )
 
-    def _compute_3d_position(self, obj, label_str, bbox_xyxy, img_h, T_W_C, depth_scale, depth_offset, auv_roll=0.0, auv_pitch=0.0, depth=None):
+    def _compute_3d_position(self, obj, label_str, bbox_xyxy, img_h, T_W_C, depth_scale, lateral_scale, depth_offset, auv_roll=0.0, auv_pitch=0.0, depth=None):
         """
         Computes the 3D position of an object in the camera frame.
         
@@ -1020,7 +1026,7 @@ class FrontCamObjectDetectorNode():
             cam_pos_vec: A numpy array [x, y, z] in the ROS camera frame, or None if invalid.
             cov_cam: A 3x3 covariance matrix for the position.
         """
-        mode = self.depth_modes.get(label_str, "depth_map_median")
+        mode = self.depth_modes.get(label_str, self.default_depth_mode)
         cam_pos_vec = None
         cov_cam = np.eye(3, dtype=float) * 0.1  # Default 10cm variance
         is_zed_point = False
@@ -1070,7 +1076,7 @@ class FrontCamObjectDetectorNode():
                     z_m = z_raw * depth_scale + depth_offset
                     u = bbox_cx - self.cam_cx
                     v = bbox_cy - self.cam_cy
-                    x_m, y_m = apply_snells_law_lateral(z_m, u, v, self.cam_fx, self.cam_fy)
+                    x_m, y_m = apply_snells_law_lateral(z_m, u, v, self.cam_fx, self.cam_fy, n_w=lateral_scale)
                     cam_pos_vec = np.array([z_m, -x_m, -y_m])
                     
                     # Covariance from depth variance in ROI
@@ -1078,7 +1084,7 @@ class FrontCamObjectDetectorNode():
                     if depth_var < 0.001: depth_var = 0.001
                     # X is forward (depth), Y is left, Z is up in ROS camera frame.
                     # We have most uncertainty in depth (X). Lateral uncertainty is roughly proportional to distance.
-                    cov_cam = np.diag([depth_var, depth_var * 0.1, depth_var * 0.1])
+                    cov_cam = np.diag([depth_var, depth_var, depth_var])
             
             # 1a. Known Height Projection
             elif calc_mode == "known_height" and label_str in self.known_heights:
@@ -1100,7 +1106,7 @@ class FrontCamObjectDetectorNode():
                         
                         u = bbox_cx - self.cam_cx
                         v = bbox_cy - self.cam_cy
-                        x_m, y_m = apply_snells_law_lateral(z_m, u, v, self.cam_fx, self.cam_fy)
+                        x_m, y_m = apply_snells_law_lateral(z_m, u, v, self.cam_fx, self.cam_fy, n_w=lateral_scale)
                         cam_pos_vec = np.array([z_m, -x_m, -y_m])
                     
             # 1b. Ray-Plane Intersection
@@ -1129,7 +1135,7 @@ class FrontCamObjectDetectorNode():
                         v = px_y - self.cam_cy
                         
                         # Apply Snell's Law to get true ray vector components at depth Z=1
-                        x_ray, y_ray = apply_snells_law_lateral(1.0, u, v, self.cam_fx, self.cam_fy)
+                        x_ray, y_ray = apply_snells_law_lateral(1.0, u, v, self.cam_fx, self.cam_fy, n_w=lateral_scale)
                         
                         v_c_ros = np.array([1.0, -x_ray, -y_ray, 0.0])
                         
@@ -1148,30 +1154,53 @@ class FrontCamObjectDetectorNode():
 
         # 2. Fallback to ZED 3D
         if cam_pos_vec is None and obj is not None:
-            is_zed_point = True
             pos_cam = obj.position
-            if np.isnan(pos_cam).any() or np.isinf(pos_cam).any() or pos_cam[0] < 0:
+            if np.isnan(pos_cam).any() or np.isinf(pos_cam).any() or pos_cam[0] <= 0:
                 return None, 1.0
-            cam_pos_vec = np.array([float(pos_cam[0]), float(pos_cam[1]), float(pos_cam[2])])
-
-        # 3. Apply depth_scale/offset only to raw ZED SDK points
-        # Geometric projections have already corrected their focal lengths
-        if is_zed_point:
+                
+            x_raw = float(pos_cam[0])
+            y_raw = float(pos_cam[1])
+            z_raw = float(pos_cam[2])
+            
+            # Extract the raw "angles" (u/fx, v/fy) from the ZED 3D point
+            # In ROS frame: X is forward (Z_img), Y is left (-X_img), Z is up (-Y_img)
+            u = (-y_raw / x_raw) * self.cam_fx
+            v = (-z_raw / x_raw) * self.cam_fy
+            
+            # Apply depth scaling to the forward Z axis
+            z_m = x_raw * depth_scale + depth_offset
+            if z_m < 0.01:
+                z_m = 0.01
+                
+            # Apply Snell's Law to correct the lateral coordinates
+            x_m, y_m = apply_snells_law_lateral(z_m, u, v, self.cam_fx, self.cam_fy, n_w=lateral_scale)
+            
+            cam_pos_vec = np.array([z_m, -x_m, -y_m])
+            
             cov = obj.position_covariance
             cov_cam = np.array([
                 [float(cov[0]), float(cov[1]), float(cov[2])],
                 [float(cov[1]), float(cov[3]), float(cov[4])],
                 [float(cov[2]), float(cov[4]), float(cov[5])]
             ])
+            # Scale covariance by the approximate depth scaling
+            cov_cam = cov_cam * (depth_scale ** 2)
+                
+        # Add dynamic covariance based on distance and object size, similar to object_map.
+        # This prevents Mahalanobis distance from becoming hypersensitive at close ranges,
+        # while keeping the added uncertainty the same in x, y, and z.
+        if cov_cam is not None:
+            dist = np.linalg.norm(cam_pos_vec) if cam_pos_vec is not None else 1.0
             
-            raw_dist = np.linalg.norm(cam_pos_vec)
-            if raw_dist > 0:
-                corrected_dist = raw_dist * depth_scale + depth_offset
-                if corrected_dist < 0.01:
-                    corrected_dist = 0.01
-                scale_ratio = corrected_dist / raw_dist
-                cam_pos_vec = cam_pos_vec * scale_ratio
-                cov_cam = cov_cam * (scale_ratio ** 2)
+            # Default physical size fallback (matching object_map's default)
+            # TODO: replace this with the actual object's size
+            max_physical_size = 0.5 
+            
+            # Base noise: 0.1m + 10% of distance + 20% of max physical size
+            dynamic_noise = 0.1 + (0.1 * dist) + (0.2 * max_physical_size)
+            
+            # Add the dynamic noise identically to X, Y, Z
+            cov_cam += np.eye(3) * dynamic_noise
                 
         return cam_pos_vec, cov_cam
 
@@ -1289,7 +1318,7 @@ class FrontCamObjectDetectorNode():
                         continue
                         
                     label = self.class_names[cls_id]
-                    mode = self.depth_modes.get(label, "depth_map_median")
+                    mode = self.depth_modes.get(label, self.default_depth_mode)
                     
                     if mode == "zed_3d":
                         needs_zed_3d = True
@@ -1343,7 +1372,10 @@ class FrontCamObjectDetectorNode():
                         objects_dict[obj.unique_object_id] = obj
 
                 # 3. Build synchronized camera-frame detections
-                depth_scale = self.node.get_parameter('depth_scale').get_parameter_value().double_value
+                depth_scale_param = 'depth_scale.sim' if self.sim else 'depth_scale.real'
+                depth_scale = self.node.get_parameter(depth_scale_param).get_parameter_value().double_value
+                lateral_scale_param = 'lateral_scale.sim' if self.sim else 'lateral_scale.real'
+                lateral_scale = self.node.get_parameter(lateral_scale_param).get_parameter_value().double_value
                 depth_offset = self.node.get_parameter('depth_offset').get_parameter_value().double_value
                 img_h, img_w = img.shape[:2]
                 
@@ -1366,7 +1398,7 @@ class FrontCamObjectDetectorNode():
                     obj = objects_dict.get(f"front_cam_det_{i}", None)
                     
                     pos_result = self._compute_3d_position(
-                        obj, label_str, bbox_xyxy, img_h, T_W_C, depth_scale, depth_offset, auv_roll, auv_pitch, depth
+                        obj, label_str, bbox_xyxy, img_h, T_W_C, depth_scale, lateral_scale, depth_offset, auv_roll, auv_pitch, depth
                     )
                     if pos_result[0] is None:
                         continue

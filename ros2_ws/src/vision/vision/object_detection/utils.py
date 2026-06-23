@@ -8,7 +8,6 @@ import glob
 import math
 import supervision as sv
 from inference_models import AutoModel, BackendType
-from vision_msgs.msg import Detection2DArray, Detection2D, ObjectHypothesisWithPose
 from geometry_msgs.msg import PoseStamped, Quaternion
 from tf_transformations import euler_matrix, quaternion_from_matrix
 import torch
@@ -145,18 +144,28 @@ def publish_annotated_image_util(detector_node, img, tracked_detections, stamp, 
         ]
 
         # 2. Initialize Annotators with dynamic values and smart positioning
-        box_annotator = sv.BoxAnnotator(
-            thickness=dynamic_thickness
-        )
+        if "xyxyxyxy" in tracked_detections.data:
+            box_annotator = sv.OrientedBoxAnnotator(
+                thickness=dynamic_thickness
+            )
+        else:
+            box_annotator = sv.BoxAnnotator(
+                thickness=dynamic_thickness
+            )
         
         label_annotator = sv.LabelAnnotator(
             text_scale=dynamic_text_scale,
             text_thickness=dynamic_thickness,
             text_padding=10
         )
+        
+        mask_annotator = sv.MaskAnnotator()
 
         output_image = box_annotator.annotate(scene=output_image, detections=tracked_detections)
         output_image = label_annotator.annotate(scene=output_image, detections=tracked_detections, labels=labels)
+        
+        if tracked_detections.mask is not None:
+            output_image = mask_annotator.annotate(scene=output_image, detections=tracked_detections)
 
     try:
         if detector_node.compressed:
@@ -170,40 +179,6 @@ def publish_annotated_image_util(detector_node, img, tracked_detections, stamp, 
     except Exception as e:
         detector_node.node.get_logger().error(f"Failed to publish annotated image: {e}")
 
-def build_detection2d_msg(detector_node, tracked_detections):
-    det_msg = Detection2DArray()
-    if tracked_detections is None: return det_msg
-    
-    det_objects = []
-    for i in range(len(tracked_detections)):
-        x1, y1, x2, y2 = tracked_detections.xyxy[i]
-        cx = float((x1 + x2) / 2)
-        cy = float((y1 + y2) / 2)
-        w = float(x2 - x1)
-        h = float(y2 - y1)
-        conf = float(tracked_detections.confidence[i])
-        cls_id = int(tracked_detections.class_id[i])
-
-        if cls_id >= len(detector_node.class_names):
-            continue
-
-        label = detector_node.class_names[cls_id]
-
-        detection = Detection2D()
-        detection.bbox.center.position.x = cx
-        detection.bbox.center.position.y = cy
-        detection.bbox.size_x = w
-        detection.bbox.size_y = h
-
-        hypothesis = ObjectHypothesisWithPose()
-        hypothesis.hypothesis.class_id = label
-        hypothesis.hypothesis.score = conf
-        
-        detection.results = [hypothesis]
-        det_objects.append(detection)
-
-    det_msg.detections = det_objects
-    return det_msg
 
 # --- Shared Dataset Service Logic ---
 def toggle_collection_callback_util(detector_node, request, response):
@@ -339,5 +314,6 @@ def apply_snells_law_lateral(z_true, u, v, fx, fy, n_w=1.333):
     r_true = z_true * tan_w
     x_m = r_true * (u / fx) / r_a
     y_m = r_true * (v / fy) / r_a
+    
     return x_m, y_m
 

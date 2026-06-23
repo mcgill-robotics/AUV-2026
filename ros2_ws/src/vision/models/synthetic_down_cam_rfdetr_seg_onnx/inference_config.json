@@ -2,8 +2,8 @@
     "image_pre_processing": {},
     "network_input": {
         "training_input_size": {
-            "height": 512,
-            "width": 512
+            "height": 384,
+            "width": 384
         },
         "dynamic_spatial_size_supported": false,
         "color_mode": "rgb",
