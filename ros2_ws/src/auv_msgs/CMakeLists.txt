@@ -12,13 +12,11 @@ set(MSG_DEP_SET
 )
 
 set(msg_files	
-	"msg/DeadReckonReport.msg"
 	"msg/PingerBearing.msg"
 	"msg/PingerTimeDifference.msg"
 	"msg/ThrusterForces.msg"
 	"msg/ThrusterMicroseconds.msg"
 	"msg/UnityState.msg"
-	"msg/VelocityReport.msg"
 	"msg/VisionDetection.msg"
 	"msg/VisionDetectionFrame.msg"
 	"msg/VisionObject.msg"
