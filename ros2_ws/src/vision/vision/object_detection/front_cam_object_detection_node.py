@@ -10,6 +10,7 @@ import time
 from auv_msgs.msg import VisionDetection, VisionDetectionFrame
 from auv_msgs.srv import AutomaticCapture
 import cv2
+import math
 from cv_bridge import CvBridge
 from geometry_msgs.msg import PoseStamped, TransformStamped
 import numpy as np
@@ -20,7 +21,7 @@ except ImportError:
     sl = None
     ZED_SDK_AVAILABLE = False
 import rclpy
-from rcl_interfaces.msg import ParameterDescriptor
+from rcl_interfaces.msg import ParameterDescriptor, SetParametersResult
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rclpy.qos import qos_profile_sensor_data
@@ -28,7 +29,7 @@ from sensor_msgs.msg import CameraInfo, CompressedImage, Image
 from std_msgs.msg import Float64
 from std_srvs.srv import Trigger
 from tf2_ros import TransformBroadcaster
-from tf_transformations import concatenate_matrices, inverse_matrix
+from tf_transformations import concatenate_matrices, inverse_matrix, quaternion_matrix, euler_from_quaternion
 
 from vision.object_detection.utils import (
     bbox_from_xyxy,
@@ -40,6 +41,7 @@ from vision.object_detection.utils import (
     load_model,
     publish_annotated_image_util,
     toggle_collection_callback_util,
+    apply_snells_law_lateral,
 )
 
 class FrontCamObjectDetectorNode():
@@ -80,11 +82,11 @@ class FrontCamObjectDetectorNode():
         self.node.declare_parameter('model_path', Parameter.Type.STRING)
         self.node.declare_parameter('queue_size', Parameter.Type.INTEGER)
         self.node.declare_parameter('publish_annotated', Parameter.Type.BOOL)
-        self.node.declare_parameter('publish_annotated_rate', Parameter.Type.INTEGER)
+        self.node.declare_parameter('publish_annotated_every_n_frames', Parameter.Type.INTEGER)
         self.node.declare_parameter('publish_camera_info', Parameter.Type.BOOL)
         self.node.declare_parameter('publish_depth', Parameter.Type.BOOL)
         self.node.declare_parameter('publish_depth_compressed', Parameter.Type.BOOL)
-        self.node.declare_parameter('publish_depth_rate', Parameter.Type.INTEGER)
+        self.node.declare_parameter('publish_depth_every_n_frames', Parameter.Type.INTEGER)
         self.node.declare_parameter('enable_depth_collection', Parameter.Type.BOOL)
         self.node.declare_parameter('collection_depth_dir', Parameter.Type.STRING)
         self.node.declare_parameter("compressed", Parameter.Type.BOOL)
@@ -93,8 +95,11 @@ class FrontCamObjectDetectorNode():
         self.node.declare_parameter("has_zed_sdk", Parameter.Type.BOOL)
         self.node.declare_parameter("image_topic", Parameter.Type.STRING)
 
-        self.node.declare_parameter("depth_scale", 1.0)
-        self.node.declare_parameter("depth_offset", 0.0)
+        self.node.declare_parameter("depth_scale.sim", Parameter.Type.DOUBLE)
+        self.node.declare_parameter("depth_scale.real", Parameter.Type.DOUBLE)
+        self.node.declare_parameter("lateral_scale.sim", Parameter.Type.DOUBLE)
+        self.node.declare_parameter("lateral_scale.real", Parameter.Type.DOUBLE)
+        self.node.declare_parameter("depth_offset", Parameter.Type.DOUBLE)
 
         self.node.declare_parameter("model_detection_threshold", Parameter.Type.DOUBLE)
         self.node.declare_parameter("zed_depth_confidence_threshold", Parameter.Type.INTEGER)
@@ -107,6 +112,8 @@ class FrontCamObjectDetectorNode():
         self.node.declare_parameter("zed_resolution.real", Parameter.Type.STRING)
         self.node.declare_parameter("zed_fps.sim", Parameter.Type.INTEGER)
         self.node.declare_parameter("zed_fps.real", Parameter.Type.INTEGER)
+        self.node.declare_parameter("zed_retrieval_width", 0)
+        self.node.declare_parameter("zed_retrieval_height", 0)
         self.node.declare_parameter(
             "zed_flip_mode",
             "OFF",
@@ -147,6 +154,7 @@ class FrontCamObjectDetectorNode():
         self.node.declare_parameter('gate_top_crop.enable', Parameter.Type.BOOL)
         self.node.declare_parameter('gate_top_crop.ratio', Parameter.Type.DOUBLE)
         self.node.declare_parameter('border_exclusion.enable', Parameter.Type.BOOL)
+        self.node.declare_parameter('border_exclusion.mode', Parameter.Type.STRING)
         self.node.declare_parameter('border_exclusion.margin_px', Parameter.Type.INTEGER)
         self.node.declare_parameter('border_exclusion.labels', Parameter.Type.STRING_ARRAY)
         self.node.declare_parameter('global_frame_id', Parameter.Type.STRING)
@@ -190,7 +198,8 @@ class FrontCamObjectDetectorNode():
 
         self.node.create_service(AutomaticCapture, '/vision/front_cam/toggle_collection', partial(toggle_collection_callback_util, self))
         self.node.create_service(Trigger, '/vision/front_cam/toggle_annotated_image', self._toggle_annotated_image_callback)
- 
+        self.node.create_service(Trigger, '/vision/front_cam/reset_vio_pose', self._reset_vio_pose_callback)
+        self.node.create_service(Trigger, '/vision/front_cam/get_camera_settings', self._get_camera_settings_callback)
         self.class_names = list(self.node.get_parameter('model_class_names').get_parameter_value().string_array_value)
         self.node.get_logger().info(f"Class names: {self.class_names}")
         model_path = self.node.get_parameter('model_path').get_parameter_value().string_value
@@ -200,12 +209,12 @@ class FrontCamObjectDetectorNode():
         queue_size = self.node.get_parameter('queue_size').get_parameter_value().integer_value
         self.publish_annotated_image = self.node.get_parameter('publish_annotated').get_parameter_value().bool_value
         self.annotated_image_enabled = self.publish_annotated_image
-        self.publish_annotated_every_n_frames = self.node.get_parameter('publish_annotated_rate').get_parameter_value().integer_value
+        self.publish_annotated_every_n_frames = self.node.get_parameter('publish_annotated_every_n_frames').get_parameter_value().integer_value
         self.publish_camera_info = self.node.get_parameter('publish_camera_info').get_parameter_value().bool_value
         self.publish_depth_image = self.node.get_parameter('publish_depth').get_parameter_value().bool_value
         self.publish_depth_compressed = self.node.get_parameter('publish_depth_compressed').get_parameter_value().bool_value
         self.broadcast_vio_tf = self.node.get_parameter('broadcast_vio_tf').get_parameter_value().bool_value
-        self.publish_depth_every_n_frames = self.node.get_parameter('publish_depth_rate').get_parameter_value().integer_value
+        self.publish_depth_every_n_frames = self.node.get_parameter('publish_depth_every_n_frames').get_parameter_value().integer_value
         self.collect_depth_image = self.node.get_parameter('enable_depth_collection').get_parameter_value().bool_value
         self.compressed = self.node.get_parameter('compressed').get_parameter_value().bool_value
         self.enable_object_detection = self.node.get_parameter('enable_object_detection').get_parameter_value().bool_value
@@ -245,11 +254,61 @@ class FrontCamObjectDetectorNode():
             self.node.get_parameter('zed_depth_stabilization').get_parameter_value().integer_value
         )
         sim = self.node.get_parameter('sim').get_parameter_value().bool_value
+        self.sim = sim
+        
+        self.node.declare_parameter("zed_positional_tracking_mode.sim", "GEN_1")
+        self.node.declare_parameter("zed_positional_tracking_mode.real", "GEN_3")
+        self.zed_positional_tracking_mode_name = self.node.get_parameter(
+            'zed_positional_tracking_mode.sim' if sim else 'zed_positional_tracking_mode.real'
+        ).get_parameter_value().string_value
+
+        self.depth_modes = {}
+        self.known_heights = {}
+        for label in self.class_names:
+            mode_param = f"depth_estimation.mode_by_label.{label}"
+            height_param = f"depth_estimation.known_heights.{label}"
+            self.node.declare_parameter(mode_param, "")
+            self.node.declare_parameter(height_param, 0.0)
+            
+            mode_val = self.node.get_parameter(mode_param).get_parameter_value().string_value
+            if mode_val:
+                self.depth_modes[label] = mode_val
+            height_val = self.node.get_parameter(height_param).get_parameter_value().double_value
+            if height_val > 0.0:
+                self.known_heights[label] = height_val
+
+        self.known_planes = {}
+        # Parse known planes
+        self.node.declare_parameter("depth_estimation.default_mode", "depth_map_median")
+        self.node.declare_parameter("depth_estimation.known_planes.surface", 0.0)
+        self.node.declare_parameter("depth_estimation.known_planes.floor", -4.0)
+        self.known_planes["surface"] = self.node.get_parameter("depth_estimation.known_planes.surface").get_parameter_value().double_value
+        self.known_planes["floor"] = self.node.get_parameter("depth_estimation.known_planes.floor").get_parameter_value().double_value
+        
+        self.default_depth_mode = self.node.get_parameter("depth_estimation.default_mode").get_parameter_value().string_value
+        
+        self.node.declare_parameter("depth_estimation.known_height_angle_limits.max_pitch_deg", 20.0)
+        self.node.declare_parameter("depth_estimation.known_height_angle_limits.max_roll_deg", 20.0)
+
+        self.node.declare_parameter("depth_estimation.depth_map_shrink_ratio", 0.8)
+        self.node.declare_parameter("depth_estimation.depth_map_nearest_percentile", 15.0)
+        self.node.declare_parameter("depth_estimation.depth_map_min_valid_fraction", 0.05)
+        
+        self.depth_map_shrink_ratio = self.node.get_parameter("depth_estimation.depth_map_shrink_ratio").get_parameter_value().double_value
+        self.depth_map_nearest_percentile = self.node.get_parameter("depth_estimation.depth_map_nearest_percentile").get_parameter_value().double_value
+        self.depth_map_min_valid_fraction = self.node.get_parameter("depth_estimation.depth_map_min_valid_fraction").get_parameter_value().double_value
+
         self.zed_camera_resolution_name = self.node.get_parameter(
             'zed_resolution.sim' if sim else 'zed_resolution.real'
         ).get_parameter_value().string_value
         self.zed_camera_fps = self.node.get_parameter(
             'zed_fps.sim' if sim else 'zed_fps.real'
+        ).get_parameter_value().integer_value
+        self.zed_retrieval_width = self.node.get_parameter(
+            'zed_retrieval_width'
+        ).get_parameter_value().integer_value
+        self.zed_retrieval_height = self.node.get_parameter(
+            'zed_retrieval_height'
         ).get_parameter_value().integer_value
         self.zed_camera_flip_mode_name = self.node.get_parameter(
             'zed_flip_mode'
@@ -296,6 +355,7 @@ class FrontCamObjectDetectorNode():
         self.enable_gate_top_crop = self.node.get_parameter('gate_top_crop.enable').get_parameter_value().bool_value
         self.gate_top_crop_ratio = self.node.get_parameter('gate_top_crop.ratio').get_parameter_value().double_value
         self.enable_border_exclusion = self.node.get_parameter('border_exclusion.enable').get_parameter_value().bool_value
+        self.border_exclusion_mode = self.node.get_parameter('border_exclusion.mode').get_parameter_value().string_value
         self.border_exclusion_margin_px = self.node.get_parameter('border_exclusion.margin_px').get_parameter_value().integer_value
         self.border_exclusion_labels = list(self.node.get_parameter('border_exclusion.labels').get_parameter_value().string_array_value)
         self.global_frame_id = self.node.get_parameter('global_frame_id').get_parameter_value().string_value
@@ -351,7 +411,7 @@ class FrontCamObjectDetectorNode():
             )
             
         self.bridge = CvBridge()
-        if not os.path.exists(model_path):
+        if self.enable_object_detection and not os.path.exists(model_path):
             self.node.get_logger().error(f"Model path does not exist: {model_path}")
             self.node.get_logger().fatal("Exiting due to missing model.")
             raise FileNotFoundError(f"Model path does not exist: {model_path}")
@@ -417,14 +477,47 @@ class FrontCamObjectDetectorNode():
 
             self._apply_zed_camera_controls()
 
+            # Retrieval scaling: open at high resolution for better depth,
+            # retrieve at a lower resolution for inference & publishing.
+            # Only applies to real camera — sim streams at a fixed resolution.
+            if not self.sim and self.zed_retrieval_width > 0 and self.zed_retrieval_height > 0:
+                native_res = self.zed.get_camera_information().camera_configuration.resolution
+                self.retrieval_resolution = sl.Resolution(self.zed_retrieval_width, self.zed_retrieval_height)
+                self.native_width = int(native_res.width)
+                self.native_height = int(native_res.height)
+                self.bbox_scale_x = self.native_width / self.zed_retrieval_width
+                self.bbox_scale_y = self.native_height / self.zed_retrieval_height
+                self.node.get_logger().info(
+                    f"Retrieval scaling enabled: grab {self.native_width}x{self.native_height} "
+                    f"-> retrieve {self.zed_retrieval_width}x{self.zed_retrieval_height} "
+                    f"(bbox scale {self.bbox_scale_x:.3f}x, {self.bbox_scale_y:.3f}x)"
+                )
+            else:
+                self.retrieval_resolution = None
+                self.bbox_scale_x = 1.0
+                self.bbox_scale_y = 1.0
+                self.native_width = 0
+                self.native_height = 0
+
             if self.enable_vio:
                 # Enable Positional Tracking
                 pos_param = sl.PositionalTrackingParameters()
-                pos_param.mode = sl.POSITIONAL_TRACKING_MODE.GEN_1
+                pos_param.mode = self._enum_from_name(
+                    sl.POSITIONAL_TRACKING_MODE,
+                    self.zed_positional_tracking_mode_name,
+                    'zed_positional_tracking_mode'
+                )
                 pos_param.enable_imu_fusion = True
                 pos_param.set_floor_as_origin = False
                 pos_param.enable_area_memory = False
                 pos_param.depth_min_range = self.zed_positional_tracking_depth_min_range
+                
+                # Set initial world transform to offset the camera from the AUV origin
+                self.zed_initial_transform = sl.Transform()
+                for r in range(4):
+                    for c in range(4):
+                        self.zed_initial_transform[r, c] = self.T_auv_detection[r, c]
+                pos_param.set_initial_world_transform(self.zed_initial_transform)
                 
                 err = self.zed.enable_positional_tracking(pos_param)
                 if err != sl.ERROR_CODE.SUCCESS:
@@ -560,6 +653,38 @@ class FrontCamObjectDetectorNode():
                 queue_size
             )
 
+        self.node.add_on_set_parameters_callback(self._parameter_callback)
+
+    def _parameter_callback(self, params):
+        if not self.has_zed_sdk or not hasattr(self, 'zed') or not self.zed.is_opened():
+            return SetParametersResult(successful=True)
+            
+        success = True
+        
+        zed_param_map = {name: setting for name, setting in self.ZED_RUNTIME_CAMERA_SETTINGS}
+        zed_param_map["zed_image_white_balance_temperature"] = sl.VIDEO_SETTINGS.WHITEBALANCE_TEMPERATURE
+        zed_param_map["zed_image_exposure"] = sl.VIDEO_SETTINGS.EXPOSURE
+        
+        for param in params:
+            if param.name in zed_param_map:
+                setting = zed_param_map[param.name]
+                if param.name in {"zed_image_auto_exposure", "zed_image_auto_white_balance"}:
+                    if param.type_ == Parameter.Type.BOOL:
+                        val = int(param.value)
+                    else:
+                        val = param.value
+                else:
+                    val = param.value
+                
+                err = self.zed.set_camera_settings(setting, val)
+                if err != sl.ERROR_CODE.SUCCESS:
+                    success = False
+                    self.node.get_logger().error(f"Failed to dynamically set {param.name}={val}: {err}")
+                else:
+                    self.node.get_logger().info(f"Dynamically updated ZED setting {param.name}={val}")
+                    
+        return SetParametersResult(successful=success)
+
     def _apply_zed_camera_controls(self):
         applied_settings = []
         for parameter_name, setting in self.ZED_RUNTIME_CAMERA_SETTINGS:
@@ -628,6 +753,47 @@ class FrontCamObjectDetectorNode():
         response.message = (
             f"Annotated image {'enabled' if self.annotated_image_enabled else 'disabled'}"
         )
+        self.node.get_logger().info(response.message)
+        return response
+        
+    def _get_camera_settings_callback(self, request, response):
+        del request
+        if not self.has_zed_sdk or not hasattr(self, 'zed') or not self.zed.is_opened():
+            response.success = False
+            response.message = "ZED camera not available."
+            return response
+            
+        settings_to_query = list(self.ZED_RUNTIME_CAMERA_SETTINGS) + [
+            ("zed_image_white_balance_temperature", sl.VIDEO_SETTINGS.WHITEBALANCE_TEMPERATURE),
+            ("zed_image_exposure", sl.VIDEO_SETTINGS.EXPOSURE)
+        ]
+        
+        current_settings = {}
+        for param_name, setting in settings_to_query:
+            err, value = self.zed.get_camera_settings(setting)
+            if err == sl.ERROR_CODE.SUCCESS:
+                current_settings[param_name] = value
+            else:
+                current_settings[param_name] = f"ERROR {err}"
+                
+        response.success = True
+        response.message = " | ".join(f"{k}: {v}" for k, v in current_settings.items())
+        return response
+
+    def _reset_vio_pose_callback(self, request, response):
+        del request
+        if self.has_zed_sdk and self.enable_vio:
+            err = self.zed.reset_positional_tracking(self.zed_initial_transform)
+            if err == sl.ERROR_CODE.SUCCESS:
+                response.success = True
+                response.message = "VIO positional tracking reset successfully"
+            else:
+                response.success = False
+                response.message = f"Failed to reset VIO tracking: {err}"
+        else:
+            response.success = False
+            response.message = "VIO is disabled or ZED SDK is not available."
+            
         self.node.get_logger().info(response.message)
         return response
 
@@ -701,10 +867,33 @@ class FrontCamObjectDetectorNode():
         fy = float(calibration.fy)
         cx = float(calibration.cx)
         cy = float(calibration.cy)
+
+        # When retrieval scaling is active, scale the intrinsics to match
+        # the lower retrieval resolution so that CameraInfo, published images,
+        # and geometric projection math all use consistent pixel coordinates.
+        if self.retrieval_resolution is not None:
+            sx = 1.0 / self.bbox_scale_x  # retrieval_width / native_width
+            sy = 1.0 / self.bbox_scale_y  # retrieval_height / native_height
+            fx *= sx
+            fy *= sy
+            cx *= sx
+            cy *= sy
+            pub_width = self.zed_retrieval_width
+            pub_height = self.zed_retrieval_height
+        else:
+            pub_width = int(resolution.width)
+            pub_height = int(resolution.height)
+
+        # Save intrinsics for custom depth projection
+        self.cam_fx = fx
+        self.cam_fy = fy
+        self.cam_cx = cx
+        self.cam_cy = cy
+        
         distortion = list(calibration.disto)
 
-        camera_info.width = int(resolution.width)
-        camera_info.height = int(resolution.height)
+        camera_info.width = pub_width
+        camera_info.height = pub_height
         camera_info.distortion_model = "plumb_bob"
         camera_info.d = [float(value) for value in distortion]
         camera_info.k = [
@@ -762,7 +951,10 @@ class FrontCamObjectDetectorNode():
             if health.low_lighting:
                 self.node.get_logger().warn("Low lighting conditions", throttle_duration_sec=5.0)
 
-            self.zed.retrieve_image(self.image_buffer, sl.VIEW.LEFT)
+            if self.retrieval_resolution:
+                self.zed.retrieve_image(self.image_buffer, sl.VIEW.LEFT, sl.MEM.CPU, self.retrieval_resolution)
+            else:
+                self.zed.retrieve_image(self.image_buffer, sl.VIEW.LEFT)
             img = cv2.cvtColor(self.image_buffer.get_data(), cv2.COLOR_RGBA2RGB)
             self._frame_counter += 1
 
@@ -773,14 +965,12 @@ class FrontCamObjectDetectorNode():
             is_collection_interval = (time.time() - self._last_collection_time) >= self.collection_interval
             is_collection_frame = self._collecting and is_collection_interval
             
-            should_get_depth = (self.publish_depth_image and self._frame_counter % self.publish_depth_every_n_frames == 0) or \
-                               (self.collect_depth_image and is_collection_frame)
-            
-            if should_get_depth:
-                self.zed.retrieve_measure(self.depth_buffer, sl.MEASURE.DEPTH)
-                depth = self.depth_buffer.get_data() # sl.UNIT.METER, shape (H,W) with NaNs
+            # Always retrieve depth map for detection 3D extraction
+            if self.retrieval_resolution:
+                self.zed.retrieve_measure(self.depth_buffer, sl.MEASURE.DEPTH, sl.MEM.CPU, self.retrieval_resolution)
             else:
-                depth = None
+                self.zed.retrieve_measure(self.depth_buffer, sl.MEASURE.DEPTH)
+            depth = self.depth_buffer.get_data() # sl.UNIT.METER, shape (H,W) with NaNs
 
             self._process_frame(
                 img, 
@@ -815,6 +1005,204 @@ class FrontCamObjectDetectorNode():
             is_collection_frame=is_collection_frame, 
             t_start=t_start
         )
+
+    def _compute_3d_position(self, obj, label_str, bbox_xyxy, img_h, T_W_C, depth_scale, lateral_scale, depth_offset, auv_roll=0.0, auv_pitch=0.0, depth=None):
+        """
+        Computes the 3D position of an object in the camera frame.
+        
+        Args:
+            obj: The ZED SDK object containing fallback 3D position.
+            label_str: The class label of the object.
+            bbox_xyxy: The 2D bounding box [x1, y1, x2, y2].
+            img_h: The image height in pixels.
+            T_W_C: Transformation matrix from camera to world (pool_link). Can be None.
+            depth_scale: Scaling factor applied to ZED depth.
+            depth_offset: Offset applied to ZED depth.
+            auv_roll: The AUV's roll angle in radians.
+            auv_pitch: The AUV's pitch angle in radians.
+            depth: The depth map as a numpy array.
+            
+        Returns:
+            cam_pos_vec: A numpy array [x, y, z] in the ROS camera frame, or None if invalid.
+            cov_cam: A 3x3 covariance matrix for the position.
+        """
+        mode = self.depth_modes.get(label_str, self.default_depth_mode)
+        cam_pos_vec = None
+        cov_cam = np.eye(3, dtype=float) * 0.1  # Default 10cm variance
+        is_zed_point = False
+        
+        # 1. Custom depth calculation logic
+        if mode != "zed_3d" and bbox_xyxy is not None:
+            x1, y1, x2, y2 = bbox_xyxy
+            bbox_cx = (x1 + x2) / 2.0
+            bbox_cy = (y1 + y2) / 2.0
+            bbox_h = max(1.0, y2 - y1)
+            
+            margin = self.border_exclusion_margin_px
+            is_touching_top_down_border = (y1 <= margin) or (y2 >= img_h - margin)
+            
+            calc_mode = mode
+            
+            if calc_mode in ("depth_map_median", "depth_map_nearest") and depth is not None:
+                # Shrink bbox only for median mode to reduce background contamination.
+                # Nearest mode doesn't need shrinking — the low percentile naturally selects
+                # the closest surface and ignores far background pixels.
+                if calc_mode == "depth_map_median":
+                    shrink = self.depth_map_shrink_ratio
+                    w_box, h_box = x2 - x1, y2 - y1
+                    x1_r = int(x1 + w_box * (1 - shrink) / 2)
+                    y1_r = int(y1 + h_box * (1 - shrink) / 2)
+                    x2_r = int(x2 - w_box * (1 - shrink) / 2)
+                    y2_r = int(y2 - h_box * (1 - shrink) / 2)
+                else:
+                    x1_r, y1_r, x2_r, y2_r = int(x1), int(y1), int(x2), int(y2)
+                
+                img_h_px, img_w_px = depth.shape[:2]
+                x1_r = max(0, min(x1_r, img_w_px - 1))
+                x2_r = max(0, min(x2_r, img_w_px - 1))
+                y1_r = max(0, min(y1_r, img_h_px - 1))
+                y2_r = max(0, min(y2_r, img_h_px - 1))
+                
+                roi = depth[y1_r:y2_r, x1_r:x2_r]
+                valid = roi[np.isfinite(roi) & (roi > 0.1)]
+                
+                min_valid = max(1, int(self.depth_map_min_valid_fraction * roi.size))
+                if len(valid) >= min_valid:
+                    if calc_mode == "depth_map_median":
+                        z_raw = float(np.median(valid))
+                    else:  # depth_map_nearest
+                        z_raw = float(np.percentile(valid, self.depth_map_nearest_percentile))
+                    
+                    z_m = z_raw * depth_scale + depth_offset
+                    u = bbox_cx - self.cam_cx
+                    v = bbox_cy - self.cam_cy
+                    x_m, y_m = apply_snells_law_lateral(z_m, u, v, self.cam_fx, self.cam_fy, n_w=lateral_scale)
+                    cam_pos_vec = np.array([z_m, -x_m, -y_m])
+                    
+                    # Covariance from depth variance in ROI
+                    depth_var = float(np.var(valid)) * (depth_scale ** 2)
+                    if depth_var < 0.001: depth_var = 0.001
+                    # X is forward (depth), Y is left, Z is up in ROS camera frame.
+                    # We have most uncertainty in depth (X). Lateral uncertainty is roughly proportional to distance.
+                    cov_cam = np.diag([depth_var, depth_var, depth_var])
+            
+            # 1a. Known Height Projection
+            elif calc_mode == "known_height" and label_str in self.known_heights:
+                max_pitch = self.node.get_parameter('depth_estimation.known_height_angle_limits.max_pitch_deg').get_parameter_value().double_value
+                max_roll = self.node.get_parameter('depth_estimation.known_height_angle_limits.max_roll_deg').get_parameter_value().double_value
+                
+                # Only use known_height if the box is fully visible and the AUV is relatively flat
+                if not is_touching_top_down_border and abs(math.degrees(auv_pitch)) <= max_pitch and abs(math.degrees(auv_roll)) <= max_roll:
+                    # Apply Snell's law to the vertical angle
+                    h_m = self.known_heights[label_str]
+                    tan_a_half = (bbox_h / 2.0) / self.cam_fy
+                    sin_a_half = tan_a_half / math.sqrt(1.0 + tan_a_half**2)
+                    sin_w_half = sin_a_half / 1.333
+                    tan_w_half = sin_w_half / math.sqrt(1.0 - sin_w_half**2)
+                    
+                    if tan_w_half > 0:
+                        z_m = h_m / (2.0 * tan_w_half)
+                        z_m += depth_offset
+                        
+                        u = bbox_cx - self.cam_cx
+                        v = bbox_cy - self.cam_cy
+                        x_m, y_m = apply_snells_law_lateral(z_m, u, v, self.cam_fx, self.cam_fy, n_w=lateral_scale)
+                        cam_pos_vec = np.array([z_m, -x_m, -y_m])
+                    
+            # 1b. Ray-Plane Intersection
+            elif "_to_" in calc_mode and T_W_C is not None:
+                proj_type, _, plane_name = calc_mode.partition("_to_")
+                if plane_name in self.known_planes:
+                    plane_z = self.known_planes[plane_name]
+                    
+                    # Determine projection pixel with border exclusion (abort if touching)
+                    px_x = bbox_cx
+                    px_y = None
+                    
+                    if proj_type == "bottom":
+                        if y2 < img_h - margin:
+                            px_y = y2
+                    elif proj_type == "top":
+                        if y1 > margin:
+                            px_y = y1
+                    elif proj_type == "center":
+                        if not is_touching_top_down_border:
+                            px_y = bbox_cy
+                        
+                    if px_y is not None:
+                        # Ray generation in Standard ROS Frame (X forward, Y left, Z up).
+                        u = px_x - self.cam_cx
+                        v = px_y - self.cam_cy
+                        
+                        # Apply Snell's Law to get true ray vector components at depth Z=1
+                        x_ray, y_ray = apply_snells_law_lateral(1.0, u, v, self.cam_fx, self.cam_fy, n_w=lateral_scale)
+                        
+                        v_c_ros = np.array([1.0, -x_ray, -y_ray, 0.0])
+                        
+                        # Transform ray and camera origin to the world frame
+                        v_w_ros = np.dot(T_W_C, v_c_ros)
+                        P0_w = np.dot(T_W_C, np.array([0.0, 0.0, 0.0, 1.0]))
+                        
+                        # Intersect ray with horizontal plane Z = plane_z
+                        # Equation: P0_z + t * v_z = plane_z  =>  t = (plane_z - P0_z) / v_z
+                        t = -1
+                        if abs(v_w_ros[2]) > 1e-6:
+                            t = (plane_z - P0_w[2]) / v_w_ros[2]
+                        if t > 0: # Intersection is strictly in front of the camera
+                            P_c = t * v_c_ros[:3]
+                            cam_pos_vec = np.array([P_c[0], P_c[1], P_c[2]])
+
+        # 2. Fallback to ZED 3D
+        if cam_pos_vec is None and obj is not None:
+            pos_cam = obj.position
+            if np.isnan(pos_cam).any() or np.isinf(pos_cam).any() or pos_cam[0] <= 0:
+                return None, 1.0
+                
+            x_raw = float(pos_cam[0])
+            y_raw = float(pos_cam[1])
+            z_raw = float(pos_cam[2])
+            
+            # Extract the raw "angles" (u/fx, v/fy) from the ZED 3D point
+            # In ROS frame: X is forward (Z_img), Y is left (-X_img), Z is up (-Y_img)
+            u = (-y_raw / x_raw) * self.cam_fx
+            v = (-z_raw / x_raw) * self.cam_fy
+            
+            # Apply depth scaling to the forward Z axis
+            z_m = x_raw * depth_scale + depth_offset
+            if z_m < 0.01:
+                z_m = 0.01
+                
+            # Apply Snell's Law to correct the lateral coordinates
+            x_m, y_m = apply_snells_law_lateral(z_m, u, v, self.cam_fx, self.cam_fy, n_w=lateral_scale)
+            
+            cam_pos_vec = np.array([z_m, -x_m, -y_m])
+            
+            cov = obj.position_covariance
+            cov_cam = np.array([
+                [float(cov[0]), float(cov[1]), float(cov[2])],
+                [float(cov[1]), float(cov[3]), float(cov[4])],
+                [float(cov[2]), float(cov[4]), float(cov[5])]
+            ])
+            # Scale covariance by the approximate depth scaling
+            cov_cam = cov_cam * (depth_scale ** 2)
+                
+        # Add dynamic covariance based on distance and object size, similar to object_map.
+        # This prevents Mahalanobis distance from becoming hypersensitive at close ranges,
+        # while keeping the added uncertainty the same in x, y, and z.
+        if cov_cam is not None:
+            dist = np.linalg.norm(cam_pos_vec) if cam_pos_vec is not None else 1.0
+            
+            # Default physical size fallback (matching object_map's default)
+            # TODO: replace this with the actual object's size
+            max_physical_size = 0.5 
+            
+            # Base noise: 0.3m + 10% of distance + 20% of max physical size
+            dynamic_noise = 0.3 + (0.1 * dist) + (0.2 * max_physical_size)
+            
+            # Add the dynamic noise identically to X, Y, Z
+            cov_cam += np.eye(3) * dynamic_noise
+                
+        return cam_pos_vec, cov_cam
 
     def _process_frame(self, img, frame_stamp, depth=None, vio_pose_msg=None, is_collection_frame=False, t_start=None):
         if vio_pose_msg is not None:
@@ -898,8 +1286,14 @@ class FrontCamObjectDetectorNode():
                 
                 if label in self.border_exclusion_labels:
                     x1, y1, x2, y2 = tracked_detections.xyxy[i]
-                    if (x1 <= margin or x2 >= img_w - margin or
-                        y1 <= margin or y2 >= img_h - margin):
+                    exclude = False
+                    if self.border_exclusion_mode in ["both", "horizontal"]:
+                        if x1 <= margin or x2 >= img_w - margin:
+                            exclude = True
+                    if self.border_exclusion_mode in ["both", "vertical"]:
+                        if y1 <= margin or y2 >= img_h - margin:
+                            exclude = True
+                    if exclude:
                         mask[i] = False
             tracked_detections = tracked_detections[mask]
 
@@ -911,110 +1305,125 @@ class FrontCamObjectDetectorNode():
 
         if tracked_detections is not None:
             if self.has_zed_sdk:
-                # 1. Ingest into ZED SDK
+                # 1. Determine if we need ZED SDK 3D pipeline and prepare custom boxes
                 custom_boxes = []
-                model_bboxes_by_unique_id = {}
+                needs_zed_3d = False
+                bboxes_cropped = []
+                
                 for i in range(len(tracked_detections)):
                     x1, y1, x2, y2 = tracked_detections.xyxy[i]
                     cls_id = int(tracked_detections.class_id[i])
-                    if cls_id >= len(self.class_names): continue
-
-                    box = sl.CustomBoxObjectData()
-                    box.probability = float(tracked_detections.confidence[i])
-                    box.label = cls_id
-                    box.is_grounded = False
-                    unique_object_id = f"front_cam_det_{i}"
-                    box.unique_object_id = unique_object_id
-                    model_bboxes_by_unique_id[unique_object_id] = (
-                        float(x1),
-                        float(y1),
-                        float(x2),
-                        float(y2),
-                    )
+                    if cls_id >= len(self.class_names):
+                        bboxes_cropped.append((x1, y1, x2, y2))
+                        continue
+                        
+                    label = self.class_names[cls_id]
+                    mode = self.depth_modes.get(label, self.default_depth_mode)
+                    
+                    if mode == "zed_3d":
+                        needs_zed_3d = True
 
                     # --- Gate top crop: only feed the top portion of gate bounding boxes ---
                     # The gate's legs extend into noisy stereo territory causing bad depth
-                    label = self.class_names[cls_id]
+                    # We crop BEFORE depth extraction so depth_map_nearest/median only sees the top bar.
                     if self.enable_gate_top_crop and label == "gate":
                         h = y2 - y1
                         y2 = y1 + h * self.gate_top_crop_ratio
+                        
+                    bboxes_cropped.append((float(x1), float(y1), float(x2), float(y2)))
 
-                    # Clamp to image bounds (PyZED requires unsigned int arrays)
-                    img_h, img_w = img.shape[:2]
-                    x1_c = min(img_w - 1, max(0, int(x1)))
-                    y1_c = min(img_h - 1, max(0, int(y1)))
-                    x2_c = min(img_w - 1, max(0, int(x2)))
-                    y2_c = min(img_h - 1, max(0, int(y2)))
+                    if mode == "zed_3d":
+                        box = sl.CustomBoxObjectData()
+                        box.probability = float(tracked_detections.confidence[i])
+                        box.label = cls_id
+                        box.is_grounded = False
+                        unique_object_id = f"front_cam_det_{i}"
+                        box.unique_object_id = unique_object_id
 
-                    # Format ZED requires: top-left, top-right, bottom-right, bottom-left
-                    box.bounding_box_2d = np.array([
-                        [x1_c, y1_c], [x2_c, y1_c], [x2_c, y2_c], [x1_c, y2_c]
-                    ], dtype=np.uint32)
-                    custom_boxes.append(box)
+                        # Upscale bbox from retrieval resolution to native grab resolution.
+                        x1_n = x1 * self.bbox_scale_x
+                        y1_n = y1 * self.bbox_scale_y
+                        x2_n = x2 * self.bbox_scale_x
+                        y2_n = y2 * self.bbox_scale_y
 
-                self.zed.ingest_custom_box_objects(custom_boxes)
+                        # Clamp to native image bounds (PyZED requires unsigned int arrays)
+                        if self.native_width > 0:
+                            clamp_w, clamp_h = self.native_width, self.native_height
+                        else:
+                            clamp_h, clamp_w = img.shape[:2]
+                        x1_c = min(clamp_w - 1, max(0, int(x1_n)))
+                        y1_c = min(clamp_h - 1, max(0, int(y1_n)))
+                        x2_c = min(clamp_w - 1, max(0, int(x2_n)))
+                        y2_c = min(clamp_h - 1, max(0, int(y2_n)))
 
-                # 2. Retrieve 3D objects
-                objects = sl.Objects()
-                self.zed.retrieve_custom_objects(objects, self.obj_runtime_param)
+                        # Format ZED requires: top-left, top-right, bottom-right, bottom-left
+                        box.bounding_box_2d = np.array([
+                            [x1_c, y1_c], [x2_c, y1_c], [x2_c, y2_c], [x1_c, y2_c]
+                        ], dtype=np.uint32)
+                        custom_boxes.append(box)
+
+                # 2. Retrieve 3D objects from ZED SDK if needed
+                objects_dict = {}
+                if needs_zed_3d and len(custom_boxes) > 0:
+                    self.zed.ingest_custom_box_objects(custom_boxes)
+                    objects = sl.Objects()
+                    self.zed.retrieve_custom_objects(objects, self.obj_runtime_param)
+                    for obj in objects.object_list:
+                        objects_dict[obj.unique_object_id] = obj
 
                 # 3. Build synchronized camera-frame detections
-                depth_scale = self.node.get_parameter('depth_scale').get_parameter_value().double_value
+                depth_scale_param = 'depth_scale.sim' if self.sim else 'depth_scale.real'
+                depth_scale = self.node.get_parameter(depth_scale_param).get_parameter_value().double_value
+                lateral_scale_param = 'lateral_scale.sim' if self.sim else 'lateral_scale.real'
+                lateral_scale = self.node.get_parameter(lateral_scale_param).get_parameter_value().double_value
                 depth_offset = self.node.get_parameter('depth_offset').get_parameter_value().double_value
-
-                for obj in objects.object_list:
-                    pos_cam = obj.position
-                    if np.isnan(pos_cam).any() or np.isinf(pos_cam).any():
+                img_h, img_w = img.shape[:2]
+                
+                # Precompute T_W_C (Transform from Camera to World).
+                T_W_C = None
+                auv_roll, auv_pitch = 0.0, 0.0
+                if detection_frame_auv_pose_msg is not None:
+                    pose = detection_frame_auv_pose_msg.pose
+                    auv_roll, auv_pitch, _ = euler_from_quaternion([pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w])
+                    T_W_auv = quaternion_matrix([pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w])
+                    T_W_auv[0:3, 3] = [pose.position.x, pose.position.y, pose.position.z]
+                    T_W_C = np.dot(T_W_auv, self.T_auv_detection)
+                
+                for i in range(len(tracked_detections)):
+                    cls_id = int(tracked_detections.class_id[i])
+                    if cls_id >= len(self.class_names): continue
+                    
+                    label_str = self.class_names[cls_id]
+                    bbox_xyxy = bboxes_cropped[i]
+                    obj = objects_dict.get(f"front_cam_det_{i}", None)
+                    
+                    pos_result = self._compute_3d_position(
+                        obj, label_str, bbox_xyxy, img_h, T_W_C, depth_scale, lateral_scale, depth_offset, auv_roll, auv_pitch, depth
+                    )
+                    if pos_result[0] is None:
                         continue
-                    if pos_cam[0] < 0:
-                        continue
-
-                    cam_pos_vec = np.array([float(pos_cam[0]), float(pos_cam[1]), float(pos_cam[2])])
-
-                    raw_dist = np.linalg.norm(cam_pos_vec)
-                    scale_ratio = 1.0
-                    if raw_dist > 0:
-                        corrected_dist = raw_dist * depth_scale + depth_offset
-                        if corrected_dist < 0.01:
-                            corrected_dist = 0.01
-                        scale_ratio = corrected_dist / raw_dist
-                        cam_pos_vec = cam_pos_vec * scale_ratio
+                    
+                    cam_pos_vec, cov_cam = pos_result
 
                     detection = VisionDetection()
-                    detection.label = self.class_names[obj.raw_label]
-                    detection.confidence = float(obj.confidence) / 100.0
+                    detection.label = label_str
+                    detection.confidence = float(tracked_detections.confidence[i])
                     detection.pose_camera.pose.position.x = float(cam_pos_vec[0])
                     detection.pose_camera.pose.position.y = float(cam_pos_vec[1])
                     detection.pose_camera.pose.position.z = float(cam_pos_vec[2])
                     detection.pose_camera.pose.orientation.w = 1.0
 
-                    cov = obj.position_covariance
-                    cov_cam = np.array([
-                        [float(cov[0]), float(cov[1]), float(cov[2])],
-                        [float(cov[1]), float(cov[3]), float(cov[4])],
-                        [float(cov[2]), float(cov[4]), float(cov[5])]
-                    ])
-                    cov_cam = cov_cam * (scale_ratio ** 2)
-
                     ros_cov = np.zeros((6, 6), dtype=float)
                     ros_cov[:3, :3] = cov_cam
                     detection.pose_camera.covariance = ros_cov.flatten().tolist()
 
-                    bbox_xyxy = model_bboxes_by_unique_id.get(obj.unique_object_id)
-                    if bbox_xyxy is not None:
-                        (
-                            detection.bbox_center_x,
-                            detection.bbox_center_y,
-                            detection.bbox_size_x,
-                            detection.bbox_size_y,
-                        ) = bbox_from_xyxy(*bbox_xyxy)
-                    else:
-                        (
-                            detection.bbox_center_x,
-                            detection.bbox_center_y,
-                            detection.bbox_size_x,
-                            detection.bbox_size_y,
-                        ) = bbox_from_zed_corners(obj.bounding_box_2d)
+                    (
+                        detection.bbox_center_x,
+                        detection.bbox_center_y,
+                        detection.bbox_size_x,
+                        detection.bbox_size_y,
+                    ) = bbox_from_xyxy(*bbox_xyxy)
+                    
                     det_objects.append(detection)
             else:
                 # ZED SDK Disabled: publish 2D detections without depth

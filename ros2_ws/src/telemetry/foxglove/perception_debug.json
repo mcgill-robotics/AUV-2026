@@ -240,7 +240,7 @@
       },
       "topics": {
         "/foxglove/scene_spheres": {
-          "visible": true,
+          "visible": false,
           "computeVertexNormals": true
         },
         "/state/pose": {
@@ -320,7 +320,7 @@
         "poseEstimateThetaDeviation": 0.26179939
       },
       "imageMode": {
-        "imageTopic": "/vision/front_cam/detection_frame/depth",
+        "imageTopic": "/vision/down_cam/detections/annotated/compressed",
         "gradient": [
           "#ef0404ff",
           "#0080ffff"
@@ -329,20 +329,20 @@
         "colorMode": "colormap",
         "colorMap": "turbo",
         "maxValue": 15,
-        "calibrationTopic": "/vision/front_cam/detection_frame/camera_info"
+        "calibrationTopic": "/down_cam/camera_info"
       },
       "synchronize": false
     },
     "3D!38qyra4": {
       "cameraState": {
         "perspective": true,
-        "distance": 7.547072050705698,
-        "phi": 81.3784429628047,
-        "thetaOffset": 106.43049683489615,
+        "distance": 6.470670899463018,
+        "phi": 75.83451984224563,
+        "thetaOffset": 64.68627096851701,
         "targetOffset": [
-          -0.03660900221344522,
-          -0.07968130957633565,
-          2.922600187422713e-12
+          -0.03313876914866442,
+          0.004258693681761466,
+          5.2356638389320206e-8
         ],
         "target": [
           0,
@@ -355,7 +355,7 @@
           0,
           1
         ],
-        "fovy": 45,
+        "fovy": 40.5,
         "near": 0.5,
         "far": 5000,
         "logDepth": false
@@ -365,7 +365,7 @@
       "scene": {
         "syncCamera": true,
         "enableStats": false,
-        "labelScaleFactor": 1.4,
+        "labelScaleFactor": 1.2,
         "ignoreColladaUpAxis": false,
         "meshUpAxis": "y_up",
         "transforms": {
@@ -493,6 +493,37 @@
           "planarProjectionFactor": 0
         },
         "/vision/down_cam/detections/annotated/compressed": {
+          "visible": false,
+          "cameraInfoTopic": "/down_cam/camera_info",
+          "projectionFrameId": "pool_link",
+          "distance": 1,
+          "renderMode": "default"
+        },
+        "/down_cam/camera_info": {
+          "visible": true
+        },
+        "/vision/front_cam/detection_frame/depth": {
+          "visible": false,
+          "frameLocked": true,
+          "cameraInfoTopic": "/vision/front_cam/detection_frame/camera_info",
+          "distance": 1,
+          "planarProjectionFactor": 0,
+          "renderMode": "pointCloud",
+          "projectionFrameId": "pool_link",
+          "color": "#ffffff",
+          "rectifyImage": true,
+          "pointSize": 1.5,
+          "syncModeEnabled": false
+        },
+        "/foxglove/scene_objects": {
+          "visible": true,
+          "showOutlines": false,
+          "computeVertexNormals": true
+        },
+        "/down_cam/image_raw/compressed": {
+          "visible": false
+        },
+        "/vision/front_cam/detection_frame/camera_info": {
           "visible": true
         }
       },
@@ -577,7 +608,7 @@
     },
     "CallService!startCollection": {
       "serviceName": "/vision/front_cam/toggle_collection",
-      "requestPayload": "{ \"data\": true , \"time_interval\": 1}",
+      "requestPayload": "{ \"data\": true , \"time_interval\": \n0.5}",
       "buttonText": "Start Collection",
       "layout": "vertical",
       "timeoutSeconds": 10,
@@ -624,7 +655,8 @@
     "Publish!3wvumo2": {
       "topicName": "/mission_selector",
       "datatype": "std_msgs/Int32",
-      "value": "{\n  \"data\": 9\n}"
+      "value": "{\n  \"data\": 9\n}",
+      "advancedView": true
     },
     "RawMessages!3im8qvp": {
       "topicPath": "/power/batteries/voltage",

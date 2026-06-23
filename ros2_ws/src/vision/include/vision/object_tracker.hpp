@@ -85,6 +85,8 @@ public:
         const std::vector<std::pair<std::string, Eigen::Vector3d>>& persistent_positions = {}
     ); 
 
+    const std::vector<Track>& get_tracks() const { return tracks; }
+
 private:
     // Breaking down the update() logic into specific steps
     // Step 1: Compute the cost matrix (MAHALANOBIS)

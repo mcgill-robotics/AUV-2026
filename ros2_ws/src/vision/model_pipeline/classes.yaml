@@ -1,23 +1,53 @@
 # Class names for the AUV vision model pipeline.
 # This is the single source of truth — update here and all scripts pick it up.
+# For front looking camera
+# names:
+# - "gate"
+# - "lane_marker"
+# - "red_pipe"
+# - "white_pipe"
+# - "octagon"
+# - "table"
+# - "bin"
+# - "board"
+# - "survey_repair"
+# - "search_rescue"
+# - "compass"
+# - "tools"
+# - "lifebuoy"
+# - "sos"
+# - "ambulance"
+# - "firetruck"
+# - "blood"
+# - "fire"
+# - "bin_structure"
+
+
+# For down looking camera 2D bouding box detection
+# names:
+# - "blood"
+# - "fire"
+# - "lane_marker"
+# - "pill"
+# - "nutbolt"
+# - "electric"
+# - "bandaid"
+# - "table"
+# - "warning"
+# - "redcross_helmet"
+# - "bin_structure"
+# - "bin"
+
+
+# For down looking camera segmentation 
 names:
-- "gate"
-- "lane_marker"
-- "red_pipe"
-- "white_pipe"
-- "octagon"
-- "table"
-- "bin"
-- "board"
-- "survey_repair"
-- "search_rescue"
-- "compass"
-- "tools"
-- "lifebuoy"
-- "sos"
-- "ambulance"
-- "firetruck"
 - "blood"
 - "fire"
-- "bin_structure"
-
+- "table"
+- "lane_marker"
+- "redcross_helmet"
+- "warning"
+- "bandaid"
+- "electric"
+- "nutbolt"
+- "pill"
