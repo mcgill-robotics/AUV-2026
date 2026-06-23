@@ -17,12 +17,15 @@
   <depend>std_msgs</depend>
   <depend>std_srvs</depend>
   <depend>sensor_msgs</depend>
-  <depend>nav_msgs</depend>
+  <depend>micro_ros_agent</depend>
+  <depend>xsens_mti_ros2_driver</depend>
+  <depend>dvl_a50_serial_python</depend>
+  <depend>dvl_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>message_filters</depend>
   <depend>tf2_ros</depend>
-  <build_depend>eigen3_cmake_module</build_depend>
   <depend>eigen</depend>
+  <build_depend>eigen3_cmake_module</build_depend>
 
   <!-- runtime deps for down-facing USB camera -->
   <exec_depend>usb_cam</exec_depend>
