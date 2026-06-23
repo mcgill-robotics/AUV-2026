@@ -8,9 +8,11 @@ the predictions as .txt files in YOLO format.
 Usage:
     python3 export_labels.py --folder /path/to/images --model-type rfdetr --model best_rf_detr_small_model.pth
     python3 export_labels.py --folder /path/to/images --model-type yolo --model best_yolov11s_model.pt
+    python3 export_labels.py --folder /path/to/images --task segment
 """
 
 import argparse
+import numpy as np
 from pathlib import Path
 import os
 import cv2
@@ -19,7 +21,7 @@ import shutil
 
 import supervision as sv
 from ultralytics import YOLO
-from rfdetr import RFDETRSmall
+from rfdetr import RFDETRSmall, RFDETRSegSmall
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp"}
 SCRIPT_DIR = Path(__file__).parent.resolve()
@@ -55,6 +57,13 @@ def main():
         choices=['yolo', 'rfdetr'],
         default='rfdetr',
         help="Type of model to use (yolo or rfdetr)"
+    )
+    parser.add_argument(
+        "--task",
+        type=str,
+        choices=["detect", "segment"],
+        default="detect",
+        help="Task type: detect (bounding boxes) or segment (polygons)"
     )
     parser.add_argument(
         "--model", "-m",
@@ -100,7 +109,10 @@ def main():
     # Load Model
     print(f"Loading {args.model_type.upper()} model: {args.model}")
     if args.model_type == 'rfdetr':
-        model = RFDETRSmall(pretrain_weights=args.model)
+        if args.task == "segment":
+            model = RFDETRSegSmall(pretrain_weights=args.model)
+        else:
+            model = RFDETRSmall(pretrain_weights=args.model)
     else:
         model = YOLO(args.model)
 
@@ -116,39 +128,66 @@ def main():
 
         h_img, w_img, _ = img.shape
         
+        yolo_masks_xyn = None
+        
         # Inference
         if args.model_type == 'rfdetr':
             detections = model.predict(img, threshold=args.conf)
         else:
             results = model.predict(img, verbose=False, conf=args.conf)
             detections = sv.Detections.from_ultralytics(results[0])
+            if args.task == "segment" and results[0].masks is not None:
+                yolo_masks_xyn = results[0].masks.xyn
             
         label_file = lbl_folder / f"{img_path.stem}.txt"
         
         with open(label_file, "w") as f:
-            for i in range(len(detections)):
-                x1, y1, x2, y2 = detections.xyxy[i]
-                class_id = int(detections.class_id[i])
-                
-                # Convert to normalized YOLO format (cx, cy, w, h)
-                w = x2 - x1
-                h = y2 - y1
-                cx = x1 + w / 2.0
-                cy = y1 + h / 2.0
-                
-                # Normalize by image dimensions
-                cx_norm = cx / w_img
-                cy_norm = cy / h_img
-                w_norm = w / w_img
-                h_norm = h / h_img
-                
-                # Clamp between 0 and 1
-                cx_norm = min(max(cx_norm, 0.0), 1.0)
-                cy_norm = min(max(cy_norm, 0.0), 1.0)
-                w_norm = min(max(w_norm, 0.0), 1.0)
-                h_norm = min(max(h_norm, 0.0), 1.0)
-                
-                f.write(f"{class_id} {cx_norm:.6f} {cy_norm:.6f} {w_norm:.6f} {h_norm:.6f}\n")
+            if args.task == "detect":
+                for i in range(len(detections)):
+                    x1, y1, x2, y2 = detections.xyxy[i]
+                    class_id = int(detections.class_id[i])
+                    
+                    w = x2 - x1
+                    h = y2 - y1
+                    cx = x1 + w / 2.0
+                    cy = y1 + h / 2.0
+                    
+                    cx_norm = min(max(cx / w_img, 0.0), 1.0)
+                    cy_norm = min(max(cy / h_img, 0.0), 1.0)
+                    w_norm = min(max(w / w_img, 0.0), 1.0)
+                    h_norm = min(max(h / h_img, 0.0), 1.0)
+                    
+                    f.write(f"{class_id} {cx_norm:.6f} {cy_norm:.6f} {w_norm:.6f} {h_norm:.6f}\n")
+            elif args.task == "segment":
+                if args.model_type == 'yolo' and yolo_masks_xyn is not None:
+                    for i in range(len(detections)):
+                        class_id = int(detections.class_id[i])
+                        coords = yolo_masks_xyn[i].reshape(-1)
+                        if len(coords) < 6:
+                            continue
+                        coords_str = " ".join([f"{c:.6f}" for c in coords])
+                        f.write(f"{class_id} {coords_str}\n")
+                elif args.model_type == 'rfdetr' and detections.mask is not None:
+                    for i in range(len(detections)):
+                        class_id = int(detections.class_id[i])
+                        mask = detections.mask[i]
+                        polygons = sv.mask_to_polygons(mask)
+                        if not polygons:
+                            continue
+                        
+                        largest_poly = max(polygons, key=lambda p: cv2.contourArea(p))
+                        
+                        if len(largest_poly) < 3:
+                            continue
+                            
+                        normalized_poly = largest_poly.astype(float)
+                        normalized_poly[:, 0] /= w_img
+                        normalized_poly[:, 1] /= h_img
+                        
+                        normalized_poly = np.clip(normalized_poly, 0.0, 1.0)
+                        
+                        coords_str = " ".join([f"{c:.6f}" for c in normalized_poly.flatten()])
+                        f.write(f"{class_id} {coords_str}\n")
                 
         print(f"[{idx}/{total_images}] Exported: {label_file.name} ({len(detections)} detections)")
 

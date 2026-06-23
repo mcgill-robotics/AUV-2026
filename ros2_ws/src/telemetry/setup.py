@@ -18,6 +18,8 @@ setup(
         (os.path.join('share', package_name, 'config'), glob('config/*')),
         # Install foxglove layout files
         # (os.path.join('share', package_name, 'foxglove'), glob('foxglove/*')),
+        # Install meshes
+        (os.path.join('share', package_name, 'meshes'), glob('meshes/*')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
