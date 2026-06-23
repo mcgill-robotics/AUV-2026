@@ -1,4 +1,4 @@
-# Sensor Data Processing
+# Sensors
 
 The **sensors** package handles low-level processing and conversion of raw sensor outputs into ROS-standardized messages for state estimation. It currently supports the **IMU**, **depth sensor**, and **DVL**, performing tasks such as:
 
@@ -11,18 +11,20 @@ These processed sensor streams are used downstream by the **EKF**, **controller*
 ---
 
 ## Table of Contents
-- [Sensor Data Processing](#sensor-data-processing)
+- [Sensors](#sensors)
   - [Table of Contents](#table-of-contents)
-  - [Overview](#overview)
-  - [IMU Processing](#imu-processing)
-    - [**1. Gravity corrected acceleration**](#1-gravity-corrected-acceleration)
-    - [**2. Gyroscope angular rates**](#2-gyroscope-angular-rates)
-    - [**3. Orientation**](#3-orientation)
-  - [Depth Sensor Processing](#depth-sensor-processing)
-  - [DVL Processing](#dvl-processing)
-    - [**1. Position Transformation Logic**](#1-position-transformation-logic)
-    - [**2. Velocity Transformation Logic**](#2-velocity-transformation-logic)
+  - [Sensor Data Processing](#sensor-data-processing)
+    - [IMU Processing](#imu-processing)
+      - [**1. Gravity corrected acceleration**](#1-gravity-corrected-acceleration)
+      - [**2. Gyroscope angular rates**](#2-gyroscope-angular-rates)
+      - [**3. Orientation**](#3-orientation)
+    - [Depth Sensor Processing](#depth-sensor-processing)
+    - [DVL Processing](#dvl-processing)
+      - [**1. Position Transformation Logic**](#1-position-transformation-logic)
+      - [**2. Velocity Transformation Logic**](#2-velocity-transformation-logic)
   - [Usage](#usage)
+  - [Sensor driver configuration](#sensor-driver-configuration)
+    - [Waterlinked DVL-a50](#waterlinked-dvl-a50)
   - [Nodes](#nodes)
     - [Published Topics](#published-topics)
     - [Subscribed Topics](#subscribed-topics)
@@ -30,11 +32,12 @@ These processed sensor streams are used downstream by the **EKF**, **controller*
     - [Dependencies](#dependencies)
     - [Building](#building)
     - [Running](#running)
-- [License](#license)
+  - [ros2 launch sensors sensors.launch.py dvl:=true](#ros2-launch-sensors-sensorslaunchpy-dvltrue)
+  - [License](#license)
 
 ---
 
-## Overview
+## Sensor Data Processing
 
 This package receives raw sensor messages and transforms them into normalized, physically meaningful quantities for the AUV system. Each sensor pipeline follows a similar pattern:
 
@@ -47,11 +50,11 @@ Different sensors follow different mathematical models (detailed below). The veh
 
 ---
 
-## IMU Processing
+### IMU Processing
 
 The IMU produces 3-axis **accelerometer**, **gyroscope**, and **magnetometer** readings. These are converted into body-frame free acceleration, angular velocity, and orientation estimates.
 
-### **1. Gravity corrected acceleration**
+#### **1. Gravity corrected acceleration**
 
 Raw accelerometer readings are the **specific force** in the sensor frame *s*: 
 
@@ -98,7 +101,7 @@ C_{si}(q_{si}) = \begin{bmatrix}
 $$
 
 
-### **2. Gyroscope angular rates**
+#### **2. Gyroscope angular rates**
 The gyro sensor model is simpler than the accelerometers, because the angular velocity of all points on a rigid body is the same. Essentially, the measured angular rates, $\omega$, are the body rates of the vehicle, expressed in the sensor frame:
 
 $$
@@ -112,7 +115,7 @@ $$
 $$
 
 
-### **3. Orientation**
+#### **3. Orientation**
 
 Absolute orientation is given to us from an Earth-fixed navigation frame (TBD if  magnetic ENU) , $n$, to the IMU as a quaternion from the sensor frame , $s$, as $q_{sn}$. However, we wish to have our orientation expressed in the pool's inertial $i$ frame because it is more intuitive. By taking an initial measurement of the pool's frame orientation in the $n$ frame, we have $q_{in}$. Thus,
 
@@ -122,7 +125,7 @@ $$
 
 ---
 
-## Depth Sensor Processing
+### Depth Sensor Processing
 
 The depth sensor gives us the z-positon of the *depth sensor* in the pool's inertial frame, expressed in the pool's frame. This is denoted as:
 
@@ -134,9 +137,9 @@ $$
  
  Our goal is to use this reading to calculate the z-position of the vehicle frame, $[r_i^{vi}]_z$. They are related as follows:
 
- $$
+$$
 [r_i^{vi}]_z = [r_i^{si}]_z + [r_i^{vs}]_{z}
- $$
+$$
  
  Where $[r_i^{vs}]_{z}$ is the translation vector from the sensor frame to the vehicle frame, expressed in the inertial frame. 
  
@@ -181,7 +184,7 @@ $r_v^{vs}$: the vector from the sensor to the vehicle frame, expressed in the ve
 ---
 
 
-## DVL Processing
+### DVL Processing
 
 
 The DVL provides position data for the sensor's location relative to the pool frame. It utilizes an internal Kalman Filter to fuse IMU and acoustic velocity measurements for dead-reckoning position estimation. All relevant documentation about the DVL a50 can be [here](https://docs.waterlinked.com/dvl/dvl-a50/). 
@@ -194,7 +197,7 @@ As mentioned above, we operate in three coordinate reference frames:
 
 Because the DVL output represents the DVL's location ($d$) and not the AUV's Center of Mass ($v$), the raw coordinates must be transformed into the pool frame before adding the offset between the DVL inertial frame($i2$) and the pool inertial frame ($p$).
 
-### **1. Position Transformation Logic**
+#### **1. Position Transformation Logic**
 
 To calculate the AUV's position in the $p$ frame, we need to go from the $p$ frame to the $i2$ frame, then from the $i2$ frame to the $d$ frame, then from the $d$ frame to the $v$ frame:
 
@@ -209,7 +212,7 @@ $$
 r_p^{vp} = r_p^{i2p} + C_{pi2}  r_{i2}^{di2} + C_{pv}  r_v^{vd}
 $$
 
-Let's know figure out how we can get the three remaining variables in the equation. 
+Let's now figure out how we can get the three remaining variables in the equation. 
 
 - $r_p^{i2p}$ is equal to $r_v^{dv}$. This is because the vector from the AUV's starting point to the DVL's starting point
 is simply the vector from the vehicle frame to the DVL frame at startup. 
@@ -222,7 +225,7 @@ rotation matrix from the DVL's inertial frame to the pool inertial frame, giving
 As for calculating the AUV's velocity from the DVL's velocity measurements, it invloves more complex calculations
 involving the orientation and angular velocity of the AUV. It is currently not supported. 
 
-### **2. Velocity Transformation Logic**
+#### **2. Velocity Transformation Logic**
 The DVL provides velocity readings of the DVL in the the DVL's body frame. We want to convert them into velocity
 measurements of the AUV in the inertial pool frame. 
 
@@ -269,13 +272,41 @@ A good exercise would be re-applying the equation at the beginning of this secti
 
 This package is not used directly by operators. It runs alongside the sensor drivers and publishes processed data for the estimation stack.
 
----
+
+## Sensor driver configuration
+The sensors package interacts directly with the sensors drivers, so its configuration and output is closely tied to the specific hardware used, notably:
+- IMU: The `xsens_mti_ros2_driver` provided by the [Xsens MTi ROS Driver and Ntrip Client repository](https://github.com/mcgill-robotics/Xsens_MTi_ROS_Driver_and_Ntrip_Client/tree/3271d806070fc13834bb85e67e34a951c7559e77)
+- Depth Sensing: Pressure data directly from embedded code on the [AUV Embedded 2026 repository](https://github.com/mcgill-robotics/auv-embedded-2026), provided to us via the `micro_ros_agent` package.
+- DVL: [dvl_a50_serial_python](https://github.com/mcgill-robotics/dvl_a50_serial_python) parses the DVL's serial output.
+
+Configuration and setup for each of these drivers is detailed in the README's of the specific repositories, IMU and DVL repository pinned to submodules in the parent workspace of this package, whereas Depth sensor information can be found in the embedded repository. 
+
+Below is a brief overview of how the sensors package interacts with each of these drivers, and any specific configuration details relevant to the sensors package.
+
+### Waterlinked DVL-a50
+
+There are two drivers available for the DVL-a50, [dvl_a50_serial_python](https://github.com/mcgill-robotics/dvl_a50_serial_python) and [dvl_a50](https://github.com/mcgill-robotics/dvl_a50), designed to work with the Waterlinked [serial](https://docs.waterlinked.com/dvl/dvl-protocol/#serial-protocol) and [ethernet JSON](https://docs.waterlinked.com/dvl/dvl-protocol/#json-protocol-tcp) protocols provided by Waterlinked. The tradeoffs between these drivers are outlined in [PR #99](https://github.com/mcgill-robotics/AUV-2026/pull/99).
+
+**The overall decision has been made to use the `dvl_a50_serial_python` driver for our main DVL interface** The `dvl_a50` ethernet driver will be kept as a backup and for testing purposes (a limited simulation of the JSON protocol is provided in a dev branch of [AUV Unity Simulation](https://github.com/mcgill-robotics/auv-sim-unity/tree/dev/DVLTCPServer)).
+
+The run the `dvl_a50_serial_python` driver, build the package and launch the driver separately with:
+
+```bash
+# assuming you are at the root of the repository
+./build.sh -p dvl_a50_serial_python
+source ros2_ws/install/setup.bash
+ros2 launch dvl_a50_serial_python dvl_a50_serial_python.launch.py
+```
 
 ## Nodes
 
-The package provides a single ROS node: `sensor_node`.
+The package provides 4 main nodes:
+- `imu_processor`: processes raw IMU data and publishes free acceleration, angular velocity, and orientation in the `auv` frame.
+- `depth_processor`: processes raw depth sensor data and publishes the AUV's depth in the `pool` frame.
+- `dvl_processor`: processes raw DVL data and publishes the AUV's position and velocity in the `pool` frame.
+- `state_aggregator`: aggregates all processed sensor data and publishes the AUV's overall state (pose, velocity, etc.) in the `pool` frame for use by the EKF and other downstream nodes.
 
-- Input: subscribes to all raw sensor data topics. TBD on how DVL data will be read
+- Input: subscribes to all raw sensor data topics.
 
 - Outputs: publishes all processed data to their respective topics
 
@@ -287,7 +318,8 @@ The package provides a single ROS node: `sensor_node`.
 |-------|---------|-------------|
 | `auv_frame/imu` | Imu | Processed imu data in `auv` frame. Free acceleration |
 | `auv_frame/depth` | Float64 | AUV's depth in `pool` frame |
-| `/sensors/dvl` | TBD | TBD |
+| `auv_frame/dvl/position` | PointStamped | AUV's position in `pool` frame |
+| `auv_frame/dvl/velocity` | TwistStamped | AUV's velocity in `pool` frame |
 | `state/pose` | PoseStamped | Aggregated pose of the AUV in `pool` frame | 
 
 **Note on VIO Fallback:** The `state_aggregator` node can optionally use the Visual Inertial Odometry (VIO) pose from the ZED camera instead of the DVL/IMU. This is configured via the `use_vio_for_position` and `use_vio_for_orientation` parameters in `sensors_frames.yaml`. When enabled, X and Y position are taken from the VIO (Z is always from the depth sensor), and orientation is taken from the VIO quaternion. This is highly useful for testing or operating when DVL/IMU hardware is unavailable.
@@ -302,7 +334,8 @@ The package provides a single ROS node: `sensor_node`.
 |-------|---------|-------------|
 | `imu/data` | Vendor IMU message | Data in imu's body frame. Specific force  |
 | `/sensors/depth/z` | Pressure sensor message | Depth of sensor probe |
-| `/raw/dvl` | Vendor DVL message | TBD |
+| `/dvl/velocity` | Vendor DVL velocity message | DVL velocity in its body frame |
+| `/dvl/dead_reckoning` | Vendor DVL position message | DVL position in its body frame |
 
 ---
 
@@ -316,28 +349,33 @@ The package provides a single ROS node: `sensor_node`.
 - sensor_msgs
 - geometry_msgs
 - message_filters
+- dvl_msgs (submodule in the parent workspace)
+- xsens_mti_ros2_driver (submodule in the parent workspace)
+- micro_ros_agent (built in docker container)
 
 ---
 
 ### Building
-
+This script builds the `sensors` package and its dependencies.
 ```bash
-source /opt/ros/humble/setup.bash
-cd <AUV-2026>/ros2_ws
-colcon build --packages-select sensors
+# assuming you are at the root of the repository
+./build.sh -p dvl_a50_serial_python
 ```
-
 ---
 
 ### Running
 
-Launch all sensor data processors
+```bash
+source ros2_ws/install/setup.bash
+ros2 launch sensors sensors.launch.py
+```
+**Note that by default, the DVL driver is not launched with the sensors package to avoid overheating the DVL when testing above water.** To launch the DVL driver alongside the sensors package, set the `dvl` argument to `true` when launching:
 
-    ros2 launch sensors sensor_node.launch.py
-
+```bash
+ros2 launch sensors sensors.launch.py dvl:=true
 ---
 
-# License
+## License
 
 Released under GPLv3
 
