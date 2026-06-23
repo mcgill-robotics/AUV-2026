@@ -2,6 +2,7 @@ import py_trees
 from numpy.polynomial.polynomial import Polynomial
 from .torpedo_behaviours import *
 from ..vision_behaviours import SearchSweepBehaviour, CircleAroundToFindBehaviour
+import operator
 class HoleType(Enum):
     LARGE = 1
     SMALL = 2
@@ -62,6 +63,12 @@ class TorpedoTask(py_trees.composites.Sequence):
         self.far_distance_threshold = 0.3
         
         self.add_children([
+            py_trees.behaviours.SetBlackboardVariable(
+                name="Set Torpedo Count to 2",
+                variable_name="/torpedo/count",
+                variable_value=2,
+                overwrite=True
+            ),
             self.board_sequence(),
             self.node_base_case(),
             py_trees.behaviours.Success(name="Placeholder Torpedo Success")
@@ -231,7 +238,14 @@ class TorpedoTask(py_trees.composites.Sequence):
         large_then_small = py_trees.composites.Sequence("Large then Small Strategy", memory=True)
         large_then_small.add_children(
             [
-                CheckTorpedoCount(expected_count=2),
+                py_trees.behaviours.CheckBlackboardVariableValue(
+                    name="Check torpedo count is 2",
+                    check=py_trees.common.ComparisonExpression(
+                        variable="/torpedo/count",
+                        value=2,
+                        operator=operator.eq,
+                    )
+                ),
                 self.board_type_selector(HoleType.LARGE),
                 self.board_type_selector(HoleType.SMALL)
             ]
@@ -240,13 +254,27 @@ class TorpedoTask(py_trees.composites.Sequence):
         small_only = py_trees.composites.Sequence("Small Only Strategy", memory=True)
         small_only.add_children(
             [
-                CheckTorpedoCount(expected_count=1),
+                py_trees.behaviours.CheckBlackboardVariableValue(
+                    name="Check torpedo count is 1",
+                    check=py_trees.common.ComparisonExpression(
+                        variable="/torpedo/count",
+                        value=1,
+                        operator=operator.eq,
+                    )
+                ),
                 self.board_type_selector(HoleType.SMALL)
             ]
         )
         large_only.add_children(
             [
-                CheckTorpedoCount(expected_count=1),
+                py_trees.behaviours.CheckBlackboardVariableValue(
+                    name="Check torpedo count is 1",
+                    check=py_trees.common.ComparisonExpression(
+                        variable="/torpedo/count",
+                        value=1,
+                        operator=operator.eq,
+                    )
+                ),
                 self.board_type_selector(HoleType.LARGE)
             ]
         )

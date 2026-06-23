@@ -580,30 +580,6 @@ class MoveToFrontOfIcon(Navigation):
                 self.action_status = ActionStatus.PENDING
                 return py_trees.common.Status.RUNNING
         return py_trees.common.Status.SUCCESS
-                
-class CheckTorpedoCount(Condition):
-    """
-    Condition to check if torpedo count matches expected count.
-    """
-    def __init__(self, expected_count: int = TORPEDO_COUNT):
-        super().__init__("Check Torpedo Count: " + str(expected_count))
-        self.expected_count = expected_count
-
-    def setup(self, **kwargs):
-        super().setup(**kwargs)
-        # self.blackboard.register_key(key="/torpedo/count", access=py_trees.common.Access.READ)
-        
-    def update(self):
-        return py_trees.common.Status.SUCCESS
-        # if not hasattr(self.blackboard, 'torpedo') or self.blackboard.torpedo.count is None:
-        #     self.node.get_logger().error(f"[{self.name}] No torpedo count available on blackboard.")
-        #     return py_trees.common.Status.FAILURE
-        # if self.blackboard.torpedo.count == self.expected_count:
-        #     self.node.get_logger().info(f"[{self.name}] Torpedo count is correct.")
-        #     return py_trees.common.Status.SUCCESS
-        # else:
-        #     self.node.get_logger().error(f"[{self.name}] Torpedo count is incorrect.")
-        #     return py_trees.common.Status.FAILURE
 
 class DetermineIconPosition(Action):
     """
