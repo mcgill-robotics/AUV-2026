@@ -1196,8 +1196,8 @@ class FrontCamObjectDetectorNode():
             # TODO: replace this with the actual object's size
             max_physical_size = 0.5 
             
-            # Base noise: 0.1m + 10% of distance + 20% of max physical size
-            dynamic_noise = 0.1 + (0.1 * dist) + (0.2 * max_physical_size)
+            # Base noise: 0.3m + 10% of distance + 20% of max physical size
+            dynamic_noise = 0.3 + (0.1 * dist) + (0.2 * max_physical_size)
             
             # Add the dynamic noise identically to X, Y, Z
             cov_cam += np.eye(3) * dynamic_noise

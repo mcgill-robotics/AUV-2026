@@ -56,7 +56,7 @@ front_cam_object_detection:
     zed_open_timeout_sec: 5.0 # wrapper-aligned open timeout
     zed_async_grab_camera_recovery: false # keep grab() blocking until communication is restored
     zed_grab_compute_capping_fps: 0.0 # wrapper-aligned compute cap; 0 disables capping
-    zed_enable_image_validity_check: false # wrapper-aligned frame corruption check
+    zed_enable_image_validity_check: true # wrapper-aligned frame corruption check
     zed_optional_opencv_calibration_file: '' # optional OpenCV override for factory calibration
     zed_depth_stabilization: 30 # init-time ZED depth stabilization; forced to 0 when enable_vio is false to avoid implicit tracking enablement
     zed_depth_mode: NEURAL # NEURAL or NEURAL_PLUS
@@ -94,7 +94,7 @@ front_cam_object_detection:
 
     # Extrinsics
     auv_to_camera_center:
-      xyz: [0.148, 0.0, 0.0]
+      xyz: [0.14, 0.0, -0.02]
       rpy: [0.0, 0.0, 0.0]
     camera_center_to_detection:
       xyz: [0.0, 0.06, 0.0]
@@ -155,7 +155,7 @@ front_cam_object_detection:
       enable: true
       ratio: 0.50 # The ratio (0.0 to 1.0) of the gate bounding box to keep from the top edge
     border_exclusion: # Excludes objects that are too close to the border
-      enable: false
+      enable: true
       mode: "horizontal" # "both", "horizontal", "vertical"
       margin_px: 20 # The number of pixels to exclude from the border
       labels: ["white_pipe", "red_pipe", "gate"] # List of labels to apply border exclusion to
@@ -205,7 +205,7 @@ down_cam_object_detection:
 
     # Extrinsics (static transform from auv_link to sensors/down_cam)
     auv_to_down_cam:
-      xyz: [-0.08, 0.08, -0.08]
+      xyz: [-0.067, 0.07, -0.014]
       rpy: [0.0, 1.57079632679, 0.0] # [Roll, Pitch, Yaw] in radians. 1.57079632679 is exactly 90 degrees pitch forward/down (pointing towards the pool floor).
 
     # Camera hardware (direct capture via cv2.VideoCapture, no usb_cam_node needed)
@@ -335,6 +335,7 @@ object_map:
     semi_persistent_objects:
       - "red_pipe"
       - "white_pipe"
+      - "lane_marker"
 
     # how long to keep a semi-persistent object in the map without detections before deleting it
     # Value is in frames (e.g. 300 = 10s at 30fps).

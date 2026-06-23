@@ -47,6 +47,7 @@ def generate_launch_description():
             'send_buffer_limit': LaunchConfiguration('send_buffer_limit'),  # 10MB buffer for images
             'use_compression': True,
             'best_effort_qos_topic_whitelist': [
+                '/tf',
                 '/vision/front_cam/detections/annotated/compressed',
                 '/vision/down_cam/detections/annotated/compressed',
                 '/vision/front_cam/detection_frame/depth'
