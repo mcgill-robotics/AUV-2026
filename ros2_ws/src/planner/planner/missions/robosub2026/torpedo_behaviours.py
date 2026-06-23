@@ -1,7 +1,6 @@
 import math
 import py_trees
-import py_trees_ros
-from typing import Optional
+from typing import Optional, Tuple
 from ..action_status_enum import ActionStatus
 import controls.utils as geometry
 from controls.utils import Vector2D
@@ -31,10 +30,6 @@ class Action(py_trees.behaviour.Behaviour):
 
     def initialise(self):
         self.logger.debug(f"Action::initialize {self.name}")
-
-    def update(self):
-        self.logger.debug(f"Action::update {self.name}")
-        return py_trees.common.Status.SUCCESS
 
     def terminate(self, new_status):
         self.logger.debug(f"Action::terminate {self.name} to {new_status}")
@@ -168,7 +163,7 @@ class TorpedoNodeFactory:
 
 
 ### Actions:
-class FindBoardOrientation(Action):
+class DetermineBoardOrientation(Action):
     """
     Action to find the orientation of the board and write it to the blackboard. This will be used for downstream alignment to the board when we are close to the board and can no longer rely on vision to find the orientation of the board.
     This is necessary for orientation in particular since position averaging is already handled by a Kalman Filter in the vision pipeline, whereas orientation is inferred based on the icons on the board, and is more susceptible to noise and outliers.
@@ -184,7 +179,7 @@ class FindBoardOrientation(Action):
             rejection_threshold: float = 0.2,
             compare_measurement_with_blackboard: bool = False
         ):
-        super().__init__("Find Board Orientation sampling" + (" once" if n_samples == 1 else f" {n_samples} times") + (f" for consistency validation" if compare_measurement_with_blackboard else ""))
+        super().__init__("Determine Board Orientation sampling" + (" once" if n_samples == 1 else f" {n_samples} times") + (f" for consistency validation" if compare_measurement_with_blackboard else ""))
         self.orientation_samples_number = n_samples
         self.sample_rate = sample_every_n_ticks
         self.rejection_threshold = rejection_threshold
@@ -251,7 +246,7 @@ class FindBoardOrientation(Action):
             return py_trees.common.Status.SUCCESS
         else:
             return py_trees.common.Status.RUNNING
-        
+     
 class MoveToFrontOfBoard(Navigation):
     """
     Navigation Action to move to the front of the board based on the orientation found in the FindBoardOrientation action.
@@ -272,7 +267,6 @@ class MoveToFrontOfBoard(Navigation):
                 
     def setup(self, **kwargs):
         super().setup(**kwargs)
-        self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/board/orientation", access=py_trees.common.Access.READ)
 
@@ -288,9 +282,6 @@ class MoveToFrontOfBoard(Navigation):
             case ActionStatus.PENDING:
                 return py_trees.common.Status.RUNNING
             case ActionStatus.NOT_SENT:  
-                if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.pose is None:
-                    self.node.get_logger().warn(f"[{self.name}] Waiting for /sensors/pose to determine AUV yaw.")
-                    return py_trees.common.Status.RUNNING
                 if not hasattr(self.blackboard, 'board') or self.blackboard.board.orientation is None:
                     self.node.get_logger().error(f"[{self.name}] No board orientation available on blackboard.")
                     return py_trees.common.Status.FAILURE
@@ -376,7 +367,6 @@ class AlignToBoard(Navigation):
                 self.action_status = ActionStatus.PENDING
                 return py_trees.common.Status.RUNNING
         return py_trees.common.Status.SUCCESS
-                
 
 class DetermineBoardType(Action):
     """
@@ -389,7 +379,6 @@ class DetermineBoardType(Action):
         super().setup(**kwargs)
         self.node = kwargs['node']
         self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
-        self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/board/type", access=py_trees.common.Access.WRITE)
         
     def update(self):
@@ -462,7 +451,7 @@ class DetermineBoardType(Action):
 
         # 2. Move to distance from board while aligning to board
         return py_trees.common.Status.SUCCESS
-
+    
 class CheckBoardType(Condition):
     """
     Condition to check if the board type on the blackboard matches the expected board type.
@@ -517,11 +506,12 @@ class MoveToFrontOfIcon(Navigation):
             raise ValueError("z_reference must be provided when use_icon_z is False")
         self.use_icon_z = use_icon_z
         self.z_reference = z_reference
-        self.blackboard = self.attach_blackboard_client(name=self.name)
+        self.compute_distance_from_icon = distance_from_icon is None
         
     def setup(self, **kwargs):
         super().setup(**kwargs)
-        self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
+        if self.compute_distance_from_icon:
+            self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/board/orientation", access=py_trees.common.Access.READ)
         
@@ -536,9 +526,6 @@ class MoveToFrontOfIcon(Navigation):
             case ActionStatus.PENDING:
                 return py_trees.common.Status.RUNNING
             case ActionStatus.NOT_SENT:  
-                if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.pose is None:
-                    self.node.get_logger().warn(f"[{self.name}] Waiting for /sensors/pose to determine AUV yaw.")
-                    return py_trees.common.Status.RUNNING
                 if not hasattr(self.blackboard, 'board') or self.blackboard.board.orientation is None:
                     self.node.get_logger().error(f"[{self.name}] No board orientation available on blackboard.")
                     return py_trees.common.Status.FAILURE
@@ -559,12 +546,17 @@ class MoveToFrontOfIcon(Navigation):
                 
                 target_2d_position = Vector2D.from_point(target_icon_vo.pose.position)
                 
-                if self.distance_from_icon is None:
+                if self.compute_distance_from_icon:
+                    if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.pose is None:
+                        self.node.get_logger().warn(f"[{self.name}] Waiting for /sensors/pose to determine distance from icon.")
+                        return py_trees.common.Status.RUNNING
                     self.distance_from_icon = geometry.plane_point_distance(
                         point=target_2d_position,
                         plane_point=auv_2d_position,
                         plane_normal=geometry.find_normal_from_quaternion(self.blackboard.board.orientation)
                     )
+                # self.compute_distance_from_icon should guarantee that self.distance_from_icon is not None, but we add an assertion here to satisfy the type checker and catch any potential bugs
+                assert self.distance_from_icon is not None
                 self.node.get_logger().info(f"[{self.name}] Distance from AUV to icon: {self.distance_from_icon:.2f}m")
                 target_xy = compute_target_in_front_of_point_on_board(target_2d_position, self.blackboard.board.orientation, self.distance_from_icon)
                 
