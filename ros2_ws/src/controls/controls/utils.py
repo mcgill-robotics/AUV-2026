@@ -1,6 +1,7 @@
 """Math utilities for the motion package."""
 
 import math
+from typing import Tuple
 from geometry_msgs.msg import Point, Quaternion
 from scipy.spatial.transform import Rotation
 from dataclasses import dataclass
@@ -66,6 +67,10 @@ def rotate_quaternion(q: Quaternion, roll_offset: float, pitch_offset: float, ya
     r = r * Rotation.from_euler('XYZ', [roll_offset, pitch_offset, yaw_offset], degrees=False)
     q_arr = r.as_quat()
     return Quaternion(x=q_arr[0], y=q_arr[1], z=q_arr[2], w=q_arr[3])
+
+def rotate_3d_vector(q: Quaternion, vector : Point) -> Point:
+    r = Rotation.from_quat([q.x, q.y, q.z, q.w])
+    return r.apply(vector)
 
 def normalize_angle(angle: float) -> float:
     """Normalize an angle to [-pi, pi].

@@ -1,5 +1,6 @@
 import math
 import py_trees
+import numpy as np
 from typing import Optional, Tuple
 from ..action_status_enum import ActionStatus
 import controls.utils as geometry
@@ -7,7 +8,7 @@ from controls.utils import Vector2D
 from controls.goal_helpers import set_attitude_quaternion,move_global
 from enum import Enum
 from auv_msgs.msg import VisionObject
-from geometry_msgs.msg import Quaternion
+from geometry_msgs.msg import Point, Quaternion
 
 TORPEDO_COUNT = 2
 
@@ -19,6 +20,10 @@ Board Type 2: Blood Ambulance Fire Firetruck
 class BoardType(Enum):
     FIRE_TOP_LEFT = 1
     BLOOD_TOP_LEFT = 2
+    
+class TorpedoSide(Enum):
+    LEFT = 1
+    RIGHT = 2
 
 class Action(py_trees.behaviour.Behaviour):
     def __init__(self, name):
@@ -599,3 +604,99 @@ class CheckTorpedoCount(Condition):
         # else:
         #     self.node.get_logger().error(f"[{self.name}] Torpedo count is incorrect.")
         #     return py_trees.common.Status.FAILURE
+        
+class AlignTorpedoToHole(Navigation):
+    """
+    Navigation Action to align the torpedo to the hole.
+    """
+    def __init__(
+            self,
+            projected_offset_to_hole: Tuple[float,float,float],
+            auv_to_torpedo : Tuple[float,float,float],
+            forward_trajectory : np.polynomial.Polynomial,
+            lateral_trajectory : np.polynomial.Polynomial,
+            vertical_trajectory : np.polynomial.Polynomial,
+            position_tolerance: float = 0.1,
+            orientation_tolerance_rad: float = 0.1,
+            timeout: float = 30.0,
+            hold_time: float = 0.5
+        ):
+        super().__init__(f"Align Torpedo to Hole", position_tolerance, orientation_tolerance_rad, timeout, hold_time)
+        self.lateral_trajectory = lateral_trajectory
+        self.vertical_trajectory = vertical_trajectory
+        self.forward_trajectory = forward_trajectory
+        self.to_hole_offset = projected_offset_to_hole
+        self.auv_to_torpedo = auv_to_torpedo
+        
+        
+    def setup(self, **kwargs):
+        super().setup(**kwargs)
+        self.blackboard.register_key(key="/board/orientation", access=py_trees.common.Access.READ)
+        # whether to orient left or right torpedo
+        self.blackboard.register_key(key="/torpedo/count", access=py_trees.common.Access.READ)
+        
+    def update(self):
+        match self.action_status:
+            case ActionStatus.SUCCEEDED:
+                self.node.get_logger().info(f"[{self.name}] Successfully aligned torpedo to hole. {self.result_message}")
+                return py_trees.common.Status.SUCCESS
+            case ActionStatus.FAILED:
+                self.node.get_logger().error(f"[{self.name}] Failed to align torpedo to hole. {self.result_message}")
+                return py_trees.common.Status.FAILURE
+            case ActionStatus.PENDING:
+                return py_trees.common.Status.RUNNING
+            case ActionStatus.NOT_SENT:  
+                if not hasattr(self.blackboard, 'board') or self.blackboard.board.orientation is None:
+                    self.node.get_logger().error(f"[{self.name}] No board orientation available on blackboard.")
+                    return py_trees.common.Status.FAILURE
+                if not hasattr(self.blackboard, 'torpedo') or self.blackboard.torpedo.count is None:
+                    self.node.get_logger().error(f"[{self.name}] No torpedo count available on blackboard.")
+                    return py_trees.common.Status.FAILURE
+                
+                # after alignment, torpedo launch should be aligned with the hole
+                # to know how much to shift back by, we need to know the trajectory time such that both lateral and vertical trajectories are 0
+                # thus we find the roots of both trajectories and plug that into the forward trajectory to find the distance to shift back by
+                
+                # take only real part of the root
+                lateral_roots = sorted([root.real for root in self.lateral_trajectory.roots()])
+                vertical_roots = sorted([root.real for root in self.vertical_trajectory.roots()])
+                # round the roots to 6 decimal so taking the common roots is more robust to numerical errors
+                # filter out roots that are not within tolerance
+                # set both and take intersection to find common roots
+                common_roots = sorted(
+                    t for t in set(round(t, 6) for t in lateral_roots) & set(round(t, 6) for t in vertical_roots)
+                    if abs(self.forward_trajectory(t)) < self.position_tolerance
+                )
+                
+                # 0 is always solution since all trajectories start at 0
+                if len(common_roots) < 2:
+                    self.node.get_logger().error(f"[{self.name}] Torpedo lateral and vertical trajectories do not intersect within tolerance beyond trivial 0 case. Lateral roots: {lateral_roots}, Vertical roots: {vertical_roots}, Common roots: {common_roots}")
+                    return py_trees.common.Status.FAILURE
+                
+                forward_offset = self.forward_trajectory(common_roots[1])
+                
+                # move from current position to hole position, then move such that torpedo launch is at the AUV CoM, then move back by the forward offset to align the torpedo with the hole
+                goal_position = geometry.rotate_3d_vector(
+                    q=self.blackboard.board.orientation,
+                    vector=Point(
+                        x=self.to_hole_offset[0] - self.auv_to_torpedo[0] - forward_offset,
+                        y=self.to_hole_offset[1] - self.auv_to_torpedo[1],
+                        z=self.to_hole_offset[2] - self.auv_to_torpedo[2]
+                    )
+                )
+                
+                self.node.get_logger().info(f"[{self.name}] Moving to position in front of hole: {goal_position} with forward offset: {forward_offset:.2f}m")
+                
+                goal = move_global(
+                    x=goal_position.x,
+                    y=goal_position.y,
+                    z=goal_position.z,
+                    tolerance=self.position_tolerance,
+                    angular_tolerance=self.orientation_tolerance_rad,
+                    hold_time=self.hold_time,
+                    timeout=self.timeout,
+                )
+                self.navigation_client.send_navigation_goal(goal, self.name, self.on_server_goal_response, self.on_server_goal_result)
+                self.action_status = ActionStatus.PENDING
+                return py_trees.common.Status.RUNNING
+        
