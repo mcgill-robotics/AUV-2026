@@ -2,7 +2,8 @@
 
 #include <string>
 #include <rclcpp/rclcpp.hpp>
-#include <nav_msgs/msg/odometry.hpp>
+#include <dvl_msgs/msg/dvl.hpp>
+#include <dvl_msgs/msg/dvldr.hpp>
 #include <geometry_msgs/msg/point_stamped.hpp>
 #include <geometry_msgs/msg/twist_stamped.hpp>
 #include <sensor_msgs/msg/imu.hpp>
@@ -35,26 +36,29 @@ namespace sensors
         //Updates our stored vehicle orientation whenever the IMU publishes new data.
         void imu_callback(const sensor_msgs::msg::Imu::SharedPtr msg); 
         
-        //Takes new Odometry message and pushes it through the data pipeline below.
-        void dvl_callback(const nav_msgs::msg::Odometry::SharedPtr msg); 
+        //Takes new dvl velocity message and pushes it through the data pipeline below.
+        void dvl_velocity_callback(const dvl_msgs::msg::DVL::SharedPtr msg);
 
+        //Takes new dvl position message and pushes it through the data pipeline below.
+        void dvl_position_callback(const dvl_msgs::msg::DVLDR::SharedPtr msg); 
+
+        // Takes in raw dvl position data in dvl frame, transforms it to inertial frame, and returns transformed data
+        Vec3 process_dvl_position(const Vec3& r_di2_i2) const;
+                
+        // Takes in raw dvl velocity data in dvl frame, transforms it to inertial frame, and returns transformed data
+        Vec3 process_dvl_velocity(const Vec3& v_di2_d) const;
+
+        // Publishes transformed position values as a PointStamped message
+        void publish_position_msg(const Vec3& r_vp_p) const;
         
-        // Puts dvl position and velocity data in dvl frame from Odometry message and puts into C++ struct.
-        DvlData_DvlFrame parse_dvl(const nav_msgs::msg::Odometry& msg) const;
-        
-        // Takes in dvl position and velocity data in dvl frame, transforms it to inertial frame, and returns transformed data
-        DvlData_InertialFrame process_dvl(const DvlData_DvlFrame& dvl_raw) const;
-        
-        // Takes transformed position values and builds a message to be published
-        geometry_msgs::msg::PointStamped compose_position_msg(const DvlData_InertialFrame& dvl_inertial) const;
-        
-        // Takes transformed velocity values and builds a message to be published
-        geometry_msgs::msg::TwistStamped compose_velocity_msg(const DvlData_InertialFrame& dvl_inertial) const;
+        // Publishes transformed velocity values as a TwistStamped message
+        void publish_velocity_msg(const Vec3& v_vp_p) const;
 
 
         
         rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
-        rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr dvl_sub_;
+        rclcpp::Subscription<dvl_msgs::msg::DVL>::SharedPtr dvl_vel_sub_;
+        rclcpp::Subscription<dvl_msgs::msg::DVLDR>::SharedPtr dvl_pos_sub_;
         
         rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr position_pub_;
         rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr velocity_pub_;

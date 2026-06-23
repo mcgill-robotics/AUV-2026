@@ -32,8 +32,10 @@ DvlProcessor::DvlProcessor() : Node("dvl_processor") {
     imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
         "auv_frame/imu", rclcpp::SensorDataQoS().keep_last(1), std::bind(&DvlProcessor::imu_callback, this, std::placeholders::_1));
 
-    dvl_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
-        "dvl/odometry", rclcpp::SensorDataQoS().keep_last(1), std::bind(&DvlProcessor::dvl_callback, this, std::placeholders::_1));
+    dvl_pos_sub_ = this->create_subscription<dvl_msgs::msg::DVLDR>(
+        "dvl/dead_reckoning", rclcpp::SensorDataQoS().keep_last(1), std::bind(&DvlProcessor::dvl_position_callback, this, std::placeholders::_1));
+    dvl_vel_sub_ = this->create_subscription<dvl_msgs::msg::DVL>(
+        "dvl/velocity", rclcpp::SensorDataQoS().keep_last(1), std::bind(&DvlProcessor::dvl_velocity_callback, this, std::placeholders::_1));
     
 
     position_pub_ = this->create_publisher<geometry_msgs::msg::PointStamped>("auv_frame/dvl/position", rclcpp::SensorDataQoS().keep_last(1)); 
@@ -55,63 +57,61 @@ void DvlProcessor::imu_callback(const sensor_msgs::msg::Imu::SharedPtr msg) {
 
 
 //Function takes new odometry messages and pushes them through the data pipeline.
-void DvlProcessor::dvl_callback(const nav_msgs::msg::Odometry::SharedPtr msg) {
-    DvlData_DvlFrame dvl_raw = parse_dvl(*msg);
-    
-    DvlData_InertialFrame dvl_inertial = process_dvl(dvl_raw);
-    
-    geometry_msgs::msg::PointStamped pos_msg = compose_position_msg(dvl_inertial);
-    geometry_msgs::msg::TwistStamped vel_msg = compose_velocity_msg(dvl_inertial);
+void DvlProcessor::dvl_velocity_callback(const dvl_msgs::msg::DVL::SharedPtr msg) {
+    Vec3 v_di2_d = Vec3(msg->velocity.x, msg->velocity.y, msg->velocity.z);
 
-    position_pub_->publish(pos_msg);
-    velocity_pub_->publish(vel_msg);
+    Vec3 v_vp_p = process_dvl_velocity(v_di2_d);
+    
+    publish_velocity_msg(v_vp_p);
 }
 
-DvlData_DvlFrame DvlProcessor::parse_dvl(const nav_msgs::msg::Odometry& msg) const {
-    DvlData_DvlFrame dvl_raw;
+void DvlProcessor::dvl_position_callback(const dvl_msgs::msg::DVLDR::SharedPtr msg) {
+    Vec3 r_di2_i2 = Vec3(msg->position.x, msg->position.y, msg->position.z);
 
-    dvl_raw.r_di2_i2 = Vec3(msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z);
-    dvl_raw.v_di2_d = Vec3(msg.twist.twist.linear.x, msg.twist.twist.linear.y, msg.twist.twist.linear.z);
+    Vec3 r_vp_p = process_dvl_position(r_di2_i2);
     
-    return dvl_raw; 
+    publish_position_msg(r_vp_p);
 }
 
-DvlData_InertialFrame DvlProcessor::process_dvl(const DvlData_DvlFrame& dvl_raw) const {
+
+Vec3 DvlProcessor::process_dvl_position(const Vec3& r_di2_i2) const 
+{
     DvlData_InertialFrame dvl_inertial;
     Vec3 r_i2p_p = r_dv_v_;
-    Vec3 r_di2_p = q_pi2_ * dvl_raw.r_di2_i2;
+    Vec3 r_di2_p = q_pi2_ * r_di2_i2;
     Vec3 r_vd_v = -r_dv_v_;
     Vec3 r_vd_p = q_iv_ * r_vd_v;
 
-
-    dvl_inertial.r_vp_p = r_i2p_p + r_di2_p + r_vd_p;
-    
-    // Velocity transformation
-    Quatd q_id = q_iv_ * q_vd_;
-    Vec3 v_di_p = q_id * dvl_raw.v_di2_d;
-    
-    dvl_inertial.v_vp_p = v_di_p - q_iv_ * (w_v_.cross(r_dv_v_));
-    return dvl_inertial;
+    Vec3 r_vp_p = r_i2p_p + r_di2_p + r_vd_p;
+    return r_vp_p;
 }
 
-geometry_msgs::msg::PointStamped DvlProcessor::compose_position_msg(const DvlData_InertialFrame& dvl_inertial) const {
+Vec3 DvlProcessor::process_dvl_velocity(const Vec3& v_di2_d) const {  
+    Quatd q_id = q_iv_ * q_vd_;
+    Vec3 v_di_p = q_id * v_di2_d;
+    Vec3 v_vp_p = v_di_p - q_iv_ * (w_v_.cross(r_dv_v_));
+
+    return v_vp_p;
+}
+
+void DvlProcessor::publish_position_msg(const Vec3& r_vp_p) const {
     geometry_msgs::msg::PointStamped msg_out;
     msg_out.header.frame_id = frame_id_global_;
-    msg_out.point.x = dvl_inertial.r_vp_p.x();
-    msg_out.point.y = dvl_inertial.r_vp_p.y();
-    msg_out.point.z = dvl_inertial.r_vp_p.z();
+    msg_out.point.x = r_vp_p.x();
+    msg_out.point.y = r_vp_p.y();
+    msg_out.point.z = r_vp_p.z();
     
-    return msg_out;
+    position_pub_->publish(msg_out);
 }
 
-geometry_msgs::msg::TwistStamped DvlProcessor::compose_velocity_msg(const DvlData_InertialFrame& dvl_inertial) const {
+void DvlProcessor::publish_velocity_msg(const Vec3& v_vp_p) const {
     geometry_msgs::msg::TwistStamped msg_out;
     msg_out.header.frame_id = frame_id_global_;    
-    msg_out.twist.linear.x = dvl_inertial.v_vp_p.x();
-    msg_out.twist.linear.y = dvl_inertial.v_vp_p.y();
-    msg_out.twist.linear.z = dvl_inertial.v_vp_p.z();
+    msg_out.twist.linear.x = v_vp_p.x();
+    msg_out.twist.linear.y = v_vp_p.y();
+    msg_out.twist.linear.z = v_vp_p.z();
     
-    return msg_out;
+    velocity_pub_->publish(msg_out);
 }
 
 } 
