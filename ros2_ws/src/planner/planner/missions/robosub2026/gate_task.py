@@ -26,13 +26,15 @@ class PlanGateTraversalBehaviour(py_trees.behaviour.Behaviour):
     def __init__(
         self,
         desired_role: str = "survey_repair",
-        pass_distance: float = 2.0,
+        approach_distance: float = 1.0,
+        pass_distance: float = 1.0,
         max_detection_age: int = 10,
         max_wait_time: float = 5.0,
         name: str = "Plan Gate Traversal",
     ):
         super().__init__(name)
         self.desired_role = desired_role
+        self.approach_distance = approach_distance
         self.pass_distance = pass_distance
         self.max_detection_age = max_detection_age
         self.max_wait_time = max_wait_time
@@ -45,8 +47,10 @@ class PlanGateTraversalBehaviour(py_trees.behaviour.Behaviour):
         self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/gate/selected_role", access=py_trees.common.Access.WRITE)
         self.blackboard.register_key(key="/gate/selected_side", access=py_trees.common.Access.WRITE)
-        self.blackboard.register_key(key="/gate/target_x", access=py_trees.common.Access.WRITE)
-        self.blackboard.register_key(key="/gate/target_y", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key="/gate/approach_x", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key="/gate/approach_y", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key="/gate/pass_x", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key="/gate/pass_y", access=py_trees.common.Access.WRITE)
         self.blackboard.register_key(key="/gate/target_yaw", access=py_trees.common.Access.WRITE)
 
     def initialise(self):
@@ -108,25 +112,36 @@ class PlanGateTraversalBehaviour(py_trees.behaviour.Behaviour):
         role_x = selected_role_obj.pose.position.x
         role_y = selected_role_obj.pose.position.y
 
-        target_base_x = 0.5 * (gate_x + role_x)
-        target_base_y = 0.5 * (gate_y + role_y)
+        # the role panel sits on one half of the opening.
+        # we aim directly for the role panel rather than the midpoint
+        target_base_x = role_x
+        target_base_y = role_y
 
         through_x, through_y = self._compute_through_direction(gate, role_objects, auv_x, auv_y)
-        target_x = target_base_x + self.pass_distance * through_x
-        target_y = target_base_y + self.pass_distance * through_y
+        approach_x = target_base_x - self.approach_distance * through_x
+        approach_y = target_base_y - self.approach_distance * through_y
+        pass_x = target_base_x + self.pass_distance * through_x
+        pass_y = target_base_y + self.pass_distance * through_y
         target_yaw = math.atan2(through_y, through_x)
 
-        chosen_side = self._compute_side_string(auv_x, auv_y, auv_yaw, role_x, role_y)
+        other_role = "search_rescue" if selected_role == "survey_repair" else "survey_repair"
+        other_role_obj = role_objects.get(other_role)
+
+        chosen_side = self._compute_side_string(
+            gate_x, gate_y, through_x, through_y, role_x, role_y, other_role_obj
+        )
 
         self.blackboard.gate.selected_role = selected_role
         self.blackboard.gate.selected_side = chosen_side
-        self.blackboard.gate.target_x = target_x
-        self.blackboard.gate.target_y = target_y
+        self.blackboard.gate.approach_x = approach_x
+        self.blackboard.gate.approach_y = approach_y
+        self.blackboard.gate.pass_x = pass_x
+        self.blackboard.gate.pass_y = pass_y
         self.blackboard.gate.target_yaw = target_yaw
 
         self.node.get_logger().info(
             f"[{self.name}] Selected role={selected_role}, side={chosen_side}, "
-            f"target=({target_x:.2f}, {target_y:.2f}), "
+            f"approach=({approach_x:.2f}, {approach_y:.2f}), pass=({pass_x:.2f}, {pass_y:.2f}), "
             f"yaw={math.degrees(target_yaw):.1f} deg"
         )
         return py_trees.common.Status.SUCCESS
@@ -191,10 +206,15 @@ class PlanGateTraversalBehaviour(py_trees.behaviour.Behaviour):
             return 1.0, 0.0
         return -to_auv_x / gate_to_auv_norm, -to_auv_y / gate_to_auv_norm
 
-    def _compute_side_string(self, auv_x, auv_y, auv_yaw, role_x, role_y):
-        forward_x = math.cos(auv_yaw)
-        forward_y = math.sin(auv_yaw)
-        cross = forward_x * (role_y - auv_y) - forward_y * (role_x - auv_x)
+    def _compute_side_string(self, gate_x, gate_y, through_x, through_y, role_x, role_y, other_role_obj):
+        if other_role_obj is not None:
+            ref_x = other_role_obj.pose.position.x
+            ref_y = other_role_obj.pose.position.y
+        else:
+            ref_x = gate_x
+            ref_y = gate_y
+            
+        cross = through_x * (role_y - ref_y) - through_y * (role_x - ref_x)
         return "left" if cross >= 0.0 else "right"
 
     def _closest_object(self, objects, ref_x, ref_y):
@@ -238,38 +258,67 @@ class NavigateThroughGateBehaviour(py_trees.behaviour.Behaviour):
         self.timeout = timeout
         self.blackboard = self.attach_blackboard_client(name=self.name)
         self.action_status = ActionStatus.NOT_SENT
-        self.result_message = ''
+        self.current_phase = "approach"
+        self.result_message = ""
 
     def setup(self, **kwargs):
         self.node = kwargs["node"]
         self.navigation_client = kwargs["shared_nav_client"]
         self.navigation_client.client_wait_for_server(timeout_sec=5.0)
-        self.blackboard.register_key(key="/gate/target_x", access=py_trees.common.Access.READ)
-        self.blackboard.register_key(key="/gate/target_y", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/gate/approach_x", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/gate/approach_y", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/gate/pass_x", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/gate/pass_y", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/gate/target_yaw", access=py_trees.common.Access.READ)
 
     def initialise(self):
         self.action_status = ActionStatus.NOT_SENT
-        self.result_message = ''
+        self.current_phase = "approach"
+        self.result_message = ""
 
     def update(self):
         if self.action_status == ActionStatus.SUCCEEDED:
-            self.node.get_logger().info(f"[{self.name}] Cleared the gate. {self.result_message}")
+            if self.current_phase == "approach":
+                self.node.get_logger().info(
+                    f"[{self.name}] Reached gate approach point. {self.result_message}"
+                )
+                self.current_phase = "pass"
+                self.action_status = ActionStatus.NOT_SENT
+                self.result_message = ""
+                return py_trees.common.Status.RUNNING
+
+            self.node.get_logger().info(
+                f"[{self.name}] Cleared the gate. {self.result_message}"
+            )
             return py_trees.common.Status.SUCCESS
 
         if self.action_status == ActionStatus.FAILED:
-            self.node.get_logger().error(f"[{self.name}] Failed to pass through the gate. {self.result_message}")
+            if self.current_phase == "approach":
+                self.node.get_logger().error(
+                    f"[{self.name}] Failed to reach gate approach point. {self.result_message}"
+                )
+            else:
+                self.node.get_logger().error(
+                    f"[{self.name}] Failed to pass through the gate. {self.result_message}"
+                )
             return py_trees.common.Status.FAILURE
 
         if self.action_status == ActionStatus.PENDING:
             return py_trees.common.Status.RUNNING
 
-        target_x = self.blackboard.gate.target_x
-        target_y = self.blackboard.gate.target_y
+        if self.current_phase == "approach":
+            target_x = self.blackboard.gate.approach_x
+            target_y = self.blackboard.gate.approach_y
+            phase_label = "approach point"
+        else:
+            target_x = self.blackboard.gate.pass_x
+            target_y = self.blackboard.gate.pass_y
+            phase_label = "pass-through point"
+            
         target_yaw = normalize_angle(self.blackboard.gate.target_yaw)
 
         self.node.get_logger().info(
-            f"[{self.name}] Moving through gate to ({target_x:.2f}, {target_y:.2f}) "
+            f"[{self.name}] Moving to {phase_label} ({target_x:.2f}, {target_y:.2f}) "
             f"yaw={math.degrees(target_yaw):.1f} deg"
         )
 
@@ -286,6 +335,7 @@ class NavigateThroughGateBehaviour(py_trees.behaviour.Behaviour):
             goal, self.name, self._on_goal_response, self._on_goal_result
         )
         self.action_status = ActionStatus.PENDING
+        self.result_message = ""
         return py_trees.common.Status.RUNNING
 
     def _on_goal_response(self, goal_response: bool):
@@ -294,10 +344,7 @@ class NavigateThroughGateBehaviour(py_trees.behaviour.Behaviour):
 
     def _on_goal_result(self, goal_success, message):
         self.result_message = message
-        if goal_success:
-            self.action_status = ActionStatus.SUCCEEDED
-        else:
-            self.action_status = ActionStatus.FAILED
+        self.action_status = ActionStatus.SUCCEEDED if goal_success else ActionStatus.FAILED
 
     def terminate(self, new_status):
         if new_status == py_trees.common.Status.INVALID:
@@ -307,16 +354,15 @@ class NavigateThroughGateBehaviour(py_trees.behaviour.Behaviour):
 
 class GateTask(py_trees.composites.Sequence):
     """
-    Sequence for the RoboSub 2026 Gate Task (Begin Assessment).
+    sequence for the RoboSub 2026 Gate Task (Begin Assessment).
 
-    The AUV:
-    - dives to a simple working depth
-    - searches for the gate
+    - dives to working depth
+    - sets a forward yaw
+    - searches for gate
     - scans to populate the role-panel detections
-    - chooses the requested role side
-    - drives through that half of the gate
-
-    Optional style maneuvers are intentionally omitted for now.
+    - chooses the role side
+    - moves to a point in front of that side
+    - drives through it
     """
 
     def __init__(
@@ -328,7 +374,8 @@ class GateTask(py_trees.composites.Sequence):
         search_attempts: int = 2,
         scan_angle_deg: float = 35.0,
         scan_pause_time: float = 1.0,
-        pass_distance: float = 1.0,
+        approach_distance: float = 1.5,
+        pass_distance: float = 2.0,
     ):
         super().__init__("Gate Task", memory=True)
 
@@ -359,6 +406,7 @@ class GateTask(py_trees.composites.Sequence):
                 ),
                 PlanGateTraversalBehaviour(
                     desired_role=desired_role,
+                    approach_distance=approach_distance,
                     pass_distance=pass_distance,
                     name="Plan Gate Pass",
                 ),

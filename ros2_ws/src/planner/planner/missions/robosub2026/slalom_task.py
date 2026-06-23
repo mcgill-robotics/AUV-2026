@@ -59,7 +59,7 @@ class SlalomTask(py_trees.composites.Sequence):
         self.add_child(
             BasicActionBehaviour(
                 name=f"Initial Dive ({initial_depth}m)",
-                goal=set_depth(z=initial_depth, timeout=30.0),
+                goal=set_depth(z=initial_depth, timeout=30.0, tolerance=position_tolerance, hold_time=hold_time),
             )
         )
 

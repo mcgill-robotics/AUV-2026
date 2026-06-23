@@ -2,12 +2,20 @@
 
 from launch import LaunchDescription
 from launch_ros.actions import Node
+import os
+from ament_index_python.packages import get_package_share_directory
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 
 
 def generate_launch_description():
     """Launch Foxglove Bridge for AUV dashboard connections."""
+    
+    telemetry_config = os.path.join(
+        get_package_share_directory('telemetry'),
+        'config',
+        'vision_foxglove.yaml'
+    )
     
     # Declare launch arguments
     port_arg = DeclareLaunchArgument(
@@ -39,9 +47,10 @@ def generate_launch_description():
             'send_buffer_limit': LaunchConfiguration('send_buffer_limit'),  # 10MB buffer for images
             'use_compression': True,
             'best_effort_qos_topic_whitelist': [
+                '/tf',
                 '/vision/front_cam/detections/annotated/compressed',
-                '/zed/zed_node/rgb/color/rect/image/compressed',
-                '/zed/zed_node/depth/depth_registered/compressed'
+                '/vision/down_cam/detections/annotated/compressed',
+                '/vision/front_cam/detection_frame/depth'
             ],
         }],
         output='screen'
@@ -58,7 +67,8 @@ def generate_launch_description():
         package='telemetry',
         executable='vision_to_foxglove',
         name='vision_to_foxglove',
-        output='screen'
+        output='screen',
+        parameters=[telemetry_config]
     )
 
     setpoint_to_foxglove_node = Node(
