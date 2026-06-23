@@ -63,6 +63,12 @@ namespace controls
                         double effort_bias_torque_z;
                         double publish_hz_;
                         double max_planar_effort_;
+                        double max_depth_effort_;
+                        double max_attitude_effort_;
+
+                        bool enabled_;
+                        rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr parameter_callback_handle_;
+                        rcl_interfaces::msg::SetParametersResult parameters_callback(const std::vector<rclcpp::Parameter> &parameters);
 
 
         };

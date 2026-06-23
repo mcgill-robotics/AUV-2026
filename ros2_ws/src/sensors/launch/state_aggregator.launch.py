@@ -16,24 +16,24 @@ def generate_launch_description():
             default_value="false",
             description="Run sensors nodes with simulation time",
         )
-        depth_processor_real = GroupAction(
+        state_aggregator_real = GroupAction(
             actions=[
                 Node(
                     package='sensors',
-                    executable='depth_processor',
-                    name='depth_processor',
+                    executable='state_aggregator',
+                    name='state_aggregator',
                     parameters=[real_params, {"use_sim_time": LaunchConfiguration("sim")}],
                     output='screen',
                     condition=UnlessCondition(LaunchConfiguration("sim")),
                     )
                 ]
             )
-        depth_processor_sim = GroupAction(
+        state_aggregator_sim = GroupAction(
             actions=[
                 Node(
                     package='sensors',
-                    executable='depth_processor',
-                    name='depth_processor',
+                    executable='state_aggregator',
+                    name='state_aggregator',
                     parameters=[sim_params, {"use_sim_time": LaunchConfiguration("sim")}],
                     output='screen',
                     condition=IfCondition(LaunchConfiguration("sim")),
@@ -43,6 +43,6 @@ def generate_launch_description():
         
         return LaunchDescription([
             sim_arg,
-            depth_processor_real,
-            depth_processor_sim
+            state_aggregator_real,
+            state_aggregator_sim
         ])

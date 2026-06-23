@@ -45,8 +45,11 @@ namespace controls
        this->declare_parameter<double>("effort_bias_torque_x", 0.0);
        this->declare_parameter<double>("effort_bias_torque_y", 0.0);
        this->declare_parameter<double>("effort_bias_torque_z", 0.0);
-       this->declare_parameter<double>("publish_hz", 30.0); // publish frequency
-       this->declare_parameter<double>("max_planar_effort", 0.0); // 0 = no limit
+       this->declare_parameter<double>("publish_hz", 50.0); // publish frequency
+       this->declare_parameter<double>("max_planar_effort", 0.0);
+       this->declare_parameter<double>("max_depth_effort", 0.0);
+       this->declare_parameter<double>("max_attitude_effort", 0.0);
+       
        effort_bias_force_x = this->get_parameter("effort_bias_force_x").as_double();
        effort_bias_force_y = this->get_parameter("effort_bias_force_y").as_double();
        effort_bias_force_z = this->get_parameter("effort_bias_force_z").as_double();
@@ -55,6 +58,15 @@ namespace controls
        effort_bias_torque_z = this->get_parameter("effort_bias_torque_z").as_double();
        publish_hz_ = this->get_parameter("publish_hz").as_double();
        max_planar_effort_ = this->get_parameter("max_planar_effort").as_double();
+       max_depth_effort_ = this->get_parameter("max_depth_effort").as_double();
+       max_attitude_effort_ = this->get_parameter("max_attitude_effort").as_double();
+
+       this->declare_parameter<bool>("enabled", true);
+       enabled_ = this->get_parameter("enabled").as_bool();
+
+       parameter_callback_handle_ = this->add_on_set_parameters_callback(
+           std::bind(&superimposer::parameters_callback, this, std::placeholders::_1)
+       );
 
         publish_timer_ = this->create_wall_timer(
             std::chrono::milliseconds(static_cast<int64_t>(1000 / publish_hz_)),   // Control loop frequency
@@ -80,6 +92,22 @@ namespace controls
         attitude_effort_.torque.x = 0.0;
         attitude_effort_.torque.y = 0.0;
         attitude_effort_.torque.z = 0.0;    
+
+        x_effort_ = wrench_msg();
+        x_effort_.force.x = 0.0;
+        x_effort_.force.y = 0.0;
+        x_effort_.force.z = 0.0;
+        x_effort_.torque.x = 0.0;
+        x_effort_.torque.y = 0.0;
+        x_effort_.torque.z = 0.0;
+
+        y_effort_ = wrench_msg();
+        y_effort_.force.x = 0.0;
+        y_effort_.force.y = 0.0;
+        y_effort_.force.z = 0.0;
+        y_effort_.torque.x = 0.0;
+        y_effort_.torque.y = 0.0;
+        y_effort_.torque.z = 0.0;
 
    }
 
@@ -111,38 +139,68 @@ namespace controls
 
    void superimposer::attitude_effort_callback(const wrench_msg::SharedPtr msg)
    {
-       attitude_effort_ = *msg; // This already is in the AUV body frame
-   }
+        attitude_effort_ = *msg;
+    }
+
+    rcl_interfaces::msg::SetParametersResult superimposer::parameters_callback(const std::vector<rclcpp::Parameter> &parameters)
+    {
+        rcl_interfaces::msg::SetParametersResult result;
+        result.successful = true;
+
+        for (const auto &parameter : parameters)
+        {
+            if (parameter.get_name() == "enabled")
+            {
+                if (parameter.get_type() != rclcpp::ParameterType::PARAMETER_BOOL)
+                {
+                    result.successful = false;
+                    result.reason = "'enabled' must be a boolean";
+                    return result;
+                }
+                enabled_ = parameter.as_bool();
+                RCLCPP_INFO(this->get_logger(), "Superimposer enabled: %s", enabled_ ? "true" : "false");
+            }
+        }
+
+        return result;
+    }
 
    void superimposer::publish_combined_effort()
    {
+       if (!enabled_) {
+           return;
+       }
+
        wrench_msg combined_effort;
 
        // Transform depth effort from pool frame to body frame. 
        Vec3 depth_force_pool(depth_effort_.force.x, depth_effort_.force.y, depth_effort_.force.z);
+       if (max_depth_effort_ > 0.0 && depth_force_pool.norm() > max_depth_effort_) {
+           depth_force_pool = depth_force_pool * (max_depth_effort_ / depth_force_pool.norm());
+       }
+
        Vec3 x_force_pool(x_effort_.force.x, x_effort_.force.y, x_effort_.force.z);
        Vec3 y_force_pool(y_effort_.force.x, y_effort_.force.y, y_effort_.force.z);
        Vec3 planar_force_pool = x_force_pool + y_force_pool;
-
-       // Clamp planar (x,y) effort vector magnitude if limit is set
-       if (max_planar_effort_ > 0.0) {
-           double planar_mag = planar_force_pool.norm();
-           if (planar_mag > max_planar_effort_) {
-               planar_force_pool *= (max_planar_effort_ / planar_mag);
-           }
+       if (max_planar_effort_ > 0.0 && planar_force_pool.norm() > max_planar_effort_) {
+           planar_force_pool = planar_force_pool * (max_planar_effort_ / planar_force_pool.norm());
        }
 
        Vec3 total_force_pool = depth_force_pool + planar_force_pool;
        Vec3 total_force_body = q_iv_.inverse() * total_force_pool; // Rotate to body frame
 
+       Vec3 attitude_torque(attitude_effort_.torque.x, attitude_effort_.torque.y, attitude_effort_.torque.z);
+       if (max_attitude_effort_ > 0.0 && attitude_torque.norm() > max_attitude_effort_) {
+           attitude_torque = attitude_torque * (max_attitude_effort_ / attitude_torque.norm());
+       }
 
        // Combine efforts (simple summation)
        combined_effort.force.x = total_force_body.x() + effort_bias_force_x;
        combined_effort.force.y = total_force_body.y() + effort_bias_force_y;
        combined_effort.force.z = total_force_body.z() + effort_bias_force_z;
-       combined_effort.torque.x = attitude_effort_.torque.x + effort_bias_torque_x;
-       combined_effort.torque.y = attitude_effort_.torque.y + effort_bias_torque_y;
-       combined_effort.torque.z = attitude_effort_.torque.z + effort_bias_torque_z;
+       combined_effort.torque.x = attitude_torque.x() + effort_bias_torque_x;
+       combined_effort.torque.y = attitude_torque.y() + effort_bias_torque_y;
+       combined_effort.torque.z = attitude_torque.z() + effort_bias_torque_z;
        
        // Publish combined effort
        pub_effort_->publish(combined_effort);

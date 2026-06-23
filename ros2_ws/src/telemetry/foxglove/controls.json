@@ -46,11 +46,11 @@
                         "diffEnabled": false
                 },
                 "RawMessages!imuSetpoint": {
-                        "topicPath": "/controls/quaternion_setpoint",
+                        "topicPath": "/controls/attitude_reference",
                         "diffEnabled": false
                 },
                 "Publish!effort": {
-                        "topicName": "/controls/effort",
+                        "topicName": "/controls/total_effort",
                         "datatype": "geometry_msgs/msg/Wrench",
                         "advancedView": true
                 },

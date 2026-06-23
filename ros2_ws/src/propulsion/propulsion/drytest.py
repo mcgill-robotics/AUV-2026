@@ -3,7 +3,7 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Int16MultiArray
 from geometry_msgs.msg import Wrench
-from propulsion.thrust_mapper_utils import force_to_pwm_thruster
+from propulsion.force_to_pwm_converter import force_to_pwm_thruster
 from time import sleep
 
 
@@ -19,7 +19,7 @@ class DryTestNode(Node):
     def __init__(self):
         super().__init__('dry_test_node')
         self.thruster_microseconds_pub = self.create_publisher(Int16MultiArray, '/propulsion/microseconds', 1)
-        self.forces_pub = self.create_publisher(Wrench, '/controls/effort', 1)
+        self.forces_pub = self.create_publisher(Wrench, '/controls/total_effort', 1)
         self.get_logger().info("Dry Test Node Initialized")
 
     def publish_thruster(self, msg):
@@ -194,7 +194,7 @@ def dry_test(self):
                     continue
                 print("Thruster " + str(thruster_num) + " spinning at " + str(100 * force_amt) + "% max forwards force for " + str(duration) + "s")
                 custom_test_msg = reset_msg.copy()
-                custom_test_msg[thruster_num - 1] = force_to_pwm_thruster(thruster_num, force_amt * MAX_FWD_FORCE * thruster_mount_dirs[thruster_num - 1])
+                custom_test_msg[thruster_num - 1] = force_to_pwm_thruster(thruster_num, force_amt * MAX_FWD_FORCE)
                 self.publish_thruster(custom_test_msg)
                 sleep(duration)
                 self.publish_thruster(reset_msg)

@@ -13,7 +13,6 @@ def generate_launch_description():
     xsens_pkg_path = get_package_share_directory("xsens_mti_ros2_driver")
     dvl_a50_pkg_path = get_package_share_directory("dvl_a50_serial_python")
     sensors_pkg_path = get_package_share_directory("sensors")
-    params = os.path.join(sensors_pkg_path, "params", "sensors_frames.yaml")
 
     # Set Sim condition
     sim_condition = DeclareLaunchArgument(
@@ -61,15 +60,12 @@ def generate_launch_description():
         ],
     )
 
-    state_aggregator = GroupAction(
-        actions=[
-            Node(
-                package="sensors",
-                executable="state_aggregator",
-                name="state_aggregator",
-                parameters=[params, {"use_sim_time": sim}],
-            )
-        ]
+    state_aggregator_file = os.path.join(
+        sensors_pkg_path, "launch", "state_aggregator.launch.py"
+    )
+    state_aggregator = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(state_aggregator_file),
+        launch_arguments={"sim": sim}.items(),
     )
 
     depth_processor_file = os.path.join(

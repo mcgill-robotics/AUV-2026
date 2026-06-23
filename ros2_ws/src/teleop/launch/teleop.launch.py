@@ -1,7 +1,8 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, LogInfo
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.conditions import UnlessCondition, IfCondition
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -18,17 +19,29 @@ def generate_launch_description():
         description='Require LB held to output force'
     )
     
-    # Joy node for gamepad input
+    # Launch argument to switch to keyboard input
+    keyboard_arg = DeclareLaunchArgument(
+        'use_keyboard',
+        default_value='false',
+        description='Use keyboard instead of gamepad for input'
+    )
+    
+    # Joy node for gamepad input (only if not using keyboard)
     joy_node = Node(
+        condition=UnlessCondition(LaunchConfiguration('use_keyboard')),
         package='joy',
-        executable='joy_node',
-        name='joy_node',
+        executable='game_controller_node',
+        name='game_controller_node',
         parameters=[{
             'deadzone': 0.1,
             'autorepeat_rate': 20.0,
         }],
         output='screen'
     )
+    
+    # Note: keyboard_to_joy is NOT launched here because it requires a dedicated TTY.
+    # When use_keyboard:=true, we simply omit the joy_node. 
+    # The user must manually run: ros2 run teleop keyboard_to_joy
     
     # Teleop converter - loads config file, can override deadman via launch arg
     teleop_node = Node(
@@ -44,6 +57,15 @@ def generate_launch_description():
     
     return LaunchDescription([
         deadman_arg,
+        keyboard_arg,
+        LogInfo(
+            condition=IfCondition(LaunchConfiguration('use_keyboard')),
+            msg="[Teleop] Launching in KEYBOARD mode."
+        ),
+        LogInfo(
+            condition=UnlessCondition(LaunchConfiguration('use_keyboard')),
+            msg="[Teleop] Launching in GAMEPAD (Joystick) mode."
+        ),
         joy_node,
         teleop_node,
     ])

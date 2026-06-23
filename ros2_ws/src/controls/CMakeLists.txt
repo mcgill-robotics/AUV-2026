@@ -32,12 +32,20 @@ add_executable(attitude_controller
 add_executable(superimposer
   src/superimposer.cpp)
 
+add_executable(trajectory_planner
+  src/trajectory_planner.cpp)
+
 target_include_directories(attitude_controller
   PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>)
 
 target_include_directories(superimposer
+  PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>)
+
+target_include_directories(trajectory_planner
   PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>)
@@ -50,7 +58,8 @@ ament_target_dependencies(attitude_controller
   nav_msgs
   message_filters
   Eigen3
-  sensors)
+  sensors
+  auv_msgs)
 
 ament_target_dependencies(superimposer
   rclcpp
@@ -61,11 +70,23 @@ ament_target_dependencies(superimposer
   message_filters
   Eigen3)
 
+ament_target_dependencies(trajectory_planner
+  rclcpp
+  std_msgs
+  sensor_msgs
+  geometry_msgs
+  nav_msgs
+  message_filters
+  Eigen3
+  sensors
+  auv_msgs)
+
 ament_python_install_package(controls)
 
 install(TARGETS
   attitude_controller
   superimposer
+  trajectory_planner
   DESTINATION lib/${PROJECT_NAME})
 
 install(DIRECTORY include/

@@ -7,6 +7,7 @@ This process occurs in two stages:
 1. **Thrust allocation** – map the wrench vector (forces and torques along X, Y, Z) into individual thruster forces using an allocation matrix.  
 2. **Force-to-PWM mapping** – convert thruster forces (in Newtons) into PWM signals (µs) using per-thruster calibration curves.  
 
+Please see the [Thrust Allocation Procedure Document](./docs/AUV_Thrust_Allocation_Procedure.pdf) for a detailed explanation of the allocation algorithm.
 
 ## Table of Contents
 - [Propulsion](#propulsion)
@@ -56,9 +57,9 @@ The propulsion package is not for direct use, it is used through publishing effo
 
 Publishing a `geometry_msgs/Wrench` message onto `/controls/total_effort` topic:
 
-
-        ros2 topic pub /controls/total_effort geometry_msgs/msg/Wrench "{force: {x: 1.0, y: 0.0, z: 0.0}, torque: {x: 0.0, y: 0.0, z: 0.0}}" 
-
+```bash
+ros2 topic pub /controls/total_effort geometry_msgs/msg/Wrench "{force: {x: 1.0, y: 0.0, z: 0.0}, torque: {x: 0.0, y: 0.0, z: 0.0}}" 
+```
 
 ## Nodes
 The package provides a single ROS node: `thrust_mapper`.
@@ -70,17 +71,17 @@ The package provides a single ROS node: `thrust_mapper`.
 
 ### Published Topics
 
- Topic | Message | Description |
-| ------ | ------- | ---------- |
-| `/propulsion/forces` | `ThrusterForces` | Array of thruster forces (N) for each thruster  |
-| `/propulsion/microseconds` | `ThrusterMicroseconds` | Array of PWM signals (µs) sent to each thrusterr |
+ | Topic                      | Message           | Description                                     |
+ | -------------------------- | ----------------- | ----------------------------------------------- |
+ | `/propulsion/forces`       | `ThrusterForces`  | Array of thruster forces (N) for each thruster  |
+ | `/propulsion/microseconds` | `Int16MultiArray` | Array of PWM signals (µs) sent to each thruster |
 
 
 
 ### Subscribed Topics
 
-| Topic | Message | Description |
-| ------ | ------- | ---------- |
+| Topic                    | Message                | Description                                                                                    |
+| ------------------------ | ---------------------- | ---------------------------------------------------------------------------------------------- |
 | `/controls/total_effort` | `geometry_msgs/Wrench` | Forces and torques, relative to the robot's frame of reference to be applied at a given moment |
 
 
@@ -92,29 +93,31 @@ The package provides a single ROS node: `thrust_mapper`.
 
 - `geometry_msgs` – for `Wrench` messages
 
-- `auv_msgs` – custom AUV message definitions (`ThrusterForces`, `ThrusterMicroseconds`)
+- `auv_msgs` – custom AUV message definitions (`ThrusterForces`)
 
 - `numpy` – for matrix math
 
 ### Building
-
-	source /opt/ros/humble/setup.bash
-	cd <AUV-2026>/ros2_ws
-	colcon build --symlink-install
-
+```bash
+source /opt/ros/humble/setup.bash
+cd <AUV-2026>/ros2_ws
+colcon build --symlink-install
+```
 After build is complete, make the packages visible to ROS
-
-	source install/setup.bash
-
+```bash
+source install/setup.bash
+```
 ### Running
 
 Launch all package nodes
 
-	ros2 launch propulsion propulsion.launch.py
+```bash
+ros2 launch propulsion propulsion.launch.py
+```
 
-| Argument | Default | Description |
-| :--- | :--- | :--- | 
-| `sim` | `false` | Run in simulation mode
+| Argument | Default | Description            |
+| :------- | :------ | :--------------------- |
+| `sim`    | `false` | Run in simulation mode |
 
 ## License
 

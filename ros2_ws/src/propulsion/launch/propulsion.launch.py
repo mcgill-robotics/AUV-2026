@@ -1,4 +1,6 @@
 # launch/thrust_mapper.launch.py
+import os
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, GroupAction, ExecuteProcess
 from launch.conditions import IfCondition, UnlessCondition
@@ -10,24 +12,16 @@ def generate_launch_description():
     sim_arg     = DeclareLaunchArgument('sim', default_value='false')
     record_arg  = DeclareLaunchArgument('record', default_value='true')
 
+    pkg_share = get_package_share_directory('propulsion')
+    params = os.path.join(pkg_share, 'params', 'propulsion.yaml')
+
     # --- Thruster mapper node (ROS2 Node)
     thrust_mapper = Node(
         package='propulsion',
         executable='thrust_mapper',     # from setup.py console_scripts
         name='thrust_mapper',
         output='screen',
-        parameters=[{
-            'thruster_PWM_lower_limit': 1228,   # [µs]
-            'thruster_PWM_upper_limit': 1768,   # [µs]
-            'a': 0.080619,                      # [m]
-            'b': 0.226341,                      # [m]
-            'c': 0.202572,                      # [m]
-            'd': 0.228205,                      # [m]
-            'e': 0.004945,                      # [m]
-            'alpha': 45.0,                      # [deg]
-            'dx': 0.0,                          # [m]
-            'dy': 0.0                           # [m]
-        }]
+        parameters=[params]
     )
 
     # --- Serial connection group 

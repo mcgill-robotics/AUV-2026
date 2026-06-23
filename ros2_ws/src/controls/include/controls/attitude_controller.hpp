@@ -7,6 +7,7 @@
 #include <geometry_msgs/msg/vector3_stamped.hpp>
 #include <geometry_msgs/msg/wrench.hpp>
 #include <message_filters/subscriber.h>
+#include <auv_msgs/msg/attitude_reference.hpp>
 
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
@@ -34,16 +35,46 @@ namespace controls
                 rclcpp::Publisher<wrench_msg>::SharedPtr pub_effort_; 
                 
         private:
-                // PID gains
-                double P_ex_;
-                double P_ey_;
-                double P_ez_;
-                double P_wx_;
-                double P_wy_;
-                double P_wz_;
+                double P_ex_large_;
+                double P_ey_large_;
+                double P_ez_large_;
+                double P_wx_large_;
+                double P_wy_large_;
+                double P_wz_large_;
 
-                Mat3 P_e_;
-                Mat3 P_w_;
+                double P_ex_sas_;
+                double P_ey_sas_;
+                double P_ez_sas_;
+                double P_wx_sas_;
+                double P_wy_sas_;
+                double P_wz_sas_;
+
+                double I_ex_large_;
+                double I_ey_large_;
+                double I_ez_large_;
+                double I_ex_sas_;
+                double I_ey_sas_;
+                double I_ez_sas_;
+
+                double I_max_;
+                double integral_activation_deg_;
+
+                double sas_switch_deg_;
+                double sas_switch_;
+
+                Mat3 P_e_large_;
+                Mat3 P_w_large_;
+                Mat3 I_e_large_;
+
+                Mat3 P_e_sas_;
+                Mat3 P_w_sas_;
+                Mat3 I_e_sas_;
+
+                enum class ControlMode
+                {
+                    LARGE_ERROR,
+                    SAS
+                };
 
                 // Control Loop Frequency
                 double control_loop_hz_;
@@ -54,14 +85,19 @@ namespace controls
 
 
                 rclcpp::Subscription<imu_msg>::SharedPtr sub_imu_;
-                rclcpp::Subscription<geometry_msgs::msg::Quaternion>::SharedPtr sub_target_orientation_;
+                rclcpp::Subscription<auv_msgs::msg::AttitudeReference>::SharedPtr sub_attitude_reference_;
 
                 // State variables
                 quatd q_iv_;
-                Vec3 w_iv_;
+                Vec3 w_iv_v; // Vehicle angular velocity vector in the inertial frame, expressed in the vehicle frame
 
                 //Target state variables
                 quatd q_iv2_; 
+                Vec3 w_ref_v; // Target (reference) angular velocity vector in the inertial frame, expressed in the body frame
+
+                // Integral error state
+                Vec3 integral_error_;
+
 
 
 
@@ -70,8 +106,8 @@ namespace controls
                 bool enabled_;
 
                 void imu_callback(const imu_msg::SharedPtr msg);
-                void target_orientation_callback(const geometry_msgs::msg::Quaternion::SharedPtr msg);
-                Vec3 feedback_effort(const quatd& q_iv2);
+                void target_attitude_callback(const auv_msgs::msg::AttitudeReference::SharedPtr msg);
+                Vec3 feedback_effort(const quatd& q_iv2, const ControlMode& mode);
                 Vec3 feedforward_effort();
                 void control_loop_callback();
                 rcl_interfaces::msg::SetParametersResult parameters_callback(

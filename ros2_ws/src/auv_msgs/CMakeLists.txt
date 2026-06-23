@@ -15,7 +15,8 @@ set(msg_files
 	"msg/PingerBearing.msg"
 	"msg/PingerTimeDifference.msg"
 	"msg/ThrusterForces.msg"
-	"msg/ThrusterMicroseconds.msg"
+	"msg/FlipCommand.msg"
+	"msg/AttitudeReference.msg"
 	"msg/UnityState.msg"
 	"msg/VisionDetection.msg"
 	"msg/VisionDetectionFrame.msg"
@@ -49,6 +50,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 	DEPENDENCIES ${MSG_DEP_SET}
 )
 
+ament_export_dependencies(rosidl_default_runtime)
 ament_export_dependencies(${MSG_DEP_SET})
 
 ament_package()

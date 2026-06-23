@@ -56,8 +56,8 @@ ros2 topic pub /controls/depth_setpoint std_msgs/msg/Float64 "{data: 1.5}"
 ros2 topic pub /controls/x_setpoint std_msgs/msg/Float64 "{data: 2.0}" 
 ros2 topic pub /controls/y_setpoint std_msgs/msg/Float64 "{data: 0.0}" 
 
-# Attitude setpoint (Quaternion)
-ros2 topic pub /controls/quaternion_setpoint geometry_msgs/msg/Quaternion "{x: 0.0, y: 0.0, z: 0.7071, w: 0.7071}"
+# Attitude setpoint (AttitudeReference)
+ros2 topic pub /controls/attitude_reference auv_msgs/msg/AttitudeReference "{orientation: {x: 0.0, y: 0.0, z: 0.7071, w: 0.7071}, angular_velocity: {x: 0.0, y: 0.0, z: 0.0}}"
 ```
 
 ### Image Collection (Vision)

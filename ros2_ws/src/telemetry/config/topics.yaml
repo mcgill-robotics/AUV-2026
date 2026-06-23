@@ -37,7 +37,7 @@ sensors:
 controls:
   # Setpoints
   depth_setpoint: /controls/depth_setpoint
-  quaternion_setpoint: /controls/quaternion_setpoint
+  attitude_reference: /controls/attitude_reference
   
   # Efforts
   depth_effort: /controls/depth_effort
@@ -45,7 +45,7 @@ controls:
   combined_effort: /controls/combined_effort
   
   # Direct control input (for teleop - TBD)
-  effort: /controls/effort
+  total_effort: /controls/total_effort
 
 # =============================================================================
 # PROPULSION

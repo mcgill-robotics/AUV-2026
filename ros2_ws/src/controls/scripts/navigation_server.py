@@ -9,10 +9,10 @@ Subscribes:
     state/pose (geometry_msgs/PoseStamped) - current AUV pose in pool frame
 
 Publishes setpoints to:
-    /controls/depth_setpoint (std_msgs/Float64)
-    /controls/x_setpoint     (std_msgs/Float64)
-    /controls/y_setpoint     (std_msgs/Float64)
-    /controls/quaternion_setpoint (geometry_msgs/Quaternion)
+    /controls/depth_setpoint      (std_msgs/Float64)
+    /controls/x_setpoint          (std_msgs/Float64)
+    /controls/y_setpoint          (std_msgs/Float64)
+    /controls/attitude_reference  (auv_msgs/AttitudeReference)
 """
 
 import math
@@ -27,6 +27,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPo
 from geometry_msgs.msg import PoseStamped, Quaternion, Vector3
 from std_msgs.msg import Float64
 from auv_msgs.action import AUVNavigate
+from auv_msgs.msg import AttitudeReference
 
 from controls.utils import yaw_from_quaternion
 import numpy as np
@@ -45,14 +46,14 @@ class NavigationServer(Node):
         self.declare_parameter('depth_setpoint_topic', '/controls/depth_setpoint')
         self.declare_parameter('x_setpoint_topic', '/controls/x_setpoint')
         self.declare_parameter('y_setpoint_topic', '/controls/y_setpoint')
-        self.declare_parameter('quat_setpoint_topic', '/controls/quaternion_setpoint')
+        self.declare_parameter('attitude_reference_topic', '/controls/attitude_reference')
 
         self.feedback_rate_hz = self.get_parameter('feedback_rate_hz').value
         state_topic = self.get_parameter('state_topic').value
         depth_setpoint_topic = self.get_parameter('depth_setpoint_topic').value
         x_setpoint_topic = self.get_parameter('x_setpoint_topic').value
         y_setpoint_topic = self.get_parameter('y_setpoint_topic').value
-        quat_setpoint_topic = self.get_parameter('quat_setpoint_topic').value
+        attitude_reference_topic = self.get_parameter('attitude_reference_topic').value
         self._feedback_period = 1.0 / self.feedback_rate_hz
 
         # ── State ────────────────────────────────────────────────────────────
@@ -92,7 +93,7 @@ class NavigationServer(Node):
         self.pub_depth_sp = self.create_publisher(Float64, depth_setpoint_topic, setpoint_qos)
         self.pub_x_sp = self.create_publisher(Float64, x_setpoint_topic, setpoint_qos)
         self.pub_y_sp = self.create_publisher(Float64, y_setpoint_topic, setpoint_qos)
-        self.pub_quat_sp = self.create_publisher(Quaternion, quat_setpoint_topic, setpoint_qos)
+        self.pub_attitude_ref = self.create_publisher(AttitudeReference, attitude_reference_topic, setpoint_qos)
 
         # ── Action server ────────────────────────────────────────────────────
         self.action_server = ActionServer(
@@ -339,7 +340,11 @@ class NavigationServer(Node):
             self.pub_y_sp.publish(msg)
 
         if goal.do_yaw:
-            self.pub_quat_sp.publish(target_quat)
+            attitude_ref = AttitudeReference()
+            attitude_ref.orientation = target_quat
+            # Zero angular velocity reference for static setpoints
+            attitude_ref.angular_velocity = Vector3(x=0.0, y=0.0, z=0.0)
+            self.pub_attitude_ref.publish(attitude_ref)
 
     # ─────────────────────────────────────────────────────────────────────────
     # Utilities
