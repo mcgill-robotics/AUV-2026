@@ -87,7 +87,11 @@ def generate_launch_description():
         actions=[
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(sensors_launch_file),
-                launch_arguments={"sim": sim}.items(),
+                launch_arguments={
+                    "sim": sim,
+                    # sensors does not launch DVL driver by default, but bringup should launch everything
+                    "dvl": "true" 
+                }.items(),
             )
         ],
     )
