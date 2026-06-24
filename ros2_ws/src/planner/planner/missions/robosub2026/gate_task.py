@@ -2,7 +2,7 @@ import math
 import random
 
 import py_trees
-from controls.goal_helpers import move_global, set_depth
+from controls.goal_helpers import move_global, move_to_pose, set_depth, set_global_yaw
 from controls.utils import normalize_angle, yaw_from_quaternion
 
 from ..action_status_enum import ActionStatus
@@ -51,6 +51,8 @@ class PlanGateTraversalBehaviour(py_trees.behaviour.Behaviour):
         self.blackboard.register_key(key="/gate/approach_y", access=py_trees.common.Access.WRITE)
         self.blackboard.register_key(key="/gate/pass_x", access=py_trees.common.Access.WRITE)
         self.blackboard.register_key(key="/gate/pass_y", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key="/gate/center_x", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key="/gate/center_y", access=py_trees.common.Access.WRITE)
         self.blackboard.register_key(key="/gate/target_yaw", access=py_trees.common.Access.WRITE)
 
     def initialise(self):
@@ -137,6 +139,8 @@ class PlanGateTraversalBehaviour(py_trees.behaviour.Behaviour):
         self.blackboard.gate.approach_y = approach_y
         self.blackboard.gate.pass_x = pass_x
         self.blackboard.gate.pass_y = pass_y
+        self.blackboard.gate.center_x = gate_x
+        self.blackboard.gate.center_y = gate_y
         self.blackboard.gate.target_yaw = target_yaw
 
         self.node.get_logger().info(
@@ -381,6 +385,15 @@ class GateTask(py_trees.composites.Sequence):
 
         self.add_children(
             [
+                BasicActionBehaviour(
+                    name="Initial Coin Flip Alignment",
+                    goal=set_global_yaw(
+                        yaw_rad=0.0,
+                        tolerance=position_tolerance,
+                        hold_time=0.0,
+                        timeout=timeout,
+                    ),
+                ),
                 BasicActionBehaviour(
                     name="Initial Dive (-1.0m)",
                     goal=set_depth(
