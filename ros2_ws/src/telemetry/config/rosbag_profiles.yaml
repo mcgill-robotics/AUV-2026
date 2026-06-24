@@ -8,9 +8,9 @@ profiles:
   all:
     topics:
       - ".*"
-    exclude:
-      - ".*/annotated/compressed$" # Excludes the 30Hz annotated images, keeping the 5Hz _throttled versions
-      # - ".*/depth/compressed$" # Depth is already happening at 5Hz, so it's fine
+    # Exclude annotated since they are natively 5Hz and handled by include rules
+    # exclude:
+    #   - ".*/annotated/compressed$"
 
   all_no_vision:
     topics:
@@ -25,9 +25,9 @@ profiles:
     topics:
       - "/zed/.*"
       - "/vision/.*"
-    exclude:
-      - ".*/annotated/compressed$" # Excludes the raw 30Hz annotated images, but captures the 5Hz _throttled ones
-      - ".*/depth/compressed$" # Excludes the raw 30Hz depth images, but captures the 5Hz _throttled ones
+      # We now natively publish annotated/depth at 5Hz, so no need to exclude them if we want to record them
+      # - ".*/annotated/compressed$" 
+      # - ".*/depth/compressed$" 
       
   nav_and_controls:
     topics:

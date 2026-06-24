@@ -102,7 +102,7 @@ front_cam_object_detection:
 
     publish_camera_info: true # publish CameraInfo for the front camera feed using ZED left-camera intrinsics
     publish_annotated: true # publishes the front camera feed topic at detection_frame_topic + /annotated, toggled raw/annotated at runtime via service
-    publish_annotated_rate: 1 # publish annotated image every N detection frames
+    publish_annotated_rate: 5 # publish annotated image every N detection frames
     publish_depth: true # publish raw 32FC1 depth map image
     publish_depth_compressed: true # publish depth map as compressed 16-bit PNG
     publish_depth_rate: 5 # publish depth image every N frames
@@ -186,7 +186,7 @@ down_cam_object_detection:
     queue_size: 10
     
     publish_annotated: true
-    publish_annotated_rate: 1
+    publish_annotated_rate: 5
     publish_depth: true
     publish_depth_compressed: false
     publish_depth_rate: 5

@@ -109,7 +109,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-py-trees-ros \
     ros-${ROS_DISTRO}-py-trees-ros-tutorials \
     ros-${ROS_DISTRO}-py-trees-ros-viewer \
-    ros-${ROS_DISTRO}-topic-tools \
     ros-${ROS_DISTRO}-rosbag2-storage-mcap \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean

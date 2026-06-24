@@ -141,7 +141,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ros-${ROS_DISTRO}-diagnostic-updater \
         ros-${ROS_DISTRO}-usb-cam \
         ros-${ROS_DISTRO}-zed-msgs \
-        ros-${ROS_DISTRO}-topic-tools \
         ros-${ROS_DISTRO}-rosbag2-storage-mcap \
         # Planner packages
         ros-${ROS_DISTRO}-py-trees \

@@ -45,24 +45,6 @@ def generate_launch_description():
         description='Path to the rosbag profiles YAML file'
     )
 
-    throttle_config_arg = DeclareLaunchArgument(
-        'throttle_config_file',
-        default_value=[
-            launch.substitutions.PathJoinSubstitution([
-                launch_ros.substitutions.FindPackageShare('telemetry'),
-                'config',
-                'throttle_config.yaml'
-            ])
-        ],
-        description='Path to the throttle configuration YAML file'
-    )
-
-    # Load the throttle config statically to parse arguments
-    telemetry_dir = get_package_share_directory('telemetry')
-    throttle_config_path = os.path.join(telemetry_dir, 'config', 'throttle_config.yaml')
-    with open(throttle_config_path, 'r') as f:
-        throttle_config = yaml.safe_load(f)
-
     # Foxglove Bridge node
     foxglove_bridge = Node(
         package='foxglove_bridge',
@@ -75,11 +57,8 @@ def generate_launch_description():
             'use_compression': True,
             'best_effort_qos_topic_whitelist': [
                 '/vision/front_cam/detection_frame/annotated/compressed',
-                '/vision/front_cam/detection_frame/annotated/compressed_throttled',
                 '/vision/down_cam/detections/annotated/compressed',
-                '/vision/down_cam/detections/annotated/compressed_throttled',
-                '/vision/front_cam/detection_frame/depth',
-                '/vision/front_cam/detection_frame/depth_throttled',
+                '/vision/front_cam/detection_frame/depth/compressed',
                 '/zed/zed_node/rgb/color/rect/image/compressed',
                 '/zed/zed_node/depth/depth_registered/compressed'
             ],
@@ -118,54 +97,14 @@ def generate_launch_description():
         }]
     )
 
-    front_rgb_throttler_node = Node(
-        package='topic_tools',
-        executable='throttle',
-        name='front_rgb_throttler',
-        arguments=[
-            throttle_config['front_rgb_throttler']['ros__parameters']['throttle_type'],
-            throttle_config['front_rgb_throttler']['ros__parameters']['input_topic'],
-            str(throttle_config['front_rgb_throttler']['ros__parameters']['msgs_per_sec']),
-            throttle_config['front_rgb_throttler']['ros__parameters']['output_topic']
-        ]
-    )
-
-    down_rgb_throttler_node = Node(
-        package='topic_tools',
-        executable='throttle',
-        name='down_rgb_throttler',
-        arguments=[
-            throttle_config['down_rgb_throttler']['ros__parameters']['throttle_type'],
-            throttle_config['down_rgb_throttler']['ros__parameters']['input_topic'],
-            str(throttle_config['down_rgb_throttler']['ros__parameters']['msgs_per_sec']),
-            throttle_config['down_rgb_throttler']['ros__parameters']['output_topic']
-        ]
-    )
-
-    front_depth_throttler_node = Node(
-        package='topic_tools',
-        executable='throttle',
-        name='front_depth_throttler',
-        arguments=[
-            throttle_config['front_depth_throttler']['ros__parameters']['throttle_type'],
-            throttle_config['front_depth_throttler']['ros__parameters']['input_topic'],
-            str(throttle_config['front_depth_throttler']['ros__parameters']['msgs_per_sec']),
-            throttle_config['front_depth_throttler']['ros__parameters']['output_topic']
-        ]
-    )
-
     return LaunchDescription([
         port_arg,   
         address_arg,
         send_buffer_limit_arg,
         rosbag_profiles_arg,
-        throttle_config_arg,
         foxglove_bridge,
         dry_test_node,
         vision_to_foxglove_node,
         setpoint_to_foxglove_node,
         rosbag_manager_node,
-        front_rgb_throttler_node,
-        down_rgb_throttler_node,
-        # front_depth_throttler_node,
     ])
