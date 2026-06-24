@@ -42,7 +42,7 @@ class GoAboveTable(py_trees.composites.Sequence):
         go_to_table_1m_away = vision_behaviours.GoNearObject(
             target_class="table",
             target_distance=4.0,
-            tolerance_meters=position_tolerance,
+            tolerance_meters=shallow_approach_tolerance,
             height_offset=None,
             hold_time=hold_time
         ) 
@@ -53,7 +53,7 @@ class GoAboveTable(py_trees.composites.Sequence):
         go_to_table2 = vision_behaviours.GoNearObject(
             target_class="table",
             target_distance=2.0,
-            tolerance_meters=position_tolerance,
+            tolerance_meters=shallow_approach_tolerance,
             height_offset=None,
             hold_time=hold_time
         )
@@ -62,7 +62,7 @@ class GoAboveTable(py_trees.composites.Sequence):
             name="Go To Table (Front Cam)",
             target_class="table",
             target_distance=0.0,
-            tolerance_meters=position_tolerance,
+            tolerance_meters=shallow_approach_tolerance,
             height_offset=None,
             hold_time=hold_time
         )
@@ -71,7 +71,7 @@ class GoAboveTable(py_trees.composites.Sequence):
             name="Go To Table Refined (Down Cam Update)",
             target_class="table",
             target_distance=0.0,
-            tolerance_meters=position_tolerance,
+            tolerance_meters=shallow_approach_tolerance,
             height_offset=None,
             hold_time=hold_time
         )

@@ -126,6 +126,7 @@ def main():
     node.declare_parameter("bins.bins_to_bin_structure", 0.3)
     node.declare_parameter("bins.force_fallback_search", False)
     node.declare_parameter("bins.force_fallback_alignment", False)
+    node.declare_parameter("bins.no_detection_timeout", 10.0)
 
     bins_params = {
         "downcam_fov_horizontal": node.get_parameter("bins.downcam_fov_horizontal").get_parameter_value().double_value,
@@ -147,6 +148,7 @@ def main():
         "bins_to_bin_structure": node.get_parameter("bins.bins_to_bin_structure").get_parameter_value().double_value,
         "force_fallback_search": node.get_parameter("bins.force_fallback_search").get_parameter_value().bool_value,
         "force_fallback_alignment": node.get_parameter("bins.force_fallback_alignment").get_parameter_value().bool_value,
+        "no_detection_timeout": node.get_parameter("bins.no_detection_timeout").get_parameter_value().double_value,
     }
 
     node.declare_parameter("octagon.downcam_fov_horizontal", 59.7)
@@ -164,8 +166,11 @@ def main():
     node.declare_parameter("octagon.surface_depth", -0.1)
     node.declare_parameter("octagon.surface_tolerance", 0.1)
     node.declare_parameter("octagon.surface_hold_time", 3.0)
-    node.declare_parameter("octagon.ending_dive_depth", -0.5)
+    node.declare_parameter("octagon.ending_dive_depth", -0.7)
     node.declare_parameter("octagon.navigation_only", True)
+    node.declare_parameter("octagon.position_tolerance", 0.3)
+    node.declare_parameter("octagon.hold_time", 1.0)
+    node.declare_parameter("octagon.timeout", 30.0)
 
     octagon_params = {
         "downcam_fov_horizontal": node.get_parameter("octagon.downcam_fov_horizontal").get_parameter_value().double_value,
@@ -185,6 +190,29 @@ def main():
         "surface_hold_time": node.get_parameter("octagon.surface_hold_time").get_parameter_value().double_value,
         "ending_dive_depth": node.get_parameter("octagon.ending_dive_depth").get_parameter_value().double_value,
         "navigation_only": node.get_parameter("octagon.navigation_only").get_parameter_value().bool_value,
+        "position_tolerance": node.get_parameter("octagon.position_tolerance").get_parameter_value().double_value,
+        "hold_time": node.get_parameter("octagon.hold_time").get_parameter_value().double_value,
+        "timeout": node.get_parameter("octagon.timeout").get_parameter_value().double_value,
+    }
+
+
+    # Return Home task parameters
+    node.declare_parameter("return_home.return_distance", 5.0)
+    node.declare_parameter("return_home.pass_distance", 2.0)
+    node.declare_parameter("return_home.approach_distance", 2.0)
+    node.declare_parameter("return_home.surface_depth", 0.0)
+    node.declare_parameter("return_home.position_tolerance", 0.3)
+    node.declare_parameter("return_home.hold_time", 1.0)
+    node.declare_parameter("return_home.timeout", 30.0)
+
+    return_home_params = {
+        "return_distance": node.get_parameter("return_home.return_distance").get_parameter_value().double_value,
+        "pass_distance": node.get_parameter("return_home.pass_distance").get_parameter_value().double_value,
+        "approach_distance": node.get_parameter("return_home.approach_distance").get_parameter_value().double_value,
+        "surface_depth": node.get_parameter("return_home.surface_depth").get_parameter_value().double_value,
+        "position_tolerance": node.get_parameter("return_home.position_tolerance").get_parameter_value().double_value,
+        "hold_time": node.get_parameter("return_home.hold_time").get_parameter_value().double_value,
+        "timeout": node.get_parameter("return_home.timeout").get_parameter_value().double_value,
     }
 
     node.declare_parameter("auto_record.enabled", True)
@@ -272,6 +300,7 @@ def main():
         gate_params=gate_params,
         bins_params=bins_params,
         octagon_params=octagon_params,
+        return_home_params=return_home_params,
         auto_record_params=auto_record_params
     )
 

@@ -78,8 +78,9 @@ planner_root_tree:
       num_required_markers: 2             # (markers) Number of markers that need to be dropped in the correct bins to complete the task
       num_bins: 4                         # (bins) Total number of bins in the bin structure
       bins_to_bin_structure: 0.3          # (m) Approximate distance from center of bin structure to the bins
-      force_fallback_search: False        # (bool) Force behavior to look for bins instead of bin structure first
-      force_fallback_alignment: False     # (bool) Force behavior to use bins for projection instead of bin structure
+      force_fallback_search: True        # (bool) Force behavior to look for bins instead of bin structure first
+      force_fallback_alignment: True     # (bool) Force behavior to use bins for projection instead of bin structure
+      no_detection_timeout: 10.0          # (s) Timeout if no bins are detected while following downcam bin
 
     octagon:
       downcam_fov_horizontal: 59.7        # (deg) Horizontal FOV of down cam while in water
@@ -99,3 +100,15 @@ planner_root_tree:
       surface_hold_time: 3.0              # (s) Hold time for the surface depth
       ending_dive_depth: -0.7             # (m) Depth to dive back down to at the end of the navigation subtask
       navigation_only: True               # (bool) If true, only perform navigation steps (align, surface, dive) and skip item drop
+      position_tolerance: 0.3             # (m)
+      hold_time: 1.0                      # (s)
+      timeout: 30.0                       # (s)
+
+    return_home:
+      return_distance: 5.0                # (m) Distance to navigate past the gate initially
+      pass_distance: 2.0                  # (m) Distance to pass through the gate backwards
+      approach_distance: 2.0              # (m) Distance to stop in front of the gate visually
+      surface_depth: -0.2                 # (m) Depth to surface at the end
+      position_tolerance: 0.3             # (m)
+      hold_time: 1.0                      # (s)
+      timeout: 60.0                       # (s)
