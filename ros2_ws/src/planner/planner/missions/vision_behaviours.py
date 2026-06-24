@@ -56,9 +56,9 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
         # Absolute angle tracking
         self.start_yaw = None
         
-        # Success alignment tracking
         self.is_looking_at_target = False
         self.target_found_pos = None
+        self.expected_failures = 0
 
     def setup(self, **kwargs):
         self.node = kwargs['node']
@@ -78,6 +78,7 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
         self.start_yaw = None
         self.is_looking_at_target = False
         self.target_found_pos = None
+        self.expected_failures = 0
 
     def update(self):
         # 1. LIVE LOGIC: Check the blackboard for the target object right now
@@ -93,6 +94,8 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
                             self.node.get_logger().info(f"[{self.name}] Transitioning to final alignment with {self.target_class}.")
                             self.is_looking_at_target = True
                             self.target_found_pos = (obj.pose.position.x, obj.pose.position.y)
+                            if self.action_status == ActionStatus.PENDING:
+                                self.expected_failures += 1
                             self.action_status = ActionStatus.NOT_SENT
                             self.sent_goal = False
                             # Continue update() to send the look_at goal immediately
@@ -220,6 +223,8 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
         self.result_message = message
         if goal_success:
             self.action_status = ActionStatus.SUCCEEDED
+        elif self.expected_failures > 0:
+            self.expected_failures -= 1
         else:
             self.action_status = ActionStatus.FAILED
 
