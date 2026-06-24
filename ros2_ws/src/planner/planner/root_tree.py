@@ -149,6 +149,56 @@ def main():
         "force_fallback_alignment": node.get_parameter("bins.force_fallback_alignment").get_parameter_value().bool_value,
     }
 
+    node.declare_parameter("octagon.downcam_fov_horizontal", 59.7)
+    node.declare_parameter("octagon.downcam_fov_vertical", 47.6)
+    node.declare_parameter("octagon.downcam_image_width", 640)
+    node.declare_parameter("octagon.downcam_image_height", 480)
+    node.declare_parameter("octagon.discovery_distance", 0.3)
+    node.declare_parameter("octagon.table_avg_height", 0.75)
+    node.declare_parameter("octagon.pool_depth", 2.1)
+    node.declare_parameter("octagon.known_height_to_pill", 0.745625)
+    node.declare_parameter("octagon.known_pill_area", 16900)
+    node.declare_parameter("octagon.shallow_approach_depth", -0.4)
+    node.declare_parameter("octagon.shallow_approach_tolerance", 0.2)
+    node.declare_parameter("octagon.shallow_approach_hold_time", 1.0)
+    node.declare_parameter("octagon.surface_depth", -0.1)
+    node.declare_parameter("octagon.surface_tolerance", 0.1)
+    node.declare_parameter("octagon.surface_hold_time", 3.0)
+    node.declare_parameter("octagon.ending_dive_depth", -0.5)
+    node.declare_parameter("octagon.navigation_only", True)
+
+    octagon_params = {
+        "downcam_fov_horizontal": node.get_parameter("octagon.downcam_fov_horizontal").get_parameter_value().double_value,
+        "downcam_fov_vertical": node.get_parameter("octagon.downcam_fov_vertical").get_parameter_value().double_value,
+        "downcam_image_width": node.get_parameter("octagon.downcam_image_width").get_parameter_value().integer_value,
+        "downcam_image_height": node.get_parameter("octagon.downcam_image_height").get_parameter_value().integer_value,
+        "discovery_distance": node.get_parameter("octagon.discovery_distance").get_parameter_value().double_value,
+        "table_avg_height": node.get_parameter("octagon.table_avg_height").get_parameter_value().double_value,
+        "pool_depth": node.get_parameter("octagon.pool_depth").get_parameter_value().double_value,
+        "known_height_to_pill": node.get_parameter("octagon.known_height_to_pill").get_parameter_value().double_value,
+        "known_pill_area": node.get_parameter("octagon.known_pill_area").get_parameter_value().integer_value,
+        "shallow_approach_depth": node.get_parameter("octagon.shallow_approach_depth").get_parameter_value().double_value,
+        "shallow_approach_tolerance": node.get_parameter("octagon.shallow_approach_tolerance").get_parameter_value().double_value,
+        "shallow_approach_hold_time": node.get_parameter("octagon.shallow_approach_hold_time").get_parameter_value().double_value,
+        "surface_depth": node.get_parameter("octagon.surface_depth").get_parameter_value().double_value,
+        "surface_tolerance": node.get_parameter("octagon.surface_tolerance").get_parameter_value().double_value,
+        "surface_hold_time": node.get_parameter("octagon.surface_hold_time").get_parameter_value().double_value,
+        "ending_dive_depth": node.get_parameter("octagon.ending_dive_depth").get_parameter_value().double_value,
+        "navigation_only": node.get_parameter("octagon.navigation_only").get_parameter_value().bool_value,
+    }
+
+    node.declare_parameter("auto_record.enabled", True)
+    node.declare_parameter("auto_record.profile", "all")
+    node.declare_parameter("auto_record.bag_prefix", "mission_")
+    node.declare_parameter("auto_record.service_path", "/rosbag_manager/control")
+
+    auto_record_params = {
+        'enabled': node.get_parameter("auto_record.enabled").get_parameter_value().bool_value,
+        'profile': node.get_parameter("auto_record.profile").get_parameter_value().string_value,
+        'bag_prefix': node.get_parameter("auto_record.bag_prefix").get_parameter_value().string_value,
+        'service_path': node.get_parameter("auto_record.service_path").get_parameter_value().string_value
+    }
+
     # Set the root of the tree
     root = py_trees.composites.Parallel("Root", policy=py_trees.common.ParallelPolicy.SuccessOnAll(synchronise=False))
 
@@ -221,6 +271,8 @@ def main():
         slalom_params=slalom_params,
         gate_params=gate_params,
         bins_params=bins_params,
+        octagon_params=octagon_params,
+        auto_record_params=auto_record_params
     )
 
     # Add children to root

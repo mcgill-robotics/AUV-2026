@@ -78,3 +78,8 @@ ros2_ws/src/xsens_mti_ros2_driver/lib/**
 *.svo
 *.svo2
 core.*
+
+# ROS bags
+*.mcap
+*.db3
+rosbags/**/*.yaml

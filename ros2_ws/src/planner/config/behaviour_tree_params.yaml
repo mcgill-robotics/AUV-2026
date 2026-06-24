@@ -3,6 +3,19 @@ planner_root_tree:
     tick_rate       : 3.0
     sim             : false
     use_ground_truth: false
+    
+    # Force tree to broadcast its state and blackboard to the network continuously
+    default_snapshot_stream: true
+    default_snapshot_blackboard_data: true
+    default_snapshot_period: 1.0
+
+    # Auto-recording configuration
+    auto_record:
+      enabled: true
+      # Profiles are defined in: src/telemetry/config/rosbag_profiles.yaml
+      profile: "all"
+      bag_prefix: "mission_"
+      service_path: "/rosbag_manager/control"
 
     gate:
       position_tolerance: 0.3      # (m)
@@ -67,3 +80,22 @@ planner_root_tree:
       bins_to_bin_structure: 0.3          # (m) Approximate distance from center of bin structure to the bins
       force_fallback_search: False        # (bool) Force behavior to look for bins instead of bin structure first
       force_fallback_alignment: False     # (bool) Force behavior to use bins for projection instead of bin structure
+
+    octagon:
+      downcam_fov_horizontal: 59.7        # (deg) Horizontal FOV of down cam while in water
+      downcam_fov_vertical: 47.6          # (deg) Vertical FOV of down cam while in water
+      downcam_image_width: 640            # (px) Width of down cam image
+      downcam_image_height: 480           # (px) Height of down cam image
+      discovery_distance: 0.3             # (m) Discovery distance for centering table
+      table_avg_height: 0.75              # (m) Estimated height of the table from the pool floor
+      pool_depth: 2.1                     # (m) Estimated depth of the pool
+      known_height_to_pill: 0.745625      # (m) Experimental distance from camera to pill for area calibration
+      known_pill_area: 16900              # (px^2) Pixel area of the pill at the known calibration height
+      shallow_approach_depth: -0.5        # (m) Shallow depth to approach the table from above
+      shallow_approach_tolerance: 0.2     # (m) Tolerance for reaching the shallow approach depth
+      shallow_approach_hold_time: 1.0     # (s) Hold time for the shallow approach depth
+      surface_depth: -0.2                 # (m) Depth to surface within the octagon
+      surface_tolerance: 0.1              # (m) Tolerance for reaching the surface depth
+      surface_hold_time: 3.0              # (s) Hold time for the surface depth
+      ending_dive_depth: -0.7             # (m) Depth to dive back down to at the end of the navigation subtask
+      navigation_only: True               # (bool) If true, only perform navigation steps (align, surface, dive) and skip item drop
