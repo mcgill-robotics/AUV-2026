@@ -10,7 +10,6 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.qos import QoSProfile, ReliabilityPolicy
 import geometry_msgs.msg
 import auv_msgs.msg
-from vision_msgs.msg import Detection2DArray
 
 # AUV dependencies
 from controls import navigation_client
@@ -150,6 +149,18 @@ def main():
         "force_fallback_alignment": node.get_parameter("bins.force_fallback_alignment").get_parameter_value().bool_value,
     }
 
+    node.declare_parameter("auto_record.enabled", True)
+    node.declare_parameter("auto_record.profile", "all")
+    node.declare_parameter("auto_record.bag_prefix", "mission_")
+    node.declare_parameter("auto_record.service_path", "/rosbag_manager/control")
+
+    auto_record_params = {
+        'enabled': node.get_parameter("auto_record.enabled").get_parameter_value().bool_value,
+        'profile': node.get_parameter("auto_record.profile").get_parameter_value().string_value,
+        'bag_prefix': node.get_parameter("auto_record.bag_prefix").get_parameter_value().string_value,
+        'service_path': node.get_parameter("auto_record.service_path").get_parameter_value().string_value
+    }
+
     # Set the root of the tree
     root = py_trees.composites.Parallel("Root", policy=py_trees.common.ParallelPolicy.SuccessOnAll(synchronise=False))
 
@@ -202,8 +213,8 @@ def main():
 
     down_cam_subscriber = py_trees_ros.subscribers.ToBlackboard(
         name="DownCamSubscriber",
-        topic_name="/vision/down_cam/detections",
-        topic_type=Detection2DArray,
+        topic_name="/vision/down_cam/detection_frame",
+        topic_type=auv_msgs.msg.VisionDetectionFrame,
         blackboard_variables={"/vision/down_cam/detections": None},
         initialise_variables={"/vision/down_cam/detections": None},
         qos_profile=qos,
@@ -222,6 +233,7 @@ def main():
         slalom_params=slalom_params,
         gate_params=gate_params,
         bins_params=bins_params,
+        auto_record_params=auto_record_params
     )
 
     # Add children to root
