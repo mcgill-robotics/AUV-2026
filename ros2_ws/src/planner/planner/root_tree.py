@@ -149,6 +149,18 @@ def main():
         "force_fallback_alignment": node.get_parameter("bins.force_fallback_alignment").get_parameter_value().bool_value,
     }
 
+    node.declare_parameter("auto_record.enabled", True)
+    node.declare_parameter("auto_record.profile", "all")
+    node.declare_parameter("auto_record.bag_prefix", "mission_")
+    node.declare_parameter("auto_record.service_path", "/rosbag_manager/control")
+
+    auto_record_params = {
+        'enabled': node.get_parameter("auto_record.enabled").get_parameter_value().bool_value,
+        'profile': node.get_parameter("auto_record.profile").get_parameter_value().string_value,
+        'bag_prefix': node.get_parameter("auto_record.bag_prefix").get_parameter_value().string_value,
+        'service_path': node.get_parameter("auto_record.service_path").get_parameter_value().string_value
+    }
+
     # Set the root of the tree
     root = py_trees.composites.Parallel("Root", policy=py_trees.common.ParallelPolicy.SuccessOnAll(synchronise=False))
 
@@ -221,6 +233,7 @@ def main():
         slalom_params=slalom_params,
         gate_params=gate_params,
         bins_params=bins_params,
+        auto_record_params=auto_record_params
     )
 
     # Add children to root

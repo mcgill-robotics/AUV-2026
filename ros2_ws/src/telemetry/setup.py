@@ -32,6 +32,7 @@ setup(
             'drytest_foxglove = telemetry.drytest_foxglove:main',
             'vision_to_foxglove = telemetry.vision_to_foxglove:main',
             'setpoint_to_foxglove = telemetry.setpoint_to_foxglove:main',
+            'rosbag_manager_node = telemetry.rosbag_manager_node:main',
         ],
     },
 )

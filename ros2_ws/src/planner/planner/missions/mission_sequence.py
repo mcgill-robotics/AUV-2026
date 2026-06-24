@@ -18,6 +18,8 @@ from .robosub2026.bins_task import BinsTask
 from .robosub2026.torpedo_task import TorpedoTask
 from .robosub2026.table_octagon_task import TableOctagonTask
 
+from .mission_behaviour_components import RosbagRecordingDecorator
+
 class MissionSpawner(py_trees.behaviour.Behaviour):
     def __init__(self, placeholder: py_trees.composites.Sequence, **kwargs):
         super().__init__("Mission Spawner")
@@ -86,6 +88,19 @@ class MissionSpawner(py_trees.behaviour.Behaviour):
                 self.blackboard.mission_choice = None
                 self.message_shown = False
                 return py_trees.common.Status.RUNNING
+
+            # Apply auto-recording decorator if enabled
+            auto_record_params = self.params.get('auto_record_params', {})
+            if auto_record_params.get('enabled', True):
+                profile = auto_record_params.get('profile', 'all')
+                prefix = auto_record_params.get('bag_prefix', 'mission_')
+                service_path = auto_record_params.get('service_path', '/rosbag_manager/control')
+                
+                # Format the mission's name (e.g. "Slalom Task" -> "slalom_task")
+                mission_name_formatted = mission_root.name.lower().replace(' ', '_')
+                bag_name = f"{prefix}{mission_name_formatted}"
+                
+                mission_root = RosbagRecordingDecorator(mission_root, profile=profile, bag_name=bag_name, service_path=service_path)
 
             # Setup the new dynamically created subtree and attach it
             py_trees.trees.setup(root=mission_root, node=self.node, shared_nav_client=self.nav_client)

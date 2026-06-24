@@ -1,0 +1,11 @@
+uint8 START_RECORD=0
+uint8 STOP_RECORD=1
+uint8 PLAY_BAG=2
+uint8 STOP_PLAY=3
+
+uint8 action
+string bag_name  # The name of the bag file (optional)
+string profile   # The recording profile to use (e.g., "all", "vision")
+---
+bool success
+string message

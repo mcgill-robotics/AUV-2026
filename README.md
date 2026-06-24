@@ -6,6 +6,20 @@ Ahoy! This project contains software intended to run on the custom-built Douglas
 
 This project is maintained by the McGill Robotics Club and was developed by its members - students of McGill University.
 
+## Packages Architecture
+
+This repository contains several ROS 2 packages that make up the AUV software stack. Click on any package below to read its specific documentation:
+
+- **[auv_msgs](ros2_ws/src/auv_msgs/README.md)**: Custom ROS 2 message, service, and action definitions.
+- **[bringup](ros2_ws/src/bringup/README.md)**: Top-level launch files for starting the entire AUV system or major subsystems.
+- **[controls](ros2_ws/src/controls/README.md)**: Provides the AUV control loops for depth, attitude, and planar motion (X/Y), computing control efforts as `geometry_msgs/Wrench` messages.
+- **[planner](ros2_ws/src/planner/README.md)**: Provides high-level mission planning and competition task execution using `py_trees` behavior trees.
+- **[propulsion](ros2_ws/src/propulsion/README.md)**: Handles low-level actuation by transforming high-level control efforts into PWM signals for each thruster.
+- **[sensors](ros2_ws/src/sensors/README.md)**: Handles low-level processing, coordinate transformations, and conversion of raw sensor outputs (IMU, Depth, DVL).
+- **[telemetry](ros2_ws/src/telemetry/README.md)**: Foxglove Studio layouts and telemetry configurations for AUV monitoring during pool tests and competition.
+- **[teleop](ros2_ws/src/teleop/README.md)**: Manual teleoperation for the AUV via an Xbox controller.
+- **[vision](ros2_ws/src/vision/README.md)**: Contains the front-camera detection pipeline, the persistent 3D object map, image enhancement nodes, and model-training helpers.
+
 ## 1. Setting Up the Dev Environment
 
 ### Prerequisites
