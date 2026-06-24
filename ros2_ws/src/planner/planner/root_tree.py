@@ -79,7 +79,14 @@ def main():
     node.declare_parameter("torpedo.refinement.alignments_per_attempt", Parameter.Type.INTEGER)
     node.declare_parameter("torpedo.refinement.samples_per_alignment", Parameter.Type.INTEGER)
     node.declare_parameter("torpedo.refinement.sample_every_n_ticks", Parameter.Type.INTEGER)
-
+    node.declare_parameter("torpedo.auv_to_torpedos.icon_to_nearest_hole.board_1.blood", Parameter.Type.DOUBLE_ARRAY)
+    node.declare_parameter("torpedo.auv_to_torpedos.icon_to_nearest_hole.board_1.fire", Parameter.Type.DOUBLE_ARRAY)
+    node.declare_parameter("torpedo.auv_to_torpedos.icon_to_nearest_hole.board_1.ambulance", Parameter.Type.DOUBLE_ARRAY)
+    node.declare_parameter("torpedo.auv_to_torpedos.icon_to_nearest_hole.board_1.firetruck", Parameter.Type.DOUBLE_ARRAY)
+    node.declare_parameter("torpedo.auv_to_torpedos.icon_to_nearest_hole.board_2.blood", Parameter.Type.DOUBLE_ARRAY)
+    node.declare_parameter("torpedo.auv_to_torpedos.icon_to_nearest_hole.board_2.fire", Parameter.Type.DOUBLE_ARRAY)
+    node.declare_parameter("torpedo.auv_to_torpedos.icon_to_nearest_hole.board_2.ambulance", Parameter.Type.DOUBLE_ARRAY)
+    node.declare_parameter("torpedo.auv_to_torpedos.icon_to_nearest_hole.board_2.firetruck", Parameter.Type.DOUBLE_ARRAY)
     slalom_params = {
         "num_layers": node.get_parameter("slalom.num_layers").get_parameter_value().integer_value,
         "gate_side": node.get_parameter("slalom.gate_side").get_parameter_value().string_value,
@@ -119,6 +126,20 @@ def main():
             "x": node.get_parameter("torpedo.torpedo_trajectory_coefficients.x").get_parameter_value().double_array_value,
             "y": node.get_parameter("torpedo.torpedo_trajectory_coefficients.y").get_parameter_value().double_array_value,
             "z": node.get_parameter("torpedo.torpedo_trajectory_coefficients.z").get_parameter_value().double_array_value
+        },
+        "icon_to_nearest_hole": {
+            "board_1": {
+                "blood": node.get_parameter("torpedo.auv_to_torpedos.icon_to_nearest_hole.board_1.blood").get_parameter_value().double_array_value,
+                "fire": node.get_parameter("torpedo.auv_to_torpedos.icon_to_nearest_hole.board_1.fire").get_parameter_value().double_array_value,
+                "ambulance": node.get_parameter("torpedo.auv_to_torpedos.icon_to_nearest_hole.board_1.ambulance").get_parameter_value().double_array_value,
+                "firetruck": node.get_parameter("torpedo.auv_to_torpedos.icon_to_nearest_hole.board_1.firetruck").get_parameter_value().double_array_value
+            },
+            "board_2": {
+                "blood": node.get_parameter("torpedo.auv_to_torpedos.icon_to_nearest_hole.board_2.blood").get_parameter_value().double_array_value,
+                "fire": node.get_parameter("torpedo.auv_to_torpedos.icon_to_nearest_hole.board_2.fire").get_parameter_value().double_array_value,
+                "ambulance": node.get_parameter("torpedo.auv_to_torpedos.icon_to_nearest_hole.board_2.ambulance").get_parameter_value().double_array_value,
+                "firetruck": node.get_parameter("torpedo.auv_to_torpedos.icon_to_nearest_hole.board_2.firetruck").get_parameter_value().double_array_value
+            }
         }
     }
 
