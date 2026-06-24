@@ -246,6 +246,7 @@ class ScanBehaviour(py_trees.behaviour.Behaviour):
         turn_hold_time_s: float = 0.1,                   # (s) hold time before turn SUCCESS
         turn_timeout_s: float = 30.0,                    # (s) timeout before turn FAILURE
         name="Scan Pipes",
+        num_steps_per_side: int = 1                      # Number of steps to scan, avoid big swings
     ):
         super().__init__(name)
         self.scan_angle_rad = math.radians(scan_angle_deg)
@@ -253,6 +254,7 @@ class ScanBehaviour(py_trees.behaviour.Behaviour):
         self.angular_tolerance_rad = angular_tolerance_rad
         self.turn_hold_time_s = turn_hold_time_s
         self.turn_timeout_s = turn_timeout_s
+        self.num_steps_per_side = num_steps_per_side
 
         self.blackboard = self.attach_blackboard_client(name=self.name)
 
@@ -281,12 +283,22 @@ class ScanBehaviour(py_trees.behaviour.Behaviour):
 
     def _scan_offsets(self):
         """Returns the sequence of yaw offsets from center to execute.
-        Pattern: left -> right -> center (3 moves covering the full scan range).
+        Pattern: left -> right -> center (3 general moves covering the full scan range).
         Convention: +yaw = counterclockwise (left), -yaw = clockwise (right).
         """
+        ccw_yaw_targets = []
+        cw_yaw_targets = []
+
+        if self.num_steps_per_side <= 0:
+            self.node.get_logger().warn(f"Step number per side invalid: {self.num_steps_per_side}")
+
+        for i in range(self.num_steps_per_side + 1, 1, -1):
+            ccw_yaw_targets.append(+self.scan_angle_rad/i)
+            cw_yaw_targets.append(-self.scan_angle_rad + self.scan_angle_rad/i)
+
         return [
-            +self.scan_angle_rad,   # rotate left (counterclockwise)
-            -self.scan_angle_rad,   # rotate right (sweeps through center)
+            *ccw_yaw_targets,   # rotate left (counterclockwise)
+            *cw_yaw_targets,   # rotate right (sweeps through center)
             0.0,                     # rotate back to center
         ]
 
@@ -360,16 +372,17 @@ class ScanBehaviour(py_trees.behaviour.Behaviour):
         self.action_status = ActionStatus.SUCCEEDED if goal_success else ActionStatus.FAILED
 
 class GoNearObject(py_trees.behaviour.Behaviour):
-    def __init__(self, target_class: str, target_distance: float, height_offset: float | None = None, tolerance_meters: float=_DEFAULT_POS_TOL, hold_time: float=_DEFAULT_HOLD):
-        super().__init__(f"GoNear{target_class}")
+    def __init__(self, target_class: str, target_distance: float, height_offset: float | None = None, tolerance_meters: float=_DEFAULT_POS_TOL, hold_time: float=_DEFAULT_HOLD, name: str | None = None):
+        super().__init__(name if name else f"GoNear{target_class}")
         self.target_class = target_class
-        self.target_distance = target_distance
+        self.target_planar_distance = target_distance
         self.height_offset = height_offset
         self.tolerance_meters = tolerance_meters
         self.hold_time = hold_time
         self.blackboard = self.attach_blackboard_client(name=self.name)
         self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/vision/last_goal_pose", access=py_trees.common.Access.WRITE)
         self.action_status = ActionStatus.NOT_SENT
 
     def setup(self, **kwargs):
@@ -403,14 +416,14 @@ class GoNearObject(py_trees.behaviour.Behaviour):
             direction_vector = (target_x - current_pose.x, target_y - current_pose.y)
             magnitude = math.sqrt(direction_vector[0]**2 + direction_vector[1]**2)
 
-            # if magnitude <= self.target_distance:
+            # if magnitude <= self.target_planar_distance:
             #     self.node.get_logger().info(f"[{self.name}] Already within target distance of {self.target_class}. No movement needed.")
             #     return py_trees.common.Status.SUCCESS
             
             normalized_direction = (direction_vector[0]/magnitude, direction_vector[1]/magnitude)
 
-            goal_x = target_x - normalized_direction[0] * self.target_distance
-            goal_y = target_y - normalized_direction[1] * self.target_distance
+            goal_x = target_x - normalized_direction[0] * self.target_planar_distance
+            goal_y = target_y - normalized_direction[1] * self.target_planar_distance
 
             if self.height_offset is None:
                 goal = move_global(goal_x, goal_y, do_z=False, tolerance=self.tolerance_meters, hold_time=self.hold_time)
@@ -418,6 +431,7 @@ class GoNearObject(py_trees.behaviour.Behaviour):
                 goal_z = target_obj.pose.position.z + self.height_offset
                 goal = move_global(goal_x, goal_y, goal_z, do_z=True, tolerance=self.tolerance_meters, hold_time=self.hold_time)
 
+            self.blackboard.vision.last_goal_pose = goal
             self.navigation_client.send_navigation_goal(goal, self.name, custom_goal_response=self.on_server_goal_response, custom_goal_result=self.on_server_goal_result)
 
             self.action_status = ActionStatus.PENDING
