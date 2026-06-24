@@ -18,6 +18,8 @@ from .robosub2026.bins_task import BinsTask
 from .robosub2026.torpedo_task import TorpedoTask
 from .robosub2026.table_octagon_task import TableOctagonTask
 
+from .mission_behaviour_components import RosbagRecordingDecorator
+
 class MissionSpawner(py_trees.behaviour.Behaviour):
     def __init__(self, placeholder: py_trees.composites.Sequence, **kwargs):
         super().__init__("Mission Spawner")
@@ -87,6 +89,19 @@ class MissionSpawner(py_trees.behaviour.Behaviour):
                 self.message_shown = False
                 return py_trees.common.Status.RUNNING
 
+            # Apply auto-recording decorator if enabled
+            auto_record_params = self.params.get('auto_record_params', {})
+            if auto_record_params.get('enabled', True):
+                profile = auto_record_params.get('profile', 'all')
+                prefix = auto_record_params.get('bag_prefix', 'mission_')
+                service_path = auto_record_params.get('service_path', '/rosbag_manager/control')
+                
+                # Format the mission's name (e.g. "Slalom Task" -> "slalom_task")
+                mission_name_formatted = mission_root.name.lower().replace(' ', '_')
+                bag_name = f"{prefix}{mission_name_formatted}"
+                
+                mission_root = RosbagRecordingDecorator(mission_root, profile=profile, bag_name=bag_name, service_path=service_path)
+
             # Setup the new dynamically created subtree and attach it
             py_trees.trees.setup(root=mission_root, node=self.node, shared_nav_client=self.nav_client)
             self.placeholder.add_child(mission_root)
@@ -100,6 +115,8 @@ class MissionSpawner(py_trees.behaviour.Behaviour):
         p = self.params
         slalom = p.get('slalom_params', {})
         torpedo = p.get('torpedo_params', {})
+        gate = p.get('gate_params', {})
+        bins = p.get('bins_params', {})
         if choice == 1:
             return OrbitQualificationMission(p['angular_tolerance'], p['position_tolerance'], p['hold_time'], p['timeout'], p['orbit_pre_qual_angular_tolerance_scale'], p['orbit_pre_qual_positional_tolerance_scale'], p['orbit_pre_qual_hold_time_initial'], p['orbit_pre_qual_hold_time_segments'])
         elif choice == 2:
@@ -117,11 +134,11 @@ class MissionSpawner(py_trees.behaviour.Behaviour):
         elif choice == 8:
             return ComprehensiveTestMission(p['position_tolerance'], p['hold_time'], p['timeout'])
         elif choice == 9:
-            return GateTask(p['position_tolerance'], p['hold_time'], p['timeout'])
+            return GateTask(**gate)
         elif choice == 10:
             return SlalomTask(**slalom)
         elif choice == 11:
-            return BinsTask(p['position_tolerance'], p['hold_time'], p['timeout'])
+            return BinsTask(**bins)
         elif choice == 12:
             return TorpedoTask(**torpedo)
         elif choice == 13:
@@ -129,10 +146,11 @@ class MissionSpawner(py_trees.behaviour.Behaviour):
         elif choice == 14:
             full_run = py_trees.composites.Sequence("FULL COMPETITION RUN", memory=True)
             full_run.add_children([
-                GateTask(p['position_tolerance'], p['hold_time'], p['timeout']),
+                GateTask(**gate),
                 SlalomTask(**slalom),
-                BinsTask(p['position_tolerance'], p['hold_time'], p['timeout']),
+                BinsTask(**bins),
                 TorpedoTask(**torpedo),
+                TorpedoTask(p['position_tolerance'], p['hold_time'], p['timeout']),
                 TableOctagonTask(p['position_tolerance'], p['hold_time'], p['timeout']),
             ])
             return full_run

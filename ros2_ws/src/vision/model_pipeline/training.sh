@@ -3,12 +3,13 @@
 usage() {
     echo ""
     echo "Usage:"
-    echo "  Fine-tuning : ./training.sh <model_path> [--model-type yolo|rfdetr] [--organize-args \"--flag value\"] [--training-args \"--flag value\"]"
-    echo "  Synthetic   : ./training.sh --mode synthetic [--model-type yolo|rfdetr] [--organize-args \"--flag value\"] [--augment-args \"--flag value\"] [--training-args \"--flag value\"]"
+    echo "  Fine-tuning : ./training.sh <model_path> [--model-type yolo|rfdetr] [--task detect|segment] [--organize-args \"--flag value\"] [--training-args \"--flag value\"]"
+    echo "  Synthetic   : ./training.sh --mode synthetic [--model-type yolo|rfdetr] [--task detect|segment] [--organize-args \"--flag value\"] [--augment-args \"--flag value\"] [--training-args \"--flag value\"]"
     echo ""
     echo "Options:"
     echo "  --model-type   Model architecture to use: 'yolo' (default) or 'rfdetr'"
     echo "  --mode         Training mode: 'finetune' (default) or 'synthetic'"
+    echo "  --task         Task type: 'detect' (default) or 'segment'"
     echo "  --organize-args  Quoted string of extra flags forwarded to organize_dataset.py"
     echo "  --augment-args   Quoted string of extra flags forwarded to augment_dataset.py (synthetic mode only)"
     echo "  --training-args  Quoted string of extra flags forwarded to training.py"
@@ -21,6 +22,7 @@ usage() {
 MODEL_PATH=""
 MODEL_TYPE="yolo"
 MODE="finetune"
+TASK="detect"
 ORGANIZE_ARGS=""
 AUGMENT_ARGS=""
 TRAINING_ARGS=""
@@ -40,6 +42,10 @@ while [[ "$#" -gt 0 ]]; do
             ;;
         --mode)
             MODE="$2"
+            shift 2
+            ;;
+        --task)
+            TASK="$2"
             shift 2
             ;;
         --organize-args)
@@ -75,6 +81,11 @@ if [[ "$MODE" != "finetune" && "$MODE" != "synthetic" ]]; then
     usage
 fi
 
+if [[ "$TASK" != "detect" && "$TASK" != "segment" ]]; then
+    echo "Error: --task must be 'detect' or 'segment' (got: '$TASK')"
+    usage
+fi
+
 if [ "$MODE" = "finetune" ] && [ -z "$MODEL_PATH" ]; then
     echo "Error: Fine-tuning mode requires a model filepath as the first argument."
     usage
@@ -86,11 +97,26 @@ if [ "$MODEL_TYPE" = "rfdetr" ]; then
     AUG_DIR="data/processed_coco_aug"
     FORMAT_ARG="--format coco"
     DEFAULT_MULTIPLIER="1"
+    if [ "$TASK" = "segment" ]; then
+        DEFAULT_IMGSZ="384"
+    else
+        DEFAULT_IMGSZ="512"
+    fi
 else
     PROCESSED_DIR="data/processed"
     AUG_DIR="data/processed_aug"
     FORMAT_ARG=""
     DEFAULT_MULTIPLIER="3"
+    DEFAULT_IMGSZ="640"
+fi
+
+# Automatically add letterbox/imgsz args if not explicitly provided by the user
+if [[ "$ORGANIZE_ARGS" != *"--letterbox"* ]]; then
+    ORGANIZE_ARGS="$ORGANIZE_ARGS --letterbox $DEFAULT_IMGSZ"
+fi
+
+if [[ "$AUGMENT_ARGS" != *"--imgsz"* ]]; then
+    AUGMENT_ARGS="$AUGMENT_ARGS --imgsz $DEFAULT_IMGSZ"
 fi
 
 # ── Run pipeline ──────────────────────────────────────────────────────────────
@@ -98,6 +124,7 @@ echo ""
 echo "╔══════════════════════════════════════════════╗"
 echo "  Training Pipeline"
 echo "  Mode       : $MODE"
+echo "  Task       : $TASK"
 echo "  Model type : $MODEL_TYPE"
 [ -n "$MODEL_PATH" ] && echo "  Model path : $MODEL_PATH"
 echo "╚══════════════════════════════════════════════╝"
@@ -109,8 +136,8 @@ if [ "$MODE" = "finetune" ]; then
     python3 fix_labels.py
 
     echo ""
-    echo "==> [2/3] Organizing dataset (format: ${MODEL_TYPE})..."
-    python3 organize_dataset.py $FORMAT_ARG $ORGANIZE_ARGS
+    echo "==> [2/3] Organizing dataset (format: ${MODEL_TYPE}, task: ${TASK})..."
+    python3 organize_dataset.py $FORMAT_ARG --task "$TASK" $ORGANIZE_ARGS
 
     echo ""
     echo "==> [3/3] Fine-tuning from: $MODEL_PATH"
@@ -119,17 +146,19 @@ if [ "$MODE" = "finetune" ]; then
             --model rfdetr \
             --custom-model "$MODEL_PATH" \
             --dataset-dir "$PROCESSED_DIR" \
+            --task "$TASK" \
             $TRAINING_ARGS
     else
         python3 training.py \
             --custom-model "$MODEL_PATH" \
+            --task "$TASK" \
             $TRAINING_ARGS
     fi
 
 else
     # ── Synthetic training pipeline ───────────────────────────────────────────
-    echo "==> [1/3] Organizing dataset (format: ${MODEL_TYPE})..."
-    python3 organize_dataset.py $FORMAT_ARG $ORGANIZE_ARGS
+    echo "==> [1/3] Organizing dataset (format: ${MODEL_TYPE}, task: ${TASK})..."
+    python3 organize_dataset.py $FORMAT_ARG --task "$TASK" $ORGANIZE_ARGS
 
     echo ""
     echo "==> [2/3] Augmenting training split (multiplier: ${DEFAULT_MULTIPLIER}x)..."
@@ -137,6 +166,7 @@ else
         --input  "$PROCESSED_DIR" \
         --output "$AUG_DIR" \
         --multiplier "$DEFAULT_MULTIPLIER" \
+        --task "$TASK" \
         $FORMAT_ARG \
         $AUGMENT_ARGS
 
@@ -146,12 +176,14 @@ else
         python3 training.py \
             --model rfdetr \
             --dataset-dir "$AUG_DIR" \
+            --task "$TASK" \
             $TRAINING_ARGS
     else
         python3 training.py \
             --model v11 \
             --size s \
             --data "$AUG_DIR/data.yaml" \
+            --task "$TASK" \
             --unity \
             $TRAINING_ARGS
     fi

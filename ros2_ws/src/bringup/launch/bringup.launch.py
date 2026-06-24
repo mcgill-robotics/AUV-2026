@@ -1,7 +1,7 @@
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, GroupAction
+from launch.actions import IncludeLaunchDescription, GroupAction, SetEnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.actions import DeclareLaunchArgument
 from launch.conditions import IfCondition
@@ -87,7 +87,11 @@ def generate_launch_description():
         actions=[
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(sensors_launch_file),
-                launch_arguments={"sim": sim}.items(),
+                launch_arguments={
+                    "sim": sim,
+                    # sensors does not launch DVL driver by default, but bringup should launch everything
+                    "dvl": "true" 
+                }.items(),
             )
         ],
     )
@@ -154,7 +158,23 @@ def generate_launch_description():
         ],
     )
 
-    return LaunchDescription([
+    # ---------------------------------------------------------------------------------
+    # Global Environment Variables
+    # ---------------------------------------------------------------------------------
+    # Limit numpy/OpenBLAS threads to 1. By default, OpenBLAS spins up threads equal 
+    # to the number of logical CPU cores (e.g., 34 threads on modern CPUs). For small 
+    # 3D transforms common in our python nodes (like controls, planner, and tf2 math), 
+    # the overhead of coordinating 34 threads causes unnecessary CPU bottlenecks.
+    # Forcing sequential execution (1 thread) reduces CPU usage.
+    env_vars = [
+        SetEnvironmentVariable(name='OMP_NUM_THREADS', value='1'),
+        SetEnvironmentVariable(name='OPENBLAS_NUM_THREADS', value='1'),
+        SetEnvironmentVariable(name='MKL_NUM_THREADS', value='1'),
+        SetEnvironmentVariable(name='VECLIB_MAXIMUM_THREADS', value='1'),
+        SetEnvironmentVariable(name='NUMEXPR_NUM_THREADS', value='1'),
+    ]
+
+    return LaunchDescription(env_vars + [
         sim_condition,
         vision_condition,
         enable_object_detection_arg,

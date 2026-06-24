@@ -6,6 +6,20 @@ Ahoy! This project contains software intended to run on the custom-built Douglas
 
 This project is maintained by the McGill Robotics Club and was developed by its members - students of McGill University.
 
+## Packages Architecture
+
+This repository contains several ROS 2 packages that make up the AUV software stack. Click on any package below to read its specific documentation:
+
+- **[auv_msgs](ros2_ws/src/auv_msgs/README.md)**: Custom ROS 2 message, service, and action definitions.
+- **[bringup](ros2_ws/src/bringup/README.md)**: Top-level launch files for starting the entire AUV system or major subsystems.
+- **[controls](ros2_ws/src/controls/README.md)**: Provides the AUV control loops for depth, attitude, and planar motion (X/Y), computing control efforts as `geometry_msgs/Wrench` messages.
+- **[planner](ros2_ws/src/planner/README.md)**: Provides high-level mission planning and competition task execution using `py_trees` behavior trees.
+- **[propulsion](ros2_ws/src/propulsion/README.md)**: Handles low-level actuation by transforming high-level control efforts into PWM signals for each thruster.
+- **[sensors](ros2_ws/src/sensors/README.md)**: Handles low-level processing, coordinate transformations, and conversion of raw sensor outputs (IMU, Depth, DVL).
+- **[telemetry](ros2_ws/src/telemetry/README.md)**: Foxglove Studio layouts and telemetry configurations for AUV monitoring during pool tests and competition.
+- **[teleop](ros2_ws/src/teleop/README.md)**: Manual teleoperation for the AUV via an Xbox controller.
+- **[vision](ros2_ws/src/vision/README.md)**: Contains the front-camera detection pipeline, the persistent 3D object map, image enhancement nodes, and model-training helpers.
+
 ## 1. Setting Up the Dev Environment
 
 ### Prerequisites
@@ -113,11 +127,26 @@ Currently, this bringup script launches the following subsystems:
 - **Telemetry** (`dashboard.launch.py`): Launches the Foxglove bridge for remote monitoring and debugging.
 - **ROS TCP Endpoint** (`endpoint.py`): Facilitates communication with the Unity Simulator (only when `sim:=true`).
 
+**⚠️ Keep in mind that the bringup script is designed to launch all subsystems by default, including the following packages for which special care must be taken:**
+
+- The `sensors` package launches drivers for the DVL. The DVL must always be underwater when configured by the driver during operation, otherwise it may overheat
+- The `propulsion` package re-arms all thrusters on launch, which can be dangerous if the AUV is not properly secured.
+- The `controls` package attempts to maintain the AUV's underwater position on launch, which may lead to unexpected thruster activation and movement.
+
+See the [Launch Options](#launch-options) section below for instructions on how to launch the bringup script with specific subsystems disabled, such as when running in simulation or when testing specific packages.
+
 ### Launch Options
 
 - `sim:=true|false` (default: `false`): Launch the AUV in simulation mode. *(Note: To set up and run the Unity simulator itself, please refer to the [auv-sim-unity repository](https://github.com/mcgill-robotics/auv-sim-unity).)*
 - `vision:=true|false` (default: `true`): Launch the vision pipeline. Set this to `false` when running the simulation on a machine without an NVIDIA GPU, as the simulator will directly provide the object map.
 - `enable_object_detection:=true|false` (default: `true`): Enable object detection inference globally. If set to `false`, the vision pipeline will still launch and publish raw camera feeds, but no AI inference models will be loaded or run.
+- `sensors:=true|false` (default: `true`): Launch the sensors package with real hardware drivers. 
+- `propulsion:=true|false` (default: `true`): Launch the propulsion package.
+- `controls:=true|false` (default: `true`): Launch the controls package.
+- `telemetry:=true|false` (default: `true`): Launch the telemetry dashboard.
+- `planner:=true|false` (default: `false`): Launch the mission planner. This is set to `false` by default as the mission planner is not yet fully integrated with the rest of the system.
+
+Note that the `sim` flag is also passed to the launched packages, so for instance if `sim:=true`, no hardware drivers will be launched by the sensors package.
 
 **Example: Running simulation without vision**
 ```bash

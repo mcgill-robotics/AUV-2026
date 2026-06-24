@@ -1,0 +1,9 @@
+string label
+float64 confidence
+float64 x_abs
+float64 y_abs
+float64 z_abs
+float64 x_rel
+float64 y_rel
+float64 z_rel
+float64 distance
