@@ -1,4 +1,3 @@
-from matplotlib.pylab import det
 import py_trees
 import planner.missions.vision_behaviours as vision_behaviours
 from planner.missions.robosub2026.bins_behaviors import FindBinStructure, ApproachObject, AlignCorrectBin

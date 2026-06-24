@@ -126,6 +126,7 @@ def main():
     node.declare_parameter("bins.bins_to_bin_structure", 0.3)
     node.declare_parameter("bins.force_fallback_search", False)
     node.declare_parameter("bins.force_fallback_alignment", False)
+    node.declare_parameter("bins.no_detection_timeout", 10.0)
 
     bins_params = {
         "downcam_fov_horizontal": node.get_parameter("bins.downcam_fov_horizontal").get_parameter_value().double_value,
@@ -147,6 +148,7 @@ def main():
         "bins_to_bin_structure": node.get_parameter("bins.bins_to_bin_structure").get_parameter_value().double_value,
         "force_fallback_search": node.get_parameter("bins.force_fallback_search").get_parameter_value().bool_value,
         "force_fallback_alignment": node.get_parameter("bins.force_fallback_alignment").get_parameter_value().bool_value,
+        "no_detection_timeout": node.get_parameter("bins.no_detection_timeout").get_parameter_value().double_value,
     }
 
     node.declare_parameter("octagon.downcam_fov_horizontal", 59.7)

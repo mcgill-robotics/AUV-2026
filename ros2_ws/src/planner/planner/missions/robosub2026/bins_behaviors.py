@@ -6,6 +6,7 @@ import planner.missions.vision_behaviours as vision_behaviours
 from controls.goal_helpers import move_global, move_robot_centric
 from planner.missions.action_status_enum import ActionStatus
 import geometry_msgs.msg._pose
+import transforms3d
 
 class ApproachObject(py_trees.composites.Sequence): 
     def __init__(self, target_class: str, target_distance: float, height_offset: float):
@@ -278,15 +279,19 @@ class GetBinStructurePos(py_trees.behaviour.Behaviour):
             bins_avg_height = (bins[0].pose.z + bins[1].pose.z) / 2
             bins_midpoint = (bins[0].pose.x + bins[1].pose.x) / 2, (bins[0].pose.y + bins[1].pose.y) / 2
 
-            auv_pose = self.blackboard.sensors.pose.pose.position
-            auv_to_bins_midpoint = (bins_midpoint[0] - auv_pose.x, bins_midpoint[1] - auv_pose.y)
+            auv_orientation = self.blackboard.sensors.pose.pose.orientation
+            q = [auv_orientation.w, auv_orientation.x, auv_orientation.y, auv_orientation.z]
+            _, _, yaw = transforms3d.euler.quat2euler(q)
+            auv_forward_vector = (math.cos(yaw), math.sin(yaw))
 
             bins_vector = (bins[1].pose.x - bins[0].pose.x, bins[1].pose.y - bins[0].pose.y)
             bins_perpendicular_vector = (-bins_vector[1], bins_vector[0])
             magnitude = math.sqrt(bins_perpendicular_vector[0] ** 2 + bins_perpendicular_vector[1] ** 2)
+            if magnitude == 0:
+                magnitude = 1.0 # prevent division by zero
             bins_perpendicular_unit_vector = bins_perpendicular_vector[0] / magnitude, bins_perpendicular_vector[1] / magnitude
 
-            dot_product = auv_to_bins_midpoint[0] * bins_perpendicular_unit_vector[0] + auv_to_bins_midpoint[1] * bins_perpendicular_unit_vector[1]
+            dot_product = auv_forward_vector[0] * bins_perpendicular_unit_vector[0] + auv_forward_vector[1] * bins_perpendicular_unit_vector[1]
             if dot_product < 0:
                 bins_perpendicular_unit_vector = (-bins_perpendicular_unit_vector[0], -bins_perpendicular_unit_vector[1])
             
@@ -382,6 +387,7 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
         self.go_above_bin_height = self.bins_params['go_above_bin_height']
         self.wrong_task_type_threshold = self.bins_params['wrong_task_type_threshold']
         self.bin_lined_up_threshold = self.bins_params['bin_lined_up_threshold']
+        self.no_detection_timeout = self.bins_params.get('no_detection_timeout', 10.0)
 
         self.down_cam_bin_position = None
         self.down_cam_new_goal_timer = 0
@@ -416,6 +422,7 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
         self.blood_detections = 0
         self.bin_lined_up_frames = 0
         self.action_status = ActionStatus.PENDING
+        self.last_detection_time = self.node.get_clock().now()
 
     def on_server_goal_response(self, goal_response: bool):
         if not goal_response:
@@ -464,8 +471,14 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
                     #     self.blood_detections += 1
 
             if len(downcam_bins) == 0:
+                time_since_last_detection = (self.node.get_clock().now() - self.last_detection_time).nanoseconds / 1e9
+                if time_since_last_detection > self.no_detection_timeout:
+                    self.node.get_logger().error(f"[{self.name}] No valid bin detected for {self.no_detection_timeout}s. Timing out.")
+                    return py_trees.common.Status.FAILURE
                 self.node.get_logger().info(f"[{self.name}] No 'blood' or 'fire' detected. Waiting...", throttle_duration_sec=2.0)
                 return py_trees.common.Status.RUNNING
+            
+            self.last_detection_time = self.node.get_clock().now()
             
             # check if its the wrong label
             if (self.role == "survey_repair" and self.blood_detections > self.fire_detections + self.wrong_task_type_threshold
