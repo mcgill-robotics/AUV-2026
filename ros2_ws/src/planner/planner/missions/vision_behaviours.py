@@ -372,8 +372,8 @@ class ScanBehaviour(py_trees.behaviour.Behaviour):
         self.action_status = ActionStatus.SUCCEEDED if goal_success else ActionStatus.FAILED
 
 class GoNearObject(py_trees.behaviour.Behaviour):
-    def __init__(self, target_class: str, target_distance: float, height_offset: float | None = None, tolerance_meters: float=_DEFAULT_POS_TOL, hold_time: float=_DEFAULT_HOLD):
-        super().__init__(f"GoNear{target_class}")
+    def __init__(self, target_class: str, target_distance: float, height_offset: float | None = None, tolerance_meters: float=_DEFAULT_POS_TOL, hold_time: float=_DEFAULT_HOLD, name: str | None = None):
+        super().__init__(name if name else f"GoNear{target_class}")
         self.target_class = target_class
         self.target_planar_distance = target_distance
         self.height_offset = height_offset

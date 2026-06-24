@@ -116,6 +116,7 @@ class MissionSpawner(py_trees.behaviour.Behaviour):
         slalom = p.get('slalom_params', {})
         gate = p.get('gate_params', {})
         bins = p.get('bins_params', {})
+        octagon = p.get('octagon_params', {})
         if choice == 1:
             return OrbitQualificationMission(p['angular_tolerance'], p['position_tolerance'], p['hold_time'], p['timeout'], p['orbit_pre_qual_angular_tolerance_scale'], p['orbit_pre_qual_positional_tolerance_scale'], p['orbit_pre_qual_hold_time_initial'], p['orbit_pre_qual_hold_time_segments'])
         elif choice == 2:
@@ -141,7 +142,7 @@ class MissionSpawner(py_trees.behaviour.Behaviour):
         elif choice == 12:
             return TorpedoTask(p['position_tolerance'], p['hold_time'], p['timeout'])
         elif choice == 13:
-            return TableOctagonTask(p['position_tolerance'], p['hold_time'], p['timeout'])
+            return TableOctagonTask(p['position_tolerance'], p['hold_time'], p['timeout'], **octagon)
         elif choice == 14:
             full_run = py_trees.composites.Sequence("FULL COMPETITION RUN", memory=True)
             full_run.add_children([
@@ -149,7 +150,7 @@ class MissionSpawner(py_trees.behaviour.Behaviour):
                 SlalomTask(**slalom),
                 BinsTask(**bins),
                 TorpedoTask(p['position_tolerance'], p['hold_time'], p['timeout']),
-                TableOctagonTask(p['position_tolerance'], p['hold_time'], p['timeout']),
+                TableOctagonTask(p['position_tolerance'], p['hold_time'], p['timeout'], **octagon),
             ])
             return full_run
         return None
