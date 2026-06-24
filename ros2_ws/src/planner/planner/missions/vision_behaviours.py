@@ -406,7 +406,8 @@ class GoNearObject(py_trees.behaviour.Behaviour):
             
             if target_obj is None:
                 self.node.get_logger().error(f"[{self.name}] Target '{self.target_class}' not found in vision during setup!")
-                return py_trees.common.Status.FAILURE
+                self.action_status = ActionStatus.FAILED
+                return
             
             target_x = target_obj.pose.position.x
             target_y = target_obj.pose.position.y
@@ -438,7 +439,9 @@ class GoNearObject(py_trees.behaviour.Behaviour):
 
             return py_trees.common.Status.RUNNING
 
-        else: return py_trees.common.Status.FAILURE
+        else: 
+            self.action_status = ActionStatus.FAILED
+            return
 
     def on_server_goal_response(self, goal_response: bool):
         if not goal_response:

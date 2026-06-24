@@ -451,7 +451,7 @@ object_map:
       gating_threshold: 15.0 # Mahalanobis distance threshold (~3 sigma) for associating detections to tracks
       min_hits: 20 # Consecutive frames a detection must be matched to confirm a new track
       max_age: 8 # Number of frames to keep a lost track alive before deleting it [CURRENTLY UNUSED]      
-      max_position_jump: 2.0 # Maximum allowed distance (meters) between predictions and measurements
+      max_position_jump: 1.5 # Maximum allowed distance (meters) between predictions and measurements
       conf_to_tent_threshold: 5 # Number of consecutive missed frames before a CONFIRMED track degrades to TENTATIVE
       tent_init_buffer: 5 # Extra frames allowed for a new TENTATIVE track to initialize before being deleted if unmatched
 

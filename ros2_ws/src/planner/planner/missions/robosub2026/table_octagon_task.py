@@ -11,20 +11,18 @@ class TableOctagonTask(py_trees.composites.Sequence):
     and delivers them to baskets.
     Items: Nut/Plug (Survey & Repair) vs Pill/Bandage (Search & Rescue).
     """
-    def __init__(self, position_tolerance: float, hold_time: float, timeout: float, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__("Table & Octagon Task", memory=True)
 
         self.blackboard = self.attach_blackboard_client(name="OctagonTaskBlackboard")
+        position_tolerance = kwargs.get('position_tolerance', 0.3)
+        hold_time = kwargs.get('hold_time', 1.0)
+        timeout = kwargs.get('timeout', 30.0)
 
         # 1. Go to a set depth to view the table better. The table is best seen at a shallow depth, since we get to
         # see the top of the table, whereas at a lower depth there is a lot of empty space
         #3 Go up to table 
-        go_above_table = GoAboveTable(
-            position_tolerance=position_tolerance,
-            hold_time=hold_time,
-            timeout=timeout,
-            **kwargs
-        )
+        go_above_table = GoAboveTable(**kwargs)
 
         # 2. Surface inside Octagon
         # 3. Locate Resupply table and items

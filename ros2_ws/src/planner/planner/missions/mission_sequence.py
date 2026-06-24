@@ -17,6 +17,7 @@ from .robosub2026.slalom_task import SlalomTask
 from .robosub2026.bins_task import BinsTask
 from .robosub2026.torpedo_task import TorpedoTask
 from .robosub2026.table_octagon_task import TableOctagonTask
+from .robosub2026.return_home_task import ReturnHomeTask
 
 from .mission_behaviour_components import RosbagRecordingDecorator
 
@@ -72,8 +73,9 @@ class MissionSpawner(py_trees.behaviour.Behaviour):
                     " 11: Bins Task\n"
                     " 12: Torpedo Task\n"
                     " 13: Table & Octagon Task\n"
+                    " 14: Return Home Task\n"
                     "--- Full Run ---\n"
-                    " 14: FULL COMPETITION RUN"
+                    " 15: FULL COMPETITION RUN"
                 )
                 self.node.get_logger().info(menu_text)
                 self.message_shown = True
@@ -117,6 +119,7 @@ class MissionSpawner(py_trees.behaviour.Behaviour):
         gate = p.get('gate_params', {})
         bins = p.get('bins_params', {})
         octagon = p.get('octagon_params', {})
+        return_home = p.get('return_home_params', {})
         if choice == 1:
             return OrbitQualificationMission(p['angular_tolerance'], p['position_tolerance'], p['hold_time'], p['timeout'], p['orbit_pre_qual_angular_tolerance_scale'], p['orbit_pre_qual_positional_tolerance_scale'], p['orbit_pre_qual_hold_time_initial'], p['orbit_pre_qual_hold_time_segments'])
         elif choice == 2:
@@ -142,15 +145,18 @@ class MissionSpawner(py_trees.behaviour.Behaviour):
         elif choice == 12:
             return TorpedoTask(p['position_tolerance'], p['hold_time'], p['timeout'])
         elif choice == 13:
-            return TableOctagonTask(p['position_tolerance'], p['hold_time'], p['timeout'], **octagon)
+            return TableOctagonTask(**octagon)
         elif choice == 14:
+            return ReturnHomeTask(**return_home)
+        elif choice == 15:
             full_run = py_trees.composites.Sequence("FULL COMPETITION RUN", memory=True)
             full_run.add_children([
                 GateTask(**gate),
                 SlalomTask(**slalom),
                 BinsTask(**bins),
                 TorpedoTask(p['position_tolerance'], p['hold_time'], p['timeout']),
-                TableOctagonTask(p['position_tolerance'], p['hold_time'], p['timeout'], **octagon),
+                TableOctagonTask(**octagon),
+                ReturnHomeTask(**return_home),
             ])
             return full_run
         return None
