@@ -410,6 +410,12 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
         except Exception as e:
             self.node.get_logger().error("Accessing /gate/selected_role failed, using search_rescue")
             self.role = "search_rescue"
+        self.down_cam_bin_position = None
+        self.expected_failures = 0
+        self.fire_detections = 0
+        self.blood_detections = 0
+        self.bin_lined_up_frames = 0
+        self.action_status = ActionStatus.PENDING
 
     def on_server_goal_response(self, goal_response: bool):
         if not goal_response:
@@ -417,6 +423,7 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
             self.action_status = ActionStatus.FAILED
 
     def on_server_goal_result(self, goal_success: bool, message: str) -> None:
+        self.node.get_logger().info(f"[{self.name}] Goal result received. Success: {goal_success}, Expected failures: {self.expected_failures}, Message: {message}")
         if goal_success:
             self.action_status = ActionStatus.SUCCEEDED
         elif self.expected_failures > 0:
@@ -447,8 +454,7 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
             downcam_bins = []
 
             for detection in self.blackboard.vision.down_cam.detections.detections:
-                hypothesis = detection.results[0].hypothesis
-                if hypothesis.class_id == "blood" or hypothesis.class_id == "fire": # or hypothesis.class_id == "bin": # for testing, accept any bin detection as valid
+                if detection.label == "blood" or detection.label == "fire": # or detection.label == "bin": # for testing, accept any bin detection as valid
                     
                     #coordinates = (detection.bbox.center.position.x, detection.bbox.center.position.y)
                     downcam_bins.append(detection)
@@ -458,6 +464,7 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
                     #     self.blood_detections += 1
 
             if len(downcam_bins) == 0:
+                self.node.get_logger().info(f"[{self.name}] No 'blood' or 'fire' detected. Waiting...", throttle_duration_sec=2.0)
                 return py_trees.common.Status.RUNNING
             
             # check if its the wrong label
@@ -475,7 +482,7 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
             closest_bin_detection = None
             closest_bin_distance = float('inf')
             for downcam_bin_detection in downcam_bins:
-                downcam_bin_position = (downcam_bin_detection.bbox.center.position.x, downcam_bin_detection.bbox.center.position.y)
+                downcam_bin_position = (downcam_bin_detection.bbox_center_x, downcam_bin_detection.bbox_center_y)
                 distance_squared = float((downcam_bin_position[0] - self.camera_width / 2) ** 2 + (downcam_bin_position[1] - self.camera_height / 2) ** 2)
                 if distance_squared < closest_bin_distance:
                     closest_bin_detection = downcam_bin_detection
@@ -483,15 +490,17 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
                     closest_bin_distance = distance_squared
 
             if closest_bin_detection is not None:
-                if closest_bin_detection.results[0].hypothesis.class_id == "fire":
+                if closest_bin_detection.label == "fire":
                     self.fire_detections += 1
-                elif closest_bin_detection.results[0].hypothesis.class_id == "blood":
+                elif closest_bin_detection.label == "blood":
                     self.blood_detections += 1
 
             if closest_bin_distance < self.bin_lined_up_threshold**2: # because closest bin distance is squared as well
                 self.bin_lined_up_frames += 1
             else:
                 self.bin_lined_up_frames = 0
+                
+            self.node.get_logger().info(f"[{self.name}] Pixel Dist^2: {closest_bin_distance:.1f} (Threshold: {self.bin_lined_up_threshold**2}). Lined up frames: {self.bin_lined_up_frames}/{self.bin_lined_up_threshold}")
 
 
             
@@ -507,12 +516,14 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
             x_angle = math.radians(self.down_cam_bin_position[0] / self.camera_width * self.downcam_fov_horizontal)
             y_angle = math.radians(self.down_cam_bin_position[1] / self.camera_height * self.downcam_fov_vertical)
 
-            #self.node.get_logger().info(f"Sending new goal: x_angle: {x_angle}, y_angle: {y_angle}")
+            forward_goal = -math.tan(y_angle) * (self.go_above_bin_height - 0.1)
+            sway_goal = -math.tan(x_angle) * (self.go_above_bin_height - 0.1)
+            self.node.get_logger().info(f"[{self.name}] Calculated physical goal -> Forward: {forward_goal:.3f}m, Sway: {sway_goal:.3f}m")
 
             self.expected_failures += 1  # current goal will fail once, ignore that failure
 
             # We know the bin is 1.0m below us, so calculate the bin position
-            self.goal = move_robot_centric(forward=-math.tan(y_angle) * (self.go_above_bin_height - 0.1), sway=-math.tan(x_angle) * (self.go_above_bin_height - 0.1))
+            self.goal = move_robot_centric(forward=forward_goal, sway=sway_goal)
             # self.goal = move_robot_centric(forward=-self.down_cam_bin_position[1] / CAMERA_HEIGHT, sway=-self.down_cam_bin_position[0] / CAMERA_WIDTH)
             self.action_status = ActionStatus.NOT_SENT  # Next tick, new goal will be sent automatically
 

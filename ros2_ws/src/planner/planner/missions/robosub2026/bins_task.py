@@ -15,8 +15,6 @@ class BinsTask(py_trees.composites.Sequence):
         super().__init__("Bins Task", memory=True)
 
         self.blackboard = self.attach_blackboard_client(name="BinsTaskBlackboard")
-        # 0. Skip to bin structure
-        skip_to_bin_structure = BasicActionBehaviour("SkipToBinStructure", goal=move_global(x=9.0, y=-7.0, yaw=0.0, z=-1.5))
         # 1. Search for and locate 3D pipeline/bins structure
         search_for_bin_structure = vision_behaviours.SearchSweepBehaviour(
             target_class="bin_structure" if not bins_params.get('force_fallback_search', False) else "bin",
@@ -47,7 +45,6 @@ class BinsTask(py_trees.composites.Sequence):
         align_correct_bin = AlignCorrectBin(bins_params)
 
         self.add_children([
-            skip_to_bin_structure,
             search_for_bin_structure,
             go_near_bin_structure,
             search_for_bins,

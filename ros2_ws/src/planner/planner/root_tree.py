@@ -10,7 +10,6 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.qos import QoSProfile, ReliabilityPolicy
 import geometry_msgs.msg
 import auv_msgs.msg
-from vision_msgs.msg import Detection2DArray
 
 # AUV dependencies
 from controls import navigation_client
@@ -202,8 +201,8 @@ def main():
 
     down_cam_subscriber = py_trees_ros.subscribers.ToBlackboard(
         name="DownCamSubscriber",
-        topic_name="/vision/down_cam/detections",
-        topic_type=Detection2DArray,
+        topic_name="/vision/down_cam/detection_frame",
+        topic_type=auv_msgs.msg.VisionDetectionFrame,
         blackboard_variables={"/vision/down_cam/detections": None},
         initialise_variables={"/vision/down_cam/detections": None},
         qos_profile=qos,
