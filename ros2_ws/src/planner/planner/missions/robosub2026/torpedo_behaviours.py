@@ -53,6 +53,7 @@ class Navigation(Action):
         self.action_status:ActionStatus = ActionStatus.NOT_SENT
         
     def setup(self, **kwargs):
+        super(Navigation, self).setup(**kwargs)
         self.node = kwargs['node']
         self.navigation_client = kwargs['shared_nav_client']
         
@@ -265,13 +266,13 @@ class MoveToFrontOfBoard(Navigation):
             timeout: float = 30.0,
             hold_time: float = 0.5,
         ):
-        super().__init__("Move to Front of Board and Align", position_tolerance, orientation_tolerance_rad, timeout, hold_time)
+        super(MoveToFrontOfBoard, self).__init__("Move to Front of Board and Align", position_tolerance, orientation_tolerance_rad, timeout, hold_time)
         self.distance_from_board = distance_from_board
         self.z_reference = z_reference
         self.blackboard = self.attach_blackboard_client(name=self.name)
                 
     def setup(self, **kwargs):
-        super().setup(**kwargs)
+        super(MoveToFrontOfBoard, self).setup(**kwargs)
         self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/board/orientation", access=py_trees.common.Access.READ)
 
@@ -337,11 +338,11 @@ class AlignToBoard(Navigation):
         timeout: float = 30.0,
         hold_time: float = 0.5,
     ):
-        super().__init__("Align to Board", position_tolerance, orientation_tolerance_rad, timeout, hold_time)
+        super(AlignToBoard, self).__init__("Align to Board", position_tolerance, orientation_tolerance_rad, timeout, hold_time)
         self.blackboard = self.attach_blackboard_client(name=self.name)
         
     def setup(self, **kwargs):
-        super().setup(**kwargs)
+        super(AlignToBoard, self).setup(**kwargs)
         self.blackboard.register_key(key="/board/orientation", access=py_trees.common.Access.READ)
         
     def update(self):
@@ -504,7 +505,7 @@ class MoveToFrontOfIcon(Navigation):
             timeout: float = 30.0,
             hold_time: float = 0.5,
         ):
-        super().__init__(f"Move in Front of {target_icon.value.capitalize()} " + (f"at {distance_from_icon}m away" if distance_from_icon is not None else "maintaining current distance"), position_tolerance, orientation_tolerance_rad, timeout, hold_time)
+        super(MoveToFrontOfIcon, self).__init__(f"Move in Front of {target_icon.value.capitalize()} " + (f"at {distance_from_icon}m away" if distance_from_icon is not None else "maintaining current distance"), position_tolerance, orientation_tolerance_rad, timeout, hold_time)
         self.target_icon = target_icon
         self.distance_from_icon = distance_from_icon
         if not use_icon_z and z_reference is None:
@@ -514,7 +515,7 @@ class MoveToFrontOfIcon(Navigation):
         self.compute_distance_from_icon = distance_from_icon is None
         
     def setup(self, **kwargs):
-        super().setup(**kwargs)
+        super(MoveToFrontOfIcon, self).setup(**kwargs)
         if self.compute_distance_from_icon:
             self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
@@ -538,7 +539,6 @@ class MoveToFrontOfIcon(Navigation):
                     self.node.get_logger().error(f"[{self.name}] No object map available to determine icon position.")
                     return py_trees.common.Status.FAILURE
                 
-                auv_2d_position = Vector2D.from_point(self.blackboard.sensors.pose.pose.position)
                 # get target icon position from vision
                 target_icon_vo = None
                 for vision_object in self.blackboard.vision.object_map.array:
@@ -555,6 +555,7 @@ class MoveToFrontOfIcon(Navigation):
                     if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.pose is None:
                         self.node.get_logger().warn(f"[{self.name}] Waiting for /sensors/pose to determine distance from icon.")
                         return py_trees.common.Status.RUNNING
+                    auv_2d_position = Vector2D.from_point(self.blackboard.sensors.pose.pose.position)
                     self.distance_from_icon = geometry.plane_point_distance(
                         point=target_2d_position,
                         plane_point=auv_2d_position,
@@ -632,7 +633,7 @@ class AlignTorpedoToHole(Navigation):
     def __init__(
             self,
             projected_offset_to_hole: Tuple[float,float,float],
-            auv_to_torpedo : Tuple[float,float,float],
+            auv_to_torpedos : dict[TorpedoSide, Tuple[float,float,float]],
             forward_trajectory : np.polynomial.Polynomial,
             lateral_trajectory : np.polynomial.Polynomial,
             vertical_trajectory : np.polynomial.Polynomial,
@@ -641,19 +642,20 @@ class AlignTorpedoToHole(Navigation):
             timeout: float = 30.0,
             hold_time: float = 0.5
         ):
-        super().__init__(f"Align Torpedo to Hole", position_tolerance, orientation_tolerance_rad, timeout, hold_time)
+        super(AlignTorpedoToHole, self).__init__(f"Align Torpedo to Hole", position_tolerance, orientation_tolerance_rad, timeout, hold_time)
         self.lateral_trajectory = lateral_trajectory
         self.vertical_trajectory = vertical_trajectory
         self.forward_trajectory = forward_trajectory
         self.to_hole_offset = projected_offset_to_hole
-        self.auv_to_torpedo = auv_to_torpedo
+        self.auv_to_torpedos = auv_to_torpedos
         
         
     def setup(self, **kwargs):
-        super().setup(**kwargs)
+        super(AlignTorpedoToHole, self).setup(**kwargs)
         self.blackboard.register_key(key="/board/orientation", access=py_trees.common.Access.READ)
         # whether to orient left or right torpedo
         self.blackboard.register_key(key="/torpedo/count", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/torpedo/icon_position", access=py_trees.common.Access.READ)
         
     def update(self):
         match self.action_status:
@@ -665,39 +667,58 @@ class AlignTorpedoToHole(Navigation):
                 return py_trees.common.Status.FAILURE
             case ActionStatus.PENDING:
                 return py_trees.common.Status.RUNNING
-            case ActionStatus.NOT_SENT:  
+            case ActionStatus.NOT_SENT:
                 if not hasattr(self.blackboard, 'board') or self.blackboard.board.orientation is None:
                     self.node.get_logger().error(f"[{self.name}] No board orientation available on blackboard.")
+                    return py_trees.common.Status.FAILURE
+                if not hasattr(self.blackboard, 'torpedo') or self.blackboard.torpedo.icon_position is None:
+                    self.node.get_logger().error(f"[{self.name}] No torpedo icon position available on blackboard.")
                     return py_trees.common.Status.FAILURE
                 if not hasattr(self.blackboard, 'torpedo') or self.blackboard.torpedo.count is None:
                     self.node.get_logger().error(f"[{self.name}] No torpedo count available on blackboard.")
                     return py_trees.common.Status.FAILURE
                 
+                match self.blackboard.torpedo.count:
+                    case 0:
+                        self.node.get_logger().error(f"[{self.name}] No torpedo detected. Alignment is redundant with absence of torpedo payload.")
+                        return py_trees.common.Status.FAILURE
+                    case 1:
+                        side = TorpedoSide.LEFT
+                    case 2:
+                        side = TorpedoSide.RIGHT
+                    case _:
+                        self.node.get_logger().error(f"[{self.name}] Invalid torpedo count {self.blackboard.torpedo.count}. Expected 1 or 2.")
+                        return py_trees.common.Status.FAILURE
+                self.auv_to_torpedo = self.auv_to_torpedos[side]
+                
                 # after alignment, torpedo launch should be aligned with the hole
                 # to know how much to shift back by, we need to know the trajectory time such that both lateral and vertical trajectories are 0
                 # thus we find the roots of both trajectories and plug that into the forward trajectory to find the distance to shift back by
                 
+                # TODO: since lateral trajectory is literally 0, we can just use the roots of the vertical trajectory, but for robustness, we will find the common roots of both trajectories
                 # take only real part of the root
-                lateral_roots = sorted([root.real for root in self.lateral_trajectory.roots()])
+                #! lateral_roots = sorted([root.real for root in self.lateral_trajectory.roots()])
                 vertical_roots = sorted([root.real for root in self.vertical_trajectory.roots()])
                 # round the roots to 6 decimal so taking the common roots is more robust to numerical errors
                 # filter out roots that are not within tolerance
                 # set both and take intersection to find common roots
-                common_roots = sorted(
-                    t for t in set(round(t, 6) for t in lateral_roots) & set(round(t, 6) for t in vertical_roots)
-                    if abs(self.forward_trajectory(t)) < self.position_tolerance
-                )
-                
+                #! common_roots = sorted(
+                #!     t for t in set(round(t, 6) for t in lateral_roots) & set(round(t, 6) for t in vertical_roots)
+                #!     if abs(self.forward_trajectory(t)) < self.position_tolerance
+                #! )
+                common_roots = vertical_roots
                 # 0 is always solution since all trajectories start at 0
                 if len(common_roots) < 2:
-                    self.node.get_logger().error(f"[{self.name}] Torpedo lateral and vertical trajectories do not intersect within tolerance beyond trivial 0 case. Lateral roots: {lateral_roots}, Vertical roots: {vertical_roots}, Common roots: {common_roots}")
+                    #! self.node.get_logger().error(f"[{self.name}] Torpedo lateral and vertical trajectories do not intersect within tolerance beyond trivial 0 case. Lateral roots: {lateral_roots}, Vertical roots: {vertical_roots}, Common roots: {common_roots}")
+                    self.node.get_logger().error(f"[{self.name}] Torpedo vertical trajectory does have non trivial roots. Vertical roots: {vertical_roots}")
                     return py_trees.common.Status.FAILURE
                 
                 forward_offset = self.forward_trajectory(common_roots[1])
+                target_orientation = geometry.rotate_quaternion(self.blackboard.board.orientation, 0, 0, math.pi)
                 
                 # move from current position to hole position, then move such that torpedo launch is at the AUV CoM, then move back by the forward offset to align the torpedo with the hole
-                goal_position = geometry.rotate_3d_vector(
-                    q=self.blackboard.board.orientation,
+                goal_offset = geometry.rotate_3d_vector(
+                    q=target_orientation,
                     vector=Point(
                         x=self.to_hole_offset[0] - self.auv_to_torpedo[0] - forward_offset,
                         y=self.to_hole_offset[1] - self.auv_to_torpedo[1],
@@ -705,12 +726,16 @@ class AlignTorpedoToHole(Navigation):
                     )
                 )
                 
-                self.node.get_logger().info(f"[{self.name}] Moving to position in front of hole: {goal_position} with forward offset: {forward_offset:.2f}m")
+                goal_position_x = self.blackboard.torpedo.icon_position.x + goal_offset.x
+                goal_position_y = self.blackboard.torpedo.icon_position.y + goal_offset.y
+                goal_position_z = self.blackboard.torpedo.icon_position.z + goal_offset.z
+                
+                self.node.get_logger().info(f"[{self.name}] Moving to position in front of hole: ({goal_position_x:.2f}, {goal_position_y:.2f}, {goal_position_z:.2f}) with forward offset: {forward_offset:.2f}m")
                 
                 goal = move_global(
-                    x=goal_position.x,
-                    y=goal_position.y,
-                    z=goal_position.z,
+                    x=goal_position_x,
+                    y=goal_position_y,
+                    z=goal_position_z,
                     tolerance=self.position_tolerance,
                     angular_tolerance=self.orientation_tolerance_rad,
                     hold_time=self.hold_time,

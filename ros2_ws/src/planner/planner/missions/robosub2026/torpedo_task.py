@@ -76,6 +76,31 @@ class TorpedoTask(py_trees.composites.Sequence):
         # distance thresholds from torpedo board
         self.farther_distance_threshold = 0.46
         self.far_distance_threshold = 0.3
+
+        # trajectory parameters
+        self.auv_to_torpedos : dict[TorpedoSide, Tuple[float,float,float]] = {
+            TorpedoSide.LEFT: cast(Tuple[float,float,float], auv_to_torpedos["left"]),
+            TorpedoSide.RIGHT: cast(Tuple[float,float,float], auv_to_torpedos["right"])
+        }
+        self.forward_trajectory:Polynomial = Polynomial(torpedo_trajectory_coefficients["x"])
+        self.lateral_trajectory:Polynomial = Polynomial(torpedo_trajectory_coefficients["y"])
+        self.vertical_trajectory:Polynomial = Polynomial(torpedo_trajectory_coefficients["z"])
+        
+        self.icon_to_nearest_hole : dict[BoardType, dict[BoardIcon, Tuple[float, float, float]]] = {
+            BoardType.FIRE_TOP_LEFT: {
+                # type cast to satisfy linter
+                BoardIcon.BLOOD: cast(Tuple[float, float, float], icon_to_nearest_hole["board_1"]["blood"]), 
+                BoardIcon.FIRE: cast(Tuple[float, float, float], icon_to_nearest_hole["board_1"]["fire"]),
+                BoardIcon.AMBULANCE: cast(Tuple[float, float, float], icon_to_nearest_hole["board_1"]["ambulance"]),
+                BoardIcon.FIRETRUCK: cast(Tuple[float, float, float], icon_to_nearest_hole["board_1"]["firetruck"])
+            },
+            BoardType.BLOOD_TOP_LEFT: {
+                BoardIcon.BLOOD: cast(Tuple[float, float, float], icon_to_nearest_hole["board_2"]["blood"]),
+                BoardIcon.FIRE: cast(Tuple[float, float, float], icon_to_nearest_hole["board_2"]["fire"]),
+                BoardIcon.AMBULANCE: cast(Tuple[float, float, float], icon_to_nearest_hole["board_2"]["ambulance"]),
+                BoardIcon.FIRETRUCK: cast(Tuple[float, float, float], icon_to_nearest_hole["board_2"]["firetruck"])
+            }
+        }
         
         self.add_children([
             py_trees.behaviours.SetBlackboardVariable(
@@ -88,31 +113,6 @@ class TorpedoTask(py_trees.composites.Sequence):
             self.node_base_case(),
             py_trees.behaviours.Success(name="Placeholder Torpedo Success")
         ])
-        
-        # trajectory parameters
-        self.auv_to_torpedos = {
-            TorpedoSide.LEFT: auv_to_torpedos["left"],
-            TorpedoSide.RIGHT: auv_to_torpedos["right"]
-        }
-        self.forward_trajectory:Polynomial = Polynomial(torpedo_trajectory_coefficients["x"])
-        self.lateral_trajectory:Polynomial = Polynomial(torpedo_trajectory_coefficients["y"])
-        self.vertical_trajectory:Polynomial = Polynomial(torpedo_trajectory_coefficients["z"])
-        
-        self.icon_to_nearest_hole : dict[BoardType, dict[BoardIcon, Tuple[float, float, float]]] = {
-            BoardType.FIRE_TOP_LEFT: {
-                # type cast to satisfy linter
-                BoardIcon.BLOOD: cast(Tuple[float, float, float], tuple(icon_to_nearest_hole["board_1"]["blood"][:3])), 
-                BoardIcon.FIRE: cast(Tuple[float, float, float], tuple(icon_to_nearest_hole["board_1"]["fire"][:3])),
-                BoardIcon.AMBULANCE: cast(Tuple[float, float, float], tuple(icon_to_nearest_hole["board_1"]["ambulance"][:3])),
-                BoardIcon.FIRETRUCK: cast(Tuple[float, float, float], tuple(icon_to_nearest_hole["board_1"]["firetruck"][:3]))
-            },
-            BoardType.BLOOD_TOP_LEFT: {
-                BoardIcon.BLOOD: cast(Tuple[float, float, float], tuple(icon_to_nearest_hole["board_2"]["blood"][:3])),
-                BoardIcon.FIRE: cast(Tuple[float, float, float], tuple(icon_to_nearest_hole["board_2"]["fire"][:3])),
-                BoardIcon.AMBULANCE: cast(Tuple[float, float, float], tuple(icon_to_nearest_hole["board_2"]["ambulance"][:3])),
-                BoardIcon.FIRETRUCK: cast(Tuple[float, float, float], tuple(icon_to_nearest_hole["board_2"]["firetruck"][:3]))
-            }
-        }
 
     def tick_tree(self):
         pass
@@ -396,25 +396,23 @@ class TorpedoTask(py_trees.composites.Sequence):
         3. Close: <0.3m away, just stick torpedo up to board and hope for the best
         """
         distance_strategy_selector = py_trees.composites.Selector("Distance Strategy Selector", memory=True)
-        # distance from board is in x direction backwards from board
-        farther_offset = (offset_to_hole[0] - self.farther_distance_threshold, offset_to_hole[1], offset_to_hole[2])
-        far_offset = (offset_to_hole[0] - self.far_distance_threshold, offset_to_hole[1], offset_to_hole[2])
         distance_strategy_selector.add_children(
             [
-                self.distance_strategy(farther_offset,icon),
-                self.distance_strategy(far_offset,icon),
+                self.distance_strategy(self.farther_distance_threshold,icon, offset_to_hole),
+                self.distance_strategy(self.far_distance_threshold,icon, offset_to_hole),
             ]
          )
         return distance_strategy_selector
 
 
-    def distance_strategy(self, offset_from_board_icon: Tuple[float, float, float], icon: BoardIcon)->py_trees.composites.Sequence:
+    def distance_strategy(self, distance_from_board:  float, icon: BoardIcon, offset_to_hole: Tuple[float, float, float])->py_trees.composites.Sequence:
         """
         Build a distance strategy based on the distance from the board
         """
-        distance_strategy = py_trees.composites.Sequence(f"Distance Strategy {offset_from_board_icon} from {icon.name}", memory=True)
-        distance_from_board = math.sqrt(offset_from_board_icon[0]**2 + offset_from_board_icon[1]**2)
-        find_icon = DetermineIconPosition(icon, attempts=3)
+        # include distance from board as negative x
+        offset_from_icon_to_hole = (offset_to_hole[0] - distance_from_board, offset_to_hole[1], offset_to_hole[2])
+        distance_strategy = py_trees.composites.Sequence(f"Distance Strategy {offset_from_icon_to_hole}m from {icon.name}", memory=True)
+
         
         distance_strategy.add_children(
             [
@@ -441,7 +439,18 @@ class TorpedoTask(py_trees.composites.Sequence):
                             hold_time=self.hold_time,
                             timeout=self.timeout
                 ),
-                find_icon
+                DetermineIconPosition(icon, attempts=3),
+                AlignTorpedoToHole(
+                    projected_offset_to_hole = offset_from_icon_to_hole,
+                    auv_to_torpedos = self.auv_to_torpedos,
+                    forward_trajectory = self.forward_trajectory,
+                    lateral_trajectory = self.lateral_trajectory,
+                    vertical_trajectory = self.vertical_trajectory,
+                    position_tolerance = self.position_tolerance,
+                    orientation_tolerance_rad = self.yaw_tolerance_rad,
+                    timeout = self.timeout,
+                    hold_time = self.hold_time
+                )
             ]
         )
         return distance_strategy

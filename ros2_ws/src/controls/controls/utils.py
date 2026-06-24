@@ -70,7 +70,8 @@ def rotate_quaternion(q: Quaternion, roll_offset: float, pitch_offset: float, ya
 
 def rotate_3d_vector(q: Quaternion, vector : Point) -> Point:
     r = Rotation.from_quat([q.x, q.y, q.z, q.w])
-    return r.apply(vector)
+    rotated = r.apply([vector.x, vector.y, vector.z])
+    return Point(x=rotated[0], y=rotated[1], z=rotated[2])
 
 def normalize_angle(angle: float) -> float:
     """Normalize an angle to [-pi, pi].
