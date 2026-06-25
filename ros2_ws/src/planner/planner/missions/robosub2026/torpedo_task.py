@@ -13,6 +13,7 @@ class TorpedoTask(py_trees.composites.Sequence):
     """
     def __init__(
             self,
+            launch_publisher_node: py_trees.behaviour.Behaviour,
             initial_distance_from_board: float = 3.0,
             z_reference: float = -1.0,
             scan_pause_time: float = 1.0,
@@ -58,6 +59,7 @@ class TorpedoTask(py_trees.composites.Sequence):
         # 4. Align with Small opening and fire torpedo
         # 5. Optional: Maintain distance (1ft or 1.5ft) for extra points
         
+        self.launch_publisher_node = launch_publisher_node
         self.pause_time = scan_pause_time
         self.position_tolerance = position_tolerance
         self.yaw_tolerance_rad = yaw_tolerance_rad

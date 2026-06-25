@@ -126,6 +126,8 @@ def main():
     node.declare_parameter("torpedo.icon_to_nearest_hole.board_2.ambulance", Parameter.Type.DOUBLE_ARRAY)
     node.declare_parameter("torpedo.icon_to_nearest_hole.board_2.firetruck", Parameter.Type.DOUBLE_ARRAY)
     
+    node.declare_parameter("torpedo.launch_topic", Parameter.Type.STRING)
+    
     slalom_params = {
         "num_layers": node.get_parameter("slalom.num_layers").get_parameter_value().integer_value,
         "gate_side": node.get_parameter("slalom.gate_side").get_parameter_value().string_value,
@@ -217,6 +219,8 @@ def main():
             }
         }
     }
+    
+    torpedo_launch_topic = node.get_parameter("torpedo.launch_topic").get_parameter_value().string_value
 
     node.declare_parameter("auto_record.enabled", True)
     node.declare_parameter("auto_record.profile", "all")
@@ -288,14 +292,16 @@ def main():
         initialise_variables={"/vision/down_cam/detections": None},
         qos_profile=qos,
     )
-    
+
     torpedo_launch_publisher = py_trees_ros.publishers.FromBlackboard(
         name="TorpedoLaunchPublisher",
-        topic_name=node.get_parameter("torpedo.launch_topic").get_parameter_value().string_value,
+        topic_name=torpedo_launch_topic,
         topic_type=std_msgs.msg.UInt8,
         blackboard_variable="/torpedo/launch_command",
         qos_profile=qos,
     )
+
+    torpedo_params["launch_publisher_node"] = torpedo_launch_publisher
 
     # Mission Sequence
     missions = DynamicMissionSequence(
@@ -315,7 +321,7 @@ def main():
     )
 
     # Add children to root
-    root.add_children([pose_subscriber, twist_subscriber, object_map_subscriber, down_cam_subscriber, torpedo_launch_publisher, missions])
+    root.add_children([pose_subscriber, twist_subscriber, object_map_subscriber, down_cam_subscriber, missions])
 
     # Create the behaviour tree and setup
     tree = py_trees_ros.trees.BehaviourTree(root=root, unicode_tree_debug=True)
