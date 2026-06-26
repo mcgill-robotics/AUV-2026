@@ -95,6 +95,8 @@ def main():
     node.declare_parameter("gate.scan_pause_time", 1.0)
     node.declare_parameter("gate.approach_distance", 1.0)
     node.declare_parameter("gate.pass_distance", 1.0)
+    node.declare_parameter("gate.global_yaw_lock", False)
+    node.declare_parameter("gate.force_blind_forward_dist", 0.0)
 
     gate_params = {
         "position_tolerance": node.get_parameter("gate.position_tolerance").get_parameter_value().double_value,
@@ -106,6 +108,8 @@ def main():
         "scan_pause_time": node.get_parameter("gate.scan_pause_time").get_parameter_value().double_value,
         "approach_distance": node.get_parameter("gate.approach_distance").get_parameter_value().double_value,
         "pass_distance": node.get_parameter("gate.pass_distance").get_parameter_value().double_value,
+        "global_yaw_lock": node.get_parameter("gate.global_yaw_lock").get_parameter_value().bool_value,
+        "force_blind_forward_dist": node.get_parameter("gate.force_blind_forward_dist").get_parameter_value().double_value,
     }
 
     # Bins task parameters
