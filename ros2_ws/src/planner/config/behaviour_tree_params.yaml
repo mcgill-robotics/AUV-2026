@@ -116,3 +116,4 @@ planner_root_tree:
       position_tolerance: 0.3             # (m)
       hold_time: 1.0                      # (s)
       timeout: 60.0                       # (s)
+      global_yaw_lock: true               # (bool) Assumes passing back through at exactly opposite of global forward

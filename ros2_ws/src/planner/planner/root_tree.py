@@ -212,6 +212,7 @@ def main():
     node.declare_parameter("return_home.position_tolerance", 0.3)
     node.declare_parameter("return_home.hold_time", 1.0)
     node.declare_parameter("return_home.timeout", 30.0)
+    node.declare_parameter("return_home.global_yaw_lock", True)
 
     return_home_params = {
         "return_distance": node.get_parameter("return_home.return_distance").get_parameter_value().double_value,
@@ -221,6 +222,7 @@ def main():
         "position_tolerance": node.get_parameter("return_home.position_tolerance").get_parameter_value().double_value,
         "hold_time": node.get_parameter("return_home.hold_time").get_parameter_value().double_value,
         "timeout": node.get_parameter("return_home.timeout").get_parameter_value().double_value,
+        "global_yaw_lock": node.get_parameter("return_home.global_yaw_lock").get_parameter_value().bool_value,
     }
 
     node.declare_parameter("auto_record.enabled", True)
