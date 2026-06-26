@@ -6,7 +6,7 @@
 namespace {
 
 constexpr double kEpsilon = 1e-6;
-constexpr double kTinyCovariance = 0.001;
+constexpr double kTinyCovariance = 0.01;
 
 Eigen::Vector2d xy(const Eigen::Vector3d& position) {
     return position.head<2>();
