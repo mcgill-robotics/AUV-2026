@@ -267,24 +267,37 @@ std::vector<std::vector<double>> ObjectTracker::compute_cost_matrix(
                     continue;
                 }
 
-                // 3. Mahalanobis distance
-                // S = C*P*C^T + R
-                // Since C is Identity, S = P + R
-                Eigen::Matrix3d P = curr_track.kf.covariance();
-                Eigen::Matrix3d R_meas = measurement_covariances[meas_idx];
-                Eigen::Matrix3d S = P + R_meas;
-                
-                Eigen::Matrix3d inv_S = S.inverse();
-                
-                double dist_sq = diff.transpose() * inv_S * diff;
-                double dist = std::sqrt(dist_sq);
+                // 3. Euclidean distance cost
+                // We previously used Mahalanobis distance, but poor covariance estimates
+                // caused it to blow up and spawn duplicate tracks.
+                double dist = euclidean_distance;
 
                 // 4. Gating and Assignment
-                if (dist > this->gating_threshold) {
-                    cost_matrix[track_idx][meas_idx] = 1e6;
-                } else {
-                    cost_matrix[track_idx][meas_idx] = dist;
-                }
+                // Since we are using Euclidean distance, we gate using max_position_jump.
+                // We still use gating_threshold here if we want to retain the YAML parameter, 
+                // but for Euclidean distance, max_position_jump is more intuitive.
+                // Let's use max_position_jump as the true gate, and set cost to dist.
+                cost_matrix[track_idx][meas_idx] = dist;
+
+                // PREVIOUS cost
+                // // 3. Mahalanobis distance
+                // // S = C*P*C^T + R
+                // // Since C is Identity, S = P + R
+                // Eigen::Matrix3d P = curr_track.kf.covariance();
+                // Eigen::Matrix3d R_meas = measurement_covariances[meas_idx];
+                // Eigen::Matrix3d S = P + R_meas;
+                
+                // Eigen::Matrix3d inv_S = S.inverse();
+                
+                // double dist_sq = diff.transpose() * inv_S * diff;
+                // double dist = std::sqrt(dist_sq);
+
+                // // 4. Gating and Assignment
+                // if (dist > this->gating_threshold) {
+                //     cost_matrix[track_idx][meas_idx] = 1e6;
+                // } else {
+                //     cost_matrix[track_idx][meas_idx] = dist;
+                // }
             }
         }
     }
@@ -335,7 +348,7 @@ std::vector<std::pair<size_t, size_t>> ObjectTracker::match_tracks(
         // Iterate through unmatched tracks and detections and remove from those lists, tentative implementation below
         // assignment is set to -1 if no assignment was made for that track
         // otherwise we check if we cost threshold
-        if (det_idx != -1 && cost_matrix[track_idx][det_idx] <= gating_threshold) {
+        if (det_idx != -1 && cost_matrix[track_idx][det_idx] <= max_position_jump) {
             // Valid match, at this point det_idx must be positive i.e. valid size_t
             matches.push_back(std::make_pair(track_idx, det_idx));
         }
@@ -410,7 +423,7 @@ void ObjectTracker::update_matched_tracks(
         track.confidence = confidences[meas_idx];
         
         // Don't overwrite the calculated gate orientation with the default measurement orientation
-        if (!track.has_orientation) {
+        if (!track.has_orientation && !std::isnan(orientations[meas_idx])) {
             track.theta_z = orientations[meas_idx]; 
         }
 
@@ -556,7 +569,7 @@ void ObjectTracker::create_new_tracks(
         new_track.consecutive_hits = 1;
         new_track.total_updates = 1;
         new_track.age = 0;
-        new_track.theta_z = orientations[det_idx];
+        new_track.theta_z = std::isnan(orientations[det_idx]) ? 0.0 : orientations[det_idx];
         new_track.confidence = confidences[det_idx];
 
         new_track.kf = create_kf(measurements[det_idx]);
@@ -582,36 +595,72 @@ void ObjectTracker::apply_gate_physical_constraints() {
 
     // Single loop to find all necessary tracks
     for (auto& t : tracks) {
-        // Only use confirmed tracks for refinement and orientation
-        if (t.state != TrackState::CONFIRMED) continue;
-
-        if (t.label == "gate") gate_track = &t;
-        else if (t.label == "search_rescue") search_rescue_track = &t;
-        else if (t.label == "survey_repair") survey_repair_track = &t;
+        if (t.label == "gate") {
+            gate_track = &t;
+        }
+        // Only use confirmed tracks for panel constraints
+        else if (t.state == TrackState::CONFIRMED) {
+            if (t.label == "search_rescue") search_rescue_track = &t;
+            else if (t.label == "survey_repair") survey_repair_track = &t;
+        }
     }
 
-    if (gate_track && search_rescue_track && survey_repair_track) {
+    if (search_rescue_track && survey_repair_track) {
         Eigen::Vector3d p_search_rescue = search_rescue_track->kf.state();
         Eigen::Vector3d p_survey_repair = survey_repair_track->kf.state();
-        Eigen::Vector3d p_gate = gate_track->kf.state();
         
-        // 1. Position Refinement
-        Eigen::Vector3d midpoint = (p_search_rescue + p_survey_repair) / 2.0;
-        // only update if refined position is within plausibility radius of original board position (prevents large jumps from erroneous measurements)
-        if ((p_gate - midpoint).norm() < refinement_plausibility_radius) {
-            // Use very small measurement covariance to strongly pull gate position towards midpoint
-            Eigen::Matrix3d tiny_R = Eigen::Matrix3d::Identity() * kTinyCovariance;
-            gate_track->kf.update(midpoint, tiny_R);
-            p_gate = gate_track->kf.state();
+        double panel_distance = (p_search_rescue - p_survey_repair).norm();
+        // If panels are too far apart, they might be false positives, do not create/refine gate
+        if (panel_distance > refinement_plausibility_radius) {
+            return;
         }
 
-        if (has_observer_position) {
-            Eigen::Vector2d gate_span = xy(p_survey_repair) - xy(p_search_rescue);
-            double yaw = 0.0;
-            if (compute_facing_yaw(gate_span, xy(p_gate), xy(observer_position), yaw)) {
-                gate_track->theta_z = yaw;
-                gate_track->has_orientation = true;
+        Eigen::Vector3d midpoint = (p_search_rescue + p_survey_repair) / 2.0;
+
+        if (gate_track) {
+            Eigen::Vector3d p_gate = gate_track->kf.state();
+            // only update if refined position is within plausibility radius
+            if ((p_gate - midpoint).norm() < refinement_plausibility_radius) {
+                // Use very small measurement covariance to strongly pull gate position towards midpoint
+                Eigen::Matrix3d tiny_R = Eigen::Matrix3d::Identity() * kTinyCovariance;
+                gate_track->kf.update(midpoint, tiny_R);
+                p_gate = gate_track->kf.state();
+                
+                // Keep the gate alive since we clearly see its panels
+                gate_track->age = 0;
+                gate_track->state = TrackState::CONFIRMED;
+                
+                if (has_observer_position) {
+                    Eigen::Vector2d gate_span = xy(p_survey_repair) - xy(p_search_rescue);
+                    double yaw = 0.0;
+                    if (compute_facing_yaw(gate_span, xy(p_gate), xy(observer_position), yaw)) {
+                        gate_track->theta_z = yaw;
+                        gate_track->has_orientation = true;
+                    }
+                }
             }
+        } else {
+            // No gate track exists, create a synthetic one!
+            Track new_gate;
+            new_gate.id = track_id_counter++;
+            new_gate.label = "gate";
+            new_gate.state = TrackState::CONFIRMED;
+            new_gate.hits = min_hits; // ensure it doesn't get instantly deleted as unconfirmed
+            new_gate.consecutive_hits = min_hits;
+            new_gate.total_updates = min_hits;
+            new_gate.age = 0;
+            new_gate.confidence = std::min(search_rescue_track->confidence, survey_repair_track->confidence);
+            new_gate.kf = create_kf(midpoint);
+            
+            if (has_observer_position) {
+                Eigen::Vector2d gate_span = xy(p_survey_repair) - xy(p_search_rescue);
+                double yaw = 0.0;
+                if (compute_facing_yaw(gate_span, xy(midpoint), xy(observer_position), yaw)) {
+                    new_gate.theta_z = yaw;
+                    new_gate.has_orientation = true;
+                }
+            }
+            tracks.push_back(new_gate);
         }
     }
 }
@@ -640,6 +689,14 @@ void ObjectTracker::apply_board_physical_constraints() {
     if (!board_track) {
         return;
     }
+
+    Eigen::Vector3d board_pos = board_track->kf.state();
+
+    // Filter out noisy icons that are physically too far from the board's current estimate
+    if (ambulance_track && (ambulance_track->kf.state() - board_pos).norm() > refinement_plausibility_radius) ambulance_track = nullptr;
+    if (firetruck_track && (firetruck_track->kf.state() - board_pos).norm() > refinement_plausibility_radius) firetruck_track = nullptr;
+    if (blood_track && (blood_track->kf.state() - board_pos).norm() > refinement_plausibility_radius) blood_track = nullptr;
+    if (fire_track && (fire_track->kf.state() - board_pos).norm() > refinement_plausibility_radius) fire_track = nullptr;
 
     const bool has_vehicle_pair = ambulance_track && firetruck_track;
     const bool has_hazard_pair = fire_track && blood_track;

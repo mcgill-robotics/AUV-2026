@@ -35,6 +35,7 @@ print("Model loaded successfully")
 # Create Annotators
 bounding_box_annotator = sv.BoxAnnotator()
 label_annotator = sv.LabelAnnotator()
+mask_annotator = sv.MaskAnnotator()
 
 # Run inference
 total_inference_time = 0.0
@@ -54,7 +55,10 @@ for i in tqdm(range(args.amount)):
         for class_id, confidence in zip(detections.class_id, detections.confidence)
     ]
     
-    annotated_image = bounding_box_annotator.annotate(scene=image.copy(), detections=detections)
+    annotated_image = image.copy()
+    if detections.mask is not None:
+        annotated_image = mask_annotator.annotate(scene=annotated_image, detections=detections)
+    annotated_image = bounding_box_annotator.annotate(scene=annotated_image, detections=detections)
     annotated_image = label_annotator.annotate(scene=annotated_image, detections=detections, labels=labels)
     
     cv2.imshow("Inference", annotated_image)

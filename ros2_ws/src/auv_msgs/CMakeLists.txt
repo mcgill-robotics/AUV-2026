@@ -12,16 +12,16 @@ set(MSG_DEP_SET
 )
 
 set(msg_files	
-	"msg/DeadReckonReport.msg"
 	"msg/PingerBearing.msg"
 	"msg/PingerTimeDifference.msg"
 	"msg/ThrusterForces.msg"
 	"msg/ThrusterMicroseconds.msg"
 	"msg/UnityState.msg"
-	"msg/VelocityReport.msg"
 	"msg/VisionDetection.msg"
 	"msg/VisionDetectionFrame.msg"
 	"msg/VisionObject.msg"
+	"msg/FoxgloveObject.msg"
+	"msg/FoxgloveObjectArray.msg"
 	"msg/VisionObjectArray.msg"
 )
 
@@ -30,6 +30,7 @@ set(srv_files
 	"srv/AutomaticCapture.srv"
 	"srv/ShootTorpedo.srv"
 	"srv/SetGripper.srv"
+	"srv/RosbagControl.srv"
 )
 
 set(action_files

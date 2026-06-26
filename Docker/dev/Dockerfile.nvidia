@@ -130,7 +130,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ros-${ROS_DISTRO}-mavros \
         ros-${ROS_DISTRO}-mavros-msgs \
         ros-${ROS_DISTRO}-marine-sensor-msgs \
-        ros-${ROS_DISTRO}-marine-acoustic-msgs \
         ros-${ROS_DISTRO}-vision-msgs \
         ros-${ROS_DISTRO}-tf-transformations \
         # Visualization Tools
@@ -142,6 +141,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ros-${ROS_DISTRO}-diagnostic-updater \
         ros-${ROS_DISTRO}-usb-cam \
         ros-${ROS_DISTRO}-zed-msgs \
+        ros-${ROS_DISTRO}-rosbag2-storage-mcap \
         # Planner packages
         ros-${ROS_DISTRO}-py-trees \
         ros-${ROS_DISTRO}-py-trees-ros-interfaces \
