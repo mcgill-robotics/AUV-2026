@@ -45,6 +45,18 @@ def generate_launch_description():
         description='Path to the rosbag profiles YAML file'
     )
 
+    auto_start_rosbag_arg = DeclareLaunchArgument(
+        'auto_start_rosbag',
+        default_value='false',
+        description='Whether to automatically start recording a rosbag'
+    )
+
+    rosbag_prefix_arg = DeclareLaunchArgument(
+        'rosbag_prefix',
+        default_value='mission_bag',
+        description='Prefix for the auto-started rosbag name'
+    )
+
     # Foxglove Bridge node
     foxglove_bridge = Node(
         package='foxglove_bridge',
@@ -93,7 +105,9 @@ def generate_launch_description():
         name='rosbag_manager',
         output='screen',
         parameters=[{
-            'profiles_file': LaunchConfiguration('rosbag_profiles_file')
+            'profiles_file': LaunchConfiguration('rosbag_profiles_file'),
+            'auto_start': LaunchConfiguration('auto_start_rosbag'),
+            'recording_name_prefix': LaunchConfiguration('rosbag_prefix')
         }]
     )
 
@@ -102,6 +116,8 @@ def generate_launch_description():
         address_arg,
         send_buffer_limit_arg,
         rosbag_profiles_arg,
+        auto_start_rosbag_arg,
+        rosbag_prefix_arg,
         foxglove_bridge,
         dry_test_node,
         vision_to_foxglove_node,

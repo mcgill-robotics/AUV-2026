@@ -58,6 +58,18 @@ def generate_launch_description():
         description="Launch the behaviour tree planner"
     )
 
+    auto_start_rosbag_arg = DeclareLaunchArgument(
+        "auto_start_rosbag",
+        default_value="false",
+        description="Automatically start recording a rosbag on bringup"
+    )
+
+    rosbag_prefix_arg = DeclareLaunchArgument(
+        "rosbag_prefix",
+        default_value="mission_bag",
+        description="Prefix for the auto-started rosbag name"
+    )
+
     vision = LaunchConfiguration("vision")
     enable_object_detection = LaunchConfiguration("enable_object_detection")
     controls = LaunchConfiguration("controls")
@@ -65,6 +77,8 @@ def generate_launch_description():
     propulsion = LaunchConfiguration("propulsion")
     telemetry = LaunchConfiguration("telemetry")
     planner = LaunchConfiguration("planner")
+    auto_start_rosbag = LaunchConfiguration("auto_start_rosbag")
+    rosbag_prefix = LaunchConfiguration("rosbag_prefix")
 
     sensors_pkg_path = get_package_share_directory("sensors")
     propulsion_pkg_path = get_package_share_directory("propulsion")
@@ -120,7 +134,11 @@ def generate_launch_description():
         condition=IfCondition(telemetry),
         actions=[
             IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(telemetry_launch_file)
+                PythonLaunchDescriptionSource(telemetry_launch_file),
+                launch_arguments={
+                    "auto_start_rosbag": auto_start_rosbag,
+                    "rosbag_prefix": rosbag_prefix,
+                }.items(),
             )
         ],
     )
@@ -167,6 +185,8 @@ def generate_launch_description():
         propulsion_condition,
         telemetry_condition,
         planner_condition,
+        auto_start_rosbag_arg,
+        rosbag_prefix_arg,
         launch_sensors,
         launch_propulsion,
         launch_controls,
