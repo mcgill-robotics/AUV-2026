@@ -21,11 +21,11 @@ class OrbitQualificationMission(py_trees.composites.Sequence):
     This behaviour is the root of the orbit Pre-qualification mission
     """
     def __init__(self, 
-                 yaw_tolerance: float, 
+                 angular_tolerance: float, 
                  position_tolerance: float, 
                  hold_time: float, 
                  timeout: float,
-                 orbit_pre_qual_yaw_tolerance_scale: float,
+                 orbit_pre_qual_angular_tolerance_scale: float,
                  orbit_pre_qual_positional_tolerance_scale: float,
                  orbit_pre_qual_hold_time_initial: float,
                  orbit_pre_qual_hold_time_segments: float):
@@ -52,11 +52,11 @@ class OrbitQualificationMission(py_trees.composites.Sequence):
         orbit_leaf = OrbitActionBehaviour(name="Orbit", rotations_segments=8, angle_to_rotate_deg=360, radius_to_rotate_meter=1.5, 
             clockwise=True, target=(13,0,0), hold_time_initial=orbit_pre_qual_hold_time_initial,
             hold_time_segments=orbit_pre_qual_hold_time_segments,
-            yaw_tolerance_scale=orbit_pre_qual_yaw_tolerance_scale, position_tolerance_scale=orbit_pre_qual_positional_tolerance_scale,
+            angular_tolerance_scale=orbit_pre_qual_angular_tolerance_scale, position_tolerance_scale=orbit_pre_qual_positional_tolerance_scale,
             timeout=timeout)
         
         # 5. Turn 180 degrees to look at the gate
-        turn_leaf = BasicActionBehaviour("Turn 180", set_global_yaw(yaw_rad=math.pi, tolerance=yaw_tolerance, hold_time=hold_time, timeout=timeout))
+        turn_leaf = BasicActionBehaviour("Turn 180", set_global_yaw(yaw_rad=math.pi, tolerance=angular_tolerance, hold_time=hold_time, timeout=timeout))
         
         # 6. Return to origin (X=0, Y=0) at the current depth
         return_leaf = BasicActionBehaviour("Return to Origin", move_global(x=0.0, y=0.0, do_z=False, tolerance=position_tolerance, hold_time=hold_time, timeout=timeout))
@@ -96,7 +96,7 @@ class OrbitActionBehaviour(py_trees.behaviour.Behaviour):
         target: tuple[float, float, float] = None,
         hold_time_initial=1.0,
         hold_time_segments=1.0,
-        yaw_tolerance_scale=0.2,
+        angular_tolerance_scale=0.2,
         position_tolerance_scale=0.2,
         timeout=10.0
     ) -> None:
@@ -119,7 +119,7 @@ class OrbitActionBehaviour(py_trees.behaviour.Behaviour):
         # Estimate the straight-line distance of the arc segment to establish a reasonable tolerance
         linear_translation = math.sqrt(2 * radius_to_rotate_meter**2 * (1 - math.cos(self.rotate_per_segment)))
         self.initial_translation_tolerance = position_tolerance_scale * linear_translation
-        self.yaw_tolerance = yaw_tolerance_scale * self.rotate_per_segment
+        self.angular_tolerance = angular_tolerance_scale * self.rotate_per_segment
         
         # Add 1 to the required segments to include the initial approach vector to the perimeter
         self.remaining_segments = self.rotations_segments
@@ -141,6 +141,7 @@ class OrbitActionBehaviour(py_trees.behaviour.Behaviour):
         """Called every time this behavior transitions is not RUNNING."""
         self.remaining_segments = self.rotations_segments + 1
         self.action_status = ActionStatus.NOT_SENT
+        self.result_message = ''
         self.start_angle = None
 
     def update(self) -> py_trees.common.Status:
@@ -153,12 +154,12 @@ class OrbitActionBehaviour(py_trees.behaviour.Behaviour):
             
         # Check for failure condition from the async callbacks
         if self.action_status is ActionStatus.FAILED:
-            self.node.get_logger().error(f"[{self.name}] Orbit failed midway.")
+            self.node.get_logger().error(f"[{self.name}] Orbit failed midway. {self.result_message}")
             return py_trees.common.Status.FAILURE
             
         # Completion check
         if self.remaining_segments <= 0 and self.action_status is ActionStatus.SUCCEEDED:
-            self.node.get_logger().info(f"[{self.name}] Completed all segments.")
+            self.node.get_logger().info(f"[{self.name}] Completed all segments. {self.result_message}")
             return py_trees.common.Status.SUCCESS
 
         # Block loop if currently navigating to a waypoint
@@ -213,7 +214,7 @@ class OrbitActionBehaviour(py_trees.behaviour.Behaviour):
             do_z=False, 
             yaw=look_at_yaw, 
             tolerance=tolerance, 
-            yaw_tolerance=self.yaw_tolerance, 
+            angular_tolerance=self.angular_tolerance, 
             hold_time=hold_time, 
             timeout=self.timeout
         )
@@ -237,7 +238,7 @@ class OrbitActionBehaviour(py_trees.behaviour.Behaviour):
         if not goal_response:
             self.action_status = ActionStatus.FAILED
 
-    def on_server_goal_result(self, goal_success) -> None:
+    def on_server_goal_result(self, goal_success: bool, message: str) -> None:
         """
         Description: This function provides customized logic to be executed when
         the goal is finished. In this case, the custom implementation updates the status of the mission
@@ -248,10 +249,9 @@ class OrbitActionBehaviour(py_trees.behaviour.Behaviour):
 
         Outputs: None
         """
+        self.result_message = message
         if goal_success:
             self.action_status = ActionStatus.SUCCEEDED
             self.remaining_segments -= 1
         else:
             self.action_status = ActionStatus.FAILED
-    
-

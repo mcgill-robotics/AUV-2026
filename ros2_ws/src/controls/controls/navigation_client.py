@@ -3,8 +3,8 @@ import rclpy
 from rclpy.action import ActionClient
 from rclpy.node import Node
 from auv_msgs.action import AUVNavigate
-from . import goal_helpers
 from std_msgs.msg import String
+from action_msgs.msg import GoalStatus
 
 class NavigationClient(Node):
         """ A client for interacting with the navigation action server.
@@ -28,6 +28,13 @@ class NavigationClient(Node):
                 self.current_goal_handle = None # Store the goal handle of the currently active goal, if any, to allow for cancellation when a new goal is sent.)
                 self.debug = debug
                 self.current_caller_publisher = self.create_publisher(String, '/controls/client/caller', 10)
+        
+        def cancel_navigation_goal(self):
+                # Check if there is an active goal and cancel it before sending a new one
+                if self.current_goal_handle is not None:
+                        if self.debug: self.get_logger().info("Cancelling current navigation goal before sending a new one.")
+                        cancel_future = self.current_goal_handle.cancel_goal_async()
+                        cancel_future.add_done_callback(self.cancel_done_callback)
 
         def send_navigation_goal(self, 
                 goal_msg: AUVNavigate.Goal, 
@@ -96,8 +103,9 @@ class NavigationClient(Node):
 
                 # Perform the custom goal result, if provided by the user
                 if custom_goal_result != None:
-                        # Extract the actual success boolean from the AUVNavigate.Result message
-                        custom_goal_result(goal_success=result.result.success)
+                        is_success = (result.status == GoalStatus.STATUS_SUCCEEDED)
+                        msg = result.result.message if result.result else ""
+                        custom_goal_result(goal_success=is_success, message=msg)
                 # Clear the current goal handle since the goal is completed
                 self.current_goal_handle = None
         

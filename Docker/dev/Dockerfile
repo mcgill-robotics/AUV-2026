@@ -87,7 +87,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-robot-localization \
     ros-${ROS_DISTRO}-nmea-msgs \
     ros-${ROS_DISTRO}-marine-sensor-msgs \
-    ros-${ROS_DISTRO}-marine-acoustic-msgs \
     ros-${ROS_DISTRO}-vision-msgs \
     ros-${ROS_DISTRO}-tf-transformations \
     # Image & Transport
@@ -110,6 +109,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-py-trees-ros \
     ros-${ROS_DISTRO}-py-trees-ros-tutorials \
     ros-${ROS_DISTRO}-py-trees-ros-viewer \
+    ros-${ROS_DISTRO}-rosbag2-storage-mcap \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 

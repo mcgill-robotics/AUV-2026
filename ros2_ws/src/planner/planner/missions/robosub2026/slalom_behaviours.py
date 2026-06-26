@@ -303,7 +303,7 @@ class NavigateToGapBehaviour(py_trees.behaviour.Behaviour):
         self,
         adjust_depth: bool = False,
         position_tolerance: float = 0.3,
-        yaw_tolerance_rad: float = 0.3,
+        angular_tolerance_rad: float = 0.3,
         hold_time: float = 0.5,
         timeout: float = 45.0,
         name="Navigate To Gap",
@@ -311,13 +311,14 @@ class NavigateToGapBehaviour(py_trees.behaviour.Behaviour):
         super().__init__(name)
         self.adjust_depth = adjust_depth
         self.position_tolerance = position_tolerance
-        self.yaw_tolerance_rad = yaw_tolerance_rad
+        self.angular_tolerance_rad = angular_tolerance_rad
         self.hold_time = hold_time
         self.timeout = timeout
         self.blackboard = self.attach_blackboard_client(name=self.name)
 
         self.action_status = ActionStatus.NOT_SENT
         self.sent_goal = False
+        self.result_message = ''
 
     def setup(self, **kwargs):
         self.node = kwargs['node']
@@ -331,14 +332,15 @@ class NavigateToGapBehaviour(py_trees.behaviour.Behaviour):
     def initialise(self):
         self.action_status = ActionStatus.NOT_SENT
         self.sent_goal = False
+        self.result_message = ''
 
     def update(self):
         if self.action_status == ActionStatus.SUCCEEDED:
-            self.node.get_logger().info(f"[{self.name}] Reached gap midpoint.")
+            self.node.get_logger().info(f"[{self.name}] Reached gap midpoint. {self.result_message}")
             return py_trees.common.Status.SUCCESS
 
         if self.action_status == ActionStatus.FAILED:
-            self.node.get_logger().error(f"[{self.name}] Failed to reach gap midpoint.")
+            self.node.get_logger().error(f"[{self.name}] Failed to reach gap midpoint. {self.result_message}")
             return py_trees.common.Status.FAILURE
 
         if self.action_status == ActionStatus.PENDING:
@@ -361,7 +363,7 @@ class NavigateToGapBehaviour(py_trees.behaviour.Behaviour):
             yaw=target_yaw, 
             do_z=self.adjust_depth,
             tolerance=self.position_tolerance,
-            yaw_tolerance=self.yaw_tolerance_rad,
+            angular_tolerance=self.angular_tolerance_rad,
             hold_time=self.hold_time,
             timeout=self.timeout,
         )
@@ -376,8 +378,12 @@ class NavigateToGapBehaviour(py_trees.behaviour.Behaviour):
         if not goal_response:
             self.action_status = ActionStatus.FAILED
 
-    def _on_goal_result(self, goal_success: bool):
-        self.action_status = ActionStatus.SUCCEEDED if goal_success else ActionStatus.FAILED
+    def _on_goal_result(self, goal_success: bool, message: str):
+        self.result_message = message
+        if goal_success:
+            self.action_status = ActionStatus.SUCCEEDED
+        else:
+            self.action_status = ActionStatus.FAILED
 
 
 
@@ -471,10 +477,10 @@ class SlalomLayer(py_trees.composites.Selector):
         layer_distance: float,
         adjust_depth: bool,
         position_tolerance: float = 0.3,
-        yaw_tolerance_rad: float = 0.3,
+        angular_tolerance_rad: float = 0.3,
         hold_time: float = 0.5,
         timeout: float = 45.0,
-        scan_yaw_tolerance_rad: float = math.radians(30.0),
+        scan_angular_tolerance_rad: float = math.radians(30.0),
         scan_hold_time: float = 0.1,
         scan_timeout: float = 30.0,
     ):
@@ -509,7 +515,7 @@ class SlalomLayer(py_trees.composites.Selector):
                 ScanBehaviour(
                     scan_angle_deg=scan_angle_deg,
                     pause_time=scan_pause_time,
-                    yaw_tolerance_rad=scan_yaw_tolerance_rad,
+                    angular_tolerance_rad=scan_angular_tolerance_rad,
                     turn_hold_time_s=scan_hold_time,
                     turn_timeout_s=scan_timeout,
                     name=f"Scan Pipes L{layer_num}",
@@ -520,7 +526,7 @@ class SlalomLayer(py_trees.composites.Selector):
                 ScanBehaviour(
                     scan_angle_deg=scan_angle_deg,
                     pause_time=scan_pause_time,
-                    yaw_tolerance_rad=scan_yaw_tolerance_rad,
+                    angular_tolerance_rad=scan_angular_tolerance_rad,
                     turn_hold_time_s=scan_hold_time,
                     turn_timeout_s=scan_timeout,
                     name=f"Scan Pipes L{layer_num}",
@@ -533,7 +539,7 @@ class SlalomLayer(py_trees.composites.Selector):
             NavigateToGapBehaviour(
                 adjust_depth=adjust_depth,
                 position_tolerance=position_tolerance,
-                yaw_tolerance_rad=yaw_tolerance_rad,
+                angular_tolerance_rad=angular_tolerance_rad,
                 hold_time=hold_time,
                 timeout=timeout,
                 name=f"Navigate To Gap L{layer_num}",

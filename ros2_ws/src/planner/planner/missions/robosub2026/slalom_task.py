@@ -28,10 +28,10 @@ class SlalomTask(py_trees.composites.Sequence):
         layer_distance: (m) Expected distance between pipe layers (used for failsafe).
         initial_depth: (m) Depth for the initial dive before slalom (negative = below surface).
         position_tolerance: (m) Position convergence threshold for gap navigation.
-        yaw_tolerance: (rad) Yaw convergence threshold for gap navigation.
+        angular_tolerance: (rad) Yaw convergence threshold for gap navigation.
         hold_time: (s) Seconds to hold within tolerance before declaring SUCCESS.
         timeout: (s) Seconds before gap navigation declares FAILURE.
-        scan_yaw_tolerance_rad: (rad) Yaw tolerance for scan/sweep turn steps.
+        scan_angular_tolerance_rad: (rad) Yaw tolerance for scan/sweep turn steps.
         scan_hold_time: (s) Hold time before scan turn step SUCCESS.
         scan_timeout: (s) Timeout before scan turn step FAILURE.
     """
@@ -47,10 +47,10 @@ class SlalomTask(py_trees.composites.Sequence):
         layer_distance: float = 2.0,
         initial_depth: float = -1.0,
         position_tolerance: float = 0.3,
-        yaw_tolerance_rad: float = 0.3,
+        angular_tolerance_rad: float = 0.3,
         hold_time: float = 0.5,
         timeout: float = 45.0,
-        scan_yaw_tolerance_rad: float = math.radians(30.0),
+        scan_angular_tolerance_rad: float = math.radians(30.0),
         scan_hold_time: float = 0.1,
         scan_timeout: float = 30.0,
     ):
@@ -59,7 +59,7 @@ class SlalomTask(py_trees.composites.Sequence):
         self.add_child(
             BasicActionBehaviour(
                 name=f"Initial Dive ({initial_depth}m)",
-                goal=set_depth(z=initial_depth, timeout=30.0),
+                goal=set_depth(z=initial_depth, timeout=30.0, tolerance=position_tolerance, hold_time=hold_time),
             )
         )
 
@@ -79,7 +79,7 @@ class SlalomTask(py_trees.composites.Sequence):
                 step_timeout=scan_pause_time,
                 clockwise=False,
                 look_at_on_success=True,
-                yaw_tolerance_rad=scan_yaw_tolerance_rad,
+                angular_tolerance_rad=scan_angular_tolerance_rad,
                 turn_hold_time_s=scan_hold_time,
                 turn_timeout_s=scan_timeout,
                 name="Search Red Pipe (Primary)",
@@ -91,7 +91,7 @@ class SlalomTask(py_trees.composites.Sequence):
                 step_timeout=scan_pause_time,
                 clockwise=False,
                 look_at_on_success=True,
-                yaw_tolerance_rad=scan_yaw_tolerance_rad,
+                angular_tolerance_rad=scan_angular_tolerance_rad,
                 turn_hold_time_s=scan_hold_time,
                 turn_timeout_s=scan_timeout,
                 name="Search White Pipe (Fallback)",
@@ -112,10 +112,10 @@ class SlalomTask(py_trees.composites.Sequence):
                 layer_distance=layer_distance,
                 adjust_depth=(i == 0),
                 position_tolerance=position_tolerance,
-                yaw_tolerance_rad=yaw_tolerance_rad,
+                angular_tolerance_rad=angular_tolerance_rad,
                 hold_time=hold_time,
                 timeout=timeout,
-                scan_yaw_tolerance_rad=scan_yaw_tolerance_rad,
+                scan_angular_tolerance_rad=scan_angular_tolerance_rad,
                 scan_hold_time=scan_hold_time,
                 scan_timeout=scan_timeout,
             )

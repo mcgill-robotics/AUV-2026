@@ -3,15 +3,39 @@ planner_root_tree:
     tick_rate       : 3.0
     sim             : false
     use_ground_truth: false
+    
+    # Force tree to broadcast its state and blackboard to the network continuously
+    default_snapshot_stream: true
+    default_snapshot_blackboard_data: true
+    default_snapshot_period: 1.0
+
+    # Auto-recording configuration
+    auto_record:
+      enabled: true
+      # Profiles are defined in: src/telemetry/config/rosbag_profiles.yaml
+      profile: "all"
+      bag_prefix: "mission_"
+      service_path: "/rosbag_manager/control"
+
+    gate:
+      position_tolerance: 0.3      # (m)
+      hold_time: 1.0               # (s)
+      timeout: 30.0                # (s)
+      desired_role: "search_rescue" # [survey_repair | search_rescue]
+      search_attempts: 2
+      scan_angle_deg: 35.0
+      scan_pause_time: 1.0
+      approach_distance: 1.0
+      pass_distance: 1.0
 
     pre_qual:
-      yaw_tolerance: 0.5         # (rad) TODO: convert to deg for consistency
+      angular_tolerance: 0.5         # (rad) TODO: convert to deg for consistency
       positional_tolerance: 0.3  # (m)
       hold_time: 1.0             # (s)
-      timeout: 20.0              # (s)
+      timeout: 30.0              # (s)
 
       orbit:
-        yaw_tolerance_scale: 0.5
+        angular_tolerance_scale: 0.5
         positional_tolerance_scale: 0.5
         hold_time_initial: 1.0
         hold_time_segments: 0.2
@@ -28,9 +52,63 @@ planner_root_tree:
       layer_distance: 2.0          # (m) Distance between pipe layers
       initial_depth: -1.0          # (m) Depth for the initial dive before slalom
       position_tolerance: 0.3      # (m) Position convergence threshold for gap navigation
-      yaw_tolerance_deg: 17.0      # (deg) Yaw convergence threshold for gap navigation
+      angular_tolerance_deg: 17.0      # (deg) Yaw convergence threshold for gap navigation
       hold_time: 0.5               # (s) Seconds to hold within tolerance before SUCCESS
       timeout: 45.0                # (s) Seconds before gap navigation FAILURE
-      scan_yaw_tolerance_deg: 30.0 # (deg) Yaw tolerance for scan/sweep turn steps
+      scan_angular_tolerance_deg: 30.0 # (deg) Yaw tolerance for scan/sweep turn steps
       scan_hold_time: 0.1          # (s) Hold time before scan turn step SUCCESS
       scan_timeout: 30.0           # (s) Timeout before scan turn step FAILURE
+
+    bins:
+      downcam_fov_horizontal: 59.7        # (deg) Horizontal FOV of down cam while in water
+      downcam_fov_vertical: 47.6          # (deg) Vertical FOV of down cam while in water
+      downcam_image_width: 640            # (px) Width of down cam image
+      downcam_image_height: 480           # (px) Height of down cam image
+      search_sweep_steps: 8               # (steps) Number of steps to take when doing the search sweep for the bin structure and for the bins themselves
+      search_sweep_step_timeout: 0.5      # (s) Seconds to wait at each step of the search sweep for the bin structure and for the bins
+      bin_moving_average_weight: 1.0      # (0-1) Weight of current measurement against previous position for moving average
+                                          # (0=useless never moves, 1=only current measurement)
+      bin_structure_distance: 2.0         # (m) How far away to go from the bin structure to look at it with frontcam to see the bins
+      go_above_bin_structure_height: 0.5  # (m) Height above bin structure when looking at it with frontcam to see the bins
+      go_above_bin_height: 0.7            # (m) Height above bin to move to before aligning with downcam
+      switch_sides_height: 1.2            # (m) Height above bin structure when switching sides to look at the other bins
+      wrong_task_type_threshold: 5        # (frames) Difference in number of frames where wrong icon and right icon were detected before deciding its the wrong task
+      task_completion_threshold: 5        # (frames) Number of frames where the correct icon was detected before dropping the marker
+      bin_lined_up_threshold: 10          # (pixels) How close the center of the bin needs to be to the center of the image to be considered "lined up" for dropping the marker
+      num_required_markers: 2             # (markers) Number of markers that need to be dropped in the correct bins to complete the task
+      num_bins: 4                         # (bins) Total number of bins in the bin structure
+      bins_to_bin_structure: 0.3          # (m) Approximate distance from center of bin structure to the bins
+      force_fallback_search: True        # (bool) Force behavior to look for bins instead of bin structure first
+      force_fallback_alignment: True     # (bool) Force behavior to use bins for projection instead of bin structure
+      no_detection_timeout: 10.0          # (s) Timeout if no bins are detected while following downcam bin
+
+    octagon:
+      downcam_fov_horizontal: 59.7        # (deg) Horizontal FOV of down cam while in water
+      downcam_fov_vertical: 47.6          # (deg) Vertical FOV of down cam while in water
+      downcam_image_width: 640            # (px) Width of down cam image
+      downcam_image_height: 480           # (px) Height of down cam image
+      discovery_distance: 0.3             # (m) Discovery distance for centering table
+      table_avg_height: 0.75              # (m) Estimated height of the table from the pool floor
+      pool_depth: 2.1                     # (m) Estimated depth of the pool
+      known_height_to_pill: 0.745625      # (m) Experimental distance from camera to pill for area calibration
+      known_pill_area: 16900              # (px^2) Pixel area of the pill at the known calibration height
+      shallow_approach_depth: -0.5        # (m) Shallow depth to approach the table from above
+      shallow_approach_tolerance: 0.2     # (m) Tolerance for reaching the shallow approach depth
+      shallow_approach_hold_time: 1.0     # (s) Hold time for the shallow approach depth
+      surface_depth: -0.2                 # (m) Depth to surface within the octagon
+      surface_tolerance: 0.1              # (m) Tolerance for reaching the surface depth
+      surface_hold_time: 3.0              # (s) Hold time for the surface depth
+      ending_dive_depth: -0.7             # (m) Depth to dive back down to at the end of the navigation subtask
+      navigation_only: True               # (bool) If true, only perform navigation steps (align, surface, dive) and skip item drop
+      position_tolerance: 0.3             # (m)
+      hold_time: 1.0                      # (s)
+      timeout: 30.0                       # (s)
+
+    return_home:
+      return_distance: 5.0                # (m) Distance to navigate past the gate initially
+      pass_distance: 2.0                  # (m) Distance to pass through the gate backwards
+      approach_distance: 2.0              # (m) Distance to stop in front of the gate visually
+      surface_depth: -0.2                 # (m) Depth to surface at the end
+      position_tolerance: 0.3             # (m)
+      hold_time: 1.0                      # (s)
+      timeout: 60.0                       # (s)
