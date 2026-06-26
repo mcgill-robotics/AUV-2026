@@ -17,6 +17,7 @@ set(ROS_DEPS
     rclcpp
     auv_msgs
     std_msgs
+    std_srvs
     geometry_msgs
     sensor_msgs
     vision_msgs
