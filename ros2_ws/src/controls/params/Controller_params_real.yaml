@@ -1,40 +1,51 @@
 attitude_controller:
     ros__parameters:
         control_loop_rate: 25.0
-        P_ex: 6.0
-        P_ey: 6.0
-        P_ez: 6.0
-        P_wx: 1.0
-        P_wy: 1.0
-        P_wz: 2.0
+        # P
+        P_ex: 6.0 # v2 -> 0.01
+        P_ey: 6.0 # v2 -> 0.01
+        P_ez: 6.0 # v2 -> 3.5
+        # I
+        I_ex: 0.0
+        I_ey: 0.0
+        I_ez: 0.0 # may need to modify (0.5 in v2)
+        # D
+        P_wx: 1.0 # v2 -> 0.1
+        P_wy: 1.0 # v2 -> 0.1
+        P_wz: 2.0 # v2 -> 2.0
+        I_MAX: 3.0
+        integral_activation_threshold_deg: 10.0
         buoyancy: 275.4 # [N]
         r_bv_v: [ 0.0, 0.0, 0.0 ] # [m] Tuned in pool tests.    
-        enabled: false
+        enabled: true
 
 depth_controller:
     ros__parameters:
         control_loop_hz: 10.0
         KP: 60.0
         KD: 60.0
-        KI: 0.0
+        KI: 0.0 # may need to modify
         I_MAX: 10.0
+        integral_activation_threshold: 0.3
         net_buoyancy: 14.5 # Newtons.
-        enabled: false
+        enabled: true
 
 x_controller:
     ros__parameters:
         control_loop_hz: 10.0
         KP: 15.0
         KD: 60.0
-        KI: 0.0
+        KI: 0.5
         I_MAX: 10.0
-        enabled: false
+        integral_activation_threshold: 0.7
+        enabled: true
 
 y_controller:
     ros__parameters:
         control_loop_hz: 10.0
         KP: 15.0
         KD: 60.0
-        KI: 0.0
+        KI: 0.5
         I_MAX: 10.0
-        enabled: false
+        integral_activation_threshold: 0.7
+        enabled: true

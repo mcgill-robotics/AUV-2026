@@ -14,6 +14,7 @@
 #include <memory>
 #include <vector>
 #include <functional>
+#include <algorithm>
 
 namespace controls
 {
@@ -38,11 +39,18 @@ namespace controls
                 double P_ex_;
                 double P_ey_;
                 double P_ez_;
+                double I_ex_;
+                double I_ey_;
+                double I_ez_;
                 double P_wx_;
                 double P_wy_;
                 double P_wz_;
+                double I_MAX_;
+                double integral_activation_threshold_deg_;
+                double integral_activation_threshold_rad_;
 
                 Mat3 P_e_;
+                Mat3 I_e_;
                 Mat3 P_w_;
 
                 // Control Loop Frequency
@@ -62,6 +70,11 @@ namespace controls
 
                 //Target state variables
                 quatd q_iv2_; 
+
+                // Integral state variables
+                Vec3 integral_error_;
+                quatd last_q_iv2_;
+                double SETPOINT_RESET_EPSILON; 
 
 
 
