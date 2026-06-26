@@ -42,6 +42,7 @@ from vision.object_detection.utils import (
     publish_annotated_image_util,
     toggle_collection_callback_util,
     apply_snells_law_lateral,
+    apply_snells_law_depth,
 )
 
 class FrontCamObjectDetectorNode():
@@ -1073,9 +1074,9 @@ class FrontCamObjectDetectorNode():
                     else:  # depth_map_nearest
                         z_raw = float(np.percentile(valid, self.depth_map_nearest_percentile))
                     
-                    z_m = z_raw * depth_scale + depth_offset
                     u = bbox_cx - self.cam_cx
                     v = bbox_cy - self.cam_cy
+                    z_m = apply_snells_law_depth(z_raw, u, self.cam_fx, depth_scale=depth_scale, n_w=lateral_scale) + depth_offset
                     x_m, y_m = apply_snells_law_lateral(z_m, u, v, self.cam_fx, self.cam_fy, n_w=lateral_scale)
                     cam_pos_vec = np.array([z_m, -x_m, -y_m])
                     
@@ -1168,7 +1169,7 @@ class FrontCamObjectDetectorNode():
             v = (-z_raw / x_raw) * self.cam_fy
             
             # Apply depth scaling to the forward Z axis
-            z_m = x_raw * depth_scale + depth_offset
+            z_m = apply_snells_law_depth(x_raw, u, self.cam_fx, depth_scale=depth_scale, n_w=lateral_scale) + depth_offset
             if z_m < 0.01:
                 z_m = 0.01
                 
