@@ -3,7 +3,7 @@ from numpy.polynomial.polynomial import Polynomial
 from .torpedo_behaviours import *
 from ..vision_behaviours import SearchSweepBehaviour, CircleAroundToFindBehaviour
 import operator
-from typing import cast, Tuple
+from typing import cast, Tuple, Callable
 class HoleType(Enum):
     LARGE = 1
     SMALL = 2
@@ -13,7 +13,6 @@ class TorpedoTask(py_trees.composites.Sequence):
     """
     def __init__(
             self,
-            launch_publisher_node: py_trees.behaviour.Behaviour,
             initial_distance_from_board: float = 3.0,
             z_reference: float = -1.0,
             scan_pause_time: float = 1.0,
@@ -49,7 +48,8 @@ class TorpedoTask(py_trees.composites.Sequence):
                     "ambulance": [0.045, -0.045, 0.0],
                     "firetruck": [-0.045, 0.045, 0.0]
                 }
-            }
+            },
+            launch_function: Callable[[TorpedoSide], None] = lambda side: print(f"Launching {side.name} torpedo"),
         ):
         super().__init__("Torpedo Task", memory=True)
         # TODO: Implement Torpedo Task
@@ -59,7 +59,7 @@ class TorpedoTask(py_trees.composites.Sequence):
         # 4. Align with Small opening and fire torpedo
         # 5. Optional: Maintain distance (1ft or 1.5ft) for extra points
         
-        self.launch_publisher_node = launch_publisher_node
+        self.launch_function = launch_function
         self.pause_time = scan_pause_time
         self.position_tolerance = position_tolerance
         self.yaw_tolerance_rad = yaw_tolerance_rad
@@ -442,6 +442,18 @@ class TorpedoTask(py_trees.composites.Sequence):
                             timeout=self.timeout
                 ),
                 DetermineIconPosition(icon, attempts=3),
+                self.torpedo_firing_sequence(offset_from_icon_to_hole=offset_from_icon_to_hole)
+            ]
+        )
+        return distance_strategy
+
+    def torpedo_firing_sequence(self, offset_from_icon_to_hole: Optional[Tuple[float, float, float]] = None)->py_trees.composites.Sequence:
+        
+        torpedo_firing_sequence = py_trees.composites.Sequence(f"Torpedo Firing Sequence", memory=True)
+        
+        children = [FireTorpedo(launch_function=self.launch_function)]
+        if offset_from_icon_to_hole is not None:
+            children.insert(0, 
                 AlignTorpedoToHole(
                     projected_offset_to_hole = offset_from_icon_to_hole,
                     auv_to_torpedos = self.auv_to_torpedos,
@@ -453,10 +465,10 @@ class TorpedoTask(py_trees.composites.Sequence):
                     timeout = self.timeout,
                     hold_time = self.hold_time
                 )
-            ]
-        )
-        return distance_strategy
-
+            )
+        torpedo_firing_sequence.add_children(children)
+        return torpedo_firing_sequence
+    
     def node_base_case(self)->py_trees.composites.Sequence:
         """
         Base case subtree that will just try to fire the torpedos without finding or aligning to board

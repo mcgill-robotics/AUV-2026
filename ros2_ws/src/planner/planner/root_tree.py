@@ -220,8 +220,7 @@ def main():
         }
     }
     
-    torpedo_launch_topic = node.get_parameter("torpedo.launch_topic").get_parameter_value().string_value
-
+    
     node.declare_parameter("auto_record.enabled", True)
     node.declare_parameter("auto_record.profile", "all")
     node.declare_parameter("auto_record.bag_prefix", "mission_")
@@ -292,16 +291,11 @@ def main():
         initialise_variables={"/vision/down_cam/detections": None},
         qos_profile=qos,
     )
-
-    torpedo_launch_publisher = py_trees_ros.publishers.FromBlackboard(
-        name="TorpedoLaunchPublisher",
-        topic_name=torpedo_launch_topic,
-        topic_type=std_msgs.msg.UInt8,
-        blackboard_variable="/torpedo/launch_command",
-        qos_profile=qos,
-    )
-
-    torpedo_params["launch_publisher_node"] = torpedo_launch_publisher
+    torpedo_launch_topic = node.get_parameter("torpedo.launch_topic").get_parameter_value().string_value
+    torpedo_launch_publisher = node.create_publisher(std_msgs.msg.UInt8, torpedo_launch_topic, qos)
+    torpedo_launch_callback = lambda side: torpedo_launch_publisher.publish(std_msgs.msg.UInt8(data=side.value))
+    
+    torpedo_params["launch_function"] = torpedo_launch_callback
 
     # Mission Sequence
     missions = DynamicMissionSequence(

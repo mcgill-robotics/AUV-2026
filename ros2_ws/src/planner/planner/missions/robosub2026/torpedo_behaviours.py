@@ -1,7 +1,7 @@
 import math
 import py_trees
 import numpy as np
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Callable
 from ..action_status_enum import ActionStatus
 import controls.utils as geometry
 from controls.utils import Vector2D
@@ -750,3 +750,36 @@ class AlignTorpedoToHole(Navigation):
                 self.action_status = ActionStatus.PENDING
                 return py_trees.common.Status.RUNNING
         
+        
+class FireTorpedo(Action):
+    """
+    Action to fire a torpedo.
+    """
+    def __init__(self, launch_function: Callable[[TorpedoSide], None]):
+        super().__init__("Fire Torpedo")
+        self.launch_function = launch_function
+
+    def setup(self, **kwargs):
+        super().setup(**kwargs)
+        self.blackboard.register_key(key="/torpedo/count", access=py_trees.common.Access.WRITE)
+        self.node = kwargs['node']
+
+    def update(self):
+        if not hasattr(self.blackboard, 'torpedo') or self.blackboard.torpedo.count is None:
+            self.node.get_logger().error(f"[{self.name}] No torpedo count available on blackboard.")
+            return py_trees.common.Status.FAILURE
+        if self.blackboard.torpedo.count <= 0:
+            self.node.get_logger().error(f"[{self.name}] No torpedos left. Cannot fire.")
+            return py_trees.common.Status.FAILURE
+        match self.blackboard.torpedo.count:
+            case 1:
+                side = TorpedoSide.LEFT
+            case 2:
+                side = TorpedoSide.RIGHT
+            case _:
+                self.node.get_logger().error(f"[{self.name}] Invalid torpedo count: {self.blackboard.torpedo.count}. Cannot determine which torpedo to fire.")
+                return py_trees.common.Status.FAILURE
+        self.launch_function(side)
+        self.blackboard.torpedo.count -= 1
+        self.node.get_logger().info(f"[{self.name}] Fired torpedo. New count: {self.blackboard.torpedo.count}")
+        return py_trees.common.Status.SUCCESS
