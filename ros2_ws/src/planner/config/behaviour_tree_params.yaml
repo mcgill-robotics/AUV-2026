@@ -27,6 +27,8 @@ planner_root_tree:
       scan_pause_time: 1.0
       approach_distance: 1.0
       pass_distance: 1.0
+      global_yaw_lock: true       # If true, assumes gate is straight and maintains yaw=0 globally when navigating through
+      force_blind_forward_dist: 0.0 # (m) If > 0, skips gate vision and just drives straight this distance in the field X (forward)
 
     pre_qual:
       angular_tolerance: 0.5         # (rad) TODO: convert to deg for consistency
@@ -58,6 +60,8 @@ planner_root_tree:
       scan_angular_tolerance_deg: 30.0 # (deg) Yaw tolerance for scan/sweep turn steps
       scan_hold_time: 0.1          # (s) Hold time before scan turn step SUCCESS
       scan_timeout: 30.0           # (s) Timeout before scan turn step FAILURE
+      force_blind_forward_dist: 0.0 # (m) If > 0, skips slalom vision and just drives straight this distance in the field X (forward) 
+      initial_approach_distance: 3.0 # (m) Distance to approach the first pipe after detecting it during the initial search 
 
     bins:
       downcam_fov_horizontal: 59.7        # (deg) Horizontal FOV of down cam while in water

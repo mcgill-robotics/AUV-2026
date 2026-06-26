@@ -6,7 +6,7 @@
 namespace {
 
 constexpr double kEpsilon = 1e-6;
-constexpr double kTinyCovariance = 0.001;
+constexpr double kTinyCovariance = 0.01;
 
 Eigen::Vector2d xy(const Eigen::Vector3d& position) {
     return position.head<2>();
@@ -267,24 +267,37 @@ std::vector<std::vector<double>> ObjectTracker::compute_cost_matrix(
                     continue;
                 }
 
-                // 3. Mahalanobis distance
-                // S = C*P*C^T + R
-                // Since C is Identity, S = P + R
-                Eigen::Matrix3d P = curr_track.kf.covariance();
-                Eigen::Matrix3d R_meas = measurement_covariances[meas_idx];
-                Eigen::Matrix3d S = P + R_meas;
-                
-                Eigen::Matrix3d inv_S = S.inverse();
-                
-                double dist_sq = diff.transpose() * inv_S * diff;
-                double dist = std::sqrt(dist_sq);
+                // 3. Euclidean distance cost
+                // We previously used Mahalanobis distance, but poor covariance estimates
+                // caused it to blow up and spawn duplicate tracks.
+                double dist = euclidean_distance;
 
                 // 4. Gating and Assignment
-                if (dist > this->gating_threshold) {
-                    cost_matrix[track_idx][meas_idx] = 1e6;
-                } else {
-                    cost_matrix[track_idx][meas_idx] = dist;
-                }
+                // Since we are using Euclidean distance, we gate using max_position_jump.
+                // We still use gating_threshold here if we want to retain the YAML parameter, 
+                // but for Euclidean distance, max_position_jump is more intuitive.
+                // Let's use max_position_jump as the true gate, and set cost to dist.
+                cost_matrix[track_idx][meas_idx] = dist;
+
+                // PREVIOUS cost
+                // // 3. Mahalanobis distance
+                // // S = C*P*C^T + R
+                // // Since C is Identity, S = P + R
+                // Eigen::Matrix3d P = curr_track.kf.covariance();
+                // Eigen::Matrix3d R_meas = measurement_covariances[meas_idx];
+                // Eigen::Matrix3d S = P + R_meas;
+                
+                // Eigen::Matrix3d inv_S = S.inverse();
+                
+                // double dist_sq = diff.transpose() * inv_S * diff;
+                // double dist = std::sqrt(dist_sq);
+
+                // // 4. Gating and Assignment
+                // if (dist > this->gating_threshold) {
+                //     cost_matrix[track_idx][meas_idx] = 1e6;
+                // } else {
+                //     cost_matrix[track_idx][meas_idx] = dist;
+                // }
             }
         }
     }
@@ -335,7 +348,7 @@ std::vector<std::pair<size_t, size_t>> ObjectTracker::match_tracks(
         // Iterate through unmatched tracks and detections and remove from those lists, tentative implementation below
         // assignment is set to -1 if no assignment was made for that track
         // otherwise we check if we cost threshold
-        if (det_idx != -1 && cost_matrix[track_idx][det_idx] <= gating_threshold) {
+        if (det_idx != -1 && cost_matrix[track_idx][det_idx] <= max_position_jump) {
             // Valid match, at this point det_idx must be positive i.e. valid size_t
             matches.push_back(std::make_pair(track_idx, det_idx));
         }

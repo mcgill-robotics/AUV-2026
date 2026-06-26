@@ -281,6 +281,37 @@ def bbox_from_zed_corners(corners) -> tuple[float, float, float, float]:
     ys = [float(point[1]) for point in corners]
     return bbox_from_xyxy(min(xs), min(ys), max(xs), max(ys))
 
+def apply_snells_law_depth(z_raw, u, fx, depth_scale=1.42, n_w=1.333):
+    """
+    Applies 1D horizontal tangential virtual depth scaling for a stereo camera behind a flat port.
+    
+    Corrects for:
+    Flat port refraction astigmatism. A flat port magnifies depth differently depending on the 
+    viewing angle. ZED computes depth strictly from horizontal disparity, so scaling depth by the 
+    full 2D radial angle incorrectly over-corrects vertical extremes (warping flat objects into 
+    "Pringle" shapes). Instead, we apply Snell's Law to just the 1D horizontal angle.
+    
+    Dynamic Scale:
+    The theoretical Tangential Virtual Depth scales by the ratio of cosines cubed.
+    dynamic_scale = depth_scale * (cos^3(theta_w_x) / cos^3(theta_a_x))
+    This scale is smallest in the center of the image and smoothly increases as the object 
+    moves horizontally toward the edges of the frame.
+    """
+    if fx == 0:
+        return z_raw * depth_scale
+        
+    u_norm = u / fx
+    r_a_x = max(abs(u_norm), 1e-6)
+    
+    cos_a_x = 1.0 / math.sqrt(1.0 + r_a_x**2)
+    sin_a_x = r_a_x * cos_a_x
+    
+    sin_w_x = sin_a_x / n_w
+    cos_w_x = math.sqrt(1.0 - sin_w_x**2)
+    
+    dynamic_scale = depth_scale * (cos_w_x**3 / cos_a_x**3)
+    return z_raw * dynamic_scale
+
 def apply_snells_law_lateral(z_true, u, v, fx, fy, n_w=1.333):
     """
     Applies exact Snell's Law un-projection to convert distorted pixel angles

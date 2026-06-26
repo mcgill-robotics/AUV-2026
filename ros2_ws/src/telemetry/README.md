@@ -113,6 +113,11 @@ ros2 service call /rosbag_manager/control auv_msgs/srv/RosbagControl "{action: 0
 ```
 *(If `bag_name` is left empty, it will auto-generate a timestamped folder name).*
 
+You can also automatically start recording when launching the AUV by passing these arguments to the `bringup` script:
+```bash
+ros2 launch bringup bringup.launch.py auto_start_rosbag:=true rosbag_prefix:=my_bag
+```
+
 Stop the current recording:
 ```bash
 ros2 service call /rosbag_manager/control auv_msgs/srv/RosbagControl "{action: 1}"

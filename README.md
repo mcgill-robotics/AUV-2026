@@ -145,10 +145,17 @@ See the [Launch Options](#launch-options) section below for instructions on how 
 - `controls:=true|false` (default: `true`): Launch the controls package.
 - `telemetry:=true|false` (default: `true`): Launch the telemetry dashboard.
 - `planner:=true|false` (default: `false`): Launch the mission planner. This is set to `false` by default as the mission planner is not yet fully integrated with the rest of the system.
+- `auto_start_rosbag:=true|false` (default: `false`): Automatically start recording a rosbag when launching.
+- `rosbag_prefix:=<string>` (default: `mission_bag`): The prefix used for the auto-started rosbag name.
 
 Note that the `sim` flag is also passed to the launched packages, so for instance if `sim:=true`, no hardware drivers will be launched by the sensors package.
 
 **Example: Running simulation without vision**
 ```bash
 ros2 launch bringup bringup.launch.py sim:=true vision:=false
+```
+
+**Example: Full real pooltest bringup with rosbag**
+```bash
+ros2 launch bringup bringup.launch.py auto_start_rosbag:=true rosbag_prefix:=my_bag_name
 ```
