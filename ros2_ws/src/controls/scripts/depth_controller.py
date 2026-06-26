@@ -80,7 +80,10 @@ class DepthController(Node):
                     result.successful = False
                     result.reason = "'enabled' must be a bool"
                     return result
-                self.enabled = bool(parameter.value)
+                new_enabled = bool(parameter.value)
+                if new_enabled and not self.enabled:
+                    self.setpoint_depth = self.current_depth
+                self.enabled = new_enabled
                 self.get_logger().info(f"Depth controller enabled: {self.enabled}")
 
         return result

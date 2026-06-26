@@ -20,6 +20,8 @@ set(msg_files
 	"msg/VisionDetection.msg"
 	"msg/VisionDetectionFrame.msg"
 	"msg/VisionObject.msg"
+	"msg/FoxgloveObject.msg"
+	"msg/FoxgloveObjectArray.msg"
 	"msg/VisionObjectArray.msg"
 )
 
@@ -28,6 +30,7 @@ set(srv_files
 	"srv/AutomaticCapture.srv"
 	"srv/ShootTorpedo.srv"
 	"srv/SetGripper.srv"
+	"srv/RosbagControl.srv"
 )
 
 set(action_files

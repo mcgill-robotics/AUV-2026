@@ -2,12 +2,25 @@
 
 from launch import LaunchDescription
 from launch_ros.actions import Node
+import os
+from ament_index_python.packages import get_package_share_directory
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
+import launch
+import launch_ros
+import yaml
+import os
+from ament_index_python.packages import get_package_share_directory
 
 
 def generate_launch_description():
     """Launch Foxglove Bridge for AUV dashboard connections."""
+    
+    telemetry_config = os.path.join(
+        get_package_share_directory('telemetry'),
+        'config',
+        'vision_foxglove.yaml'
+    )
     
     # Declare launch arguments
     port_arg = DeclareLaunchArgument(
@@ -24,8 +37,32 @@ def generate_launch_description():
 
     send_buffer_limit_arg = DeclareLaunchArgument(
         'send_buffer_limit',
-        default_value='10000000',
-        description='Send buffer limit for Foxglove bridge'
+        default_value='50000000',
+        description='Send buffer limit for Foxglove bridge (50MB)'
+    )
+
+    rosbag_profiles_arg = DeclareLaunchArgument(
+        'rosbag_profiles_file',
+        default_value=[
+            launch.substitutions.PathJoinSubstitution([
+                launch_ros.substitutions.FindPackageShare('telemetry'),
+                'config',
+                'rosbag_profiles.yaml'
+            ])
+        ],
+        description='Path to the rosbag profiles YAML file'
+    )
+
+    auto_start_rosbag_arg = DeclareLaunchArgument(
+        'auto_start_rosbag',
+        default_value='false',
+        description='Whether to automatically start recording a rosbag'
+    )
+
+    rosbag_prefix_arg = DeclareLaunchArgument(
+        'rosbag_prefix',
+        default_value='mission_bag',
+        description='Prefix for the auto-started rosbag name'
     )
 
     # Foxglove Bridge node
@@ -36,10 +73,13 @@ def generate_launch_description():
         parameters=[{
             'port': LaunchConfiguration('port'),
             'address': LaunchConfiguration('address'),
-            'send_buffer_limit': LaunchConfiguration('send_buffer_limit'),  # 10MB buffer for images
+            'send_buffer_limit': LaunchConfiguration('send_buffer_limit'),  # Increased buffer for multiple image streams
             'use_compression': True,
             'best_effort_qos_topic_whitelist': [
-                '/vision/front_cam/detections/annotated/compressed',
+                '/tf',
+                '/vision/front_cam/detection_frame/annotated/compressed',
+                '/vision/down_cam/detections/annotated/compressed',
+                '/vision/front_cam/detection_frame/depth/compressed',
                 '/zed/zed_node/rgb/color/rect/image/compressed',
                 '/zed/zed_node/depth/depth_registered/compressed'
             ],
@@ -58,7 +98,8 @@ def generate_launch_description():
         package='telemetry',
         executable='vision_to_foxglove',
         name='vision_to_foxglove',
-        output='screen'
+        output='screen',
+        parameters=[telemetry_config]
     )
 
     setpoint_to_foxglove_node = Node(
@@ -68,12 +109,28 @@ def generate_launch_description():
         output='screen'
     )
 
+    rosbag_manager_node = Node(
+        package='telemetry',
+        executable='rosbag_manager_node',
+        name='rosbag_manager',
+        output='screen',
+        parameters=[{
+            'profiles_file': LaunchConfiguration('rosbag_profiles_file'),
+            'auto_start': LaunchConfiguration('auto_start_rosbag'),
+            'recording_name_prefix': LaunchConfiguration('rosbag_prefix')
+        }]
+    )
+
     return LaunchDescription([
-        port_arg,
+        port_arg,   
         address_arg,
         send_buffer_limit_arg,
+        rosbag_profiles_arg,
+        auto_start_rosbag_arg,
+        rosbag_prefix_arg,
         foxglove_bridge,
         dry_test_node,
         vision_to_foxglove_node,
         setpoint_to_foxglove_node,
+        rosbag_manager_node,
     ])

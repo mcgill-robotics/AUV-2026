@@ -1,0 +1,819 @@
+import math
+import py_trees
+from py_trees.decorators import Retry
+from controls.goal_helpers import move_global, translate_field_centric
+from controls.utils import yaw_from_quaternion, normalize_angle
+from ..action_status_enum import ActionStatus
+from ..mission_behaviour_components import BasicActionBehaviour
+from ..vision_behaviours import ScanBehaviour
+
+
+class MatchPipesBehaviour(py_trees.behaviour.Behaviour):
+    """
+    Reads the object map and performs geometric analysis to find a pipe triplet
+    (1 red center + 2 white on either side forming a roughly straight line).
+
+    Writes the computed navigation target (midpoint + perpendicular yaw) to the
+    blackboard for the downstream NavigateToGap behaviour to consume.
+
+    The gate_side parameter is a fallback default. At runtime, the behaviour
+    reads /gate/selected_side from the blackboard (written by GateTask). If present,
+    the blackboard value overrides the config default.
+
+    This is a one-shot computation that completes in a single tick.
+    """
+    def __init__(
+        self,
+        gate_side: str = "right",
+        yaw_inward_offset_rad: float = math.radians(10.0),
+        collinearity_threshold: float = 0.5,
+        min_forward_dist: float = 0.5,
+        name="Match Pipes",
+    ):
+        super().__init__(name)
+        self.gate_side = gate_side
+        self.yaw_inward_offset_rad = yaw_inward_offset_rad
+        self.collinearity_threshold = collinearity_threshold
+        self.min_forward_dist = min_forward_dist
+
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/gate/selected_side", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/slalom/target_x", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key="/slalom/target_y", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key="/slalom/target_z", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key="/slalom/target_yaw", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key="/slalom/target_yaw", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/slalom/has_offset", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key="/slalom/has_offset", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/slalom/offset_x", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key="/slalom/offset_y", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key="/slalom/offset_x", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/slalom/offset_y", access=py_trees.common.Access.READ)
+
+    def update(self):
+        # --- Resolve gate_side: blackboard (from GateTask) takes priority over config default ---
+        gate_side = self.gate_side  # config default
+        try:
+            bb_side = self.blackboard.gate.selected_side
+            if bb_side in ("left", "right"):
+                gate_side = bb_side
+                self.node.get_logger().info(f"[{self.name}] Using gate_side='{gate_side}' from blackboard.")
+        except (AttributeError, KeyError):
+            self.node.get_logger().info(f"[{self.name}] No /gate/selected_side on blackboard, using config default '{gate_side}'.")
+
+        # --- Get AUV pose ---
+        if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.pose is None:
+            self.node.get_logger().warn(f"[{self.name}] Waiting for /sensors/pose.")
+            return py_trees.common.Status.RUNNING
+
+        auv_pose = self.blackboard.sensors.pose.pose
+        auv_x = auv_pose.position.x
+        auv_y = auv_pose.position.y
+        auv_yaw = yaw_from_quaternion(auv_pose.orientation)
+        # Unit vector in the AUV's forward direction (from its heading angle)
+        fwd_x = math.cos(auv_yaw)
+        fwd_y = math.sin(auv_yaw)
+
+        # --- Get object map ---
+        if not hasattr(self.blackboard, 'vision') or self.blackboard.vision.object_map is None:
+            self.node.get_logger().error(f"[{self.name}] No object map available.")
+            return py_trees.common.Status.FAILURE
+
+        # --- Filter forward-only pipes ---
+        # We use the dot product between the AUV→pipe vector and the AUV's
+        # forward unit vector. If dot > 0, the pipe is in front of the AUV.
+        # A positive min_forward_dist also rejects pipes that are too close.
+        #   dot = (pipe - auv) · forward = |pipe - auv| * cos(angle)
+        red_pipes = []
+        white_pipes = []
+        for obj in self.blackboard.vision.object_map.array:
+            dx = obj.pose.position.x - auv_x
+            dy = obj.pose.position.y - auv_y
+            dot = dx * fwd_x + dy * fwd_y
+            if dot < self.min_forward_dist:
+                continue
+            if obj.label == "red_pipe":
+                red_pipes.append(obj)
+            elif obj.label == "white_pipe":
+                white_pipes.append(obj)
+
+        self.node.get_logger().info(
+            f"[{self.name}] Forward pipes: {len(red_pipes)} red, {len(white_pipes)} white"
+        )
+
+        if len(red_pipes) == 0:
+            self.node.get_logger().error(f"[{self.name}] No red pipes found in front.")
+            return py_trees.common.Status.FAILURE
+
+        # --- Closest red pipe ---
+        closest_red = min(
+            red_pipes,
+            key=lambda p: math.hypot(p.pose.position.x - auv_x, p.pose.position.y - auv_y),
+        )
+        red_x = closest_red.pose.position.x
+        red_y = closest_red.pose.position.y
+        self.node.get_logger().info(f"[{self.name}] Closest red pipe at ({red_x:.2f}, {red_y:.2f})")
+
+        # --- OPTIMIZED PATH: APPLY CACHED OFFSET ---
+        has_offset = False
+        try:
+            if self.blackboard.slalom.has_offset:
+                has_offset = True
+        except (AttributeError, KeyError):
+            pass
+
+        if has_offset:
+            target_x = red_x + self.blackboard.slalom.offset_x
+            target_y = red_y + self.blackboard.slalom.offset_y
+            target_z = closest_red.pose.position.z
+            
+            try:
+                target_yaw = self.blackboard.slalom.target_yaw
+            except (AttributeError, KeyError):
+                target_yaw = auv_yaw
+
+            self.blackboard.slalom.target_x = target_x
+            self.blackboard.slalom.target_y = target_y
+            self.blackboard.slalom.target_z = target_z
+            self.blackboard.slalom.target_yaw = target_yaw
+            
+            self.node.get_logger().info(
+                f"[{self.name}] [OPTIMIZED] Applied cached offset: target=({target_x:.2f}, {target_y:.2f}) using red pipe at ({red_x:.2f}, {red_y:.2f})"
+            )
+            return py_trees.common.Status.SUCCESS
+
+        # --- NOMINAL PATH: Requires at least 1 White Pipe ---
+        if len(white_pipes) == 0:
+            self.node.get_logger().error(
+                f"[{self.name}] Need >= 1 white pipe, found 0."
+            )
+            return py_trees.common.Status.FAILURE
+
+        # --- Find best collinear white pair ---
+        # For each pair of white pipes, we check whether the red pipe lies
+        # approximately on the line between them (i.e., all 3 are collinear).
+        #
+        # Two tests are used:
+        #
+        # 1) PERPENDICULAR DISTANCE (collinearity test)
+        #    Given line segment W1->W2, the perpendicular distance of point R
+        #    from this line is computed using the 2D cross product:
+        #      cross = |(W2 - W1) × (R - W1)| = |dx*(Ry-W1y) - dy*(Rx-W1x)|
+        #      perp_dist = cross / |W2 - W1|
+        #    If perp_dist < threshold, the 3 points are approximately collinear.
+        #    (See: "Point-to-line distance" formula)
+        #
+        # 2) PROJECTION PARAMETER (between-ness test)
+        #    We project the red pipe onto the W1->W2 line segment:
+        #      t = ((R - W1) · (W2 - W1)) / |W2 - W1|²
+        #    t=0 means R is at W1, t=1 means R is at W2.
+        #    If 0.1 < t < 0.9, the red pipe is between the whites (with margin).
+        #    (See: "Scalar projection" / "Parameter of closest point on line")
+        best_pair = None
+        best_perp = float('inf')
+
+        for i in range(len(white_pipes)):
+            for j in range(i + 1, len(white_pipes)):
+                w1 = white_pipes[i]
+                w2 = white_pipes[j]
+                w1x, w1y = w1.pose.position.x, w1.pose.position.y
+                w2x, w2y = w2.pose.position.x, w2.pose.position.y
+
+                line_dx = w2x - w1x
+                line_dy = w2y - w1y
+                line_len = math.hypot(line_dx, line_dy)
+                if line_len < 0.5:
+                    continue
+
+                # Perpendicular distance of red from the w1->w2 line
+                cross = abs(line_dx * (red_y - w1y) - line_dy * (red_x - w1x))
+                perp_dist = cross / line_len
+
+                # Projection parameter: red must lie between the two whites
+                t = ((red_x - w1x) * line_dx + (red_y - w1y) * line_dy) / (line_len ** 2)
+
+                if perp_dist < self.collinearity_threshold and 0.1 < t < 0.9:
+                    if perp_dist < best_perp:
+                        best_perp = perp_dist
+                        best_pair = (w1, w2)
+
+        if best_pair is None:
+            self.node.get_logger().warn(
+                f"[{self.name}] No collinear white pipe pair found. Falling back to 1 Red + 1 White logic."
+            )
+            
+            # --- 2-Pipe Fallback (1 Red + 1 White) ---
+            closest_white = min(
+                white_pipes,
+                key=lambda p: math.hypot(p.pose.position.x - auv_x, p.pose.position.y - auv_y),
+            )
+            wx, wy = closest_white.pose.position.x, closest_white.pose.position.y
+            wz = closest_white.pose.position.z
+
+            # Determine if this white pipe is to the LEFT or RIGHT of the red pipe (from AUV perspective)
+            # Positive cross -> Left, Negative cross -> Right
+            cross = fwd_x * (wy - red_y) - fwd_y * (wx - red_x)
+            white_side = "left" if cross > 0 else "right"
+
+            self.node.get_logger().info(f"[{self.name}] Closest white pipe at ({wx:.2f}, {wy:.2f}) is on the {white_side}.")
+
+            if gate_side == white_side:
+                # The white pipe we see is the one we want to pass next to
+                target_x = (red_x + wx) / 2.0
+                target_y = (red_y + wy) / 2.0
+                target_z = (closest_red.pose.position.z + wz) / 2.0
+            else:
+                # The white pipe we see is on the WRONG side. 
+                # Extrapolate gap to the OTHER side of the red pipe (Red - (White - Red)/2)
+                target_x = red_x - (wx - red_x) / 2.0
+                target_y = red_y - (wy - red_y) / 2.0
+                target_z = closest_red.pose.position.z
+
+            # Target yaw: perpendicular to the line between Red and White
+            line_angle = math.atan2(wy - red_y, wx - red_x)
+            perp1 = normalize_angle(line_angle + math.pi / 2)
+            perp2 = normalize_angle(line_angle - math.pi / 2)
+
+            diff1 = abs(normalize_angle(perp1 - auv_yaw))
+            diff2 = abs(normalize_angle(perp2 - auv_yaw))
+            target_yaw = perp1 if diff1 < diff2 else perp2
+
+            if gate_side == "left":
+                target_yaw = normalize_angle(target_yaw - self.yaw_inward_offset_rad)
+            else:
+                target_yaw = normalize_angle(target_yaw + self.yaw_inward_offset_rad)
+
+            # Write results to blackboard
+            self.blackboard.slalom.target_x = target_x
+            self.blackboard.slalom.target_y = target_y
+            self.blackboard.slalom.target_z = target_z
+            self.blackboard.slalom.target_yaw = target_yaw
+
+            # Cache the offset vector
+            self.blackboard.slalom.offset_x = target_x - red_x
+            self.blackboard.slalom.offset_y = target_y - red_y
+            self.blackboard.slalom.has_offset = True
+
+            self.node.get_logger().info(
+                f"[{self.name}] [FALLBACK] Cached offset from 2-pipe pair: target=({target_x:.2f}, {target_y:.2f})"
+            )
+            return py_trees.common.Status.SUCCESS
+
+        w1, w2 = best_pair
+        w1x, w1y = w1.pose.position.x, w1.pose.position.y
+        w2x, w2y = w2.pose.position.x, w2.pose.position.y
+
+        # --- Determine left/right white relative to AUV heading ---
+        # We use the 2D cross product of the AUV's forward vector with the
+        # AUV->pipe vector to determine which side each pipe is on:
+        #   cross = fwd × (pipe - auv) = fwd_x*(py-ay) - fwd_y*(px-ax)
+        # Positive cross -> pipe is to the LEFT of the AUV's heading.
+        # Negative cross -> pipe is to the RIGHT.
+        # (This is the "signed area" / "determinant" side-of-line test.)
+        w1_cross = fwd_x * (w1y - auv_y) - fwd_y * (w1x - auv_x)
+        w2_cross = fwd_x * (w2y - auv_y) - fwd_y * (w2x - auv_x)
+
+        if w1_cross > w2_cross:
+            left_x, left_y, left_z = w1x, w1y, w1.pose.position.z
+            right_x, right_y, right_z = w2x, w2y, w2.pose.position.z
+        else:
+            left_x, left_y, left_z = w2x, w2y, w2.pose.position.z
+            right_x, right_y, right_z = w1x, w1y, w1.pose.position.z
+
+        self.node.get_logger().info(
+            f"[{self.name}] Matched triplet: "
+            f"L-white({left_x:.2f},{left_y:.2f}) "
+            f"Red({red_x:.2f},{red_y:.2f}) "
+            f"R-white({right_x:.2f},{right_y:.2f})"
+        )
+
+        # --- Compute midpoint and depth based on gate side ---
+        if gate_side == "left":
+            target_x = (red_x + left_x) / 2.0
+            target_y = (red_y + left_y) / 2.0
+            target_z = (closest_red.pose.position.z + left_z) / 2.0
+        else:
+            target_x = (red_x + right_x) / 2.0
+            target_y = (red_y + right_y) / 2.0
+            target_z = (closest_red.pose.position.z + right_z) / 2.0
+
+        # --- Compute perpendicular yaw (facing forward through the gap) ---
+        # The pipe line direction is the vector from left_white -> right_white.
+        # The angle of this line is: line_angle = atan2(dy, dx).
+        # A perpendicular to this line is ±90° from line_angle.
+        # There are two perpendicular directions (one forward, one backward).
+        # We pick the one that is closest to the AUV's current heading,
+        # which guarantees the AUV will face forward through the gap.
+        pipe_line_dx = right_x - left_x
+        pipe_line_dy = right_y - left_y
+        line_angle = math.atan2(pipe_line_dy, pipe_line_dx)
+        perp1 = normalize_angle(line_angle + math.pi / 2)
+        perp2 = normalize_angle(line_angle - math.pi / 2)
+
+        # Pick the perpendicular closer to AUV's current heading
+        diff1 = abs(normalize_angle(perp1 - auv_yaw))
+        diff2 = abs(normalize_angle(perp2 - auv_yaw))
+        target_yaw = perp1 if diff1 < diff2 else perp2
+
+        # Apply inward convergence offset so AUV hugs the center axis
+        if gate_side == "left":
+            # Passing on the left side, we steer slightly Right (negative yaw)
+            target_yaw = normalize_angle(target_yaw - self.yaw_inward_offset_rad)
+        else:
+            # Passing on the right side, we steer slightly Left (positive yaw)
+            target_yaw = normalize_angle(target_yaw + self.yaw_inward_offset_rad)
+
+        # --- Write results to blackboard ---
+        self.blackboard.slalom.target_x = target_x
+        self.blackboard.slalom.target_y = target_y
+        self.blackboard.slalom.target_z = target_z
+        self.blackboard.slalom.target_yaw = target_yaw
+
+        # Cache the offset vector from this layer for subsequent layers
+        self.blackboard.slalom.offset_x = target_x - red_x
+        self.blackboard.slalom.offset_y = target_y - red_y
+        self.blackboard.slalom.has_offset = True
+
+        self.node.get_logger().info(
+            f"[{self.name}] [NOMINAL] Cached new offset vector: "
+            f"({self.blackboard.slalom.offset_x:.2f}, {self.blackboard.slalom.offset_y:.2f})"
+        )
+
+        self.node.get_logger().info(
+            f"[{self.name}] Target: ({target_x:.2f}, {target_y:.2f}, z={target_z:.2f}) "
+            f"yaw={math.degrees(target_yaw):.1f}° (gate_side={gate_side})"
+        )
+        return py_trees.common.Status.SUCCESS
+
+
+class NavigateToGapBehaviour(py_trees.behaviour.Behaviour):
+    """
+    Reads the slalom navigation target from the blackboard and drives the AUV
+    to the computed gap midpoint with the perpendicular orientation.
+    """
+    def __init__(
+        self,
+        adjust_depth: bool = False,
+        position_tolerance: float = 0.3,
+        angular_tolerance_rad: float = 0.3,
+        hold_time: float = 0.5,
+        timeout: float = 45.0,
+        name="Navigate To Gap",
+    ):
+        super().__init__(name)
+        self.adjust_depth = adjust_depth
+        self.position_tolerance = position_tolerance
+        self.angular_tolerance_rad = angular_tolerance_rad
+        self.hold_time = hold_time
+        self.timeout = timeout
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+
+        self.action_status = ActionStatus.NOT_SENT
+        self.sent_goal = False
+        self.result_message = ''
+
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.navigation_client = kwargs['shared_nav_client']
+        self.navigation_client.client_wait_for_server(timeout_sec=5.0)
+        self.blackboard.register_key(key="/slalom/target_x", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/slalom/target_y", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/slalom/target_z", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/slalom/target_yaw", access=py_trees.common.Access.READ)
+
+    def initialise(self):
+        self.action_status = ActionStatus.NOT_SENT
+        self.sent_goal = False
+        self.result_message = ''
+
+    def update(self):
+        if self.action_status == ActionStatus.SUCCEEDED:
+            self.node.get_logger().info(f"[{self.name}] Reached gap midpoint. {self.result_message}")
+            return py_trees.common.Status.SUCCESS
+
+        if self.action_status == ActionStatus.FAILED:
+            self.node.get_logger().error(f"[{self.name}] Failed to reach gap midpoint. {self.result_message}")
+            return py_trees.common.Status.FAILURE
+
+        if self.action_status == ActionStatus.PENDING:
+            return py_trees.common.Status.RUNNING
+
+        # Send approach goal
+        target_x = self.blackboard.slalom.target_x
+        target_y = self.blackboard.slalom.target_y
+        target_z = self.blackboard.slalom.target_z
+        target_yaw = self.blackboard.slalom.target_yaw
+
+        self.node.get_logger().info(
+            f"[{self.name}] Approaching gap at ({target_x:.2f}, {target_y:.2f}) "
+            f"yaw={math.degrees(target_yaw):.1f}°, do_z={self.adjust_depth}"
+        )
+        goal = move_global(
+            x=target_x, 
+            y=target_y, 
+            z=target_z if self.adjust_depth else 0.0,
+            yaw=target_yaw, 
+            do_z=self.adjust_depth,
+            tolerance=self.position_tolerance,
+            angular_tolerance=self.angular_tolerance_rad,
+            hold_time=self.hold_time,
+            timeout=self.timeout,
+        )
+        self.navigation_client.send_navigation_goal(
+            goal, self.name, self._on_goal_response, self._on_goal_result
+        )
+        self.action_status = ActionStatus.PENDING
+        self.sent_goal = True
+        return py_trees.common.Status.RUNNING
+
+    def _on_goal_response(self, goal_response: bool):
+        if not goal_response:
+            self.action_status = ActionStatus.FAILED
+
+    def _on_goal_result(self, goal_success: bool, message: str):
+        self.result_message = message
+        if goal_success:
+            self.action_status = ActionStatus.SUCCEEDED
+        else:
+            self.action_status = ActionStatus.FAILED
+
+
+
+
+class SkipScanCheckBehaviour(py_trees.behaviour.Behaviour):
+    """
+    Checks if a cached slalom offset is available and a red pipe is detected
+    close in front of the AUV [1.5m, 3.0m].
+    
+    If both conditions are met, returns SUCCESS (allowing the scan phase to be skipped).
+    Otherwise, returns FAILURE.
+    """
+    def __init__(self, min_dist: float = 1.5, max_dist: float = 3.0, name="Skip Scan Check"):
+        super().__init__(name)
+        self.min_dist = min_dist
+        self.max_dist = max_dist
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/slalom/has_offset", access=py_trees.common.Access.READ)
+
+    def update(self):
+        # 1. Check if we have a cached offset vector
+        has_offset = False
+        try:
+            if self.blackboard.slalom.has_offset:
+                has_offset = True
+        except (AttributeError, KeyError):
+            pass
+
+        if not has_offset:
+            self.node.get_logger().info(f"[{self.name}] No cached offset available. Cannot skip scan.")
+            return py_trees.common.Status.FAILURE
+
+        # 2. Get AUV pose and heading
+        if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.pose is None:
+            return py_trees.common.Status.FAILURE
+
+        auv_pose = self.blackboard.sensors.pose.pose
+        auv_x, auv_y = auv_pose.position.x, auv_pose.position.y
+        auv_yaw = yaw_from_quaternion(auv_pose.orientation)
+        fwd_x, fwd_y = math.cos(auv_yaw), math.sin(auv_yaw)
+
+        # 3. Check for close red pipe in front
+        if not hasattr(self.blackboard, 'vision') or self.blackboard.vision.object_map is None:
+            return py_trees.common.Status.FAILURE
+
+        red_pipe_nearby = False
+        for obj in self.blackboard.vision.object_map.array:
+            if obj.label == "red_pipe":
+                dx = obj.pose.position.x - auv_x
+                dy = obj.pose.position.y - auv_y
+                dist = math.hypot(dx, dy)
+                dot = dx * fwd_x + dy * fwd_y
+                
+                # Check if it is in front and within range
+                if dot > 0 and self.min_dist <= dist <= self.max_dist:
+                    self.node.get_logger().info(
+                        f"[{self.name}] Red pipe found in front at dist={dist:.2f}m. SCAN CANCELLED."
+                    )
+                    red_pipe_nearby = True
+                    break
+
+        if red_pipe_nearby:
+            return py_trees.common.Status.SUCCESS
+        
+        self.node.get_logger().info(f"[{self.name}] No red pipe in range [{self.min_dist}, {self.max_dist}]m.")
+        return py_trees.common.Status.FAILURE
+
+
+
+
+class SlalomFailsafeBehaviour(py_trees.behaviour.Behaviour):
+    """
+    Failsafe behaviour for a slalom layer.
+    If a cached target_yaw exists on the blackboard, it drives forward in that
+    direction by layer_distance. Otherwise, it falls back to driving straight
+    along the field X-axis.
+    """
+    def __init__(
+        self,
+        layer_distance: float,
+        position_tolerance: float = 0.3,
+        hold_time: float = 0.5,
+        timeout: float = 45.0,
+        name="Slalom Failsafe",
+    ):
+        super().__init__(name)
+        self.layer_distance = layer_distance
+        self.position_tolerance = position_tolerance
+        self.hold_time = hold_time
+        self.timeout = timeout
+        
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+        
+        self.action_status = ActionStatus.NOT_SENT
+        self.sent_goal = False
+        self.result_message = ''
+
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.navigation_client = kwargs['shared_nav_client']
+        self.navigation_client.client_wait_for_server(timeout_sec=5.0)
+        self.blackboard.register_key(key="/slalom/target_yaw", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
+
+    def initialise(self):
+        self.action_status = ActionStatus.NOT_SENT
+        self.sent_goal = False
+        self.result_message = ''
+
+    def update(self):
+        if self.action_status == ActionStatus.SUCCEEDED:
+            self.node.get_logger().info(f"[{self.name}] Failsafe move complete. {self.result_message}")
+            return py_trees.common.Status.SUCCESS
+
+        if self.action_status == ActionStatus.FAILED:
+            self.node.get_logger().error(f"[{self.name}] Failsafe move failed. {self.result_message}")
+            return py_trees.common.Status.FAILURE
+
+        if self.action_status == ActionStatus.PENDING:
+            return py_trees.common.Status.RUNNING
+
+        has_yaw = False
+        try:
+            target_yaw = self.blackboard.slalom.target_yaw
+            has_yaw = True
+        except (AttributeError, KeyError):
+            pass
+
+        if has_yaw and hasattr(self.blackboard, 'sensors') and self.blackboard.sensors.pose is not None:
+            auv_pose = self.blackboard.sensors.pose.pose
+            curr_x = auv_pose.position.x
+            curr_y = auv_pose.position.y
+            
+            target_x = curr_x + self.layer_distance * math.cos(target_yaw)
+            target_y = curr_y + self.layer_distance * math.sin(target_yaw)
+            
+            self.node.get_logger().warn(
+                f"[{self.name}] Failsafe triggered. Driving {self.layer_distance:.1f}m along "
+                f"cached yaw ({math.degrees(target_yaw):.1f}°) to ({target_x:.2f}, {target_y:.2f})"
+            )
+            
+            goal = move_global(
+                x=target_x,
+                y=target_y,
+                z=0.0,
+                yaw=target_yaw,
+                do_z=False,
+                tolerance=self.position_tolerance,
+                hold_time=self.hold_time,
+                timeout=self.timeout
+            )
+        else:
+            self.node.get_logger().warn(
+                f"[{self.name}] Failsafe triggered. No cached yaw found. Driving {self.layer_distance:.1f}m along Field-X."
+            )
+            goal = translate_field_centric(
+                dx=self.layer_distance,
+                tolerance=self.position_tolerance,
+                hold_time=self.hold_time,
+                timeout=self.timeout
+            )
+
+        self.navigation_client.send_navigation_goal(
+            goal, self.name, self._on_goal_response, self._on_goal_result
+        )
+        self.action_status = ActionStatus.PENDING
+        self.sent_goal = True
+        return py_trees.common.Status.RUNNING
+
+    def _on_goal_response(self, goal_response: bool):
+        if not goal_response:
+            self.action_status = ActionStatus.FAILED
+
+    def _on_goal_result(self, goal_success: bool, message: str):
+        self.result_message = message
+        if goal_success:
+            self.action_status = ActionStatus.SUCCEEDED
+        else:
+            self.action_status = ActionStatus.FAILED
+
+
+class ForceBlindDriveBehaviour(py_trees.behaviour.Behaviour):
+    """
+    Reads the current pose from the blackboard and commands a global move
+    forward by `distance` meters while locking to the specified absolute `target_yaw`.
+    """
+    def __init__(
+        self,
+        distance: float,
+        target_yaw: float = 0.0,
+        lateral_translation: float = 0.0,
+        position_tolerance: float = 0.3,
+        hold_time: float = 0.5,
+        timeout: float = 45.0,
+        name="Force Blind Drive",
+    ):
+        super().__init__(name)
+        self.distance = distance
+        self.target_yaw = target_yaw
+        self.lateral_translation = lateral_translation
+        self.position_tolerance = position_tolerance
+        self.hold_time = hold_time
+        self.timeout = timeout
+        
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+        
+        self.action_status = ActionStatus.NOT_SENT
+        self.sent_goal = False
+        self.result_message = ''
+
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.navigation_client = kwargs['shared_nav_client']
+        self.navigation_client.client_wait_for_server(timeout_sec=5.0)
+        self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
+
+    def initialise(self):
+        self.action_status = ActionStatus.NOT_SENT
+        self.sent_goal = False
+        self.result_message = ''
+
+    def update(self):
+        if self.action_status == ActionStatus.SUCCEEDED:
+            return py_trees.common.Status.SUCCESS
+        if self.action_status == ActionStatus.FAILED:
+            return py_trees.common.Status.FAILURE
+        if self.action_status == ActionStatus.PENDING:
+            return py_trees.common.Status.RUNNING
+
+        if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.pose is None:
+            self.node.get_logger().warn(f"[{self.name}] Waiting for /sensors/pose.")
+            return py_trees.common.Status.RUNNING
+
+        auv_pose = self.blackboard.sensors.pose.pose
+        curr_x = auv_pose.position.x
+        curr_y = auv_pose.position.y
+        
+        target_x = curr_x + self.distance * math.cos(self.target_yaw) - self.lateral_translation * math.sin(self.target_yaw)
+        target_y = curr_y + self.distance * math.sin(self.target_yaw) + self.lateral_translation * math.cos(self.target_yaw)
+        
+        self.node.get_logger().info(
+            f"[{self.name}] Driving forward {self.distance:.1f}m, lateral {self.lateral_translation:.1f}m "
+            f"at yaw {math.degrees(self.target_yaw):.1f}° to ({target_x:.2f}, {target_y:.2f})"
+        )
+        
+        goal = move_global(
+            x=target_x,
+            y=target_y,
+            z=0.0,
+            yaw=self.target_yaw,
+            do_z=False,
+            tolerance=self.position_tolerance,
+            hold_time=self.hold_time,
+            timeout=self.timeout
+        )
+
+        self.navigation_client.send_navigation_goal(
+            goal, self.name, self._on_goal_response, self._on_goal_result
+        )
+        self.action_status = ActionStatus.PENDING
+        self.sent_goal = True
+        return py_trees.common.Status.RUNNING
+
+    def _on_goal_response(self, goal_response: bool):
+        if not goal_response:
+            self.action_status = ActionStatus.FAILED
+
+    def _on_goal_result(self, goal_success: bool, message: str):
+        self.result_message = message
+        if goal_success:
+            self.action_status = ActionStatus.SUCCEEDED
+        else:
+            self.action_status = ActionStatus.FAILED
+
+
+class SlalomLayer(py_trees.composites.Selector):
+    """
+    Handles a single slalom layer with a nominal execution and a fallback failsafe.
+    If the nominal execution fails (e.g., pipes not matched), it falls back to driving
+    forward by the layer distance to clear the layer blindly.
+    """
+    def __init__(
+        self,
+        layer_num: int,
+        gate_side: str,
+        yaw_inward_offset_deg: float,
+        scan_angle_deg: float,
+        scan_pause_time: float,
+        collinearity_threshold: float,
+        min_forward_dist: float,
+        layer_distance: float,
+        adjust_depth: bool,
+        position_tolerance: float = 0.3,
+        angular_tolerance_rad: float = 0.3,
+        hold_time: float = 0.5,
+        timeout: float = 45.0,
+        scan_angular_tolerance_rad: float = math.radians(30.0),
+        scan_hold_time: float = 0.1,
+        scan_timeout: float = 30.0,
+    ):
+        super().__init__(f"Slalom Layer {layer_num} Strategy", memory=True)
+
+        nominal = py_trees.composites.Sequence(f"Layer {layer_num} Nominal", memory=True)
+        match_behavior = MatchPipesBehaviour(
+            gate_side=gate_side,
+            yaw_inward_offset_rad=math.radians(yaw_inward_offset_deg),
+            collinearity_threshold=collinearity_threshold,
+            min_forward_dist=min_forward_dist,
+            name=f"Match Pipes L{layer_num}",
+        )
+
+        retry_match = Retry(
+            name=f"Retry Match L{layer_num}",
+            child=match_behavior,
+            num_failures=30  # 1 seconds grace period for object map at 30Hz
+        )
+
+        # ── OPTIMIZATION: Skip Scan Selector ──────────────────────────────────
+        scan_selector = py_trees.composites.Selector(name=f"Scan or Skip L{layer_num}", memory=True)
+
+        if layer_num > 1:
+            skip_scan_check = SkipScanCheckBehaviour(
+                min_dist=1.5, 
+                max_dist=3.5, 
+                name=f"Skip Scan Check L{layer_num}"
+            )
+            scan_selector.add_children([
+                skip_scan_check,
+                ScanBehaviour(
+                    scan_angle_deg=scan_angle_deg,
+                    pause_time=scan_pause_time,
+                    angular_tolerance_rad=scan_angular_tolerance_rad,
+                    turn_hold_time_s=scan_hold_time,
+                    turn_timeout_s=scan_timeout,
+                    name=f"Scan Pipes L{layer_num}",
+                )
+            ])
+        else:
+            scan_selector.add_child(
+                ScanBehaviour(
+                    scan_angle_deg=scan_angle_deg,
+                    pause_time=scan_pause_time,
+                    angular_tolerance_rad=scan_angular_tolerance_rad,
+                    turn_hold_time_s=scan_hold_time,
+                    turn_timeout_s=scan_timeout,
+                    name=f"Scan Pipes L{layer_num}",
+                )
+            )
+
+        nominal.add_children([
+            scan_selector,
+            retry_match,
+            NavigateToGapBehaviour(
+                adjust_depth=adjust_depth,
+                position_tolerance=position_tolerance,
+                angular_tolerance_rad=angular_tolerance_rad,
+                hold_time=hold_time,
+                timeout=timeout,
+                name=f"Navigate To Gap L{layer_num}",
+            ),
+        ])
+
+        failsafe = SlalomFailsafeBehaviour(
+            layer_distance=layer_distance,
+            position_tolerance=position_tolerance,
+            hold_time=hold_time,
+            timeout=timeout,
+            name=f"Layer {layer_num} Failsafe",
+        )
+
+        self.add_children([nominal, failsafe])

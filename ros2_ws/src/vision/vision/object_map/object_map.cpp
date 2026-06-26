@@ -8,9 +8,10 @@ ObjectMapNode::ObjectMapNode() : Node("object_map_node")
 
     string front_cam_detection_frame_topic =
         this->declare_parameter<string>("front_cam_detection_frame_topic");
+    string down_cam_detection_topic = 
+        this->declare_parameter<string>("down_cam_detection_topic");
     string object_map_topic = this->declare_parameter<string>("object_map_topic");
     auv_frame_id = this->declare_parameter<string>("frame_id_auv");
-
     float new_object_min_distance_threshold =
         this->declare_parameter<float>("new_object_min_distance_threshold");
     bool large_structure_separation_enabled = this->declare_parameter<bool>("large_structure_separation.enable");
@@ -19,12 +20,19 @@ ObjectMapNode::ObjectMapNode() : Node("object_map_node")
     bool large_structure_pipe_separation_enabled = this->declare_parameter<bool>("large_structure_pipe_separation.enable");
     float min_large_structure_pipe_separation =
         this->declare_parameter<float>("large_structure_pipe_separation.min_distance_m");
-    double gating_threshold = this->declare_parameter<double>("gating_threshold");
-    int min_hits = this->declare_parameter<int>("min_hits");
-    int max_age = this->declare_parameter<int>("max_age");
-    double max_position_jump = this->declare_parameter<double>("max_position_jump");
-    int conf_to_tent_threshold = this->declare_parameter<int>("conf_to_tent_threshold");
-    int tent_init_buffer = this->declare_parameter<int>("tent_init_buffer");
+    double front_gating_threshold = this->declare_parameter<double>("front_tracker.gating_threshold");
+    int front_min_hits = this->declare_parameter<int>("front_tracker.min_hits");
+    int front_max_age = this->declare_parameter<int>("front_tracker.max_age");
+    double front_max_position_jump = this->declare_parameter<double>("front_tracker.max_position_jump");
+    int front_conf_to_tent_threshold = this->declare_parameter<int>("front_tracker.conf_to_tent_threshold");
+    int front_tent_init_buffer = this->declare_parameter<int>("front_tracker.tent_init_buffer");
+
+    double down_gating_threshold = this->declare_parameter<double>("down_tracker.gating_threshold");
+    int down_min_hits = this->declare_parameter<int>("down_tracker.min_hits");
+    int down_max_age = this->declare_parameter<int>("down_tracker.max_age");
+    double down_max_position_jump = this->declare_parameter<double>("down_tracker.max_position_jump");
+    int down_conf_to_tent_threshold = this->declare_parameter<int>("down_tracker.conf_to_tent_threshold");
+    int down_tent_init_buffer = this->declare_parameter<int>("down_tracker.tent_init_buffer");
 
     bool enable_gate_midpoint_refinement =
         this->declare_parameter<bool>("gate_midpoint");
@@ -51,7 +59,16 @@ ObjectMapNode::ObjectMapNode() : Node("object_map_node")
         max_per_class_map[max_per_class_labels[i]] = static_cast<int>(max_per_class_values[i]);
     }
 
-    object_tracker = ObjectTracker(
+    std::vector<std::string> object_size_labels = this->declare_parameter<std::vector<std::string>>("object_size_labels", std::vector<std::string>());
+    std::vector<double> object_size_x = this->declare_parameter<std::vector<double>>("object_size_x", std::vector<double>());
+    std::vector<double> object_size_y = this->declare_parameter<std::vector<double>>("object_size_y", std::vector<double>());
+    std::vector<double> object_size_z = this->declare_parameter<std::vector<double>>("object_size_z", std::vector<double>());
+
+    for (size_t i = 0; i < object_size_labels.size() && i < object_size_x.size() && i < object_size_y.size() && i < object_size_z.size(); ++i) {
+        object_sizes_map[object_size_labels[i]] = Eigen::Vector3d(object_size_x[i], object_size_y[i], object_size_z[i]);
+    }
+
+    front_tracker = ObjectTracker(
         max_per_class_map,
         large_structure_labels,
         pipe_labels,
@@ -60,12 +77,34 @@ ObjectMapNode::ObjectMapNode() : Node("object_map_node")
         min_large_structure_separation,
         large_structure_pipe_separation_enabled,
         min_large_structure_pipe_separation,
-        gating_threshold,
-        min_hits,
-        max_age,
-        max_position_jump,
-        conf_to_tent_threshold,
-        tent_init_buffer,
+        front_gating_threshold,
+        front_min_hits,
+        front_max_age,
+        front_max_position_jump,
+        front_conf_to_tent_threshold,
+        front_tent_init_buffer,
+        semi_persistent_objects,
+        semi_persistent_conf_to_tent_threshold,
+        enable_gate_midpoint_refinement,
+        enable_board_icon_refinement,
+        refinement_plausibility_radius
+    );
+
+    down_tracker = ObjectTracker(
+        max_per_class_map,
+        large_structure_labels,
+        pipe_labels,
+        new_object_min_distance_threshold,
+        large_structure_separation_enabled,
+        min_large_structure_separation,
+        large_structure_pipe_separation_enabled,
+        min_large_structure_pipe_separation,
+        down_gating_threshold,
+        down_min_hits,
+        down_max_age,
+        down_max_position_jump,
+        down_conf_to_tent_threshold,
+        down_tent_init_buffer,
         semi_persistent_objects,
         semi_persistent_conf_to_tent_threshold,
         enable_gate_midpoint_refinement,
@@ -76,10 +115,14 @@ ObjectMapNode::ObjectMapNode() : Node("object_map_node")
     enable_z_axis_locking = this->declare_parameter<bool>("z_axis_locking.enable");
     pool_floor_z = this->declare_parameter<double>("z_axis_locking.pool_floor_z");
     pool_surface_z = this->declare_parameter<double>("z_axis_locking.pool_surface_z");
+    double table_height = this->declare_parameter<double>("table_height", 0.67);
+    water_refraction_scale = this->declare_parameter<double>("water_refraction_scale", 1.33);
+    table_z = pool_floor_z + table_height;
     table_octagon_refinement_mode = this->declare_parameter<std::string>("table_octagon_mode");
     unique_objects = this->declare_parameter<std::vector<std::string>>("unique_objects");
     floor_objects = this->declare_parameter<std::vector<std::string>>("floor_objects");
     surface_objects = this->declare_parameter<std::vector<std::string>>("surface_objects");
+    table_top_objects = this->declare_parameter<std::vector<std::string>>("table_top_objects");
     enable_pipe_distance_truncation = this->declare_parameter<bool>("pipe_distance_truncation.enable");
     max_pipe_distance = this->declare_parameter<double>("pipe_distance_truncation.max_distance_m");
     enable_lane_boundary = this->declare_parameter<bool>("lane_boundary.enable", false);
@@ -106,6 +149,17 @@ ObjectMapNode::ObjectMapNode() : Node("object_map_node")
             front_cam_detection_frame_topic,
             10,
             std::bind(&ObjectMapNode::detection_callback, this, std::placeholders::_1));
+
+    down_cam_subscriber = 
+        this->create_subscription<auv_msgs::msg::VisionDetectionFrame>(
+            down_cam_detection_topic,
+            10,
+            std::bind(&ObjectMapNode::down_cam_detection_callback, this, std::placeholders::_1));
+
+    clear_map_service = this->create_service<std_srvs::srv::Trigger>(
+        "~/clear",
+        std::bind(&ObjectMapNode::clear_map_callback, this, std::placeholders::_1, std::placeholders::_2)
+    );
 
     RCLCPP_INFO(this->get_logger(), "Using synchronized front-camera detection frames for object mapping.");
 }
@@ -144,6 +198,11 @@ bool ObjectMapNode::is_floor_bound(const std::string& label) const
 bool ObjectMapNode::is_surface_bound(const std::string& label) const
 {
     return std::find(surface_objects.begin(), surface_objects.end(), label) != surface_objects.end();
+}
+
+bool ObjectMapNode::is_table_top_object(const std::string& label) const
+{
+    return std::find(table_top_objects.begin(), table_top_objects.end(), label) != table_top_objects.end();
 }
 
 bool ObjectMapNode::is_table_octagon_mode_enabled() const
@@ -187,6 +246,16 @@ auv_msgs::msg::VisionObject ObjectMapNode::build_object_message(
     object_msg.pose.position.y = position(1);
     apply_z_axis_depth_constraints(object_msg, position);
 
+    if (object_sizes_map.count(label)) {
+        object_msg.size.x = object_sizes_map.at(label).x();
+        object_msg.size.y = object_sizes_map.at(label).y();
+        object_msg.size.z = object_sizes_map.at(label).z();
+    } else {
+        object_msg.size.x = 0.0;
+        object_msg.size.y = 0.0;
+        object_msg.size.z = 0.0;
+    }
+
     tf2::Quaternion q;
     q.setRPY(0.0, 0.0, theta_z);
     object_msg.pose.orientation = tf2::toMsg(q);
@@ -195,6 +264,8 @@ auv_msgs::msg::VisionObject ObjectMapNode::build_object_message(
     object_msg.frames_since_last_seen = frames_since_last_seen;
     return object_msg;
 }
+
+
 
 void ObjectMapNode::detection_callback(const auv_msgs::msg::VisionDetectionFrame::SharedPtr msg)
 {
@@ -287,7 +358,17 @@ void ObjectMapNode::detection_callback(const auv_msgs::msg::VisionDetectionFrame
         Eigen::Matrix3d cov_camera = covariance_from_ros_pose(detection.pose_camera.covariance);
         Eigen::Matrix3d cov_world =
             camera_to_world_rotation * cov_camera * camera_to_world_rotation.transpose();
-        cov_world += Eigen::Matrix3d::Identity() * 0.3;
+            
+        // Calculate dynamic noise based on distance and physical object size
+        double distance = pos_camera.norm();
+        double max_physical_size = 0.5; // Default fallback size
+        if (object_sizes_map.count(label)) {
+            max_physical_size = object_sizes_map.at(label).maxCoeff();
+        }
+        
+        // Base noise 0.1m + 10% of distance + 20% of the max physical size
+        double dynamic_noise = 0.1 + (0.1 * distance) + (0.2 * max_physical_size);
+        cov_world += Eigen::Matrix3d::Identity() * dynamic_noise;
 
         filtered_measurements.push_back(pos_world);
         filtered_covariances.push_back(cov_world);
@@ -308,7 +389,8 @@ void ObjectMapNode::detection_callback(const auv_msgs::msg::VisionDetectionFrame
         persistent_positions.emplace_back(label, track.get_position());
     }
 
-    std::vector<Track> all_tracks = object_tracker.update(
+    // Update the independent front camera tracker
+    std::vector<Track> front_tracks = front_tracker.update(
         filtered_measurements,
         filtered_covariances,
         filtered_classes,
@@ -318,7 +400,16 @@ void ObjectMapNode::detection_callback(const auv_msgs::msg::VisionDetectionFrame
         has_observer_position,
         persistent_positions);
 
-        // auto t3 = std::chrono::high_resolution_clock::now();
+    // Get the latest tracks from the down camera tracker
+    const std::vector<Track>& down_tracks = down_tracker.get_tracks();
+
+    // Combine tracks from both trackers for publishing and persistence logic
+    std::vector<Track> all_tracks;
+    all_tracks.reserve(front_tracks.size() + down_tracks.size());
+    all_tracks.insert(all_tracks.end(), front_tracks.begin(), front_tracks.end());
+    all_tracks.insert(all_tracks.end(), down_tracks.begin(), down_tracks.end());
+
+    // auto t3 = std::chrono::high_resolution_clock::now();
 
     publish_object_map(all_tracks);
 
@@ -339,6 +430,144 @@ void ObjectMapNode::detection_callback(const auv_msgs::msg::VisionDetectionFrame
     //     d_total, d_tf, d_pre, d_track, d_pub, pipeline_latency.seconds() * 1000.0);
 
     RCLCPP_DEBUG(this->get_logger(), "Object map latency: %.3f ms", d_total);
+}
+
+void ObjectMapNode::down_cam_detection_callback(const auv_msgs::msg::VisionDetectionFrame::SharedPtr msg)
+{
+    auto t0 = std::chrono::high_resolution_clock::now();
+
+    frame_collection_time = rclcpp::Time(msg->header.stamp, this->get_clock()->get_clock_type());
+    world_frame_id = msg->auv_pose.header.frame_id.empty() ? "pool_link" : msg->auv_pose.header.frame_id;
+    const std::string detection_frame_id =
+        msg->header.frame_id.empty() ? "down_camera_optical_frame" : msg->header.frame_id;
+
+    geometry_msgs::msg::TransformStamped camera_to_auv_msg;
+    try {
+        camera_to_auv_msg = tf_buffer_->lookupTransform(
+            auv_frame_id,
+            detection_frame_id,
+            tf2::TimePointZero);
+    } catch (const tf2::TransformException& ex) {
+        RCLCPP_WARN(
+            this->get_logger(),
+            "Skipping detection frame because TF %s -> %s is unavailable: %s",
+            auv_frame_id.c_str(),
+            detection_frame_id.c_str(),
+            ex.what());
+        return;
+    }
+
+    tf2::Transform tf_world_auv;
+    tf2::fromMsg(msg->auv_pose.pose, tf_world_auv);
+
+    tf2::Transform tf_auv_camera;
+    tf2::fromMsg(camera_to_auv_msg.transform, tf_auv_camera);
+
+    tf2::Transform tf_world_camera = tf_world_auv * tf_auv_camera;
+    tf2::Matrix3x3 world_camera_basis = tf_world_camera.getBasis();
+
+    Eigen::Matrix3d camera_to_world_rotation;
+    for (int r = 0; r < 3; ++r) {
+        for (int c = 0; c < 3; ++c) {
+            camera_to_world_rotation(r, c) = world_camera_basis[r][c];
+        }
+    }
+
+    Eigen::Vector3d observer_position = eigen_from_point(msg->auv_pose.pose.position);
+    bool has_observer_position = true;
+
+    std::vector<Eigen::Vector3d> filtered_measurements;
+    std::vector<Eigen::Matrix3d> filtered_covariances;
+    std::vector<std::string> filtered_classes;
+    std::vector<double> filtered_orientations;
+    std::vector<double> filtered_confidences;
+
+    filtered_measurements.reserve(msg->detections.size());
+    filtered_covariances.reserve(msg->detections.size());
+    filtered_classes.reserve(msg->detections.size());
+    filtered_orientations.reserve(msg->detections.size());
+    filtered_confidences.reserve(msg->detections.size());
+
+    for (const auto& detection : msg->detections) {
+        const std::string& label = detection.label;
+
+        Eigen::Vector3d pos_camera = eigen_from_point(detection.pose_camera.pose.position);
+        
+        if (std::isnan(pos_camera.x()) || std::isnan(pos_camera.y()) || std::isnan(pos_camera.z())) {
+            continue; // Skip 3D update if projection failed (but 2D bbox was published)
+        }
+
+        tf2::Vector3 pos_world_tf = tf_world_camera * tf2::Vector3(
+            pos_camera.x(),
+            pos_camera.y(),
+            pos_camera.z());
+        Eigen::Vector3d pos_world(
+            pos_world_tf.x(),
+            pos_world_tf.y(),
+            pos_world_tf.z());
+
+        if (enable_lane_boundary) {
+            if (pos_world.x() < lane_x_min || pos_world.x() > lane_x_max ||
+                pos_world.y() < lane_y_min || pos_world.y() > lane_y_max) {
+                continue;
+            }
+        }
+
+        // Use a generic diagonal covariance for down cam detections
+        Eigen::Matrix3d cov_world = Eigen::Matrix3d::Identity() * 0.2;
+
+        filtered_measurements.push_back(pos_world);
+        filtered_covariances.push_back(cov_world);
+        filtered_classes.push_back(label);
+        double yaw = std::nan("");
+        tf2::Quaternion q_cam;
+        tf2::fromMsg(detection.pose_camera.pose.orientation, q_cam);
+        if (q_cam.length2() > 0.5) {
+            q_cam.normalize();
+            tf2::Quaternion q_world = tf_world_camera.getRotation() * q_cam;
+            double roll, pitch;
+            tf2::Matrix3x3(q_world).getRPY(roll, pitch, yaw);
+            
+            // Normalize yaw to be closest to 0 (forward) to stabilize symmetric objects
+            while (yaw > M_PI / 4.0) yaw -= M_PI / 2.0;
+            while (yaw < -M_PI / 4.0) yaw += M_PI / 2.0;
+        }
+        filtered_orientations.push_back(yaw);
+        filtered_confidences.push_back(detection.confidence);
+    }
+
+    std::vector<std::pair<std::string, Eigen::Vector3d>> persistent_positions;
+    persistent_positions.reserve(persistent_objects.size());
+    for (const auto& [label, track] : persistent_objects) {
+        persistent_positions.emplace_back(label, track.get_position());
+    }
+
+    // Update the independent down camera tracker
+    std::vector<Track> down_tracks = down_tracker.update(
+        filtered_measurements,
+        filtered_covariances,
+        filtered_classes,
+        filtered_orientations,
+        filtered_confidences,
+        observer_position,
+        has_observer_position,
+        persistent_positions);
+
+    // Get the latest tracks from the front camera tracker
+    const std::vector<Track>& front_tracks = front_tracker.get_tracks();
+
+    // Combine tracks from both trackers for publishing and persistence logic
+    std::vector<Track> all_tracks;
+    all_tracks.reserve(front_tracks.size() + down_tracks.size());
+    all_tracks.insert(all_tracks.end(), front_tracks.begin(), front_tracks.end());
+    all_tracks.insert(all_tracks.end(), down_tracks.begin(), down_tracks.end());
+
+    publish_object_map(all_tracks);
+
+    auto t1 = std::chrono::high_resolution_clock::now();
+    auto d_total = std::chrono::duration<double, std::milli>(t1 - t0).count();
+
+    RCLCPP_DEBUG(this->get_logger(), "Down object map latency: %.3f ms", d_total);
 }
 
 void ObjectMapNode::publish_object_map(const std::vector<Track>& tracks)
@@ -515,5 +744,16 @@ void ObjectMapNode::publish_object_map(const std::vector<Track>& tracks)
             this->get_logger(),
             "Object map pipeline latency: %.9f seconds",
             time_diff.seconds());
+}
+
+void ObjectMapNode::clear_map_callback(const std::shared_ptr<std_srvs::srv::Trigger::Request> /*request*/,
+                                       std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+{
+    persistent_objects.clear();
+    front_tracker.clear();
+    down_tracker.clear();
+    response->success = true;
+    response->message = "Object map and persistent objects cleared.";
+    RCLCPP_INFO(this->get_logger(), "Cleared object map and persistent objects via service call.");
 }
 

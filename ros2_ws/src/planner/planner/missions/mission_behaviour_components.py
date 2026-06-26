@@ -11,6 +11,7 @@ from std_srvs.srv import Trigger
 
 # AUV dependencies
 from auv_msgs.action import AUVNavigate
+from auv_msgs.srv import RosbagControl
 
 # Planner dependencies
 from .action_status_enum import ActionStatus
@@ -48,6 +49,7 @@ class BasicActionBehaviour(py_trees.behaviour.Behaviour):
             self.sent_goal = False
             self.action_status = ActionStatus.NOT_SENT # Either succeeded, pending, failed or not sent
             self.is_waiting_for_result = False
+            self.result_message = ""
             
         def setup(self, **kwargs) -> None:
             """
@@ -72,7 +74,7 @@ class BasicActionBehaviour(py_trees.behaviour.Behaviour):
             """
             # Reset field needed to keep track of goal
             self.action_status = ActionStatus.NOT_SENT
-
+            self.result_message = ""
                 
         def update(self) -> py_trees.common.Status:
             """
@@ -93,12 +95,12 @@ class BasicActionBehaviour(py_trees.behaviour.Behaviour):
                 
             # Check for failure condition from the async callbacks (goal response and goal result)
             if self.action_status is ActionStatus.FAILED:
-                self.node.get_logger().error(f"[{self.name}] Action failed midway.")
+                self.node.get_logger().error(f"[{self.name}] Action failed: {self.result_message}")
                 return py_trees.common.Status.FAILURE
                 
             # Completion check
             if self.action_status is ActionStatus.SUCCEEDED:
-                self.node.get_logger().info(f"[{self.name}] Completed goal.")
+                self.node.get_logger().info(f"[{self.name}] Completed goal. {self.result_message}")
                 return py_trees.common.Status.SUCCESS
 
             # Block loop if currently navigating to a waypoint
@@ -125,29 +127,24 @@ class BasicActionBehaviour(py_trees.behaviour.Behaviour):
             if not goal_response:
                 self.action_status = ActionStatus.FAILED
 
-        def on_server_goal_result(self, goal_success) -> None:
+        def on_server_goal_result(self, goal_success: bool, message: str) -> None:
             """
             Description: This function provides customized logic to be executed when
             the goal is finished. In this case, the custom implementation updates the status of the mission
             depending on whether or not the goal was successful or failed. Pass this function as an input 
             to the navigation_client.send_navigation_goal
 
-            Inputs: goal_success: str, The client will call this function with true upon success, and false upon failure
+            Inputs: goal_success: bool, The client will call this function with true upon success, and false upon failure
+                    message: str, The result message from the action server
 
             Outputs: None
             """
+            self.result_message = message
             if goal_success:
                 self.action_status = ActionStatus.SUCCEEDED
             else:
                 self.action_status = ActionStatus.FAILED
 
-        def terminate(self, new_status: py_trees.common.Status):
-            """Called if the tree aborts this branch or if it naturally finishes."""
-            if new_status == py_trees.common.Status.INVALID:
-                if hasattr(self, 'node') and self.node:
-                    self.node.get_logger().warn(f"[{self.name}] Aborted branch. Canceling active goal.")
-                if hasattr(self, 'navigation_client') and self.navigation_client:
-                    self.navigation_client.reset_action_client()
 
 
 class BasicTriggerServiceBehaviour(py_trees.behaviour.Behaviour):
@@ -333,4 +330,163 @@ class TimerBehaviour(py_trees.behaviour.Behaviour):
                 if (current_time - self.start_time) > float(self.timer_duration):
                         return py_trees.common.Status.SUCCESS
                 
+                return py_trees.common.Status.RUNNING
+
+class RosbagRecordingDecorator(py_trees.decorators.Decorator):
+    """
+    A decorator that automatically starts a rosbag recording when the decorated mission
+    starts, and stops the recording when the mission ends (whether success, failure, or interrupted).
+    """
+    def __init__(self, child: py_trees.behaviour.Behaviour, profile: str = "all", bag_name: str = "", service_path: str = "/rosbag_manager/control") -> None:
+        super().__init__(name="Rosbag Recording Decorator", child=child)
+        self.profile = profile
+        self.bag_name = bag_name
+        self.service_path = service_path
+        self.started_recording = False
+        
+    def setup(self, **kwargs) -> None:
+        self.node = kwargs['node']
+        self.service_client = self.node.create_client(RosbagControl, self.service_path)
+        
+    def initialise(self) -> None:
+        if self.service_client.wait_for_service(timeout_sec=1.0):
+            req = RosbagControl.Request()
+            req.action = RosbagControl.Request.START_RECORD
+            req.profile = self.profile
+            req.bag_name = self.bag_name
+            
+            self.node.get_logger().info(f"[{self.name}] Starting auto-recording (profile: {self.profile}, bag: {self.bag_name})...")
+            future = self.service_client.call_async(req)
+            
+            def done_callback(f):
+                try:
+                    response = f.result()
+                    if response.success:
+                        self.started_recording = True
+                    else:
+                        self.node.get_logger().info(f"[{self.name}] Auto-record didn't start: {response.message} (Is a bag already recording?)")
+                except Exception as e:
+                    self.node.get_logger().error(f"[{self.name}] Service call failed: {e}")
+                    
+            future.add_done_callback(done_callback)
+        else:
+            self.node.get_logger().warn(f"[{self.name}] {self.service_path} service not available. Skipping auto-record.")
+            
+    def update(self) -> py_trees.common.Status:
+        return self.decorated.status
+        
+    def terminate(self, new_status: py_trees.common.Status) -> None:
+        if new_status != py_trees.common.Status.RUNNING and self.started_recording:
+            if self.service_client.wait_for_service(timeout_sec=1.0):
+                req = RosbagControl.Request()
+                req.action = RosbagControl.Request.STOP_RECORD
+                
+                self.node.get_logger().info(f"[{self.name}] Stopping auto-recording...")
+                self.service_client.call_async(req)
+            self.started_recording = False
+
+from rcl_interfaces.srv import SetParameters
+from rcl_interfaces.msg import Parameter, ParameterValue, ParameterType
+
+class SetNodeParameterBehaviour(py_trees.behaviour.Behaviour):
+        """
+        Calls a ROS2 node's ~/set_parameters service to dynamically change a parameter.
+        """
+        def __init__(self, node_name: str, param_name: str, param_value, name="SetNodeParameter"):
+                super().__init__(name)
+                self.target_node = node_name
+                self.param_name = param_name
+                self.param_value = param_value
+                
+                self.service_client = None
+                self.future = None
+                self.request_sent = False
+
+        def setup(self, **kwargs):
+                self.node = kwargs['node']
+                self.service_client = self.node.create_client(SetParameters, f'{self.target_node}/set_parameters')
+                
+        def initialise(self):
+                self.future = None
+                self.request_sent = False
+                
+        def update(self):
+                if not self.request_sent:
+                        if not self.service_client.wait_for_service(timeout_sec=1.0):
+                                self.node.get_logger().warn(f"[{self.name}] Service {self.target_node}/set_parameters not available.")
+                                return py_trees.common.Status.RUNNING
+                                
+                        request = SetParameters.Request()
+                        param = Parameter()
+                        param.name = self.param_name
+                        val = ParameterValue()
+                        
+                        if isinstance(self.param_value, bool):
+                                val.type = ParameterType.PARAMETER_BOOL
+                                val.bool_value = self.param_value
+                        elif isinstance(self.param_value, int):
+                                val.type = ParameterType.PARAMETER_INTEGER
+                                val.integer_value = self.param_value
+                        elif isinstance(self.param_value, float):
+                                val.type = ParameterType.PARAMETER_DOUBLE
+                                val.double_value = self.param_value
+                        elif isinstance(self.param_value, str):
+                                val.type = ParameterType.PARAMETER_STRING
+                                val.string_value = self.param_value
+                                
+                        param.value = val
+                        request.parameters = [param]
+                        
+                        self.future = self.service_client.call_async(request)
+                        self.request_sent = True
+                        self.node.get_logger().info(f"[{self.name}] Setting {self.param_name}={self.param_value} on {self.target_node}")
+                        return py_trees.common.Status.RUNNING
+                        
+                if not self.future.done():
+                        return py_trees.common.Status.RUNNING
+                        
+                if self.future.exception() is not None:
+                        self.node.get_logger().error(f"[{self.name}] SetParameters failed: {self.future.exception()}")
+                        return py_trees.common.Status.FAILURE
+                        
+                response = self.future.result()
+                if not response.results[0].successful:
+                        self.node.get_logger().error(f"[{self.name}] Failed to set parameter: {response.results[0].reason}")
+                        return py_trees.common.Status.FAILURE
+                        
+                self.node.get_logger().info(f"[{self.name}] Successfully set parameter.")
+                return py_trees.common.Status.SUCCESS
+
+from std_srvs.srv import Trigger
+
+class WaitForTriggerBehaviour(py_trees.behaviour.Behaviour):
+        """
+        Waits until a ROS 2 service on the planner node is called to trigger the mission.
+        """
+        def __init__(self, service_name: str = "~/start_mission", name="Wait For Trigger"):
+                super().__init__(name)
+                self.service_name = service_name
+                self.triggered = False
+                self.srv = None
+                
+        def setup(self, **kwargs):
+                self.node = kwargs['node']
+                self.srv = self.node.create_service(Trigger, self.service_name, self.trigger_callback)
+                self.node.get_logger().info(f"[{self.name}] Hosted trigger service at {self.service_name}")
+                
+        def trigger_callback(self, request, response):
+                self.triggered = True
+                response.success = True
+                response.message = "Mission Triggered!"
+                self.node.get_logger().info(f"[{self.name}] Received trigger via service call.")
+                return response
+                
+        def initialise(self):
+                # We don't reset triggered here, because once triggered, it should stay triggered
+                # unless explicitly reset for a new run.
+                pass
+                
+        def update(self):
+                if self.triggered:
+                        return py_trees.common.Status.SUCCESS
                 return py_trees.common.Status.RUNNING

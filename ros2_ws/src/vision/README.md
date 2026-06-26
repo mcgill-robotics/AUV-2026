@@ -18,6 +18,45 @@ ros2 launch vision vision_pipeline.launch.py
 
 Configuration is loaded from [config/vision_pipeline.yaml](config/vision_pipeline.yaml).
 
+### Changing Pools (Pool-Side Calibration)
+
+When deploying the AUV at a new pool, there is **only one primary parameter** you need to change in [config/vision_pipeline.yaml](config/vision_pipeline.yaml) to ensure all 3D projections, locking, and depth calculations function correctly:
+
+1. **`pool_floor_z`**: Under `object_map.ros__parameters.z_axis_locking.pool_floor_z` (default `-2.1`), set this to the absolute depth of your pool in meters (negative value).
+   
+   *Note: Updating this single value automatically propagates to the front camera depth estimation plane, the down-camera raycasting plane (which dynamically projects to `pool_floor_z + table_height` for table-top items), and the C++ map snap-to-floor constraints.*
+
+Other pool-specific parameters to optionally verify:
+* **`pool_surface_z`**: Under `object_map.ros__parameters.z_axis_locking.pool_surface_z` (default `0.0`), change if the relative water level offset changes.
+* **`lane_boundary`**: If wall-reflection/clutter filtering is needed, remember to set **`enable: true`**, and then adjust the `x_min`, `x_max`, `y_min`, and `y_max` AABB coordinates to match your active competition lane dimensions.
+
+### Calculating Camera Intrinsics (For Future Reference)
+* Downward-facing Camera Model: [ELP-USB500W02M-AF60](https://www.webcamerausb.com/elp-5megapixel-high-resolution-autofocus-usb-camera-module-usb20-ov5640-color-cmos-sensor-60degree-lens-not-support-otg-p-63.html)
+
+If you replace the downward-facing camera module or change the resolution of `down_cam_object_detection` in `vision_pipeline.yaml` (e.g. from 640x480 to 1280x720), you must recompute and update the camera intrinsics (`fx`, `fy`, `cx`, `cy`) under the `down_cam_object_detection` block for accurate 3D ray-casting.
+
+Here is the general formula for a standard pinhole camera model based on the lens's **Diagonal Field of View (DFOV)** and the image resolution ($W \times H$):
+
+1. **Diagonal in Pixels ($D_{\text{pixels}}$)**:
+   $$D_{\text{pixels}} = \sqrt{W^2 + H^2}$$
+   (For $640 \times 480$: $D_{\text{pixels}} = \sqrt{640^2 + 480^2} = 800\text{ pixels}$)
+
+2. **Focal Length in Pixels ($f$)**:
+   $$f_x = f_y = f = \frac{D_{\text{pixels}}}{2 \tan\left(\frac{\theta_d}{2}\right)}$$
+   Where $\theta_d$ is the Diagonal FOV of the lens in degrees.
+   (For a 60° FOV lens at 640x480: $f = \frac{800}{2 \tan(30^\circ)} = 400\sqrt{3} \approx 692.8$)
+   
+   **Note:** $f_x$ and $f_y$ represent the focal length scaled by the physical pixel pitch along the horizontal ($p_x$) and vertical ($p_y$) directions ($f_x = F / p_x, f_y = F / p_y$). Since modern CMOS sensors (like the OV5640) use perfectly **square pixels** ($p_x = p_y = 1.4\mu\text{m}$), the horizontal and vertical focal lengths in pixels are identical ($f_x = f_y$).
+
+3. **Principal Point / Optical Center ($c_x, c_y$)**:
+   $$c_x = \frac{W}{2}, \quad c_y = \frac{H}{2}$$
+   (For $640 \times 480$: $c_x = 320.0$, $c_y = 240.0$)
+
+4. **Horizontal and Vertical Field of View (FOV)**:
+   Using the focal length $f$:
+   * **Horizontal FOV (HFOV)**: $\text{HFOV} = 2 \cdot \arctan\left(\frac{W}{2f}\right) = 2 \cdot \arctan\left(\frac{640}{2 \cdot 692.8}\right) \approx 49.6^\circ$
+   * **Vertical FOV (VFOV)**: $\text{VFOV} = 2 \cdot \arctan\left(\frac{H}{2f}\right) = 2 \cdot \arctan\left(\frac{480}{2 \cdot 692.8}\right) \approx 38.2^\circ$
+
 ### Launch Parameters
 
 | Parameter | Type | Default | Description |
@@ -206,6 +245,13 @@ This is intentionally separate from the official `auv_link` TF so Foxglove and d
 
 - `/image_collection/toggle_manual_front_collection` - compatibility alias for the same `AutomaticCapture` behavior.
 
+- `/vision/front_cam/reset_vio_pose` - `std_srvs/Trigger`
+  - Resets the ZED positional tracking (VIO) to zero drift and snaps the AUV back to the world origin.
+
+  ```bash
+  ros2 service call /vision/front_cam/reset_vio_pose std_srvs/srv/Trigger
+  ```
+
 ### Down Camera
 
 - `/vision/down_cam/toggle_collection` - `auv_msgs/AutomaticCapture`
@@ -249,15 +295,26 @@ The launch file publishes the static chain:
 This split matters:
 - 3D detections stay in `zed_left_camera_frame`
 - image-like topics use `zed_left_camera_frame_optical`
+- **Note on VIO**: The ZED's internal positional tracking is initialized with the physical offset from `auv_link`. This means the world frame origin corresponds exactly to the AUV's starting position and orientation, not the camera's optical frame.
 
 That layout is what Foxglove expects for correct camera visualization.
 
 ## 2026 Tracking / Mapping Logic
 
+### Depth Estimation Modes
+
+To overcome the limitations of stereo depth mapping (like water refraction and noisy point clouds on featureless objects like pipes/gates), the front camera node supports multiple depth estimation modes configurable in `vision_pipeline.yaml` under `depth_estimation`:
+
+- `zed_3d`: The default mode. Retrieves the 3D position directly from the ZED SDK's depth map using the center of the bounding box. It strictly applies the `depth_scale` and `depth_offset` parameters to correct for refraction.
+- `known_height`: Uses a pinhole camera model to estimate depth based on the known physical height of an object (e.g. gates or bins). It leverages the `known_heights` configuration. To prevent bad measurements when the AUV is pitching/rolling heavily, this mode respects `known_height_angle_limits`.
+- `{pixel}_to_{plane}`: Projects a specific point of the bounding box (`bottom`, `top`, or `center`) onto a known horizontal plane (e.g. `floor`, `surface`). For example, `bottom_to_floor` draws a ray from the camera, through the bottom-center of the bounding box, and intersects it with the pool floor.
+  
+*Note: All geometric modes (`known_height` and `*_to_*`) automatically scale the camera's focal length (`fx`, `fy`) by `depth_scale` to geometrically correct for water refraction while preserving the rigid plane constraints.*
+
 ### Front-Camera Filters
 
 - `gate_top_crop` is a bounding box filter applied to gate detections before ZED ingestion. The lower portion (half by default) of the gate box is cropped off since it is mostly made up of the background, which may lead to poor depth estimation.
-- `border_exclusion` is a simple filter applied before ZED ingestion. For configured labels such as `gate`, any 2D detection touching the image border within `border_exclusion_margin_px` is dropped. This helps reject partial detections at the left/right image edges that often produce unstable depth or incorrect clipped 3D positions.
+- `border_exclusion` is a simple filter applied before 3D geometric projection or ZED ingestion. For configured labels, any 2D detection touching the image border within `border_exclusion_margin_px` is ignored for distance calculations or drops back to center-point projection. This prevents projecting objects infinitely far when their bottom edge touches the image border.
   
 ### Object Map Filters
 

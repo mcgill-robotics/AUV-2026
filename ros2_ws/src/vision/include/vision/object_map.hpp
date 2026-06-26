@@ -14,6 +14,9 @@
 #include "auv_msgs/msg/vision_object.hpp"
 #include "auv_msgs/msg/vision_object_array.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
+#include "sensor_msgs/msg/camera_info.hpp"
+#include "vision_msgs/msg/detection2_d_array.hpp"
+#include <mutex>
 #include "object_tracker.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "tf2/LinearMath/Quaternion.h"
@@ -22,6 +25,7 @@
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/transform_listener.h"
+#include "std_srvs/srv/trigger.hpp"
 
 class ObjectMapNode : public rclcpp::Node
 {
@@ -43,6 +47,8 @@ private:
 
     bool is_surface_bound(const std::string& label) const;
 
+    bool is_table_top_object(const std::string& label) const;
+
     bool is_table_octagon_mode_enabled() const;
 
     void apply_z_axis_depth_constraints(
@@ -59,10 +65,16 @@ private:
         int frames_since_last_seen) const;
 
     void detection_callback(const auv_msgs::msg::VisionDetectionFrame::SharedPtr msg);
+    void down_cam_detection_callback(const auv_msgs::msg::VisionDetectionFrame::SharedPtr msg);
 
     void publish_object_map(const std::vector<Track>& tracks);
 
+    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr clear_map_service;
+    void clear_map_callback(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+                            std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+
     std::map<std::string, Track> persistent_objects;
+    std::unordered_map<std::string, Eigen::Vector3d> object_sizes_map;
     bool enable_z_axis_locking;
     std::string table_octagon_refinement_mode;
     double pool_floor_z;
@@ -77,13 +89,21 @@ private:
     std::vector<std::string> unique_objects;
     std::vector<std::string> floor_objects;
     std::vector<std::string> surface_objects;
+    std::vector<std::string> table_top_objects;
     std::string auv_frame_id;
     std::string world_frame_id = "pool_link";
 
-    ObjectTracker object_tracker;
+    ObjectTracker front_tracker;
+    ObjectTracker down_tracker;
     rclcpp::Time frame_collection_time;
     rclcpp::Publisher<auv_msgs::msg::VisionObjectArray>::SharedPtr object_map_publisher;
     rclcpp::Subscription<auv_msgs::msg::VisionDetectionFrame>::SharedPtr detection_subscriber;
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+
+    rclcpp::Subscription<auv_msgs::msg::VisionDetectionFrame>::SharedPtr down_cam_subscriber;
+    
+    double water_refraction_scale;
+
+    double table_z;
 };
