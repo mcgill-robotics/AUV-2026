@@ -37,6 +37,7 @@ class AxisController(Node):
         self.declare_parameter("KD", 0.0)
         self.declare_parameter("KI", 0.0)
         self.declare_parameter("I_MAX", 0.0)
+        self.declare_parameter("integral_activation_threshold", 0.5)
         self.declare_parameter("enabled", False)
 
         # PID controller parameters
@@ -45,11 +46,12 @@ class AxisController(Node):
         self.KD = float(self.get_parameter("KD").value)
         self.KI = float(self.get_parameter("KI").value)
         self.I_MAX = float(self.get_parameter("I_MAX").value)
+        self.integral_activation_threshold = float(self.get_parameter("integral_activation_threshold").value)
         self.enabled = bool(self.get_parameter("enabled").value)
 
         self.parameter_callback_handle = self.add_on_set_parameters_callback(self.parameters_callback)
 
-        self.pid = PID(self.KP, self.KD, self.KI, self.I_MAX)
+        self.pid = PID(self.KP, self.KD, self.KI, self.I_MAX, self.integral_activation_threshold)
 
         self.setpoint = 0.0  # Setpoint in meters
         self.current_position = 0.0   # Current position in meters
