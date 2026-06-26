@@ -22,8 +22,8 @@ class BoardType(Enum):
     BLOOD_TOP_LEFT = 2
     
 class TorpedoSide(Enum):
-    LEFT = 1
-    RIGHT = 2
+    RIGHT = 1
+    LEFT = 2
 
 class Action(py_trees.behaviour.Behaviour):
     def __init__(self, name):
@@ -683,9 +683,9 @@ class AlignTorpedoToHole(Navigation):
                         self.node.get_logger().error(f"[{self.name}] No torpedo detected. Alignment is redundant with absence of torpedo payload.")
                         return py_trees.common.Status.FAILURE
                     case 1:
-                        side = TorpedoSide.LEFT
-                    case 2:
                         side = TorpedoSide.RIGHT
+                    case 2:
+                        side = TorpedoSide.LEFT
                     case _:
                         self.node.get_logger().error(f"[{self.name}] Invalid torpedo count {self.blackboard.torpedo.count}. Expected 1 or 2.")
                         return py_trees.common.Status.FAILURE
@@ -713,24 +713,29 @@ class AlignTorpedoToHole(Navigation):
                     self.node.get_logger().error(f"[{self.name}] Torpedo vertical trajectory does have non trivial roots. Vertical roots: {vertical_roots}")
                     return py_trees.common.Status.FAILURE
                 
-                forward_offset = self.forward_trajectory(common_roots[1])
+                backward_offset = self.forward_trajectory(common_roots[1])
                 target_orientation = geometry.rotate_quaternion(self.blackboard.board.orientation, 0, 0, math.pi)
                 
+                offset_vector = Point(
+                    x=self.to_hole_offset[0] - self.auv_to_torpedo[0] - backward_offset,
+                    y=self.to_hole_offset[1] - self.auv_to_torpedo[1],
+                    z=self.to_hole_offset[2] - self.auv_to_torpedo[2]
+                )
+                
+                self.node.get_logger().info(f"[{self.name}] Aligning torpedo to hole offset from icon position: {offset_vector}")
                 # move from current position to hole position, then move such that torpedo launch is at the AUV CoM, then move back by the forward offset to align the torpedo with the hole
                 goal_offset = geometry.rotate_3d_vector(
                     q=target_orientation,
-                    vector=Point(
-                        x=self.to_hole_offset[0] - self.auv_to_torpedo[0] - forward_offset,
-                        y=self.to_hole_offset[1] - self.auv_to_torpedo[1],
-                        z=self.to_hole_offset[2] - self.auv_to_torpedo[2]
-                    )
+                    vector=offset_vector
                 )
+                
+                self.node.get_logger().info(f"[{self.name}] Rotated offset vector to hole in board frame: {goal_offset}")
                 
                 goal_position_x = self.blackboard.torpedo.icon_position.x + goal_offset.x
                 goal_position_y = self.blackboard.torpedo.icon_position.y + goal_offset.y
                 goal_position_z = self.blackboard.torpedo.icon_position.z + goal_offset.z
                 
-                self.node.get_logger().info(f"[{self.name}] Moving to position in front of hole: ({goal_position_x:.2f}, {goal_position_y:.2f}, {goal_position_z:.2f}) with forward offset: {forward_offset:.2f}m")
+                self.node.get_logger().info(f"[{self.name}] Moving to position in front of hole: ({goal_position_x:.2f}, {goal_position_y:.2f}, {goal_position_z:.2f}) with backward offset: {backward_offset:.2f}m")
                 
                 goal = move_global(
                     x=goal_position_x,
