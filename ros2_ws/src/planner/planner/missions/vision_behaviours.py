@@ -291,16 +291,24 @@ class ScanBehaviour(py_trees.behaviour.Behaviour):
 
         if self.num_steps_per_side <= 0:
             self.node.get_logger().warn(f"Step number per side invalid: {self.num_steps_per_side}")
+            self.num_steps_per_side = 1
 
-        for i in range(self.num_steps_per_side + 1, 1, -1):
-            ccw_yaw_targets.append(+self.scan_angle_rad/i)
-            cw_yaw_targets.append(-self.scan_angle_rad + self.scan_angle_rad/i)
+        step_size = self.scan_angle_rad / self.num_steps_per_side
 
-        return [
-            *ccw_yaw_targets,   # rotate left (counterclockwise)
-            *cw_yaw_targets,   # rotate right (sweeps through center)
-            0.0,                     # rotate back to center
-        ]
+        # Sweep left (0 to +scan_angle)
+        for i in range(1, self.num_steps_per_side + 1):
+            ccw_yaw_targets.append(i * step_size)
+            
+        # Sweep right (+scan_angle to -scan_angle)
+        for i in range(1, 2 * self.num_steps_per_side + 1):
+            cw_yaw_targets.append(self.scan_angle_rad - i * step_size)
+
+        # Return to center (-scan_angle to 0)
+        center_targets = []
+        for i in range(1, self.num_steps_per_side + 1):
+            center_targets.append(-self.scan_angle_rad + i * step_size)
+
+        return [*ccw_yaw_targets, *cw_yaw_targets, *center_targets]
 
     def update(self):
         # Capture center yaw on first tick

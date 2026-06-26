@@ -388,20 +388,14 @@ class GateTask(py_trees.composites.Sequence):
         pass_distance: float = 2.0,
         global_yaw_lock: bool = False,
         force_blind_forward_dist: float = 0.0,
+        scan_angular_tolerance_deg: float = 30.0,
+        scan_hold_time: float = 0.1,
+        scan_timeout: float = 30.0,
+        initial_alignment_tolerance_deg: float = 5.0,
+        initial_alignment_hold_time: float = 1.0,
+        initial_alignment_timeout: float = 15.0,
     ):
         super().__init__("Gate Task", memory=True)
-
-        self.add_child(
-            BasicActionBehaviour(
-                name="Initial Coin Flip Alignment",
-                goal=set_global_yaw(
-                    yaw_rad=0.0,
-                    tolerance=position_tolerance,
-                    hold_time=0.0,
-                    timeout=timeout,
-                ),
-            )
-        )
 
         self.add_child(
             BasicActionBehaviour(
@@ -411,6 +405,19 @@ class GateTask(py_trees.composites.Sequence):
                     tolerance=position_tolerance,
                     hold_time=hold_time,
                     timeout=timeout,
+                ),
+            )
+        )
+
+        import math
+        self.add_child(
+            BasicActionBehaviour(
+                name="Initial Coin Flip Alignment",
+                goal=set_global_yaw(
+                    yaw_rad=0.0,
+                    tolerance=math.radians(initial_alignment_tolerance_deg),
+                    hold_time=initial_alignment_hold_time,
+                    timeout=initial_alignment_timeout,
                 ),
             )
         )
@@ -438,11 +445,17 @@ class GateTask(py_trees.composites.Sequence):
                     step_timeout=scan_pause_time,
                     clockwise=False,
                     look_at_on_success=True,
+                    angular_tolerance_rad=math.radians(scan_angular_tolerance_deg),
+                    turn_hold_time_s=scan_hold_time,
+                    turn_timeout_s=scan_timeout,
                     name="Search Gate",
                 ),
                 ScanBehaviour(
                     scan_angle_deg=scan_angle_deg,
                     pause_time=scan_pause_time,
+                    angular_tolerance_rad=math.radians(scan_angular_tolerance_deg),
+                    turn_hold_time_s=scan_hold_time,
+                    turn_timeout_s=scan_timeout,
                     name="Scan Gate Panels",
                 ),
                 PlanGateTraversalBehaviour(
