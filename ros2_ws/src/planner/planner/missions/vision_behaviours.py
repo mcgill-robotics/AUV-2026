@@ -417,9 +417,10 @@ class GoNearObject(py_trees.behaviour.Behaviour):
             direction_vector = (target_x - current_pose.x, target_y - current_pose.y)
             magnitude = math.sqrt(direction_vector[0]**2 + direction_vector[1]**2)
 
-            # if magnitude <= self.target_planar_distance:
-            #     self.node.get_logger().info(f"[{self.name}] Already within target distance of {self.target_class}. No movement needed.")
-            #     return py_trees.common.Status.SUCCESS
+            if magnitude <= self.target_planar_distance:
+                self.node.get_logger().info(f"[{self.name}] Already within target distance of {self.target_class} ({magnitude:.2f}m <= {self.target_planar_distance:.2f}m). No movement needed.")
+                self.action_status = ActionStatus.SUCCEEDED
+                return
             
             normalized_direction = (direction_vector[0]/magnitude, direction_vector[1]/magnitude)
 

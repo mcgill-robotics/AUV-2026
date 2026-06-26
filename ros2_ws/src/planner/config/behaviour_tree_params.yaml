@@ -59,6 +59,7 @@ planner_root_tree:
       scan_hold_time: 0.1          # (s) Hold time before scan turn step SUCCESS
       scan_timeout: 30.0           # (s) Timeout before scan turn step FAILURE
       force_blind_forward_dist: 0.0 # (m) If > 0, skips slalom vision and just drives straight this distance in the field X (forward) 
+      initial_approach_distance: 3.0 # (m) Distance to approach the first pipe after detecting it during the initial search 
 
     bins:
       downcam_fov_horizontal: 59.7        # (deg) Horizontal FOV of down cam while in water
