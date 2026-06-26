@@ -31,12 +31,14 @@ def main():
     node.declare_parameter("pre_qual.timeout", 1.0)
     node.declare_parameter("pre_qual.hold_time", 1.0)
     node.declare_parameter("tick_rate", 1.0)
+    node.declare_parameter("startup_delay", 15.0)
 
     pre_qual_angular_tolerance = node.get_parameter("pre_qual.angular_tolerance").get_parameter_value().double_value
     pre_qual_positional_tolerance = node.get_parameter("pre_qual.positional_tolerance").get_parameter_value().double_value
     pre_qual_timeout = node.get_parameter("pre_qual.timeout").get_parameter_value().double_value
     pre_qual_hold_time = node.get_parameter("pre_qual.hold_time").get_parameter_value().double_value
     tick_rate = node.get_parameter("tick_rate").get_parameter_value().double_value
+    startup_delay = node.get_parameter("startup_delay").get_parameter_value().double_value
 
     node.declare_parameter("pre_qual.orbit.angular_tolerance_scale", 1.0)
     node.declare_parameter("pre_qual.orbit.positional_tolerance_scale", 1.0)
@@ -97,6 +99,12 @@ def main():
     node.declare_parameter("gate.pass_distance", 1.0)
     node.declare_parameter("gate.global_yaw_lock", False)
     node.declare_parameter("gate.force_blind_forward_dist", 0.0)
+    node.declare_parameter("gate.scan_angular_tolerance_deg", 30.0)
+    node.declare_parameter("gate.scan_hold_time", 0.1)
+    node.declare_parameter("gate.scan_timeout", 30.0)
+    node.declare_parameter("gate.initial_alignment_tolerance_deg", 5.0)
+    node.declare_parameter("gate.initial_alignment_hold_time", 1.0)
+    node.declare_parameter("gate.initial_alignment_timeout", 15.0)
 
     gate_params = {
         "position_tolerance": node.get_parameter("gate.position_tolerance").get_parameter_value().double_value,
@@ -110,6 +118,12 @@ def main():
         "pass_distance": node.get_parameter("gate.pass_distance").get_parameter_value().double_value,
         "global_yaw_lock": node.get_parameter("gate.global_yaw_lock").get_parameter_value().bool_value,
         "force_blind_forward_dist": node.get_parameter("gate.force_blind_forward_dist").get_parameter_value().double_value,
+        "scan_angular_tolerance_deg": node.get_parameter("gate.scan_angular_tolerance_deg").get_parameter_value().double_value,
+        "scan_hold_time": node.get_parameter("gate.scan_hold_time").get_parameter_value().double_value,
+        "scan_timeout": node.get_parameter("gate.scan_timeout").get_parameter_value().double_value,
+        "initial_alignment_tolerance_deg": node.get_parameter("gate.initial_alignment_tolerance_deg").get_parameter_value().double_value,
+        "initial_alignment_hold_time": node.get_parameter("gate.initial_alignment_hold_time").get_parameter_value().double_value,
+        "initial_alignment_timeout": node.get_parameter("gate.initial_alignment_timeout").get_parameter_value().double_value,
     }
 
     # Bins task parameters
@@ -307,7 +321,8 @@ def main():
         bins_params=bins_params,
         octagon_params=octagon_params,
         return_home_params=return_home_params,
-        auto_record_params=auto_record_params
+        auto_record_params=auto_record_params,
+        startup_delay=startup_delay
     )
 
     # Add children to root

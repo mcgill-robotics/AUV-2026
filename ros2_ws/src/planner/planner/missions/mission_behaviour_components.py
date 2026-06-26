@@ -384,3 +384,109 @@ class RosbagRecordingDecorator(py_trees.decorators.Decorator):
                 self.node.get_logger().info(f"[{self.name}] Stopping auto-recording...")
                 self.service_client.call_async(req)
             self.started_recording = False
+
+from rcl_interfaces.srv import SetParameters
+from rcl_interfaces.msg import Parameter, ParameterValue, ParameterType
+
+class SetNodeParameterBehaviour(py_trees.behaviour.Behaviour):
+        """
+        Calls a ROS2 node's ~/set_parameters service to dynamically change a parameter.
+        """
+        def __init__(self, node_name: str, param_name: str, param_value, name="SetNodeParameter"):
+                super().__init__(name)
+                self.target_node = node_name
+                self.param_name = param_name
+                self.param_value = param_value
+                
+                self.service_client = None
+                self.future = None
+                self.request_sent = False
+
+        def setup(self, **kwargs):
+                self.node = kwargs['node']
+                self.service_client = self.node.create_client(SetParameters, f'{self.target_node}/set_parameters')
+                
+        def initialise(self):
+                self.future = None
+                self.request_sent = False
+                
+        def update(self):
+                if not self.request_sent:
+                        if not self.service_client.wait_for_service(timeout_sec=1.0):
+                                self.node.get_logger().warn(f"[{self.name}] Service {self.target_node}/set_parameters not available.")
+                                return py_trees.common.Status.RUNNING
+                                
+                        request = SetParameters.Request()
+                        param = Parameter()
+                        param.name = self.param_name
+                        val = ParameterValue()
+                        
+                        if isinstance(self.param_value, bool):
+                                val.type = ParameterType.PARAMETER_BOOL
+                                val.bool_value = self.param_value
+                        elif isinstance(self.param_value, int):
+                                val.type = ParameterType.PARAMETER_INTEGER
+                                val.integer_value = self.param_value
+                        elif isinstance(self.param_value, float):
+                                val.type = ParameterType.PARAMETER_DOUBLE
+                                val.double_value = self.param_value
+                        elif isinstance(self.param_value, str):
+                                val.type = ParameterType.PARAMETER_STRING
+                                val.string_value = self.param_value
+                                
+                        param.value = val
+                        request.parameters = [param]
+                        
+                        self.future = self.service_client.call_async(request)
+                        self.request_sent = True
+                        self.node.get_logger().info(f"[{self.name}] Setting {self.param_name}={self.param_value} on {self.target_node}")
+                        return py_trees.common.Status.RUNNING
+                        
+                if not self.future.done():
+                        return py_trees.common.Status.RUNNING
+                        
+                if self.future.exception() is not None:
+                        self.node.get_logger().error(f"[{self.name}] SetParameters failed: {self.future.exception()}")
+                        return py_trees.common.Status.FAILURE
+                        
+                response = self.future.result()
+                if not response.results[0].successful:
+                        self.node.get_logger().error(f"[{self.name}] Failed to set parameter: {response.results[0].reason}")
+                        return py_trees.common.Status.FAILURE
+                        
+                self.node.get_logger().info(f"[{self.name}] Successfully set parameter.")
+                return py_trees.common.Status.SUCCESS
+
+from std_srvs.srv import Trigger
+
+class WaitForTriggerBehaviour(py_trees.behaviour.Behaviour):
+        """
+        Waits until a ROS 2 service on the planner node is called to trigger the mission.
+        """
+        def __init__(self, service_name: str = "~/start_mission", name="Wait For Trigger"):
+                super().__init__(name)
+                self.service_name = service_name
+                self.triggered = False
+                self.srv = None
+                
+        def setup(self, **kwargs):
+                self.node = kwargs['node']
+                self.srv = self.node.create_service(Trigger, self.service_name, self.trigger_callback)
+                self.node.get_logger().info(f"[{self.name}] Hosted trigger service at {self.service_name}")
+                
+        def trigger_callback(self, request, response):
+                self.triggered = True
+                response.success = True
+                response.message = "Mission Triggered!"
+                self.node.get_logger().info(f"[{self.name}] Received trigger via service call.")
+                return response
+                
+        def initialise(self):
+                # We don't reset triggered here, because once triggered, it should stay triggered
+                # unless explicitly reset for a new run.
+                pass
+                
+        def update(self):
+                if self.triggered:
+                        return py_trees.common.Status.SUCCESS
+                return py_trees.common.Status.RUNNING

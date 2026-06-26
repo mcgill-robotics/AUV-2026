@@ -164,7 +164,11 @@ namespace controls
                     return result;
                 }
 
-                enabled_ = parameter.as_bool();
+                bool new_enabled = parameter.as_bool();
+                if (new_enabled && !enabled_) {
+                    q_iv2_ = q_iv_; // Snap target orientation to current orientation on enable
+                }
+                enabled_ = new_enabled;
                 RCLCPP_INFO(
                     this->get_logger(),
                     "Attitude controller enabled: %s",
