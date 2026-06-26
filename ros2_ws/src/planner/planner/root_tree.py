@@ -64,6 +64,7 @@ def main():
     node.declare_parameter("slalom.scan_angular_tolerance_deg", 30.0)
     node.declare_parameter("slalom.scan_hold_time", 0.1)
     node.declare_parameter("slalom.scan_timeout", 30.0)
+    node.declare_parameter("slalom.force_blind_forward_dist", 0.0)
 
     slalom_params = {
         "num_layers": node.get_parameter("slalom.num_layers").get_parameter_value().integer_value,
@@ -81,6 +82,7 @@ def main():
         "scan_angular_tolerance_rad": math.radians(node.get_parameter("slalom.scan_angular_tolerance_deg").get_parameter_value().double_value),  # deg -> rad
         "scan_hold_time": node.get_parameter("slalom.scan_hold_time").get_parameter_value().double_value,
         "scan_timeout": node.get_parameter("slalom.scan_timeout").get_parameter_value().double_value,
+        "force_blind_forward_dist": node.get_parameter("slalom.force_blind_forward_dist").get_parameter_value().double_value,
     }
 
     # Gate task parameters
