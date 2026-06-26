@@ -636,6 +636,7 @@ class ForceBlindDriveBehaviour(py_trees.behaviour.Behaviour):
         self,
         distance: float,
         target_yaw: float = 0.0,
+        lateral_translation: float = 0.0,
         position_tolerance: float = 0.3,
         hold_time: float = 0.5,
         timeout: float = 45.0,
@@ -644,6 +645,7 @@ class ForceBlindDriveBehaviour(py_trees.behaviour.Behaviour):
         super().__init__(name)
         self.distance = distance
         self.target_yaw = target_yaw
+        self.lateral_translation = lateral_translation
         self.position_tolerance = position_tolerance
         self.hold_time = hold_time
         self.timeout = timeout
@@ -681,12 +683,12 @@ class ForceBlindDriveBehaviour(py_trees.behaviour.Behaviour):
         curr_x = auv_pose.position.x
         curr_y = auv_pose.position.y
         
-        target_x = curr_x + self.distance * math.cos(self.target_yaw)
-        target_y = curr_y + self.distance * math.sin(self.target_yaw)
+        target_x = curr_x + self.distance * math.cos(self.target_yaw) - self.lateral_translation * math.sin(self.target_yaw)
+        target_y = curr_y + self.distance * math.sin(self.target_yaw) + self.lateral_translation * math.cos(self.target_yaw)
         
         self.node.get_logger().info(
-            f"[{self.name}] Driving {self.distance:.1f}m at yaw {math.degrees(self.target_yaw):.1f}° "
-            f"to ({target_x:.2f}, {target_y:.2f})"
+            f"[{self.name}] Driving forward {self.distance:.1f}m, lateral {self.lateral_translation:.1f}m "
+            f"at yaw {math.degrees(self.target_yaw):.1f}° to ({target_x:.2f}, {target_y:.2f})"
         )
         
         goal = move_global(

@@ -2,7 +2,7 @@ import math
 import py_trees
 from controls.goal_helpers import set_depth, translate_field_centric
 from ..mission_behaviour_components import BasicActionBehaviour
-from ..vision_behaviours import SearchSweepBehaviour
+from ..vision_behaviours import ScanBehaviour, SearchSweepBehaviour, GoNearObject
 from .slalom_behaviours import SlalomLayer, ForceBlindDriveBehaviour
 
 
@@ -54,6 +54,7 @@ class SlalomTask(py_trees.composites.Sequence):
         scan_hold_time: float = 0.1,
         scan_timeout: float = 30.0,
         force_blind_forward_dist: float = 0.0,
+        initial_approach_distance: float = 3.0,
     ):
         super().__init__("Slalom Task", memory=True)
 
@@ -112,6 +113,26 @@ class SlalomTask(py_trees.composites.Sequence):
             ),
         ])
         nominal_execution.add_child(initial_search)
+
+        if initial_approach_distance > 0.0:
+            approach_selector = py_trees.composites.Selector("Initial Approach", memory=True)
+            approach_selector.add_children([
+                GoNearObject(
+                    target_class="red_pipe",
+                    target_distance=initial_approach_distance,
+                    tolerance_meters=position_tolerance,
+                    hold_time=hold_time,
+                    name=f"Approach Red Pipe (dist={initial_approach_distance})"
+                ),
+                GoNearObject(
+                    target_class="white_pipe",
+                    target_distance=initial_approach_distance,
+                    tolerance_meters=position_tolerance,
+                    hold_time=hold_time,
+                    name=f"Approach White Pipe (dist={initial_approach_distance})"
+                )
+            ])
+            nominal_execution.add_child(approach_selector)
 
         # 2. Add each layer as a self-recovering sequence
         for i in range(num_layers):
