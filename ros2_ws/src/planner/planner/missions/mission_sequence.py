@@ -131,6 +131,7 @@ class MissionSpawner(py_trees.behaviour.Behaviour):
     def _build_mission(self, choice: int):
         p = self.params
         slalom = p.get('slalom_params', {})
+        torpedo = p.get('torpedo_params', {})
         gate = p.get('gate_params', {})
         bins = p.get('bins_params', {})
         octagon = p.get('octagon_params', {})
@@ -158,7 +159,7 @@ class MissionSpawner(py_trees.behaviour.Behaviour):
         elif choice == 11:
             return BinsTask(**bins)
         elif choice == 12:
-            return TorpedoTask(p['position_tolerance'], p['hold_time'], p['timeout'])
+            return TorpedoTask(**torpedo)
         elif choice == 13:
             return TableOctagonTask(**octagon)
         elif choice == 14:
@@ -169,9 +170,9 @@ class MissionSpawner(py_trees.behaviour.Behaviour):
                 GateTask(**gate),
                 SlalomTask(**slalom),
                 BinsTask(**bins),
-                # TorpedoTask(p['position_tolerance'], p['hold_time'], p['timeout']),
                 TableOctagonTask(**octagon),
                 ReturnHomeTask(**return_home),
+                TorpedoTask(**torpedo)
             ])
             return full_run
         return None

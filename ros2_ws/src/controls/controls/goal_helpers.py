@@ -11,6 +11,7 @@ without manually setting boolean flags. Example usage::
 """
 
 import math
+from typing import Optional
 from geometry_msgs.msg import Pose, Point, Quaternion
 from auv_msgs.action import AUVNavigate
 from controls.utils import quaternion_from_yaw
@@ -195,9 +196,9 @@ def set_global_yaw(
     )
 
 def set_attitude(
-    roll: float = None,
-    pitch: float = None,
-    yaw: float = None,
+    roll: Optional[float] = None,
+    pitch: Optional[float] = None,
+    yaw: Optional[float] = None,
     tolerance: float = _DEFAULT_ANGULAR_TOL,
     hold_time: float = _DEFAULT_HOLD,
     timeout: float = _DEFAULT_TIMEOUT,
@@ -235,6 +236,30 @@ def set_attitude(
         hold_time=hold_time,
         timeout=timeout,
     )
+    
+def set_attitude_quaternion(
+    orientation: Quaternion,
+    tolerance: float = _DEFAULT_ANGULAR_TOL,
+    hold_time: float = _DEFAULT_HOLD,
+    timeout: float = _DEFAULT_TIMEOUT,
+) -> AUVNavigate.Goal:
+    """Set the AUV attitude using a full quaternion. Position is unaffected.
+
+    Args:
+        orientation: Target orientation as a geometry_msgs/Quaternion.
+        tolerance: Angular convergence threshold in radians.
+        hold_time: Seconds to hold within tolerance before SUCCESS.
+        timeout: Seconds before FAILURE (0 = no timeout).
+    """
+    pose = Pose()
+    pose.orientation = orientation
+    return _make_goal(
+        target_pose=pose,
+        do_roll=True, do_pitch=True, do_yaw=True,
+        angular_tolerance=tolerance,
+        hold_time=hold_time,
+        timeout=timeout,
+    )
 
 
 def look_at(
@@ -262,6 +287,31 @@ def look_at(
     yaw_rad = math.atan2(dy, dx)
     return set_global_yaw(yaw_rad, tolerance, hold_time, timeout)
 
+
+def move_to_and_look_at(
+    target_x: float,
+    target_y: float,
+    target_z: float,
+    reference_x: float,
+    reference_y: float,
+    position_tolerance: float = _DEFAULT_POS_TOL,
+    yaw_tolerance: float = _DEFAULT_ANGULAR_TOL,
+    hold_time: float = _DEFAULT_HOLD,
+    timeout: float = _DEFAULT_TIMEOUT,
+) -> AUVNavigate.Goal:
+    """Move to an absolute XYZ and look at a specific point. Yaw is set to face the reference point XY from the target position XY."""
+    pose = Pose()
+    pose.position = Point(x=target_x, y=target_y, z=target_z)
+    yaw_rad = math.atan2(reference_y - target_y, reference_x - target_x)
+    pose.orientation = quaternion_from_yaw(yaw_rad)
+    return _make_goal(
+        target_pose=pose,
+        do_x=True, do_y=True, do_z=True, do_yaw=True,
+        position_tolerance=position_tolerance,
+        angular_tolerance=yaw_tolerance,
+        hold_time=hold_time,
+        timeout=timeout,
+    )
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Relative Navigation (Delta Movements)
