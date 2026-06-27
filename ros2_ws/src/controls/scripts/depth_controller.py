@@ -75,7 +75,7 @@ class DepthController(Node):
     def setpoint_srv_callback(self, request, response):
         self.setpoint_depth = request.data
         response.success = True
-        response.message = "Setpoint updated successfully."
+        response.message = f"Setpoint updated to {self.setpoint_depth}."
         return response
 
     def parameters_callback(self, parameters):
