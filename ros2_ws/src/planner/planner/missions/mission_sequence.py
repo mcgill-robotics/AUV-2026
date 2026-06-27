@@ -170,9 +170,9 @@ class MissionSpawner(py_trees.behaviour.Behaviour):
                 GateTask(**gate),
                 SlalomTask(**slalom),
                 BinsTask(**bins),
+                TorpedoTask(**torpedo),
                 TableOctagonTask(**octagon),
-                ReturnHomeTask(**return_home),
-                TorpedoTask(**torpedo)
+                ReturnHomeTask(**return_home)
             ])
             return full_run
         return None
