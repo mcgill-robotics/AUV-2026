@@ -10,6 +10,9 @@
 imu_processor:
   ros__parameters:
     frame_id: "imu_link"
+    # To hotswap to the ZED camera IMU instead of the hardware IMU, change this to: "/sensors/zed/imu/data"
+    # and update q_vs to match the ZED's physical orientation relative to the AUV.
+    topic_in: "imu/data"
     # Position offset from sensor to AUV frame (meters)
     offset_xyz: [0.0, 0.0, 0.0] # IMU is mounted at origin of AUV frame
     # Orientation offset as quaternion from sensor to AUV frame. (w,x,y,z)

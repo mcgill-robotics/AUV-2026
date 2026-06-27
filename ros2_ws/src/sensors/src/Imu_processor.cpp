@@ -15,16 +15,20 @@ ImuProcessor::ImuProcessor()
         "auv_frame/imu",
         rclcpp::SensorDataQoS().keep_last(1)
     );
-    imu_sub_ = this->create_subscription<imu_msg>(
-        "imu/data",
-        rclcpp::SensorDataQoS().keep_last(1),
-        std::bind(&ImuProcessor::imu_callback, this, std::placeholders::_1)
-    );
-
+    this->declare_parameter<std::string>("topic_in", "imu/data");
     this->declare_parameter<std::vector<double>>("q_vs", {1, 0.0, 0.0, 0.0}); // Default no rotation. 
     this->declare_parameter<std::vector<double>>("q_in", {1.0, 0.0, 0.0, 0.0}); // Default: no rotation
     this->declare_parameter<std::string>("frame_id_auv", "auv_link");
     this->declare_parameter<std::string>("frame_id_global", "pool_link");
+
+    std::string topic_in;
+    this->get_parameter("topic_in", topic_in);
+
+    imu_sub_ = this->create_subscription<imu_msg>(
+        topic_in,
+        rclcpp::SensorDataQoS().keep_last(1),
+        std::bind(&ImuProcessor::imu_callback, this, std::placeholders::_1)
+    );
 
     std::vector<double> q_vs_vec;
     std::vector<double> q_in_vec;
