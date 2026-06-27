@@ -77,7 +77,7 @@ class AxisController(Node):
     def setpoint_srv_callback(self, request, response):
         self.setpoint = request.data
         response.success = True
-        response.message = f"Setpoint {self.axis_name} updated successfully."
+        response.message = f"Setpoint {self.axis_name} updated to {self.setpoint}."
         return response
 
     def parameters_callback(self, parameters):
