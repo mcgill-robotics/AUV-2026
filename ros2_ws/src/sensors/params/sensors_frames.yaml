@@ -16,7 +16,7 @@ imu_processor:
     # Position offset from sensor to AUV frame (meters)
     offset_xyz: [0.0, 0.0, 0.0] # IMU is mounted at origin of AUV frame
     # Orientation offset as quaternion from sensor to AUV frame. (w,x,y,z)
-    q_vs: [1.0, 0.0, 0.0, 0.0]
+    q_vs: [0.0, 1.0, 0.0, 0.0]
 
 # Depth node parameters
 depth_processor:
