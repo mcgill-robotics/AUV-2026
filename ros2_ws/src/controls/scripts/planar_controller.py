@@ -7,6 +7,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPo
 from rcl_interfaces.msg import SetParametersResult
 from controls.pid import PID
 
+from auv_msgs.srv import SetFloat64
 from geometry_msgs.msg import Wrench, PointStamped
 from std_msgs.msg import Float64
 
@@ -31,6 +32,7 @@ class AxisController(Node):
         self.pub_effort = self.create_publisher(Wrench, f'/controls/{axis_name}_effort', qos_profile_sensor_data)
         self.sub_position = self.create_subscription(PointStamped, f'auv_frame/dvl/position', self.position_callback, qos_profile_sensor_data)
         self.setpoint_sub = self.create_subscription(Float64, f'/controls/{axis_name}_setpoint', self.setpoint_callback, qos)
+        self.srv_setpoint = self.create_service(SetFloat64, f'/controls/srv_setpoint_{axis_name}', self.setpoint_srv_callback)
 
         self.declare_parameter('control_loop_hz', 10.0)
         self.declare_parameter("KP", 0.0)
@@ -71,6 +73,12 @@ class AxisController(Node):
 
     def setpoint_callback(self, msg):
         self.setpoint = msg.data
+
+    def setpoint_srv_callback(self, request, response):
+        self.setpoint = request.data
+        response.success = True
+        response.message = f"Setpoint {self.axis_name} updated successfully."
+        return response
 
     def parameters_callback(self, parameters):
         result = SetParametersResult()

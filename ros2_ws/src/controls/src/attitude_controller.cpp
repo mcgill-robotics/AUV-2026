@@ -70,6 +70,11 @@ namespace controls
             1,
             std::bind(&AttitudeController::target_orientation_callback, this, std::placeholders::_1)
         );
+
+        setpoint_service_ = this->create_service<auv_msgs::srv::SetAttitudeEuler>(
+            "/controls/setpoint_attitude_euler",
+            std::bind(&AttitudeController::setpoint_service_callback, this, std::placeholders::_1, std::placeholders::_2)
+        );
         parameter_callback_handle_ = this->add_on_set_parameters_callback(
             std::bind(&AttitudeController::parameters_callback, this, std::placeholders::_1)
         );
@@ -106,6 +111,18 @@ namespace controls
             msg->y,
             msg->z
         );
+    }
+
+    void AttitudeController::setpoint_service_callback (const std::shared_ptr<auv_msgs::srv::SetAttitudeEuler::Request> request,
+        std::shared_ptr<auv_msgs::srv::SetAttitudeEuler::Response> response)
+    {
+        // Convert Euler angles to quaternion
+        q_iv2_ = Eigen::AngleAxisd(request->yaw,   Eigen::Vector3d::UnitZ())
+         * Eigen::AngleAxisd(request->pitch, Eigen::Vector3d::UnitY())
+         * Eigen::AngleAxisd(request->roll,  Eigen::Vector3d::UnitX());
+
+        response->success = true;
+        response->message = "Target orientation set successfully.";
     }
 
 
