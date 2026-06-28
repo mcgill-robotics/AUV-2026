@@ -19,7 +19,7 @@
   <depend>sensor_msgs</depend>
   <depend>micro_ros_agent</depend>
   <depend>xsens_mti_ros2_driver</depend>
-  <depend>dvl_a50_serial</depend>
+  <depend>dvl_a50_serial_python</depend>
   <depend>dvl_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>message_filters</depend>
