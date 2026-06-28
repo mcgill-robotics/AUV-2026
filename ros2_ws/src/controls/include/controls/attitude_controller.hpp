@@ -87,7 +87,6 @@ namespace controls
 
                 void imu_callback(const imu_msg::SharedPtr msg);
                 void target_orientation_callback(const geometry_msgs::msg::Quaternion::SharedPtr msg);
-                void setpoint_service_callback(const std::shared_ptr<auv_msgs::srv::SetAttitudeEuler::Request> request,std::shared_ptr<auv_msgs::srv::SetAttitudeEuler::Response> response);
                 Vec3 feedback_effort(const quatd& q_iv2);
                 Vec3 feedforward_effort();
                 void control_loop_callback();
