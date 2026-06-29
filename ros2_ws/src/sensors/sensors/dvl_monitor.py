@@ -98,6 +98,7 @@ class DVLMonitor(HealthMonitor):
                 "underwater during operation or disable acoustics."
             )
             self._vel_status = (DiagnosticStatus.WARN,"⚠ DVL OVERHEATING WARNING — monitor temperature")
+            return
         if msg.status > 1:
             self._vel_status_details["Status code"] = f"<b>Unknown: {msg.status}</b>"
             self._vel_status = (DiagnosticStatus.WARN, f"Invalid DVL velocity status code")

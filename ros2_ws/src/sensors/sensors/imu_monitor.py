@@ -76,7 +76,7 @@ class IMUMonitor(HealthMonitor):
             
             oor_vel = []
             if msg.clipflag_gyr_x:
-                oor_vel.append("<b>X")
+                oor_vel.append("X")
             if msg.clipflag_gyr_y:
                 oor_vel.append("Y")
             if msg.clipflag_gyr_z:
