@@ -20,15 +20,27 @@ ImuProcessor::ImuProcessor()
     this->declare_parameter<std::vector<double>>("q_in", {1.0, 0.0, 0.0, 0.0}); // Default: no rotation
     this->declare_parameter<std::string>("frame_id_auv", "auv_link");
     this->declare_parameter<std::string>("frame_id_global", "pool_link");
+    this->declare_parameter<bool>("use_dvl_yaw_correction", true);
+    this->declare_parameter<double>("dvl_yaw_interpolation_rate", 0.01);
 
     std::string topic_in;
     this->get_parameter("topic_in", topic_in);
+    this->get_parameter("use_dvl_yaw_correction", use_dvl_yaw_correction_);
+    this->get_parameter("dvl_yaw_interpolation_rate", dvl_yaw_interpolation_rate_);
 
     imu_sub_ = this->create_subscription<imu_msg>(
         topic_in,
         rclcpp::SensorDataQoS().keep_last(1),
         std::bind(&ImuProcessor::imu_callback, this, std::placeholders::_1)
     );
+
+    if (use_dvl_yaw_correction_) {
+        dvl_odom_sub_ = this->create_subscription<dvl_msgs::msg::DVLDR>(
+            "dvl/dead_reckoning",
+            rclcpp::SensorDataQoS().keep_last(1),
+            std::bind(&ImuProcessor::dvl_odom_callback, this, std::placeholders::_1)
+        );
+    }
 
     std::vector<double> q_vs_vec;
     std::vector<double> q_in_vec;
@@ -110,11 +122,45 @@ void ImuProcessor::imu_callback(const imu_msg::SharedPtr imu_in)
     imu_msg imu_in_msg = *imu_in;
     ImuDataRawFrame imu_raw = parse_imu(imu_in_msg);
     ImuDataAUVFrame imu_auv = process_imu(imu_raw);
+
+    if (use_dvl_yaw_correction_) {
+        // Smoothly interpolate current yaw offset towards target offset (Complementary filter)
+        // Runs at IMU frequency (~100Hz)
+        double error = sensors::math::normalizeAngle(target_yaw_offset_ - current_yaw_offset_);
+        current_yaw_offset_ += dvl_yaw_interpolation_rate_ * error;
+        current_yaw_offset_ = sensors::math::normalizeAngle(current_yaw_offset_);
+
+        // Apply the drift correction offset to the final orientation
+        quatd q_correction(Eigen::AngleAxisd(current_yaw_offset_, Vec3::UnitZ()));
+        imu_auv.q_iv = sensors::math::canonicalizeShortest(q_correction * imu_auv.q_iv);
+    }
+
+    // Store the final orientation so the DVL callback can compute the offset
+    q_iv_ = imu_auv.q_iv;
+
     imu_msg imu_msg_out = compose_imu_msg(imu_auv);
 
     // Publish processed message
     imu_pub_->publish(imu_msg_out);
 }
+
+void ImuProcessor::dvl_odom_callback(const dvl_msgs::msg::DVLDR::SharedPtr msg)
+{
+    // Extract absolute true yaw from DVL dead reckoning (provided in degrees)
+    // The DVL native frame is FRD (Z-down), so positive yaw is clockwise.
+    // The AUV IMU frame is FLU (Z-up), so positive yaw is counter-clockwise.
+    // We invert the DVL yaw to match the FLU convention.
+    double yaw_dvl_frd = msg->yaw * M_PI / 180.0;
+    double yaw_dvl = sensors::math::normalizeAngle(-yaw_dvl_frd);
+
+    // Compute raw yaw from the IMU before offset was applied
+    double yaw_corrected = sensors::math::yawFromQuat(q_iv_);
+    double yaw_raw = yaw_corrected - current_yaw_offset_;
+
+    // Set the new target offset for the IMU callback to smoothly track
+    target_yaw_offset_ = sensors::math::normalizeAngle(yaw_dvl - yaw_raw);
+}
+
 }
 
 int main(int argc, char *argv[])

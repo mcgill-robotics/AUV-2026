@@ -17,6 +17,10 @@ imu_processor:
     offset_xyz: [0.0, 0.0, 0.0] # IMU is mounted at origin of AUV frame
     # Orientation offset as quaternion from sensor to AUV frame. (w,x,y,z)
     q_vs: [0.0, 1.0, 0.0, 0.0]
+    
+    # DVL Yaw drift correction (Complementary filter)
+    use_dvl_yaw_correction: false
+    dvl_yaw_interpolation_rate: 0.1
 
 # Depth node parameters
 depth_processor:
