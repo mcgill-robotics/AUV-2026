@@ -16,8 +16,6 @@
 #include <functional>
 #include <algorithm>
 
-#include "auv_msgs/srv/set_attitude_euler.hpp"
-
 namespace controls
 {
     using float64msg = std_msgs::msg::Float64;
@@ -65,7 +63,6 @@ namespace controls
 
                 rclcpp::Subscription<imu_msg>::SharedPtr sub_imu_;
                 rclcpp::Subscription<geometry_msgs::msg::Quaternion>::SharedPtr sub_target_orientation_;
-                rclcpp::Service<auv_msgs::srv::SetAttitudeEuler>::SharedPtr setpoint_service_;
 
                 // State variables
                 quatd q_iv_;
