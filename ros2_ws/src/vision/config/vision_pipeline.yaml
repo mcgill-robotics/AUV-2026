@@ -5,8 +5,8 @@ front_cam_object_detection:
     image_topic: /zed/zed_node/rgb/color/rect/image # this will be the input topic if sim=true and no zed sdk is available, this will be set to front_image_enhancement.ros__parameters.output_topic if enhance_images is set to true
     detection_frame_topic: /vision/front_cam/detection_frame # synchronized camera-frame detections + A
     has_zed_sdk: true
-    model_relative_path: models/synthetic_front_cam_rfdetr_onnx # inference-models package directory
-    # model_relative_path: models/real_front_cam_rfdetr_onnx # inference-models package directory
+    #model_relative_path: models/synthetic_front_cam_rfdetr_onnx # inference-models package directory
+    model_relative_path: models/real_front_cam_rfdetr_onnx # inference-models package directory
     # WARNING: These class names MUST be manually maintained when changing models to have new classes. 
     # You must also update the `class_names.txt` file in the model package.
     # A mismatch here can crash the vision node.
@@ -80,7 +80,7 @@ front_cam_object_detection:
     # Positional tracking and pose publication parameters
     pose_source: auv_pose # auv_pose uses state/pose for synchronized detection frames; zed_vio uses the front ZED VIO estimate
     auv_pose_topic: state/pose # official aggregated AUV pose used for synchronized detection frames when pose_source=auv_pose
-    enable_vio_pose: false # if false, skip ZED positional tracking and do not publish vision VIO pose/TF
+    enable_vio_pose: true # if false, skip ZED positional tracking and do not publish vision VIO pose/TF
     vio_pose_topic: /vision/vio_pose # optional topic for publishing the ZED VIO pose estimate; only used if pose.vio.enable is true
     broadcast_vio_tf: true # if true and pose.vio.enable is true, publish pool_link -> auv_vio_link TF for visualization/debugging
 
@@ -360,8 +360,8 @@ object_map:
       table: 1
       bin_structure: 1
       lane_marker: 2
-      white_pipe: 6
-      red_pipe: 3
+      white_pipe: 10
+      red_pipe: 5
       bin: 4
       search_rescue: 1
       survey_repair: 1

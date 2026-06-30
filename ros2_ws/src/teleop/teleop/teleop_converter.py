@@ -1,25 +1,43 @@
 """
-Teleop Converter Node
+Teleop Converter Node (Dual Mode)
 
-Converts gamepad (Joy) and Foxglove/keyboard (Twist) inputs into Wrench commands
-for manual AUV control. Implements deadman switch and safety timeout.
+Converts gamepad (Joy) inputs into either:
+  - Controls Mode (LB): Offsets setpoints for PID controllers
+  - Propulsion Mode (RB): Raw wrench for direct thruster control
+
+Implements safety timeout, automatic controller toggling, and smooth mode transitions.
 """
 
+import math
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
 
 from sensor_msgs.msg import Joy
-from geometry_msgs.msg import Twist, Wrench
+from geometry_msgs.msg import PoseStamped, Wrench, Quaternion
+from std_msgs.msg import Float64
+from rcl_interfaces.srv import SetParameters
+from rcl_interfaces.msg import Parameter, ParameterType
+import tf_transformations
+
+
+def normalize_angle(angle: float) -> float:
+    """Normalize angle to [-pi, pi]."""
+    while angle > math.pi:
+        angle -= 2.0 * math.pi
+    while angle < -math.pi:
+        angle += 2.0 * math.pi
+    return angle
 
 
 class TeleopConverter(Node):
-    """Converts Joy/Twist inputs to Wrench output for thruster control."""
+    """Dual-mode teleop: Controls Mode (LB) offsets setpoints, Propulsion Mode (RB) sends raw wrench."""
 
     def __init__(self):
         super().__init__('teleop_converter')
-        
+
         # =================================================================
-        # Parameters - Scaling
+        # Parameters - Scaling (Propulsion Mode)
         # =================================================================
         self.declare_parameter('surge_scale', 20.0)   # Newtons
         self.declare_parameter('sway_scale', 20.0)    # Newtons
@@ -27,193 +45,361 @@ class TeleopConverter(Node):
         self.declare_parameter('yaw_scale', 5.0)      # Nm
         self.declare_parameter('roll_scale', 2.0)     # Nm
         self.declare_parameter('pitch_scale', 2.0)    # Nm
+
+        # =================================================================
+        # Parameters - Max Offsets (Controls Mode)
+        # =================================================================
+        self.declare_parameter('surge_max_offset', 0.5)   # meters
+        self.declare_parameter('sway_max_offset', 0.5)    # meters
+        self.declare_parameter('depth_max_offset', 0.2)   # meters
+        self.declare_parameter('yaw_max_offset', 0.5)     # rad
+        self.declare_parameter('roll_max_offset', 0.5)    # rad
+        self.declare_parameter('pitch_max_offset', 0.5)   # rad
+
         self.declare_parameter('deadzone', 0.1)
         self.declare_parameter('timeout_sec', 0.5)
-        self.declare_parameter('require_deadman', True)
-        
+
         # =================================================================
-        # Parameters - Axis/Button Indices
-        # Xbox One S Controller (USB mode, Linux):
-        #   Axes: 0=LX, 1=LY, 2=LT, 3=RX, 4=RY, 5=RT, 6=DpadX, 7=DpadY
-        #   Buttons: 0=A, 1=B, 2=X, 3=Y, 4=LB, 5=RB, ...
-        # More info here: https://wiki.ros.org/joy
+        # Parameters - Axis/Button Indices (SDL2 game_controller_node)
         # =================================================================
-        self.declare_parameter('axis_left_x', 0)    # Left stick horizontal (Sway)
-        self.declare_parameter('axis_left_y', 1)    # Left stick vertical (Surge)
-        self.declare_parameter('axis_right_x', 3)   # Right stick horizontal (Yaw)
-        self.declare_parameter('axis_lt', 2)        # Left trigger (Heave down)
-        self.declare_parameter('axis_rt', 5)        # Right trigger (Heave up)
-        self.declare_parameter('axis_dpad_x', 6)    # D-pad horizontal (Roll)
-        self.declare_parameter('axis_dpad_y', 7)    # D-pad vertical (Pitch)
-        self.declare_parameter('btn_deadman', 4)    # LB button (Deadman)
-        
-        # Load scaling parameters
+        self.declare_parameter('axis_left_x', 0)
+        self.declare_parameter('axis_left_y', 1)
+        self.declare_parameter('axis_right_x', 2)
+        self.declare_parameter('axis_right_y', 3)
+        self.declare_parameter('axis_lt', 4)
+        self.declare_parameter('axis_rt', 5)
+
+        self.declare_parameter('btn_controls_mode', 9)    # LB
+        self.declare_parameter('btn_propulsion_mode', 10) # RB
+        self.declare_parameter('btn_dpad_up', 11)
+        self.declare_parameter('btn_dpad_down', 12)
+        self.declare_parameter('btn_dpad_left', 13)
+        self.declare_parameter('btn_dpad_right', 14)
+
+        # Load parameters
         self.surge_scale = self.get_parameter('surge_scale').value
         self.sway_scale = self.get_parameter('sway_scale').value
         self.heave_scale = self.get_parameter('heave_scale').value
         self.yaw_scale = self.get_parameter('yaw_scale').value
         self.roll_scale = self.get_parameter('roll_scale').value
         self.pitch_scale = self.get_parameter('pitch_scale').value
+
+        self.surge_max_offset = self.get_parameter('surge_max_offset').value
+        self.sway_max_offset = self.get_parameter('sway_max_offset').value
+        self.depth_max_offset = self.get_parameter('depth_max_offset').value
+        self.yaw_max_offset = self.get_parameter('yaw_max_offset').value
+        self.roll_max_offset = self.get_parameter('roll_max_offset').value
+        self.pitch_max_offset = self.get_parameter('pitch_max_offset').value
+
         self.deadzone = self.get_parameter('deadzone').value
         self.timeout_sec = self.get_parameter('timeout_sec').value
-        self.require_deadman = self.get_parameter('require_deadman').value
-        
-        # Load axis/button indices
+
         self.axis_left_x = self.get_parameter('axis_left_x').value
         self.axis_left_y = self.get_parameter('axis_left_y').value
         self.axis_right_x = self.get_parameter('axis_right_x').value
+        self.axis_right_y = self.get_parameter('axis_right_y').value
         self.axis_lt = self.get_parameter('axis_lt').value
         self.axis_rt = self.get_parameter('axis_rt').value
-        self.axis_dpad_x = self.get_parameter('axis_dpad_x').value
-        self.axis_dpad_y = self.get_parameter('axis_dpad_y').value
-        self.btn_deadman = self.get_parameter('btn_deadman').value
-        
+
+        self.btn_controls_mode = self.get_parameter('btn_controls_mode').value
+        self.btn_propulsion_mode = self.get_parameter('btn_propulsion_mode').value
+        self.btn_dpad_up = self.get_parameter('btn_dpad_up').value
+        self.btn_dpad_down = self.get_parameter('btn_dpad_down').value
+        self.btn_dpad_left = self.get_parameter('btn_dpad_left').value
+        self.btn_dpad_right = self.get_parameter('btn_dpad_right').value
+
         # =================================================================
         # State
         # =================================================================
         self.last_joy_time = None
-        self.last_twist_time = None
+        self.dt = 0.05 # 20Hz loop
+
+        # State estimation data
+        self.current_pose = None
+        self.setpoints_initialized = False
+        self.current_yaw = 0.0
+        self.current_roll = 0.0
+        self.current_pitch = 0.0
+
+        # Target setpoints (Controls Mode)
+        self.target_x = 0.0
+        self.target_y = 0.0
+        self.target_depth = 0.0
+        self.target_yaw = 0.0
+        self.target_roll = 0.0
+        self.target_pitch = 0.0
+
+        self.xy_active = False
+        self.z_active = False
+        self.yaw_active = False
+        self.pitch_active = False
+        self.roll_active = False
+
+        # Parameter Clients for toggling PID controllers and Superimposer
+        self.controller_nodes = ['attitude_controller', 'depth_controller', 'x_controller', 'y_controller', 'superimposer']
+        self.param_clients = {}
+        for node_name in self.controller_nodes:
+            client = self.create_client(SetParameters, f'/{node_name}/set_parameters')
+            self.param_clients[node_name] = client
+
+        # Output wrench (Propulsion Mode)
         self.current_wrench = Wrench()
-        
+
+        self.controls_mode_active = False
+        self.propulsion_mode_active = False
+
+        # =================================================================
+        # ROS Interfaces
+        # =================================================================
         # Subscribers
         self.joy_sub = self.create_subscription(
             Joy, '/joy', self.joy_callback, 10)
-        self.twist_sub = self.create_subscription(
-            Twist, '/cmd_vel', self.twist_callback, 10)
-        
-        # Publishers
+        self.pose_sub = self.create_subscription(
+            PoseStamped, '/state/pose', self.pose_callback, qos_profile_sensor_data)
+
+        # Publishers (Propulsion)
         self.wrench_pub = self.create_publisher(
             Wrench, '/controls/total_effort', 10)
-        
-        # Timer for publishing at fixed rate and checking timeout
-        self.timer = self.create_timer(0.05, self.publish_loop)  # 20 Hz
-        
-        self.get_logger().info('Teleop Converter initialized')
-        self.get_logger().info(f'Scales: surge={self.surge_scale}, heave={self.heave_scale}, yaw={self.yaw_scale}')
-        self.get_logger().info(f'Deadman button: {self.btn_deadman}, required: {self.require_deadman}')
+
+        # Publishers (Controls)
+        self.x_sp_pub = self.create_publisher(Float64, '/controls/x_setpoint', 10)
+        self.y_sp_pub = self.create_publisher(Float64, '/controls/y_setpoint', 10)
+        self.depth_sp_pub = self.create_publisher(Float64, '/controls/depth_setpoint', 10)
+        self.attitude_sp_pub = self.create_publisher(Quaternion, '/controls/quaternion_setpoint', 10)
+
+        # Timer
+        self.timer = self.create_timer(self.dt, self.publish_loop)
+
+        self.get_logger().info('Teleop Converter initialized (Dual Mode)')
+
+    def pose_callback(self, msg: PoseStamped):
+        """Keep track of the AUV's current global position and yaw."""
+        self.current_pose = msg
+        q = msg.pose.orientation
+        # Use intrinsic Z-Y-X axes (rzyx) which gives us (yaw, pitch, roll)
+        euler = tf_transformations.euler_from_quaternion([q.x, q.y, q.z, q.w], axes='rzyx')
+        self.current_yaw = euler[0]
+        self.current_pitch = euler[1]
+        self.current_roll = euler[2]
+
+        if not self.setpoints_initialized:
+            self.target_x = self.current_pose.pose.position.x
+            self.target_y = self.current_pose.pose.position.y
+            self.target_depth = -self.current_pose.pose.position.z
+            self.target_roll = self.current_roll
+            self.target_pitch = self.current_pitch
+            self.target_yaw = self.current_yaw
+            self.setpoints_initialized = True
+            self.get_logger().info(f'Initialized Setpoints -> X:{self.target_x:.2f}, Y:{self.target_y:.2f}, Z:{self.target_depth:.2f}, Yaw:{self.target_yaw:.2f}, Roll:{self.target_roll:.2f}, Pitch:{self.target_pitch:.2f}')
 
     def apply_deadzone(self, value: float) -> float:
         """Apply deadzone to axis value."""
         if abs(value) < self.deadzone:
             return 0.0
-        # Scale remaining range to 0-1
         sign = 1.0 if value > 0 else -1.0
         return sign * (abs(value) - self.deadzone) / (1.0 - self.deadzone)
 
+    def process_trigger(self, raw_val: float) -> float:
+        """
+        Convert trigger axis to 0.0 - 1.0 range.
+        Based on hardware: unpressed is 0.0, fully pressed is -1.0.
+        """
+        return -raw_val
+
     def joy_callback(self, msg: Joy):
         """Process gamepad input."""
+        self.last_joy_time = self.get_clock().now()
+
         # =================================================================
-        # Deadman switch check
+        # Mode detection (LB = Controls, RB = Propulsion)
         # =================================================================
-        deadman_held = True
-        if self.require_deadman:
-            if len(msg.buttons) > self.btn_deadman:
-                deadman_held = bool(msg.buttons[self.btn_deadman])
+        lb_held = False
+        rb_held = False
+        if len(msg.buttons) > self.btn_controls_mode:
+            lb_held = bool(msg.buttons[self.btn_controls_mode])
+        if len(msg.buttons) > self.btn_propulsion_mode:
+            rb_held = bool(msg.buttons[self.btn_propulsion_mode])
+
+        # Handle mode transitions
+        if rb_held and not self.propulsion_mode_active:
+            self.get_logger().info('Entering Propulsion Mode. Disabling PID controllers.')
+            self.set_controllers_enabled(False)
+        elif not rb_held and self.propulsion_mode_active:
+            self.set_controllers_enabled(True)
+            if self.current_pose is not None:
+                self.target_x = self.current_pose.pose.position.x
+                self.target_y = self.current_pose.pose.position.y
+                self.target_depth = -self.current_pose.pose.position.z
+                self.target_yaw = self.current_yaw
+                self.target_roll = self.current_roll
+                self.target_pitch = self.current_pitch
+                self.get_logger().info(f'Exited Propulsion Mode. Latched setpoints -> X:{self.target_x:.2f}, Y:{self.target_y:.2f}, Z:{self.target_depth:.2f}, Yaw:{self.target_yaw:.2f}, Roll:{self.target_roll:.2f}, Pitch:{self.target_pitch:.2f}')
             else:
-                deadman_held = False
-        
-        if not deadman_held:
-            self.current_wrench = Wrench()
-            return
-        
+                self.get_logger().info('Exited Propulsion Mode. Re-enabling PID controllers.')
+
+        self.controls_mode_active = lb_held
+        self.propulsion_mode_active = rb_held
+
         # =================================================================
         # Extract axis values
         # =================================================================
-        # Left stick: X/Y plane movement (surge/sway)
-        surge = 0.0
-        sway = 0.0
-        if len(msg.axes) > self.axis_left_y:
-            surge = self.apply_deadzone(msg.axes[self.axis_left_y])
-        if len(msg.axes) > self.axis_left_x:
-            sway = self.apply_deadzone(msg.axes[self.axis_left_x])
-        
-        # Right stick: Yaw only (horizontal axis)
-        yaw = 0.0
-        if len(msg.axes) > self.axis_right_x:
-            yaw = self.apply_deadzone(msg.axes[self.axis_right_x])
-        
-        # Triggers: Heave (LT = down, RT = up)
-        # Triggers typically range from 1.0 (released) to -1.0 (pressed)
-        heave = 0.0
-        if len(msg.axes) > max(self.axis_lt, self.axis_rt):
-            lt = (1.0 - msg.axes[self.axis_lt]) / 2.0  # 0 (released) to 1 (pressed)
-            rt = (1.0 - msg.axes[self.axis_rt]) / 2.0  # 0 (released) to 1 (pressed)
-            heave = rt - lt  # Positive = up, Negative = down
-        
-        # D-pad: Roll (left/right) and Pitch (up/down)
-        roll = 0.0
-        pitch = 0.0
-        if len(msg.axes) > self.axis_dpad_x:
-            roll = -msg.axes[self.axis_dpad_x]  # +1 = right, -1 = left
-        if len(msg.axes) > self.axis_dpad_y:
-            pitch = msg.axes[self.axis_dpad_y]  # +1 = up, -1 = down
-        
-        # =================================================================
-        # Only update last_joy_time if there's actual non-zero input
-        # This allows keyboard to work when joystick is idle
-        # =================================================================
-        has_input = (abs(surge) > 0.01 or abs(sway) > 0.01 or abs(heave) > 0.01 or
-                     abs(yaw) > 0.01 or abs(roll) > 0.01 or abs(pitch) > 0.01)
-        
-        if has_input:
-            self.last_joy_time = self.get_clock().now()
-        
-        # =================================================================
-        # Build wrench
-        # =================================================================
-        wrench = Wrench()
-        wrench.force.x = surge * self.surge_scale
-        wrench.force.y = sway * self.sway_scale
-        wrench.force.z = heave * self.heave_scale
-        wrench.torque.x = roll * self.roll_scale
-        wrench.torque.y = pitch * self.pitch_scale
-        wrench.torque.z = yaw * self.yaw_scale
-        
-        self.current_wrench = wrench
+        surge_axis = 0.0
+        sway_axis = 0.0
+        yaw_axis = 0.0
+        heave_axis = 0.0
+        roll_axis = 0.0
+        pitch_axis = 0.0
 
-    def twist_callback(self, msg: Twist):
-        """Process Twist input from keyboard/Foxglove (fallback if no Joy). (NOT YET IMPLEMENTED)"""
-        self.last_twist_time = self.get_clock().now()
-        
-        # Only use Twist if no recent Joy input
-        if self.last_joy_time is not None:
-            elapsed = (self.get_clock().now() - self.last_joy_time).nanoseconds / 1e9
-            if elapsed < self.timeout_sec:
-                return  # Joy has priority
-        
-        # Convert Twist to Wrench (linear mapping)
-        wrench = Wrench()
-        wrench.force.x = msg.linear.x * self.surge_scale
-        wrench.force.y = msg.linear.y * self.sway_scale
-        wrench.force.z = msg.linear.z * self.heave_scale
-        wrench.torque.x = msg.angular.x * self.roll_scale
-        wrench.torque.y = msg.angular.y * self.pitch_scale
-        wrench.torque.z = msg.angular.z * self.yaw_scale
-        
-        self.current_wrench = wrench
+        if len(msg.axes) > self.axis_left_y:
+            surge_axis = self.apply_deadzone(msg.axes[self.axis_left_y])
+        if len(msg.axes) > self.axis_left_x:
+            sway_axis = self.apply_deadzone(msg.axes[self.axis_left_x])
+
+        if len(msg.axes) > self.axis_right_x:
+            yaw_axis = self.apply_deadzone(msg.axes[self.axis_right_x])
+
+        if len(msg.axes) > max(self.axis_lt, self.axis_rt):
+            lt = self.process_trigger(msg.axes[self.axis_lt])
+            rt = self.process_trigger(msg.axes[self.axis_rt])
+            heave_axis = rt - lt  # Positive = up, Negative = down
+
+        if len(msg.buttons) > max(self.btn_dpad_up, self.btn_dpad_down, self.btn_dpad_left, self.btn_dpad_right):
+            # Cancel out if both opposing buttons are pressed
+            roll_axis = float(msg.buttons[self.btn_dpad_right]) - float(msg.buttons[self.btn_dpad_left])
+            pitch_axis = float(msg.buttons[self.btn_dpad_up]) - float(msg.buttons[self.btn_dpad_down])
+
+        # =================================================================
+        # Propulsion Mode Logic (Raw Wrench)
+        # =================================================================
+        if self.propulsion_mode_active:
+            wrench = Wrench()
+            wrench.force.x = surge_axis * self.surge_scale
+            wrench.force.y = sway_axis * self.sway_scale
+            wrench.force.z = heave_axis * self.heave_scale
+            wrench.torque.x = roll_axis * self.roll_scale
+            wrench.torque.y = pitch_axis * self.pitch_scale
+            wrench.torque.z = yaw_axis * self.yaw_scale
+            self.current_wrench = wrench
+
+            # Continuously update the target setpoints to perfectly match the current pose
+            # so the PID loops don't wind up, and we have a smooth transition back to Controls Mode.
+            if self.current_pose is not None:
+                self.target_x = self.current_pose.pose.position.x
+                self.target_y = self.current_pose.pose.position.y
+                self.target_depth = -self.current_pose.pose.position.z
+                self.target_yaw = self.current_yaw
+                self.target_roll = self.current_roll
+                self.target_pitch = self.current_pitch
+        else:
+            self.current_wrench = Wrench()
+
+        # =================================================================
+        # Controls Mode Logic (Setpoint Offset)
+        # =================================================================
+        if self.controls_mode_active and self.current_pose is not None:
+            # X/Y Plane
+            if surge_axis != 0.0 or sway_axis != 0.0:
+                dx_body = surge_axis * self.surge_max_offset
+                dy_body = sway_axis * self.sway_max_offset
+                cy = math.cos(self.current_yaw)
+                sy = math.sin(self.current_yaw)
+                self.target_x = self.current_pose.pose.position.x + (dx_body * cy - dy_body * sy)
+                self.target_y = self.current_pose.pose.position.y + (dx_body * sy + dy_body * cy)
+                self.xy_active = True
+            elif self.xy_active:
+                # Stick just released: Latch to current pose to hold position
+                self.target_x = self.current_pose.pose.position.x
+                self.target_y = self.current_pose.pose.position.y
+                self.xy_active = False
+
+            # Z (Heave)
+            if heave_axis != 0.0:
+                self.target_depth = -self.current_pose.pose.position.z - (heave_axis * self.depth_max_offset)
+                self.z_active = True
+            elif self.z_active:
+                self.target_depth = -self.current_pose.pose.position.z
+                self.z_active = False
+
+            # Yaw
+            if yaw_axis != 0.0:
+                self.target_yaw = normalize_angle(self.current_yaw + yaw_axis * self.yaw_max_offset)
+                self.yaw_active = True
+            elif self.yaw_active:
+                self.target_yaw = self.current_yaw
+                self.yaw_active = False
+
+            # Pitch
+            if pitch_axis != 0.0:
+                self.target_pitch = self.current_pitch + pitch_axis * self.pitch_max_offset
+                self.pitch_active = True
+            elif self.pitch_active:
+                self.target_pitch = self.current_pitch
+                self.pitch_active = False
+
+            # Roll
+            if roll_axis != 0.0:
+                self.target_roll = self.current_roll + roll_axis * self.roll_max_offset
+                self.roll_active = True
+            elif self.roll_active:
+                self.target_roll = self.current_roll
+                self.roll_active = False
+
+    def set_controllers_enabled(self, enabled: bool):
+        """Asynchronously toggles the enabled parameter on all active PID controllers."""
+        for node_name, client in self.param_clients.items():
+            if not client.service_is_ready():
+                self.get_logger().debug(f'Service /{node_name}/set_parameters not ready')
+                continue
+
+            req = SetParameters.Request()
+            param = Parameter()
+            param.name = "enabled"
+            param.value.type = ParameterType.PARAMETER_BOOL
+            param.value.bool_value = enabled
+            req.parameters.append(param)
+
+            client.call_async(req)
 
     def publish_loop(self):
-        """Publish wrench at fixed rate, with timeout check."""
+        """Publish outputs at fixed rate, with timeout check."""
         now = self.get_clock().now()
-        
-        # Check for input timeout
+
         joy_stale = True
-        twist_stale = True
-        
         if self.last_joy_time is not None:
             elapsed = (now - self.last_joy_time).nanoseconds / 1e9
             joy_stale = elapsed > self.timeout_sec
-        
-        if self.last_twist_time is not None:
-            elapsed = (now - self.last_twist_time).nanoseconds / 1e9
-            twist_stale = elapsed > self.timeout_sec
-        
-        # If all inputs are stale, zero output (safety)
-        if joy_stale and twist_stale:
+
+        if joy_stale:
             self.current_wrench = Wrench()
-        
-        # Publish wrench (always publish, even zeros - keeps stream alive)
-        self.wrench_pub.publish(self.current_wrench)
+            self.controls_mode_active = False
+            self.propulsion_mode_active = False
+
+        # Only publish Wrench if we are actively in propulsion mode
+        if self.propulsion_mode_active:
+            self.wrench_pub.publish(self.current_wrench)
+
+        # Publish Setpoints if Controls mode OR Propulsion mode is active
+        if (self.controls_mode_active or self.propulsion_mode_active) and self.current_pose is not None:
+            msg_x = Float64()
+            msg_x.data = self.target_x
+            self.x_sp_pub.publish(msg_x)
+
+            msg_y = Float64()
+            msg_y.data = self.target_y
+            self.y_sp_pub.publish(msg_y)
+
+            msg_depth = Float64()
+            msg_depth.data = self.target_depth
+            self.depth_sp_pub.publish(msg_depth)
+
+            # Attitude: publish as Quaternion (current attitude controller interface)
+            q_arr = tf_transformations.quaternion_from_euler(self.target_roll, self.target_pitch, self.target_yaw, axes='sxyz')
+            msg_quat = Quaternion()
+            msg_quat.x = q_arr[0]
+            msg_quat.y = q_arr[1]
+            msg_quat.z = q_arr[2]
+            msg_quat.w = q_arr[3]
+            self.attitude_sp_pub.publish(msg_quat)
 
 
 def main(args=None):

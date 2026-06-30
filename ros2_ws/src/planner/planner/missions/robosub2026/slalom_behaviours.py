@@ -766,34 +766,34 @@ class SlalomLayer(py_trees.composites.Selector):
         # ── OPTIMIZATION: Skip Scan Selector ──────────────────────────────────
         scan_selector = py_trees.composites.Selector(name=f"Scan or Skip L{layer_num}", memory=True)
 
-        if layer_num > 1:
-            skip_scan_check = SkipScanCheckBehaviour(
-                min_dist=1.5, 
-                max_dist=3.5, 
-                name=f"Skip Scan Check L{layer_num}"
+        # if layer_num > 1:
+        #     skip_scan_check = SkipScanCheckBehaviour(
+        #         min_dist=1.5, 
+        #         max_dist=3.5, 
+        #         name=f"Skip Scan Check L{layer_num}"
+        #     )
+        #     scan_selector.add_children([
+        #         skip_scan_check,
+        #         ScanBehaviour(
+        #             scan_angle_deg=scan_angle_deg,
+        #             pause_time=scan_pause_time,
+        #             angular_tolerance_rad=scan_angular_tolerance_rad,
+        #             turn_hold_time_s=scan_hold_time,
+        #             turn_timeout_s=scan_timeout,
+        #             name=f"Scan Pipes L{layer_num}",
+        #         )
+        #     ])
+        # else:
+        scan_selector.add_child(
+            ScanBehaviour(
+                scan_angle_deg=scan_angle_deg,
+                pause_time=scan_pause_time,
+                angular_tolerance_rad=scan_angular_tolerance_rad,
+                turn_hold_time_s=scan_hold_time,
+                turn_timeout_s=scan_timeout,
+                name=f"Scan Pipes L{layer_num}",
             )
-            scan_selector.add_children([
-                skip_scan_check,
-                ScanBehaviour(
-                    scan_angle_deg=scan_angle_deg,
-                    pause_time=scan_pause_time,
-                    angular_tolerance_rad=scan_angular_tolerance_rad,
-                    turn_hold_time_s=scan_hold_time,
-                    turn_timeout_s=scan_timeout,
-                    name=f"Scan Pipes L{layer_num}",
-                )
-            ])
-        else:
-            scan_selector.add_child(
-                ScanBehaviour(
-                    scan_angle_deg=scan_angle_deg,
-                    pause_time=scan_pause_time,
-                    angular_tolerance_rad=scan_angular_tolerance_rad,
-                    turn_hold_time_s=scan_hold_time,
-                    turn_timeout_s=scan_timeout,
-                    name=f"Scan Pipes L{layer_num}",
-                )
-            )
+        )
 
         nominal.add_children([
             scan_selector,

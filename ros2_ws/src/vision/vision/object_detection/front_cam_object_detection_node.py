@@ -25,7 +25,7 @@ from rcl_interfaces.msg import ParameterDescriptor, SetParametersResult
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rclpy.qos import qos_profile_sensor_data
-from sensor_msgs.msg import CameraInfo, CompressedImage, Image
+from sensor_msgs.msg import CameraInfo, CompressedImage, Image, Imu
 from std_msgs.msg import Float64
 from std_srvs.srv import Trigger
 from tf2_ros import TransformBroadcaster
@@ -606,6 +606,19 @@ class FrontCamObjectDetectorNode():
             self.pub_vio_pose = None
         self._configure_pose_source()
 
+        if self.has_zed_sdk:
+            # Note: To use the ZED IMU instead of the hardware IMU, change `topic_in` 
+            # in `sensors_frames.yaml` for the imu_processor to this topic.
+            self.pub_zed_imu = self.node.create_publisher(
+                Imu,
+                '/sensors/zed/imu/data',
+                qos_profile_sensor_data
+            )
+            self.sensors_data = sl.SensorsData()
+            self.zed_imu_pose = sl.Transform()
+        else:
+            self.pub_zed_imu = None
+
         self.node.get_logger().info(
             f"Publishing synchronized detection frames to: {self.detection_frame_topic}"
         )
@@ -945,6 +958,36 @@ class FrontCamObjectDetectorNode():
             frame_stamp = self.node.get_clock().now().to_msg()
             vio_pose_msg = self._get_vio_world_pose_snapshot(frame_stamp) if self.enable_vio else None
             
+            # --- ZED IMU Data ---
+            if self.pub_zed_imu is not None:
+                err = self.zed.get_sensors_data(self.sensors_data, sl.TIME_REFERENCE.IMAGE)
+                if err == sl.ERROR_CODE.SUCCESS:
+                    imu_data = self.sensors_data.get_imu_data()
+                    orientation = imu_data.get_pose(self.zed_imu_pose).get_orientation().get()
+                    angular_velocity = imu_data.get_angular_velocity()
+                    linear_acceleration = imu_data.get_linear_acceleration()
+                    
+                    imu_msg = Imu()
+                    imu_msg.header.stamp = frame_stamp
+                    imu_msg.header.frame_id = self.image_frame_id
+                    
+                    # Invert Y and Z axes to match ROS FLU (Forward-Left-Up) frame
+                    # because ZED natively outputs in FRD (Forward-Right-Down)
+                    imu_msg.orientation.x = float(orientation[0])
+                    imu_msg.orientation.y = float(orientation[1])
+                    imu_msg.orientation.z = float(orientation[2])
+                    imu_msg.orientation.w = float(orientation[3])
+                    
+                    imu_msg.angular_velocity.x = math.radians(float(angular_velocity[0]))
+                    imu_msg.angular_velocity.y = math.radians(float(angular_velocity[1]))
+                    imu_msg.angular_velocity.z = -math.radians(float(angular_velocity[2]))
+                    
+                    imu_msg.linear_acceleration.x = float(linear_acceleration[0])
+                    imu_msg.linear_acceleration.y = float(linear_acceleration[1])
+                    imu_msg.linear_acceleration.z = float(linear_acceleration[2])
+                    
+                    self.pub_zed_imu.publish(imu_msg)
+
             # --- ZED Health Checks ---
             health = self.zed.get_health_status()
             if health.low_image_quality:
