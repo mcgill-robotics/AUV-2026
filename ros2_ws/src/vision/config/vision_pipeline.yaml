@@ -5,8 +5,8 @@ front_cam_object_detection:
     image_topic: /zed/zed_node/rgb/color/rect/image # this will be the input topic if sim=true and no zed sdk is available, this will be set to front_image_enhancement.ros__parameters.output_topic if enhance_images is set to true
     detection_frame_topic: /vision/front_cam/detection_frame # synchronized camera-frame detections + A
     has_zed_sdk: true
-    #model_relative_path: models/synthetic_front_cam_rfdetr_onnx # inference-models package directory
-    model_relative_path: models/real_front_cam_rfdetr_onnx # inference-models package directory
+    model_relative_path: models/synthetic_front_cam_rfdetr_onnx # inference-models package directory
+    # model_relative_path: models/real_front_cam_rfdetr_onnx # inference-models package directory
     # WARNING: These class names MUST be manually maintained when changing models to have new classes. 
     # You must also update the `class_names.txt` file in the model package.
     # A mismatch here can crash the vision node.

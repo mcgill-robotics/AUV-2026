@@ -17,7 +17,7 @@ attitude_controller:
         integral_activation_threshold_deg: 10.0
         buoyancy: 264.09 # [N]
         r_bv_v: [ 0.0, 0.0, 0.0 ] # [m] From CAD Model    
-        enabled: false
+        enabled: true
 
 depth_controller:
     ros__parameters:
@@ -28,7 +28,7 @@ depth_controller:
         I_MAX: 10.0
         integral_activation_threshold: 0.3
         net_buoyancy: 9.03 # Newtons
-        enabled: false
+        enabled: true
 
 x_controller:
     ros__parameters:

@@ -81,5 +81,6 @@ install(DIRECTORY
         DESTINATION include/${PROJECT_NAME})
 
 ament_export_include_directories(include)
+ament_export_dependencies(rclcpp std_msgs std_srvs geometry_msgs sensor_msgs message_filters dvl_msgs tf2_ros tf2 nav_msgs angles)
 
 ament_package()
