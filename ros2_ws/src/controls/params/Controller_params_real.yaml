@@ -17,7 +17,7 @@ attitude_controller:
         integral_activation_threshold_deg: 10.0
         buoyancy: 275.4 # [N]
         r_bv_v: [ 0.0, 0.0, 0.0 ] # [m] Tuned in pool tests.    
-        enabled: true
+        enabled: false
 
 depth_controller:
     ros__parameters:
@@ -28,7 +28,7 @@ depth_controller:
         I_MAX: 10.0
         integral_activation_threshold: 0.3
         net_buoyancy: 3.5 # Newtons.
-        enabled: true
+        enabled: false
 
 x_controller:
     ros__parameters:
@@ -38,7 +38,7 @@ x_controller:
         KI: 0.5
         I_MAX: 10.0
         integral_activation_threshold: 0.5
-        enabled: true
+        enabled: false
 
 y_controller:
     ros__parameters:
@@ -48,4 +48,4 @@ y_controller:
         KI: 0.5
         I_MAX: 10.0
         integral_activation_threshold: 0.5
-        enabled: true
+        enabled: false

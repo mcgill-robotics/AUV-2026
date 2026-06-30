@@ -401,7 +401,7 @@ class GateTask(py_trees.composites.Sequence):
             BasicActionBehaviour(
                 name="Initial Dive (-1.0m)",
                 goal=set_depth(
-                    z=-1.0,
+                    z=-1.2,
                     tolerance=position_tolerance,
                     hold_time=hold_time,
                     timeout=timeout,
@@ -440,7 +440,7 @@ class GateTask(py_trees.composites.Sequence):
             [
                 SearchSweepBehaviour(
                     target_class="gate",
-                    num_steps=5,
+                    num_steps=8,
                     max_attempts=search_attempts,
                     step_timeout=scan_pause_time,
                     clockwise=False,

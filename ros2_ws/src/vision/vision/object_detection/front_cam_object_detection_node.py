@@ -974,17 +974,17 @@ class FrontCamObjectDetectorNode():
                     # Invert Y and Z axes to match ROS FLU (Forward-Left-Up) frame
                     # because ZED natively outputs in FRD (Forward-Right-Down)
                     imu_msg.orientation.x = float(orientation[0])
-                    imu_msg.orientation.y = -float(orientation[1])
-                    imu_msg.orientation.z = -float(orientation[2])
+                    imu_msg.orientation.y = float(orientation[1])
+                    imu_msg.orientation.z = float(orientation[2])
                     imu_msg.orientation.w = float(orientation[3])
                     
                     imu_msg.angular_velocity.x = math.radians(float(angular_velocity[0]))
-                    imu_msg.angular_velocity.y = -math.radians(float(angular_velocity[1]))
+                    imu_msg.angular_velocity.y = math.radians(float(angular_velocity[1]))
                     imu_msg.angular_velocity.z = -math.radians(float(angular_velocity[2]))
                     
                     imu_msg.linear_acceleration.x = float(linear_acceleration[0])
-                    imu_msg.linear_acceleration.y = -float(linear_acceleration[1])
-                    imu_msg.linear_acceleration.z = -float(linear_acceleration[2])
+                    imu_msg.linear_acceleration.y = float(linear_acceleration[1])
+                    imu_msg.linear_acceleration.z = float(linear_acceleration[2])
                     
                     self.pub_zed_imu.publish(imu_msg)
 
