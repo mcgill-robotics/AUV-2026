@@ -131,7 +131,7 @@ class TorpedoTask(py_trees.composites.Sequence):
             [
                 self.board_rough_position_sequence(),
                 self.board_orientation_refinement_selector(),
-                # board_type,
+                board_type,
                 self.firing_order_strategy_selector()
             ]
          )
@@ -304,7 +304,7 @@ class TorpedoTask(py_trees.composites.Sequence):
                     name="Check torpedo count is 1",
                     check=py_trees.common.ComparisonExpression(
                         variable="/torpedo/count",
-                        value=1,
+                        value=2,
                         operator=operator.eq,
                     )
                 ),
@@ -330,8 +330,8 @@ class TorpedoTask(py_trees.composites.Sequence):
         
         board_type_selector.add_children(
             [
-                # self.board_type_strategy(BoardType.FIRE_TOP_LEFT, hole_type),
-                self.board_type_strategy(BoardType.BLOOD_TOP_LEFT, hole_type)
+                self.board_type_strategy(BoardType.FIRE_TOP_LEFT, hole_type),
+                # self.board_type_strategy(BoardType.BLOOD_TOP_LEFT, hole_type)
             ]
          )
         return board_type_selector
