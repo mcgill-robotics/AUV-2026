@@ -22,6 +22,20 @@ def yaw_from_quaternion(q: Quaternion) -> float:
     euler = r.as_euler('ZYX', degrees=False)
     return euler[0]
 
+def euler_to_quaternion(roll: float, pitch: float, yaw: float) -> Quaternion:
+    """Convert Euler angles to a geometry_msgs Quaternion.
+
+    Args:
+        roll: Roll angle in radians.
+        pitch: Pitch angle in radians.
+        yaw: Yaw angle in radians.
+
+    Returns:
+        geometry_msgs/Quaternion
+    """
+    r = Rotation.from_euler('ZYX', [yaw, pitch, roll], degrees=False)
+    q_arr = r.as_quat()
+    return Quaternion(x=q_arr[0], y=q_arr[1], z=q_arr[2], w=q_arr[3])
 
 def quaternion_from_yaw(yaw: float) -> Quaternion:
     """Create a geometry_msgs Quaternion from a pure yaw rotation.

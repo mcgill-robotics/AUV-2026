@@ -6,25 +6,10 @@
   },
   "layout": {
     "first": {
-      "first": "Publish!depth_sp",
-      "second": {
-        "first": "Publish!attitude_sp",
-        "second": {
-          "first": {
-            "first": "Publish!xy_sp",
-            "second": "Publish!w3c60c",
-            "direction": "column",
-            "splitPercentage": 49.609931405317894
-          },
-          "second": "Plot!11y8nrv",
-          "direction": "column",
-          "splitPercentage": 58.478024117530104
-        },
-        "direction": "column",
-        "splitPercentage": 25.252283876525212
-      },
+      "first": "CallService!2eqthq4",
+      "second": "Plot!11y8nrv",
       "direction": "column",
-      "splitPercentage": 23.372803639028238
+      "splitPercentage": 83.54584092289011
     },
     "second": {
       "first": {
@@ -43,14 +28,33 @@
       "splitPercentage": 49.86529193529038
     },
     "direction": "row",
-    "splitPercentage": 17.341939035488068
+    "splitPercentage": 29.520295202952028
   },
   "configById": {
     "RawMessages!imu_raw": {
       "topicPath": "/imu/data"
     },
     "RawMessages!imu_proc": {
-      "topicPath": "/auv_frame/imu"
+      "topicPath": "/auv_frame/imu",
+      "defaultExpanded": false
+    },
+    "Plot!f8j8jt": {
+      "paths": [
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/controls/quaternion_setpoint.@rpy.yaw.@degrees",
+          "enabled": true,
+          "color": "#f5774d",
+          "id": "123412f9-31ef-4df9-aafd-6536b12b5420"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/auv_frame/imu.orientation.@rpy.yaw.@degrees",
+          "enabled": true,
+          "color": "#4e98e2",
+          "id": "601cc092-54c4-4219-ae25-5850c2da8591"
+        }
+      ]
     },
     "RawMessages!depth_raw": {
       "topicPath": "/sensors/depth/z"
@@ -85,7 +89,8 @@
       "topicPath": "/dvl/dead_reckoning"
     },
     "RawMessages!dvl_odom": {
-      "topicPath": "/dvl/odometry"
+      "topicPath": "/dvl/odometry",
+      "defaultExpanded": false
     },
     "3D!pose_viz": {
       "cameraState": {
@@ -150,27 +155,15 @@
       "imageMode": {}
     },
     "RawMessages!pose_raw": {
-      "topicPath": "/state/pose"
+      "topicPath": "/state/pose",
+      "defaultExpanded": false
     },
-    "Publish!depth_sp": {
-      "topicName": "/controls/depth_setpoint",
-      "datatype": "std_msgs/Float64",
-      "value": "{\n  \"data\": 0.3\n}"
-    },
-    "Publish!attitude_sp": {
-      "topicName": "/controls/quaternion_setpoint",
-      "datatype": "geometry_msgs/Quaternion",
-      "value": "{\n  \"x\": 0.3826,\n  \"y\": 0,\n  \"z\": 0,\n  \"w\": 0.9238\n}\n"
-    },
-    "Publish!xy_sp": {
-      "topicName": "/controls/x_setpoint",
-      "datatype": "std_msgs/msg/Float64",
-      "value": "{\n  \"data\": 0.0\n}"
-    },
-    "Publish!w3c60c": {
-      "topicName": "/controls/y_setpoint",
-      "datatype": "std_msgs/msg/Float64",
-      "value": "{\n  \"data\": 0\n}"
+    "CallService!2eqthq4": {
+      "requestPayload": "{\n \"x\": 0.0,\n \"y\": 0.0,\n \"z\": 1.0,\n \"roll\": 0.0,\n \"pitch\": 0.0,\n \"yaw\": 45.0\n}\n",
+      "layout": "vertical",
+      "timeoutSeconds": 10,
+      "serviceName": "/controls/debug_setpoint",
+      "editingMode": true
     },
     "Plot!11y8nrv": {
       "paths": [
@@ -195,7 +188,7 @@
       "showPlotValuesInLegend": true
     },
     "Tab!imu": {
-      "activeTabIdx": 1,
+      "activeTabIdx": 2,
       "tabs": [
         {
           "title": "IMU (Raw)",
@@ -204,6 +197,10 @@
         {
           "title": "IMU (Processed)",
           "layout": "RawMessages!imu_proc"
+        },
+        {
+          "title": "",
+          "layout": "Plot!f8j8jt"
         }
       ]
     },
