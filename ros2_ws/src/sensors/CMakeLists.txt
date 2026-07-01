@@ -24,6 +24,11 @@ find_package(tf2 REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(angles REQUIRED)
 
+set(PYTHON_NODE_SOURCES
+  sensors/health_monitor.py
+  sensors/dvl_monitor.py
+)
+
 # Executables
 
 add_executable(state_aggregator src/State_aggregator.cpp)
@@ -82,5 +87,9 @@ install(DIRECTORY
 
 ament_export_include_directories(include)
 ament_export_dependencies(rclcpp std_msgs std_srvs geometry_msgs sensor_msgs message_filters dvl_msgs tf2_ros tf2 nav_msgs angles)
+
+# Python nodes
+ament_python_install_package(${PROJECT_NAME})
+install(PROGRAMS ${PYTHON_NODE_SOURCES} DESTINATION lib/${PROJECT_NAME})
 
 ament_package()
