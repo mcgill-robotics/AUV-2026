@@ -691,6 +691,8 @@ class AlignTorpedoToHole(Navigation):
                         return py_trees.common.Status.FAILURE
                 self.auv_to_torpedo = self.auv_to_torpedos[side]
                 
+                
+                self.node.get_logger().info(f"[{self.name}] Trajectory coeffs: Forward: {self.forward_trajectory.coef}, Lateral: {self.lateral_trajectory.coef}, Vertical: {self.vertical_trajectory.coef}")
                 # after alignment, torpedo launch should be aligned with the hole
                 # to know how much to shift back by, we need to know the trajectory time such that both lateral and vertical trajectories are 0
                 # thus we find the roots of both trajectories and plug that into the forward trajectory to find the distance to shift back by
@@ -698,7 +700,7 @@ class AlignTorpedoToHole(Navigation):
                 # TODO: since lateral trajectory is literally 0, we can just use the roots of the vertical trajectory, but for robustness, we will find the common roots of both trajectories
                 # take only real part of the root
                 #! lateral_roots = sorted([root.real for root in self.lateral_trajectory.roots()])
-                vertical_roots = sorted([root.real for root in self.vertical_trajectory.roots()])
+                vertical_roots = sorted(r.real for r in self.vertical_trajectory.roots() if np.isreal(r))
                 # round the roots to 6 decimal so taking the common roots is more robust to numerical errors
                 # filter out roots that are not within tolerance
                 # set both and take intersection to find common roots
@@ -710,14 +712,27 @@ class AlignTorpedoToHole(Navigation):
                 # 0 is always solution since all trajectories start at 0
                 if len(common_roots) < 2:
                     #! self.node.get_logger().error(f"[{self.name}] Torpedo lateral and vertical trajectories do not intersect within tolerance beyond trivial 0 case. Lateral roots: {lateral_roots}, Vertical roots: {vertical_roots}, Common roots: {common_roots}")
-                    self.node.get_logger().error(f"[{self.name}] Torpedo vertical trajectory does have non trivial roots. Vertical roots: {vertical_roots}")
+                    self.node.get_logger().error(f"[{self.name}] Torpedo vertical trajectory does not have non trivial roots. Vertical roots: {vertical_roots}")
                     return py_trees.common.Status.FAILURE
                 
+                self.node.get_logger().info(f"[{self.name}] Torpedo lateral and vertical trajectories intersect at common roots: {common_roots}. Corresponding forward trajectory values: {[self.forward_trajectory(root) for root in common_roots]}. Hole forward offset: {self.to_hole_offset[0]}")
+                root_index = 1
                 backward_offset = self.forward_trajectory(common_roots[1])
+                cannot_reach_minimum_offset = False
+                while abs(self.to_hole_offset[0]) > abs(backward_offset):
+                    self.node.get_logger().info(f"[{self.name}] Torpedo forward trajectory at root t={common_roots[root_index]}; x(t)={backward_offset}, Hole forward offset: {self.to_hole_offset[0]}. Not enough to reach hole, checking next root...")
+                    if root_index + 1 >= len(common_roots):
+                        self.node.get_logger().error(f"[{self.name}] Torpedo forward trajectory does not reach minimum hole offset. Using last root: t={common_roots[root_index]} where x(t)={backward_offset}, Hole forward offset: {self.to_hole_offset[0]}")
+                        cannot_reach_minimum_offset = True
+                        break
+                    root_index += 1
+                    backward_offset = self.forward_trajectory(common_roots[root_index])
+                if not cannot_reach_minimum_offset:
+                    self.node.get_logger().info(f"[{self.name}] Torpedo forward trajectory at root t={common_roots[root_index]}; x(t)={backward_offset}, Hole forward offset: {self.to_hole_offset[0]}. Enough to reach hole, proceeding with alignment...")
                 target_orientation = geometry.rotate_quaternion(self.blackboard.board.orientation, 0, 0, math.pi)
                 
                 offset_vector = Point(
-                    x=self.to_hole_offset[0] - self.auv_to_torpedo[0] - backward_offset,
+                    x=- self.auv_to_torpedo[0] - backward_offset,
                     y=self.to_hole_offset[1] - self.auv_to_torpedo[1],
                     z=self.to_hole_offset[2] - self.auv_to_torpedo[2]
                 )
