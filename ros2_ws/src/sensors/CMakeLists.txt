@@ -20,11 +20,14 @@ find_package(eigen3_cmake_module REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(dvl_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(angles REQUIRED)
 
 # Executables
 
 add_executable(state_aggregator src/State_aggregator.cpp)
-ament_target_dependencies(state_aggregator rclcpp std_msgs std_srvs geometry_msgs sensor_msgs message_filters tf2_ros)
+ament_target_dependencies(state_aggregator rclcpp std_msgs std_srvs geometry_msgs sensor_msgs message_filters tf2_ros tf2 nav_msgs dvl_msgs angles)
 target_link_libraries(state_aggregator Eigen3::Eigen)
 target_include_directories(state_aggregator PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -32,7 +35,7 @@ target_include_directories(state_aggregator PUBLIC
 )
 
 add_executable(imu_processor src/Imu_processor.cpp)
-ament_target_dependencies(imu_processor rclcpp std_msgs geometry_msgs sensor_msgs message_filters)
+ament_target_dependencies(imu_processor rclcpp std_msgs geometry_msgs sensor_msgs message_filters nav_msgs dvl_msgs angles tf2)
 target_link_libraries(imu_processor Eigen3::Eigen)
 target_include_directories(imu_processor PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -48,7 +51,7 @@ target_include_directories(depth_processor PUBLIC
 )
 
 add_executable(dvl_processor src/dvl_processor.cpp)
-ament_target_dependencies(dvl_processor rclcpp std_msgs geometry_msgs sensor_msgs message_filters dvl_msgs)
+ament_target_dependencies(dvl_processor rclcpp std_msgs geometry_msgs sensor_msgs message_filters dvl_msgs tf2 angles)
 target_link_libraries(dvl_processor Eigen3::Eigen)
 target_include_directories(dvl_processor PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -78,5 +81,6 @@ install(DIRECTORY
         DESTINATION include/${PROJECT_NAME})
 
 ament_export_include_directories(include)
+ament_export_dependencies(rclcpp std_msgs std_srvs geometry_msgs sensor_msgs message_filters dvl_msgs tf2_ros tf2 nav_msgs angles)
 
 ament_package()

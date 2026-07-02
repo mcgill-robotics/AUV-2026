@@ -7,13 +7,14 @@ from rclpy.node import Node
 from geometry_msgs.msg import Wrench
 
 class PID:
-        def __init__(self, KP, KD, KI, I_MAX=0.0):
+        SETPOINT_RESET_EPSILON = 1e-3
+
+        def __init__(self, KP, KD, KI, I_MAX=0.0, integral_activation_threshold=float('inf')):
                 self.KP = KP
                 self.KD = KD
                 self.KI = KI
                 self.I_MAX = I_MAX
-
-
+                self.integral_activation_threshold = integral_activation_threshold
 
                 self.position_error = 0.0
                 self.integral_error = 0.0
@@ -23,15 +24,17 @@ class PID:
                 
 
         def compute_errors(self, setpoint, position, previous_position, time_step):
-                if setpoint != self.last_setpoint: # Reset integral term for a new setpoint
+                # Reset integral term for a new setpoint (using a small epsilon for float comparison)
+                if abs(setpoint - self.last_setpoint) > self.SETPOINT_RESET_EPSILON: 
                         self.integral_error = 0.0
                         self.last_setpoint = setpoint
 
                 self.position_error = setpoint - position
 
-
-                self.integral_error += self.position_error * time_step
-                self.integral_error = np.clip(self.integral_error, -self.I_MAX, self.I_MAX)
+                # Conditional Integration: Only integrate if error is within the threshold
+                if abs(self.position_error) <= self.integral_activation_threshold:
+                        self.integral_error += self.position_error * time_step
+                        self.integral_error = np.clip(self.integral_error, -self.I_MAX, self.I_MAX)
 
                 # Differentiate position to avoid derivative kick
                 self.derivative_error = (position - previous_position) / time_step

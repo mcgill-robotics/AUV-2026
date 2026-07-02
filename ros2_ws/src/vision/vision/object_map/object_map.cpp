@@ -156,6 +156,11 @@ ObjectMapNode::ObjectMapNode() : Node("object_map_node")
             10,
             std::bind(&ObjectMapNode::down_cam_detection_callback, this, std::placeholders::_1));
 
+    clear_map_service = this->create_service<std_srvs::srv::Trigger>(
+        "~/clear",
+        std::bind(&ObjectMapNode::clear_map_callback, this, std::placeholders::_1, std::placeholders::_2)
+    );
+
     RCLCPP_INFO(this->get_logger(), "Using synchronized front-camera detection frames for object mapping.");
 }
 
@@ -739,5 +744,16 @@ void ObjectMapNode::publish_object_map(const std::vector<Track>& tracks)
             this->get_logger(),
             "Object map pipeline latency: %.9f seconds",
             time_diff.seconds());
+}
+
+void ObjectMapNode::clear_map_callback(const std::shared_ptr<std_srvs::srv::Trigger::Request> /*request*/,
+                                       std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+{
+    persistent_objects.clear();
+    front_tracker.clear();
+    down_tracker.clear();
+    response->success = true;
+    response->message = "Object map and persistent objects cleared.";
+    RCLCPP_INFO(this->get_logger(), "Cleared object map and persistent objects via service call.");
 }
 

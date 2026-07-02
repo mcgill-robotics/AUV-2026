@@ -25,7 +25,13 @@ class RosbagManagerNode(Node):
             'rosbag_profiles.yaml'
         )
         self.declare_parameter('profiles_file', default_config)
+        self.declare_parameter('auto_start', False)
+        self.declare_parameter('auto_start_profile', 'all')
+        self.declare_parameter('recording_name_prefix', 'bag')
         config_path = self.get_parameter('profiles_file').get_parameter_value().string_value
+        self.auto_start = self.get_parameter('auto_start').get_parameter_value().bool_value
+        self.auto_start_profile = self.get_parameter('auto_start_profile').get_parameter_value().string_value
+        self.recording_name_prefix = self.get_parameter('recording_name_prefix').get_parameter_value().string_value
 
         # Load profiles and config
         self.profiles = {}
@@ -53,6 +59,11 @@ class RosbagManagerNode(Node):
 
         # Create directory
         os.makedirs(self.save_dir, exist_ok=True)
+
+        # Auto-start if requested
+        if self.auto_start:
+            self.get_logger().info(f"Auto-starting recording with profile '{self.auto_start_profile}' and prefix '{self.recording_name_prefix}'")
+            self.start_recording(self.auto_start_profile, self.recording_name_prefix)
 
     def control_callback(self, request, response):
         action = request.action

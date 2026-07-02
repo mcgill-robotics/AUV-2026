@@ -9,6 +9,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPo
 from rcl_interfaces.msg import SetParametersResult
 from controls.pid import PID
 
+from auv_msgs.srv import SetFloat64
 from geometry_msgs.msg import Wrench
 from std_msgs.msg import Float64
 
@@ -28,12 +29,14 @@ class DepthController(Node):
         self.pub_effort = self.create_publisher(Wrench, '/controls/depth_effort', qos_profile_sensor_data)
         self.sub_depth = self.create_subscription(Float64, 'auv_frame/depth', self.depth_callback, qos_profile_sensor_data)
         self.setpoint_sub = self.create_subscription(Float64, '/controls/depth_setpoint', self.setpoint_callback, qos)
+        self.srv_setpoint_depth = self.create_service(SetFloat64, '/controls/srv_setpoint_depth', self.setpoint_srv_callback)
 
         self.declare_parameter('control_loop_hz', 10.0)
         self.declare_parameter("KP", 0.0)
         self.declare_parameter("KD", 0.0)
         self.declare_parameter("KI", 0.0)
         self.declare_parameter("I_MAX", 0.0)
+        self.declare_parameter("integral_activation_threshold", 1.0)
         self.declare_parameter("net_buoyancy", 0.0)
         self.declare_parameter("enabled", False)
 
@@ -43,12 +46,13 @@ class DepthController(Node):
         self.KD = float(self.get_parameter("KD").value)
         self.KI = float(self.get_parameter("KI").value)
         self.I_MAX = float(self.get_parameter("I_MAX").value)
+        self.integral_activation_threshold = float(self.get_parameter("integral_activation_threshold").value)
         self.net_buoyancy = float(self.get_parameter("net_buoyancy").value)
         self.enabled = bool(self.get_parameter("enabled").value)
 
         self.parameter_callback_handle = self.add_on_set_parameters_callback(self.parameters_callback)
 
-        self.pid = PID(self.KP, self.KD, self.KI, self.I_MAX)
+        self.pid = PID(self.KP, self.KD, self.KI, self.I_MAX, self.integral_activation_threshold)
 
         self.setpoint_depth = 0.25  # Desired depth in meters. TODO: Change default value to AUV float depth
         self.current_depth = 0.0   # Current depth in meters
@@ -68,6 +72,12 @@ class DepthController(Node):
     def setpoint_callback(self, msg):
         self.setpoint_depth = msg.data
 
+    def setpoint_srv_callback(self, request, response):
+        self.setpoint_depth = request.data
+        response.success = True
+        response.message = f"Setpoint updated to {self.setpoint_depth}."
+        return response
+
     def parameters_callback(self, parameters):
         result = SetParametersResult()
         result.successful = True
@@ -78,7 +88,10 @@ class DepthController(Node):
                     result.successful = False
                     result.reason = "'enabled' must be a bool"
                     return result
-                self.enabled = bool(parameter.value)
+                new_enabled = bool(parameter.value)
+                if new_enabled and not self.enabled:
+                    self.setpoint_depth = self.current_depth
+                self.enabled = new_enabled
                 self.get_logger().info(f"Depth controller enabled: {self.enabled}")
 
         return result

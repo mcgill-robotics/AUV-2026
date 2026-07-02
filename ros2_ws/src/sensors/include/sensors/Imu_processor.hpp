@@ -1,6 +1,7 @@
 #pragma once
 
 #include <sensor_msgs/msg/imu.hpp>
+#include <dvl_msgs/msg/dvldr.hpp>
 #include <geometry_msgs/msg/vector3_stamped.hpp>
 #include <message_filters/subscriber.h>
 #include <Eigen/Dense>
@@ -38,9 +39,11 @@ class ImuProcessor: public rclcpp::Node
 
 	private:
 		void imu_callback(const imu_msg::SharedPtr imu_in);
+		void dvl_odom_callback(const dvl_msgs::msg::DVLDR::SharedPtr msg);
 
 		rclcpp::Publisher<imu_msg>::SharedPtr imu_pub_;
 		rclcpp::Subscription<imu_msg>::SharedPtr imu_sub_;
+		rclcpp::Subscription<dvl_msgs::msg::DVLDR>::SharedPtr dvl_odom_sub_;
 
 		ImuDataRawFrame parse_imu(const imu_msg& imu_in) const;
 		ImuDataAUVFrame process_imu(const ImuDataRawFrame& imu_raw) const;
@@ -56,6 +59,11 @@ class ImuProcessor: public rclcpp::Node
 		quatd q_iv_;
 		std::string frame_id_auv_;
 		std::string frame_id_global_;			
+
+		double target_yaw_offset_{0.0};
+		double current_yaw_offset_{0.0};
+		bool use_dvl_yaw_correction_{false};
+		double dvl_yaw_interpolation_rate_{0.01};
 
 };
 } // namespace sensors

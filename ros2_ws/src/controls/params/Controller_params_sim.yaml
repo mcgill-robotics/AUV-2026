@@ -1,12 +1,20 @@
 attitude_controller:
     ros__parameters:
         control_loop_rate: 10.0
+        # P
         P_ex: 6.0
         P_ey: 6.0
         P_ez: 6.0
+        # I
+        I_ex: 0.0
+        I_ey: 0.0
+        I_ez: 0.0
+        # D
         P_wx: 1.0
         P_wy: 1.0
         P_wz: 1.0
+        I_MAX: 3.0
+        integral_activation_threshold_deg: 10.0
         buoyancy: 264.09 # [N]
         r_bv_v: [ 0.0, 0.0, 0.0 ] # [m] From CAD Model    
         enabled: true
@@ -18,6 +26,7 @@ depth_controller:
         KD: 50.0
         KI: 0.0
         I_MAX: 10.0
+        integral_activation_threshold: 0.3
         net_buoyancy: 9.03 # Newtons
         enabled: true
 
@@ -26,8 +35,9 @@ x_controller:
         control_loop_hz: 10.0
         KP: 15.0
         KD: 50.0
-        KI: 0.0
+        KI: 0.5
         I_MAX: 10.0
+        integral_activation_threshold: 0.7
         enabled: true
 
 y_controller:
@@ -35,6 +45,7 @@ y_controller:
         control_loop_hz: 10.0
         KP: 15.0
         KD: 50.0
-        KI: 0.0
+        KI: 0.5
         I_MAX: 10.0
+        integral_activation_threshold: 0.7
         enabled: true

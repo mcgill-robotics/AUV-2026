@@ -2,8 +2,8 @@ import math
 import py_trees
 from controls.goal_helpers import set_depth, translate_field_centric
 from ..mission_behaviour_components import BasicActionBehaviour
-from ..vision_behaviours import SearchSweepBehaviour
-from .slalom_behaviours import SlalomLayer
+from ..vision_behaviours import ScanBehaviour, SearchSweepBehaviour, GoNearObject
+from .slalom_behaviours import SlalomLayer, ForceBlindDriveBehaviour
 
 
 class SlalomTask(py_trees.composites.Sequence):
@@ -53,6 +53,8 @@ class SlalomTask(py_trees.composites.Sequence):
         scan_angular_tolerance_rad: float = math.radians(30.0),
         scan_hold_time: float = 0.1,
         scan_timeout: float = 30.0,
+        force_blind_forward_dist: float = 0.0,
+        initial_approach_distance: float = 3.0,
     ):
         super().__init__("Slalom Task", memory=True)
 
@@ -62,6 +64,19 @@ class SlalomTask(py_trees.composites.Sequence):
                 goal=set_depth(z=initial_depth, timeout=30.0, tolerance=position_tolerance, hold_time=hold_time),
             )
         )
+
+        if force_blind_forward_dist > 0.0:
+            self.add_child(
+                ForceBlindDriveBehaviour(
+                    distance=force_blind_forward_dist,
+                    target_yaw=0.0,
+                    position_tolerance=position_tolerance,
+                    hold_time=hold_time,
+                    timeout=timeout,
+                    name=f"Forced Blind Drive ({force_blind_forward_dist}m)",
+                )
+            )
+            return
 
         # Strategy Selector: Try nominal slalom, if completely lost initially, fallback to full length drive
         strategy_selector = py_trees.composites.Selector("Slalom Strategy", memory=True)
@@ -99,6 +114,26 @@ class SlalomTask(py_trees.composites.Sequence):
         ])
         nominal_execution.add_child(initial_search)
 
+        if initial_approach_distance > 0.0:
+            approach_selector = py_trees.composites.Selector("Initial Approach", memory=True)
+            approach_selector.add_children([
+                GoNearObject(
+                    target_class="red_pipe",
+                    target_distance=initial_approach_distance,
+                    tolerance_meters=position_tolerance,
+                    hold_time=hold_time,
+                    name=f"Approach Red Pipe (dist={initial_approach_distance})"
+                ),
+                GoNearObject(
+                    target_class="white_pipe",
+                    target_distance=initial_approach_distance,
+                    tolerance_meters=position_tolerance,
+                    hold_time=hold_time,
+                    name=f"Approach White Pipe (dist={initial_approach_distance})"
+                )
+            ])
+            nominal_execution.add_child(approach_selector)
+
         # 2. Add each layer as a self-recovering sequence
         for i in range(num_layers):
             layer = SlalomLayer(
@@ -122,14 +157,13 @@ class SlalomTask(py_trees.composites.Sequence):
             nominal_execution.add_child(layer)
 
         # --- TOTAL FAILSAFE ---
-        total_failsafe = BasicActionBehaviour(
-            name="Total Slalom Failsafe (Blind Drive Field-X)",
-            goal=translate_field_centric(
-                dx=num_layers * layer_distance, 
-                tolerance=position_tolerance,
-                hold_time=hold_time,
-                timeout=timeout
-            ),
+        total_failsafe = ForceBlindDriveBehaviour(
+            distance=num_layers * layer_distance,
+            target_yaw=0.0,
+            position_tolerance=position_tolerance,
+            hold_time=hold_time,
+            timeout=timeout,
+            name="Total Slalom Failsafe (Blind Drive Global-X)",
         )
 
         strategy_selector.add_children([nominal_execution, total_failsafe])
