@@ -104,6 +104,13 @@ planner_root_tree:
       pool_depth: 2.1                     # (m) Estimated depth of the pool
       known_height_to_pill: 0.745625      # (m) Experimental distance from camera to pill for area calibration
       known_pill_area: 16900              # (px^2) Pixel area of the pill at the known calibration height
+      COM_to_dvl_height: 0.1              # (m) Distance from the center of mass to the DVL in the vertical direction
+      
+      # Shortcuts to have shorter form of the mission. These params are either or (xor).
+      navigation_only: False               # (bool) If true, only perform navigation steps (align, surface, dive) and skip item drop
+      item_drop_only: False               # (bool) If true, only perform item drop and skip navigation steps (align, surface, dive)
+      
+      # Navigate to table
       shallow_approach_depth: -0.5        # (m) Shallow depth to approach the table from above
       shallow_approach_tolerance: 0.2     # (m) Tolerance for reaching the shallow approach depth
       shallow_approach_hold_time: 1.0     # (s) Hold time for the shallow approach depth
@@ -111,10 +118,24 @@ planner_root_tree:
       surface_tolerance: 0.1              # (m) Tolerance for reaching the surface depth
       surface_hold_time: 3.0              # (s) Hold time for the surface depth
       ending_dive_depth: -0.7             # (m) Depth to dive back down to at the end of the navigation subtask
-      navigation_only: True               # (bool) If true, only perform navigation steps (align, surface, dive) and skip item drop
       position_tolerance: 0.3             # (m)
       hold_time: 1.0                      # (s)
       timeout: 30.0                       # (s)
+
+      # Table cleanup
+      relative_height_to_measure_table: -0.4 # (m) Depth to measure the table height with the DVL's altitude reading
+      expected_table_items: ["table", "bandaid", "warning",
+                             "redcross_helmet"] # (list) List of expected items to see when properly above table
+                                                # param is used to determine if we are properly lined up above the table
+      survey_repair_items: {items_labels: ["electric", "nutbolt"], bin_label: "warning"}
+      search_rescue_items: {items_labels: ["bandaid", "pill"], bin_label: "redcross_helmet"}
+      grab_only_for_role: True            # (bool) If true, only grab items for the role that is currently selected
+      number_of_items_to_grab: 1          #(items) Number of items to grab from the table, starting from the roles for the current role 
+      item_drop_height_relative_bin: 0.1  # (m) Height above the bin to drop the item relative to the bin's height
+      tf_auv_to_grabber:                  # (m) and (deg) Transform from the AUV's center of mass to the grabber's open bracket in the AUV body frame
+        xyz: [-0.1125559, -0.1739998, -0.01242304] 
+        rpy: [0.0, 0.0, 0.0] 
+        
 
     return_home:
       return_distance: 5.0                # (m) Distance to navigate past the gate initially
