@@ -3,7 +3,7 @@ from numpy.polynomial.polynomial import Polynomial
 from .torpedo_behaviours import *
 from ..vision_behaviours import SearchSweepBehaviour, CircleAroundToFindBehaviour
 import operator
-from typing import cast, Tuple, Callable
+from typing import List, cast, Tuple, Callable
 class HoleType(Enum):
     LARGE = 1
     SMALL = 2
@@ -50,14 +50,9 @@ class TorpedoTask(py_trees.composites.Sequence):
                 }
             },
             launch_function: Callable[[TorpedoSide], None] = lambda side: print(f"Launching {side.name} torpedo"),
+            torpedo_firing_buffer_time: float = 1.0
         ):
         super().__init__("Torpedo Task", memory=True)
-        # TODO: Implement Torpedo Task
-        # 1. Locate Torpedo board via acoustic localization or vision
-        # 2. Identify large and small openings matching role
-        # 3. Align with Large opening and fire torpedo
-        # 4. Align with Small opening and fire torpedo
-        # 5. Optional: Maintain distance (1ft or 1.5ft) for extra points
         
         self.launch_function = launch_function
         self.pause_time = scan_pause_time
@@ -104,6 +99,8 @@ class TorpedoTask(py_trees.composites.Sequence):
             }
         }
         
+        self.torpedo_firing_buffer_time = torpedo_firing_buffer_time
+        
         self.add_children([
             py_trees.behaviours.SetBlackboardVariable(
                 name="Set Torpedo Count to 2",
@@ -111,13 +108,23 @@ class TorpedoTask(py_trees.composites.Sequence):
                 variable_value=2,
                 overwrite=True
             ),
-            self.board_sequence(),
-            # self.node_base_case(),
-            # py_trees.behaviours.Success(name="Placeholder Torpedo Success")
+            self.strategy_selector()
         ])
 
-    def tick_tree(self):
-        pass
+    def strategy_selector(self)->py_trees.composites.Selector:
+        """
+        Selector for torpedo strategy. If we can find and align to the board, we will try to fire torpedos through the openings. If we fail to find or align to the board, we can fallback to just firing torpedos at random in front of us for partial points.
+
+        returns py_trees.composites.Selector
+        """
+        strategy_selector = py_trees.composites.Selector("Torpedo Strategy Selector", memory=True)
+        strategy_selector.add_children(
+            [
+                self.board_sequence(),
+                self.node_base_case()
+            ]
+         )
+        return strategy_selector
 
     def board_sequence(self)->py_trees.composites.Sequence:
         """
@@ -314,9 +321,9 @@ class TorpedoTask(py_trees.composites.Sequence):
         
         firing_order_selector.add_children(
             [
-                # large_then_small,
+                large_then_small,
                 large_only,
-                # small_only
+                small_only
             ]
          )
         return firing_order_selector
@@ -331,7 +338,7 @@ class TorpedoTask(py_trees.composites.Sequence):
         board_type_selector.add_children(
             [
                 self.board_type_strategy(BoardType.FIRE_TOP_LEFT, hole_type),
-                # self.board_type_strategy(BoardType.BLOOD_TOP_LEFT, hole_type)
+                self.board_type_strategy(BoardType.BLOOD_TOP_LEFT, hole_type)
             ]
          )
         return board_type_selector
@@ -385,7 +392,7 @@ class TorpedoTask(py_trees.composites.Sequence):
         hole_selector.add_children(
             [
                 self.distance_strategy_selector(icon1,self.icon_to_nearest_hole[board_type][icon1]),
-                # self.distance_strategy_selector(icon2,self.icon_to_nearest_hole[board_type][icon2])
+                self.distance_strategy_selector(icon2,self.icon_to_nearest_hole[board_type][icon2])
             ]
         )                                          
         return hole_selector
@@ -401,7 +408,7 @@ class TorpedoTask(py_trees.composites.Sequence):
         distance_strategy_selector.add_children(
             [
                 self.distance_strategy(self.farther_distance_threshold,icon, offset_to_hole),
-                # self.distance_strategy(self.far_distance_threshold,icon, offset_to_hole),
+                self.distance_strategy(self.far_distance_threshold,icon, offset_to_hole),
             ]
          )
         return distance_strategy_selector
@@ -451,7 +458,7 @@ class TorpedoTask(py_trees.composites.Sequence):
         
         torpedo_firing_sequence = py_trees.composites.Sequence(f"Torpedo Firing Sequence", memory=True)
         
-        children = [FireTorpedo(launch_function=self.launch_function)]
+        children: List[py_trees.behaviour.Behaviour] = [FireTorpedo(launch_function=self.launch_function, firing_buffer_time=self.torpedo_firing_buffer_time)]
         if offset_from_icon_to_hole is not None:
             children.insert(0, 
                 AlignTorpedoToHole(
@@ -476,11 +483,18 @@ class TorpedoTask(py_trees.composites.Sequence):
         returns py_trees.composites.Sequence
         """
 
-        node_base_case = py_trees.composites.Sequence("base_case", memory=True)
+        node_base_case = py_trees.composites.Sequence("Base Case (No Board Alignment)", memory=True)
         node_base_case.add_children(
             [
-                # TODO add behaviours to just fire torpedos at random in front of us for partial points
-                py_trees.behaviours.Success(name="Placeholder Torpedo Success")
+                py_trees.behaviours.CheckBlackboardVariableValue(
+                    name="Check torpedo count is at least 1",
+                    check=py_trees.common.ComparisonExpression(
+                        variable="/torpedo/count",
+                        value=1,
+                        operator=operator.ge,
+                    )
+                ),
+                FireTorpedo(launch_function=self.launch_function, firing_buffer_time=self.torpedo_firing_buffer_time)
             ]
         )
         return node_base_case

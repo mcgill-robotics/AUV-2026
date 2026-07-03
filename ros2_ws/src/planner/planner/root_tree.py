@@ -180,7 +180,7 @@ def main():
     node.declare_parameter("torpedo.icon_to_nearest_hole.board_2.fire", Parameter.Type.DOUBLE_ARRAY)
     node.declare_parameter("torpedo.icon_to_nearest_hole.board_2.ambulance", Parameter.Type.DOUBLE_ARRAY)
     node.declare_parameter("torpedo.icon_to_nearest_hole.board_2.firetruck", Parameter.Type.DOUBLE_ARRAY)
-    
+    node.declare_parameter("torpedo.firing_pause_time", Parameter.Type.DOUBLE)
     node.declare_parameter("torpedo.launch_topic", Parameter.Type.STRING)
     
     slalom_params = {
@@ -339,7 +339,8 @@ def main():
                 "ambulance": node.get_parameter("torpedo.icon_to_nearest_hole.board_2.ambulance").get_parameter_value().double_array_value,
                 "firetruck": node.get_parameter("torpedo.icon_to_nearest_hole.board_2.firetruck").get_parameter_value().double_array_value
             }
-        }
+        },
+        "torpedo_firing_buffer_time": node.get_parameter("torpedo.firing_pause_time").get_parameter_value().double_value
     }
     
     
