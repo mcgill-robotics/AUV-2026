@@ -796,8 +796,7 @@ class FireTorpedo(Action):
                 self.pause_time_total = self.firing_buffer_time
                 if self.has_fired:
                     if not hasattr(self.blackboard, 'torpedo') or self.blackboard.torpedo.trajectory_time is None:
-                        self.node.get_logger().error(f"[{self.name}] No torpedo trajectory time available on blackboard.")
-                        return py_trees.common.Status.FAILURE
+                        self.node.get_logger().error(f"[{self.name}] No torpedo trajectory time found on blackboard. Assuming no trajectory delay after firing.")
                     self.pause_time_total += self.blackboard.torpedo.trajectory_time
                 if not self.is_pausing:
                     self.node.get_logger().info(f"[{self.name}] Pausing for {self.firing_buffer_time:.2f}s.")
@@ -823,9 +822,9 @@ class FireTorpedo(Action):
                     return py_trees.common.Status.FAILURE
                 match self.blackboard.torpedo.count:
                     case 1:
-                        side = TorpedoSide.LEFT
-                    case 2:
                         side = TorpedoSide.RIGHT
+                    case 2:
+                        side = TorpedoSide.LEFT
                     case _:
                         self.node.get_logger().error(f"[{self.name}] Invalid torpedo count: {self.blackboard.torpedo.count}. Cannot determine which torpedo to fire.")
                         return py_trees.common.Status.FAILURE
