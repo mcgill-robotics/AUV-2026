@@ -3,7 +3,7 @@ from numpy.polynomial.polynomial import Polynomial
 from .torpedo_behaviours import *
 from ..vision_behaviours import SearchSweepBehaviour, CircleAroundToFindBehaviour
 import operator
-from typing import cast, Tuple, Callable
+from typing import List, cast, Tuple, Callable
 class HoleType(Enum):
     LARGE = 1
     SMALL = 2
@@ -50,6 +50,7 @@ class TorpedoTask(py_trees.composites.Sequence):
                 }
             },
             launch_function: Callable[[TorpedoSide], None] = lambda side: print(f"Launching {side.name} torpedo"),
+            torpedo_firing_buffer_time: float = 1.0
         ):
         super().__init__("Torpedo Task", memory=True)
         # TODO: Implement Torpedo Task
@@ -103,6 +104,8 @@ class TorpedoTask(py_trees.composites.Sequence):
                 BoardIcon.FIRETRUCK: cast(Tuple[float, float, float], icon_to_nearest_hole["board_2"]["firetruck"])
             }
         }
+        
+        self.torpedo_firing_buffer_time = torpedo_firing_buffer_time
         
         self.add_children([
             py_trees.behaviours.SetBlackboardVariable(
@@ -451,7 +454,7 @@ class TorpedoTask(py_trees.composites.Sequence):
         
         torpedo_firing_sequence = py_trees.composites.Sequence(f"Torpedo Firing Sequence", memory=True)
         
-        children = [FireTorpedo(launch_function=self.launch_function)]
+        children: List[py_trees.behaviour.Behaviour] = [FireTorpedo(launch_function=self.launch_function, firing_buffer_time=self.torpedo_firing_buffer_time)]
         if offset_from_icon_to_hole is not None:
             children.insert(0, 
                 AlignTorpedoToHole(

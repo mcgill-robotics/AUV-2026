@@ -134,6 +134,7 @@ planner_root_tree:
       yaw_tolerance_deg: 1.0                # (deg) Yaw convergence threshold for board alignment
       hold_time: 0.5                        # (s) Seconds to hold navigation within tolerance before SUCCESS
       timeout: 30.0                         # (s) Seconds before navigation steps fail with FAILURE
+      firing_pause_time: 5.0                # (s) Seconds to pause before and after firing torpedo
 
       refinement:
         rejection_threshold_deg: 10.0     # (deg) Threshold for rejecting outlier orientation samples based on distance from current mean
