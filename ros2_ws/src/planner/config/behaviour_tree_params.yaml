@@ -98,8 +98,9 @@ planner_root_tree:
       downcam_fov_vertical: 47.6          # (deg) Vertical FOV of down cam while in water
       downcam_image_width: 640            # (px) Width of down cam image
       downcam_image_height: 480           # (px) Height of down cam image
-      discovery_distance: 0.3             # (m) Discovery distance for centering table
       table_avg_height: 0.75              # (m) Estimated height of the table from the pool floor
+      table_max_height: 0.9               # (m) Maximum height of the table from the pool floor
+      height_above_to_measure_table: 0.3  # (m) Depth to measure the table from the maximum table height
       pool_depth: 2.1                     # (m) Estimated depth of the pool
       known_height_to_pill: 0.745625      # (m) Experimental distance from camera to pill for area calibration
       known_pill_area: 16900              # (px^2) Pixel area of the pill at the known calibration height

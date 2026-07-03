@@ -78,12 +78,16 @@ class GoAboveTable(py_trees.composites.Sequence):
 
         #5 Center around that the table is underneath Dougie
         align_table = AlignWithTable(**kwargs)
-
+        
+        #6 Get the depth of the table using DVL, this is more reliable than using the down cam 
+        # since the down cam BB can be noisy and not give a good estimate
+        get_table_depth = AcquireTableDepthDVL(**kwargs)
+        
+        #7 Surface octagon
         surface_depth = kwargs.get("surface_depth", -0.1)
         surface_tolerance = kwargs.get("surface_tolerance", 0.1)
         surface_hold_time = kwargs.get("surface_hold_time", 3.0)
-        
-        #6 Surface octagon
+
         surface_octagon = BasicActionBehaviour(
             name="Surface in Octagon", 
             goal=set_depth(z=surface_depth, tolerance=surface_tolerance, hold_time=surface_hold_time, timeout=timeout)
@@ -106,6 +110,7 @@ class GoAboveTable(py_trees.composites.Sequence):
 
         if not navigation_only:
             children.append(align_table)
+            children.append(get_table_depth)
             
         children.append(surface_octagon)
 
@@ -448,6 +453,51 @@ class CenterTable(py_trees.behaviour.Behaviour):
         self.action_status = ActionStatus.PENDING
 
         return py_trees.common.Status.RUNNING
+
+class AcquireTableDepthDVL(py_trees.composites.Sequence):
+    def __init__(self, name="Acquire Table Depth DVL", **kwargs):
+        super().__init__(name)
+        self.blackboard = self.attach_blackboard_client(name="AcquireTableDepthDVL Blackboard")
+        self.depth_to_measure_table = kwargs['depth_to_measure_table']
+
+        get_slightly_above_table = BasicActionBehaviour(
+            goal=set_depth(z=self.depth_to_measure_table, tolerance=.15, hold_time=3, timeout=30)
+        )
+
+        measure_table_depth_dvl = MeasureTableDepthDVL(**kwargs)
+
+        self.add_children([get_slightly_above_table,
+            measure_table_depth_dvl
+        ])
+
+class MeasureTableDepthDVL(py_trees.behaviour.Behaviour):
+    def __init__(self, name="Measure Table Depth DVL", **kwargs):
+        super().__init__(name)
+        self.blackboard = self.attach_blackboard_client(name="MeasureTableDepthDVL Blackboard")
+        self.com_to_dvl = kwargs['COM_to_dvl_height']
+        self.table_max_height = kwargs['table_max_height']
+        self.pool_depth = kwargs['pool_depth']
+    
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.blackboard.register_key('/sensors/dvl/velocity', access=py_trees.common.Access.READ)
+        self.blackboard.register_key('/sensors/pose', access=py_trees.common.Access.READ)
+        self.blackboard.register_key('/mission/octagon_task/height_table', access=py_trees.common.Access.WRITE)
+
+    def update(self) -> py_trees.common.Status:
+        if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.dvl.velocity is None:
+            self.node.get_logger().error("Blackboard sensors dvl key is not set up or dvl is None")
+            return py_trees.common.Status.FAILURE
+
+        if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.pose is None:
+            self.node.get_logger().error("Blackboard sensors pose key is not set up or pose is None")
+            return py_trees.common.Status.FAILURE
+        
+        # Get the dvl altitude and acquire the table height from it
+        self.blackboard.mission.octagon_task.height_table = self.blackboard.sensors.dvl.velocity.altitude + self.blackboard.sensors.pose.pose.position.z + \
+            self.com_to_dvl 
+        
+        return py_trees.common.Status.SUCCESS
 
 class ScanOctagonImages(py_trees.composites.Sequence):
     def __init__(self, num_steps_per_side=5):

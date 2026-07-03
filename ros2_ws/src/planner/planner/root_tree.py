@@ -396,6 +396,15 @@ def main():
         qos_profile=qos,
     )
 
+    dvl_velocity_subscriber = py_trees_ros.subscribers.ToBlackboard(
+        name="DVLVelocitySubscriber",
+        topic_name="/dvl/velocity",
+        topic_type=geometry_msgs.msg.TwistStamped,
+        blackboard_variables={"/sensors/dvl/velocity": None},
+        initialise_variables={"/sensors/dvl/velocity": None},
+        qos_profile=qos,
+    )
+
     object_map_subscriber = py_trees_ros.subscribers.ToBlackboard(
         name="ObjectMapSubscriber",
         topic_name="/vision/object_map",
@@ -440,7 +449,7 @@ def main():
     )
 
     # Add children to root
-    root.add_children([pose_subscriber, twist_subscriber, object_map_subscriber, down_cam_subscriber, missions])
+    root.add_children([pose_subscriber, dvl_velocity_subscriber, twist_subscriber, object_map_subscriber, down_cam_subscriber, missions])
 
     # Create the behaviour tree and setup
     tree = py_trees_ros.trees.BehaviourTree(root=root, unicode_tree_debug=True)
