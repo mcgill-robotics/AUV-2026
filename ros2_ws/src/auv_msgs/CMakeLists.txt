@@ -32,6 +32,7 @@ set(srv_files
 	"srv/ShootTorpedo.srv"
 	"srv/SetGripper.srv"
 	"srv/RosbagControl.srv"
+	"srv/SetDownCamProjectionHeights.srv"
 )
 
 set(action_files

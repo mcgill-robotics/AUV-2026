@@ -20,6 +20,7 @@ import copy
 from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import CameraInfo, CompressedImage, Image
 from std_srvs.srv import Trigger
+from auv_msgs.srv import SetDownCamProjectionHeights
 import math
 from tf_transformations import quaternion_matrix, quaternion_from_euler, quaternion_multiply
 
@@ -223,6 +224,11 @@ class DownCamObjectDetectorNode():
             Trigger,
             '/vision/down_cam/get_camera_settings',
             self._get_camera_settings_callback,
+        )
+        self.node.create_service(
+            SetDownCamProjectionHeights,
+            '/vision/down_cam/set_projection_heights',
+            self._set_projection_heights_callback
         )
 
         self.compressed = self.node.get_parameter('compressed').get_parameter_value().bool_value
@@ -466,6 +472,23 @@ class DownCamObjectDetectorNode():
                 
         response.success = True
         response.message = " | ".join(f"{k}: {v}" for k, v in current_settings.items())
+        return response
+
+    def _set_projection_heights_callback(self, request, response):
+        projection_height = request.projection_height
+        response.success = True
+
+        if request.all_labels:
+            for label in self.down_cam_heights_map.keys():
+                self.down_cam_heights_map[label] = projection_height
+        else:
+            if request.specific_label in self.down_cam_heights_map:
+                self.down_cam_heights_map[request.specific_label] = projection_height
+            else:
+                response.success = False
+                response.message = f"Label '{request.specific_label}' not found in down_cam_projection_labels."
+        
+        del request
         return response
 
     def _auv_pose_callback(self, msg: PoseStamped):
