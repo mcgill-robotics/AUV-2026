@@ -8,9 +8,14 @@ namespace controls
         this->declare_parameter<double>("P_ex", 1.0);
         this->declare_parameter<double>("P_ey", 1.0);
         this->declare_parameter<double>("P_ez", 1.0);
+        this->declare_parameter<double>("I_ex", 0.0);
+        this->declare_parameter<double>("I_ey", 0.0);
+        this->declare_parameter<double>("I_ez", 0.0);
         this->declare_parameter<double>("P_wx", 1.0);
         this->declare_parameter<double>("P_wy", 1.0);
         this->declare_parameter<double>("P_wz", 1.0);
+        this->declare_parameter<double>("I_MAX", 10.0);
+        this->declare_parameter<double>("integral_activation_threshold_deg", std::numeric_limits<double>::infinity());
         this->declare_parameter<double>("buoyancy", 278.0); // Newtons
         this->declare_parameter<std::vector<double>>("r_bv_v", {0.0, 0.0, 0.023}); // [m] From CAD Model
         this->declare_parameter<double>("control_loop_hz", 25.0); // Control loop frequency
@@ -19,9 +24,15 @@ namespace controls
         this->get_parameter("P_ex", P_ex_);
         this->get_parameter("P_ey", P_ey_);
         this->get_parameter("P_ez", P_ez_);
+        this->get_parameter("I_ex", I_ex_);
+        this->get_parameter("I_ey", I_ey_);
+        this->get_parameter("I_ez", I_ez_);
         this->get_parameter("P_wx", P_wx_);
         this->get_parameter("P_wy", P_wy_);
         this->get_parameter("P_wz", P_wz_);
+        this->get_parameter("I_MAX", I_MAX_);
+        this->get_parameter("integral_activation_threshold_deg", integral_activation_threshold_deg_);
+        integral_activation_threshold_rad_ = integral_activation_threshold_deg_ * (M_PI / 180.0);
         this->get_parameter("buoyancy", buoyancy_);
         this->get_parameter("r_bv_v", r_bv_v_);
         this->get_parameter("control_loop_hz", control_loop_hz_);
@@ -31,9 +42,17 @@ namespace controls
         w_iv_ = Vec3::Zero(); // Initial angular velocity: zero vector
         q_iv2_ = quatd::Identity(); // Initial target orientation: identity quaternion
 
+        integral_error_ = Vec3::Zero();
+        last_q_iv2_ = quatd::Identity();
+        SETPOINT_RESET_EPSILON = 1e-3;
+
         P_e_ << P_ex_, 0, 0,
                 0, P_ey_, 0,
                 0, 0, P_ez_;
+        
+        I_e_ << I_ex_, 0, 0,
+                0, I_ey_, 0,
+                0, 0, I_ez_;
         
         P_w_ << P_wx_, 0, 0,
                 0, P_wy_, 0,
@@ -50,6 +69,11 @@ namespace controls
             "/controls/quaternion_setpoint",
             1,
             std::bind(&AttitudeController::target_orientation_callback, this, std::placeholders::_1)
+        );
+
+        setpoint_service_ = this->create_service<auv_msgs::srv::SetAttitudeEuler>(
+            "/controls/setpoint_attitude_deg",
+            std::bind(&AttitudeController::setpoint_service_callback, this, std::placeholders::_1, std::placeholders::_2)
         );
         parameter_callback_handle_ = this->add_on_set_parameters_callback(
             std::bind(&AttitudeController::parameters_callback, this, std::placeholders::_1)
@@ -89,13 +113,48 @@ namespace controls
         );
     }
 
+    void AttitudeController::setpoint_service_callback (const std::shared_ptr<auv_msgs::srv::SetAttitudeEuler::Request> request,
+        std::shared_ptr<auv_msgs::srv::SetAttitudeEuler::Response> response)
+    {
+        // Convert from degrees to radians
+        Vec3 euler_rad(
+            request->roll * (M_PI / 180.0),
+            request->pitch * (M_PI / 180.0),
+            request->yaw * (M_PI / 180.0)
+        );
+
+        // Convert Euler angles to quaternion
+        q_iv2_ = Eigen::AngleAxisd(euler_rad.z(),   Eigen::Vector3d::UnitZ())
+         * Eigen::AngleAxisd(euler_rad.y(), Eigen::Vector3d::UnitY())
+         * Eigen::AngleAxisd(euler_rad.x(),  Eigen::Vector3d::UnitX());
+
+        response->success = true;
+        response->message = "Target orientation set to " + std::to_string(request->roll) + " deg, " + std::to_string(request->pitch) + " deg, " + std::to_string(request->yaw) + " deg.";
+    }
+
 
     Vec3 AttitudeController::feedback_effort(const quatd& q_iv2)
     {
+        // Detect setpoint change using dot product
+        double dot = std::abs(q_iv2.dot(last_q_iv2_));
+        if (1.0 - dot > SETPOINT_RESET_EPSILON) {
+            integral_error_ = Vec3::Zero();
+            last_q_iv2_ = q_iv2;
+        }
+
         quatd q_error = q_iv_.conjugate() * q_iv2;
         q_error = sensors::math::canonicalizeShortest(q_error);
         Vec3 error_vector = Vec3(q_error.x(), q_error.y(), q_error.z());
-        Vec3 feedback = P_e_ * error_vector - P_w_ * w_iv_;
+
+        double dt = 1.0 / control_loop_hz_;
+
+        // Conditional integration based on magnitude of the error vector
+        if (error_vector.norm() <= integral_activation_threshold_rad_) {
+            integral_error_ += error_vector * dt;
+            integral_error_ = integral_error_.cwiseMin(I_MAX_).cwiseMax(-I_MAX_);
+        }
+
+        Vec3 feedback = P_e_ * error_vector + I_e_ * integral_error_ - P_w_ * w_iv_;
         return feedback;
     }
 
@@ -164,14 +223,53 @@ namespace controls
                     return result;
                 }
 
-                enabled_ = parameter.as_bool();
+                bool new_enabled = parameter.as_bool();
+                if (new_enabled && !enabled_) {
+                    q_iv2_ = q_iv_; // Snap target orientation to current orientation on enable
+                }
+                enabled_ = new_enabled;
                 RCLCPP_INFO(
                     this->get_logger(),
                     "Attitude controller enabled: %s",
                     enabled_ ? "true" : "false"
                 );
             }
+            else if (parameter.get_name() == "integral_activation_threshold_deg")
+            {
+                if (parameter.get_type() != rclcpp::ParameterType::PARAMETER_DOUBLE)
+                {
+                    result.successful = false;
+                    result.reason = "'integral_activation_threshold_deg' must be a double";
+                    return result;
+                }
+
+                integral_activation_threshold_deg_ = parameter.as_double();
+                integral_activation_threshold_rad_ = integral_activation_threshold_deg_ * (M_PI / 180.0);
+            }
+            else if (parameter.get_name() == "P_ex") { P_ex_ = parameter.as_double(); }
+            else if (parameter.get_name() == "P_ey") { P_ey_ = parameter.as_double(); }
+            else if (parameter.get_name() == "P_ez") { P_ez_ = parameter.as_double(); }
+            else if (parameter.get_name() == "I_ex") { I_ex_ = parameter.as_double(); }
+            else if (parameter.get_name() == "I_ey") { I_ey_ = parameter.as_double(); }
+            else if (parameter.get_name() == "I_ez") { I_ez_ = parameter.as_double(); }
+            else if (parameter.get_name() == "P_wx") { P_wx_ = parameter.as_double(); }
+            else if (parameter.get_name() == "P_wy") { P_wy_ = parameter.as_double(); }
+            else if (parameter.get_name() == "P_wz") { P_wz_ = parameter.as_double(); }
+            else if (parameter.get_name() == "I_MAX") { I_MAX_ = parameter.as_double(); }
         }
+
+        // Reconstruct matrices with updated values
+        P_e_ << P_ex_, 0, 0,
+                0, P_ey_, 0,
+                0, 0, P_ez_;
+        
+        I_e_ << I_ex_, 0, 0,
+                0, I_ey_, 0,
+                0, 0, I_ez_;
+        
+        P_w_ << P_wx_, 0, 0,
+                0, P_wy_, 0,
+                0, 0, P_wz_;
 
         return result;
     }

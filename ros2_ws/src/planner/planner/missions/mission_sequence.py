@@ -19,7 +19,7 @@ from .robosub2026.torpedo_task import TorpedoTask
 from .robosub2026.table_octagon_task import TableOctagonTask
 from .robosub2026.return_home_task import ReturnHomeTask
 
-from .mission_behaviour_components import RosbagRecordingDecorator
+from .mission_behaviour_components import RosbagRecordingDecorator, TimerBehaviour, SetNodeParameterBehaviour
 
 class MissionSpawner(py_trees.behaviour.Behaviour):
     def __init__(self, placeholder: py_trees.composites.Sequence, **kwargs):
@@ -104,7 +104,22 @@ class MissionSpawner(py_trees.behaviour.Behaviour):
                 
                 mission_root = RosbagRecordingDecorator(mission_root, profile=profile, bag_name=bag_name, service_path=service_path)
 
-            # Setup the new dynamically created subtree and attach it
+            # Create the startup sequence to allow untethering and enabling controllers
+            startup_delay = self.params.get('startup_delay', 15.0)
+            startup_sequence = py_trees.composites.Sequence("Startup Sequence", memory=True)
+            if startup_delay > 0.0:
+                startup_sequence.add_child(TimerBehaviour(timer_duration=startup_delay, name=f"Startup Delay ({startup_delay}s)"))
+            
+            startup_sequence.add_children([
+                SetNodeParameterBehaviour("/attitude_controller", "enabled", True, name="Enable Attitude Controller"),
+                SetNodeParameterBehaviour("/depth_controller", "enabled", True, name="Enable Depth Controller"),
+                SetNodeParameterBehaviour("/x_controller", "enabled", True, name="Enable X Controller"),
+                SetNodeParameterBehaviour("/y_controller", "enabled", True, name="Enable Y Controller")
+            ])
+            py_trees.trees.setup(root=startup_sequence, node=self.node, shared_nav_client=self.nav_client)
+            self.placeholder.add_child(startup_sequence)
+
+            # Setup the new dynamically created subtree and attach it after the startup sequence
             py_trees.trees.setup(root=mission_root, node=self.node, shared_nav_client=self.nav_client)
             self.placeholder.add_child(mission_root)
             self.mission_loaded = True
@@ -116,6 +131,7 @@ class MissionSpawner(py_trees.behaviour.Behaviour):
     def _build_mission(self, choice: int):
         p = self.params
         slalom = p.get('slalom_params', {})
+        torpedo = p.get('torpedo_params', {})
         gate = p.get('gate_params', {})
         bins = p.get('bins_params', {})
         octagon = p.get('octagon_params', {})
@@ -143,7 +159,7 @@ class MissionSpawner(py_trees.behaviour.Behaviour):
         elif choice == 11:
             return BinsTask(**bins)
         elif choice == 12:
-            return TorpedoTask(p['position_tolerance'], p['hold_time'], p['timeout'])
+            return TorpedoTask(**torpedo)
         elif choice == 13:
             return TableOctagonTask(**octagon)
         elif choice == 14:
@@ -154,9 +170,9 @@ class MissionSpawner(py_trees.behaviour.Behaviour):
                 GateTask(**gate),
                 SlalomTask(**slalom),
                 BinsTask(**bins),
-                TorpedoTask(p['position_tolerance'], p['hold_time'], p['timeout']),
+                TorpedoTask(**torpedo),
                 TableOctagonTask(**octagon),
-                ReturnHomeTask(**return_home),
+                ReturnHomeTask(**return_home)
             ])
             return full_run
         return None

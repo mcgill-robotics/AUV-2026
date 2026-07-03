@@ -184,7 +184,7 @@ RUN groupmod --gid $USER_GID --new-name $USERNAME ros \
     && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
     && chmod 0440 /etc/sudoers.d/$USERNAME \
     && groupadd -f -r render \
-    && usermod -aG video,render -s /bin/bash $USERNAME
+    && usermod -aG video,render,dialout -s /bin/bash $USERNAME
 
 # Install fixuid for dynamic UID/GID remapping at runtime
 # This allows the container to match the host user's UID when running with --user

@@ -27,10 +27,13 @@ set(msg_files
 
 set(srv_files
 	"srv/SetInt32.srv"
+	"srv/SetFloat64.srv"
+	"srv/SetAttitudeEuler.srv"
 	"srv/AutomaticCapture.srv"
 	"srv/ShootTorpedo.srv"
 	"srv/SetGripper.srv"
 	"srv/RosbagControl.srv"
+	"srv/SetDownCamProjectionHeights.srv"
 )
 
 set(action_files

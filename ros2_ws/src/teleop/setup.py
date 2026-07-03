@@ -24,6 +24,7 @@ setup(
     entry_points={
         'console_scripts': [
             'teleop_converter = teleop.teleop_converter:main',
+            'keyboard_to_joy = teleop.keyboard_to_joy:main',
         ],
     },
 )

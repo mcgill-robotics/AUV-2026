@@ -14,6 +14,9 @@
 #include <memory>
 #include <vector>
 #include <functional>
+#include <algorithm>
+
+#include "auv_msgs/srv/set_attitude_euler.hpp"
 
 namespace controls
 {
@@ -38,11 +41,18 @@ namespace controls
                 double P_ex_;
                 double P_ey_;
                 double P_ez_;
+                double I_ex_;
+                double I_ey_;
+                double I_ez_;
                 double P_wx_;
                 double P_wy_;
                 double P_wz_;
+                double I_MAX_;
+                double integral_activation_threshold_deg_;
+                double integral_activation_threshold_rad_;
 
                 Mat3 P_e_;
+                Mat3 I_e_;
                 Mat3 P_w_;
 
                 // Control Loop Frequency
@@ -55,6 +65,7 @@ namespace controls
 
                 rclcpp::Subscription<imu_msg>::SharedPtr sub_imu_;
                 rclcpp::Subscription<geometry_msgs::msg::Quaternion>::SharedPtr sub_target_orientation_;
+                rclcpp::Service<auv_msgs::srv::SetAttitudeEuler>::SharedPtr setpoint_service_;
 
                 // State variables
                 quatd q_iv_;
@@ -62,6 +73,11 @@ namespace controls
 
                 //Target state variables
                 quatd q_iv2_; 
+
+                // Integral state variables
+                Vec3 integral_error_;
+                quatd last_q_iv2_;
+                double SETPOINT_RESET_EPSILON; 
 
 
 
@@ -71,6 +87,7 @@ namespace controls
 
                 void imu_callback(const imu_msg::SharedPtr msg);
                 void target_orientation_callback(const geometry_msgs::msg::Quaternion::SharedPtr msg);
+                void setpoint_service_callback(const std::shared_ptr<auv_msgs::srv::SetAttitudeEuler::Request> request,std::shared_ptr<auv_msgs::srv::SetAttitudeEuler::Response> response);
                 Vec3 feedback_effort(const quatd& q_iv2);
                 Vec3 feedforward_effort();
                 void control_loop_callback();

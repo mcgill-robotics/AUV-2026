@@ -7,6 +7,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPo
 from rcl_interfaces.msg import SetParametersResult
 from controls.pid import PID
 
+from auv_msgs.srv import SetFloat64
 from geometry_msgs.msg import Wrench, PointStamped
 from std_msgs.msg import Float64
 
@@ -31,12 +32,14 @@ class AxisController(Node):
         self.pub_effort = self.create_publisher(Wrench, f'/controls/{axis_name}_effort', qos_profile_sensor_data)
         self.sub_position = self.create_subscription(PointStamped, f'auv_frame/dvl/position', self.position_callback, qos_profile_sensor_data)
         self.setpoint_sub = self.create_subscription(Float64, f'/controls/{axis_name}_setpoint', self.setpoint_callback, qos)
+        self.srv_setpoint = self.create_service(SetFloat64, f'/controls/srv_setpoint_{axis_name}', self.setpoint_srv_callback)
 
         self.declare_parameter('control_loop_hz', 10.0)
         self.declare_parameter("KP", 0.0)
         self.declare_parameter("KD", 0.0)
         self.declare_parameter("KI", 0.0)
         self.declare_parameter("I_MAX", 0.0)
+        self.declare_parameter("integral_activation_threshold", 0.5)
         self.declare_parameter("enabled", False)
 
         # PID controller parameters
@@ -45,11 +48,12 @@ class AxisController(Node):
         self.KD = float(self.get_parameter("KD").value)
         self.KI = float(self.get_parameter("KI").value)
         self.I_MAX = float(self.get_parameter("I_MAX").value)
+        self.integral_activation_threshold = float(self.get_parameter("integral_activation_threshold").value)
         self.enabled = bool(self.get_parameter("enabled").value)
 
         self.parameter_callback_handle = self.add_on_set_parameters_callback(self.parameters_callback)
 
-        self.pid = PID(self.KP, self.KD, self.KI, self.I_MAX)
+        self.pid = PID(self.KP, self.KD, self.KI, self.I_MAX, self.integral_activation_threshold)
 
         self.setpoint = 0.0  # Setpoint in meters
         self.current_position = 0.0   # Current position in meters
@@ -70,6 +74,12 @@ class AxisController(Node):
     def setpoint_callback(self, msg):
         self.setpoint = msg.data
 
+    def setpoint_srv_callback(self, request, response):
+        self.setpoint = request.data
+        response.success = True
+        response.message = f"Setpoint {self.axis_name} updated to {self.setpoint}."
+        return response
+
     def parameters_callback(self, parameters):
         result = SetParametersResult()
         result.successful = True
@@ -80,7 +90,10 @@ class AxisController(Node):
                     result.successful = False
                     result.reason = "'enabled' must be a bool"
                     return result
-                self.enabled = bool(parameter.value)
+                new_enabled = bool(parameter.value)
+                if new_enabled and not self.enabled:
+                    self.setpoint = self.current_position
+                self.enabled = new_enabled
                 self.get_logger().info(f"{self.axis_name} controller enabled: {self.enabled}")
 
         return result
