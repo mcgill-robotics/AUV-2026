@@ -1,5 +1,6 @@
 # Python dependencies
 import math
+from platform import node
 import py_trees
 import threading
 
@@ -15,6 +16,7 @@ from rclpy.parameter import Parameter
 # AUV dependencies
 from controls import navigation_client
 import std_msgs.msg
+import dvl_msgs.msg
 
 # Planner dependencies
 from .missions.mission_sequence import DynamicMissionSequence
@@ -242,9 +244,11 @@ def main():
     node.declare_parameter("octagon.downcam_fov_vertical", 47.6)
     node.declare_parameter("octagon.downcam_image_width", 640)
     node.declare_parameter("octagon.downcam_image_height", 480)
-    node.declare_parameter("octagon.discovery_distance", 0.3)
     node.declare_parameter("octagon.table_avg_height", 0.75)
+    node.declare_parameter("octagon.table_max_height", 0.9)
+    node.declare_parameter("octagon.height_above_to_measure_table", 0.3)
     node.declare_parameter("octagon.pool_depth", 2.1)
+    node.declare_parameter("octagon.COM_to_dvl_height", 0.1)
     node.declare_parameter("octagon.known_height_to_pill", 0.745625)
     node.declare_parameter("octagon.known_pill_area", 16900)
     node.declare_parameter("octagon.shallow_approach_depth", -0.4)
@@ -255,17 +259,34 @@ def main():
     node.declare_parameter("octagon.surface_hold_time", 3.0)
     node.declare_parameter("octagon.ending_dive_depth", -0.7)
     node.declare_parameter("octagon.navigation_only", True)
+    node.declare_parameter("octagon.item_drop_only", False)
     node.declare_parameter("octagon.position_tolerance", 0.3)
     node.declare_parameter("octagon.hold_time", 1.0)
     node.declare_parameter("octagon.timeout", 30.0)
+    node.declare_parameter("octagon.grab_only_for_role", True)
+    node.declare_parameter("octagon.number_of_items_to_grab", 3)
+    node.declare_parameter("octagon.tf_auv_to_grabber.xyz", [-0.1125559, -0.1739998, -0.01242304])
+    node.declare_parameter("octagon.tf_auv_to_grabber.rpy", [0.0, 0.0, 0.0])
+    node.declare_parameter("octagon.expected_table_items",
+    ["table", "pill", "nutbolt", "electric", "bandaid", "warning", "redcross_helmet"])
+    # Survey repair items (flattened dict)
+    node.declare_parameter("octagon.survey_repair_items.items_labels", ["electric", "nutbolt"])
+    node.declare_parameter("octagon.survey_repair_items.bin_label", "warning")
+    # Search rescue items (flattened dict)
+    node.declare_parameter("octagon.search_rescue_items.items_labels", ["bandaid", "pill"])
+    node.declare_parameter("octagon.search_rescue_items.bin_label", "redcross_helmet")
+    node.declare_parameter("octagon.item_drop_height_relative_bin", 0.1)
+    node.declare_parameter("octagon.relative_height_to_measure_table", -0.4)
 
     octagon_params = {
         "downcam_fov_horizontal": node.get_parameter("octagon.downcam_fov_horizontal").get_parameter_value().double_value,
         "downcam_fov_vertical": node.get_parameter("octagon.downcam_fov_vertical").get_parameter_value().double_value,
         "downcam_image_width": node.get_parameter("octagon.downcam_image_width").get_parameter_value().integer_value,
         "downcam_image_height": node.get_parameter("octagon.downcam_image_height").get_parameter_value().integer_value,
-        "discovery_distance": node.get_parameter("octagon.discovery_distance").get_parameter_value().double_value,
+        "table_max_height": node.get_parameter("octagon.table_max_height").get_parameter_value().double_value,
         "table_avg_height": node.get_parameter("octagon.table_avg_height").get_parameter_value().double_value,
+        "height_above_to_measure_table": node.get_parameter("octagon.height_above_to_measure_table").get_parameter_value().double_value,
+        "COM_to_dvl_height": node.get_parameter("octagon.COM_to_dvl_height").get_parameter_value().double_value,
         "pool_depth": node.get_parameter("octagon.pool_depth").get_parameter_value().double_value,
         "known_height_to_pill": node.get_parameter("octagon.known_height_to_pill").get_parameter_value().double_value,
         "known_pill_area": node.get_parameter("octagon.known_pill_area").get_parameter_value().integer_value,
@@ -280,7 +301,18 @@ def main():
         "position_tolerance": node.get_parameter("octagon.position_tolerance").get_parameter_value().double_value,
         "hold_time": node.get_parameter("octagon.hold_time").get_parameter_value().double_value,
         "timeout": node.get_parameter("octagon.timeout").get_parameter_value().double_value,
-    }
+        "grab_only_for_role": node.get_parameter("octagon.grab_only_for_role").get_parameter_value().bool_value,
+        "number_of_items_to_grab": node.get_parameter("octagon.number_of_items_to_grab").get_parameter_value().integer_value,
+        "tf_auv_to_grabber.xyz": node.get_parameter("octagon.tf_auv_to_grabber.xyz").get_parameter_value().double_array_value,
+        "tf_auv_to_grabber.rpy": node.get_parameter("octagon.tf_auv_to_grabber.rpy").get_parameter_value().double_array_value,
+        "expected_table_items": node.get_parameter("octagon.expected_table_items").get_parameter_value().string_array_value,
+        "survey_repair_items": {"items_labels": node.get_parameter("octagon.survey_repair_items.items_labels").get_parameter_value().string_array_value,
+            "bin_label": node.get_parameter("octagon.survey_repair_items.bin_label").get_parameter_value().string_value,},
+        "search_rescue_items": {"items_labels": node.get_parameter("octagon.search_rescue_items.items_labels").get_parameter_value().string_array_value,
+            "bin_label": node.get_parameter("octagon.search_rescue_items.bin_label").get_parameter_value().string_value,},
+        "item_drop_only": node.get_parameter("octagon.item_drop_only").get_parameter_value().bool_value,
+        "relative_height_to_measure_table": node.get_parameter("octagon.relative_height_to_measure_table").get_parameter_value().double_value,
+        }
 
 
     # Return Home task parameters
@@ -397,6 +429,15 @@ def main():
         qos_profile=qos,
     )
 
+    dvl_velocity_subscriber = py_trees_ros.subscribers.ToBlackboard(
+        name="DVLVelocitySubscriber",
+        topic_name="/dvl/velocity",
+        topic_type=dvl_msgs.msg.DVL,
+        blackboard_variables={"/sensors/dvl/velocity": None},
+        initialise_variables={"/sensors/dvl/velocity": None},
+        qos_profile=qos,
+    )
+
     object_map_subscriber = py_trees_ros.subscribers.ToBlackboard(
         name="ObjectMapSubscriber",
         topic_name="/vision/object_map",
@@ -448,7 +489,7 @@ def main():
     )
 
     # Add children to root
-    root.add_children([pose_subscriber, twist_subscriber, object_map_subscriber, down_cam_subscriber, missions])
+    root.add_children([pose_subscriber, dvl_velocity_subscriber, twist_subscriber, object_map_subscriber, down_cam_subscriber, missions])
 
     # Create the behaviour tree and setup
     tree = py_trees_ros.trees.BehaviourTree(root=root, unicode_tree_debug=True)

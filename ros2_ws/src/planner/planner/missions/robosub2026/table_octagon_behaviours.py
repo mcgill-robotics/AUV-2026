@@ -1,9 +1,13 @@
 import py_trees
 import math 
+from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster, TransformStamped
+from tf_transformations import quaternion_from_euler
 import planner.missions.vision_behaviours as vision_behaviours
-from controls.goal_helpers import set_depth, move_global, move_robot_centric
+from controls.goal_helpers import set_depth, move_global, move_robot_centric, move_rigid_component_global
 from planner.missions.action_status_enum import ActionStatus
-from ..mission_behaviour_components import BasicActionBehaviour
+from ..mission_behaviour_components import BasicActionBehaviour, TimerBehaviour
+from std_msgs.msg import UInt8
+from auv_msgs.srv import SetDownCamProjectionHeights
 
 # The following classes are defined in a pre-order fashion, meaning that if a class is used in another class, it is defined before the class that uses it.
 #  For example, CheckAboveTable is defined before GoAboveTable, since GoAboveTable uses CheckAboveTable as a child behavior.
@@ -17,14 +21,15 @@ class GoAboveTable(py_trees.composites.Sequence):
 
         # Initialize the expected table items, this list will get truncated as objects are placed
         # in their respective bins
-        self.blackboard.missions.octagon.expected_table_items = ["table", "pill", "nutbolt", "electric", "bandaid", "warning", "redcross_helmet"]
+        expected_table_items = kwargs.get("expected_table_items", ["table", "pill", "nutbolt", "electric", "bandaid", "warning", "redcross_helmet"])
+        self.blackboard.missions.octagon.expected_table_items = expected_table_items
 
+        # 1. Go to a set depth to view the table better. The table is best seen at a shallow depth, since we get to
+        # see the top of the table, whereas at a lower depth there is a lot of empty space
         shallow_approach_depth = kwargs.get("shallow_approach_depth", -0.4)
         shallow_approach_tolerance = kwargs.get("shallow_approach_tolerance", position_tolerance)
         shallow_approach_hold_time = kwargs.get("shallow_approach_hold_time", hold_time)
-        
-        # 1. Go to a set depth to view the table better. The table is best seen at a shallow depth, since we get to
-        # see the top of the table, whereas at a lower depth there is a lot of empty space
+
         go_shallow_depth = BasicActionBehaviour(
             name="Octagon: Go Shallow Depth",
             goal=set_depth(z=shallow_approach_depth, tolerance=shallow_approach_tolerance, hold_time=shallow_approach_hold_time, timeout=timeout)
@@ -78,12 +83,16 @@ class GoAboveTable(py_trees.composites.Sequence):
 
         #5 Center around that the table is underneath Dougie
         align_table = AlignWithTable(**kwargs)
-
+        
+        #6 Get the depth of the table using DVL, this is more reliable than using the down cam 
+        # since the down cam BB can be noisy and not give a good estimate
+        get_table_depth = AcquireTableDepthDVL(**kwargs)
+        
+        #7 Surface octagon
         surface_depth = kwargs.get("surface_depth", -0.1)
         surface_tolerance = kwargs.get("surface_tolerance", 0.1)
         surface_hold_time = kwargs.get("surface_hold_time", 3.0)
-        
-        #6 Surface octagon
+
         surface_octagon = BasicActionBehaviour(
             name="Surface in Octagon", 
             goal=set_depth(z=surface_depth, tolerance=surface_tolerance, hold_time=surface_hold_time, timeout=timeout)
@@ -93,7 +102,7 @@ class GoAboveTable(py_trees.composites.Sequence):
         #7 Scan octagon for images
         scan_images = ScanOctagonImages(num_steps_per_side=5)
 
-        navigation_only = kwargs.get("navigation_only", True)
+        navigation_only = kwargs.get("navigation_only", False)
 
         children = [
             go_shallow_depth,
@@ -106,11 +115,12 @@ class GoAboveTable(py_trees.composites.Sequence):
 
         if not navigation_only:
             children.append(align_table)
+            children.append(get_table_depth)
             
         children.append(surface_octagon)
 
-        if not navigation_only:
-            children.append(scan_images)
+        #if not navigation_only:
+        #    children.append(scan_images)
 
         self.add_children(children)
 
@@ -332,12 +342,12 @@ class CheckAboveTable(py_trees.behaviour.Behaviour):
             self.node.get_logger().info(f"Seen: {seen_items_str}")
 
         if set(self.blackboard.missions.octagon.expected_table_items).issubset(self.seen_items):
-            area_pill = potential_pill_detection.bbox_size_x * potential_pill_detection.bbox_size_y
+            #area_pill = potential_pill_detection.bbox_size_x * potential_pill_detection.bbox_size_y
             
             # From inverse proportionality with area and distance / TODO: Replace with DVL transducer
             # beams for altitude because turns out this inverse prop. thing stinks some hot cheeks
-            height_to_pill = self.known_height_to_pill * math.sqrt(self.known_pill_area/area_pill)
-            self.blackboard.mission.octagon_task.height_table = self.pool_depth - height_to_pill - (-1 * self.blackboard.sensors.pose.pose.position.z)
+            #height_to_pill = self.known_height_to_pill * math.sqrt(self.known_pill_area/area_pill)
+            #self.blackboard.mission.octagon_task.height_table = self.pool_depth - height_to_pill - (-1 * self.blackboard.sensors.pose.pose.position.z)
             
             self.consecutive_ticks_full_set_of_items += 1
             if self.consecutive_ticks_full_set_of_items >= self.target_consecutive_ticks_full_set_of_items:  
@@ -435,9 +445,10 @@ class CenterTable(py_trees.behaviour.Behaviour):
         x_angle = math.radians( (cx - self.camera_width/2) / self.camera_width * self.downcam_fov_horizontal)
         y_angle = math.radians( (cy - self.camera_height/2) / self.camera_height * self.downcam_fov_vertical)
 
+        # Use avg possible height here for estimation since we do not yet have measurement of true height
+        # with help from DVL
         height_to_table = 2.1 - (-1 * self.blackboard.sensors.pose.pose.position.z + self.table_avg_height)
-        self.node.get_logger().info("sup")
-        
+
         x = math.tan(x_angle) * height_to_table
         y = math.tan(y_angle) * height_to_table
         self.node.get_logger().info(f"forward: {-y}, sway: {-x}")
@@ -448,6 +459,96 @@ class CenterTable(py_trees.behaviour.Behaviour):
         self.action_status = ActionStatus.PENDING
 
         return py_trees.common.Status.RUNNING
+
+class AcquireTableDepthDVL(py_trees.composites.Sequence):
+    def __init__(self, name="Acquire Table Depth DVL", **kwargs):
+        super().__init__(name, memory=True)
+        self.blackboard = self.attach_blackboard_client(name="AcquireTableDepthDVL Blackboard")
+        self.depth_to_measure_table_height = kwargs.get("depth_to_measure_table_height", -0.4)
+
+        get_slightly_above_table = BasicActionBehaviour(
+            goal=set_depth(z=self.depth_to_measure_table_height, tolerance=.15, hold_time=3.0, timeout=30.0)
+        )
+
+        measure_table_depth_dvl = MeasureTableDepthDVL(**kwargs)
+
+        self.add_children([get_slightly_above_table,
+            measure_table_depth_dvl
+        ])
+
+class MeasureTableDepthDVL(py_trees.behaviour.Behaviour):
+    def __init__(self, name="Measure Table Depth DVL", **kwargs):
+        super().__init__(name)
+        self.blackboard = self.attach_blackboard_client(name="MeasureTableDepthDVL Blackboard")
+        self.com_to_dvl = kwargs.get('COM_to_dvl_height', 0.0)
+        self.table_max_height = kwargs.get('table_max_height', 0.75)
+        self.pool_depth = kwargs.get('pool_depth', 2.1)
+        self.service_sent = False
+        self.future = None
+        self.timeout_sec = 10.0
+    
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        
+        self.service_client = self.node.create_client(SetDownCamProjectionHeights, '/vision/down_cam/set_projection_heights')
+        
+        self.blackboard.register_key('/sensors/dvl/velocity', access=py_trees.common.Access.READ)
+        self.blackboard.register_key('/sensors/pose', access=py_trees.common.Access.READ)
+        self.blackboard.register_key('/mission/octagon_task/height_table', access=py_trees.common.Access.WRITE)
+
+    def initialise(self):
+        self.service_sent = False
+
+    def update(self) -> py_trees.common.Status:
+        if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.dvl.velocity is None:
+            self.node.get_logger().error("Blackboard sensors dvl key is not set up or dvl is None")
+            return py_trees.common.Status.FAILURE
+
+        if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.pose is None:
+            self.node.get_logger().error("Blackboard sensors pose key is not set up or pose is None")
+            return py_trees.common.Status.FAILURE
+        
+        # Send the service
+        if not self.service_sent:
+            # Get the dvl altitude and acquire the table height from it
+            self.blackboard.mission.octagon_task.height_table = self.blackboard.sensors.dvl.velocity.altitude + self.blackboard.sensors.pose.pose.position.z + \
+                self.com_to_dvl 
+            self.node.get_logger().info(f"[{self.name}] Acquired table height from DVL: {self.blackboard.mission.octagon_task.height_table:.3f} m")
+            request = SetDownCamProjectionHeights.Request()
+            request.all_labels = True
+            request.projection_height = self.blackboard.mission.octagon_task.height_table
+            request.specific_label = ""
+            self.request_time = self.node.get_clock().now()
+            self.future = self.service_client.call_async(request)
+            self.service_sent = True
+        
+        # Still waiting for response
+        if not self.future.done():
+            # Check for timeout
+            elapsed = (self.node.get_clock().now() - self.request_time).nanoseconds / 1e9
+            if elapsed >= self.timeout_sec:
+                self.node.get_logger().error(f"[{self.name}] Service call timed out after {self.timeout_sec:.1f}s")
+                self.future.cancel()
+                # Reset to allow retry on the next tick (stays RUNNING)
+                self.service_sent = False
+                return py_trees.common.Status.RUNNING
+            return py_trees.common.Status.RUNNING
+        
+        # Check if the service call itself failed (e.g. middleware error)
+        if self.future.exception() is not None:
+            self.node.get_logger().error(f"[{self.name}] Service call failed: {self.future.exception()}")
+            # Reset to allow retry on the next tick (stays RUNNING)
+            self.service_sent = False
+            return py_trees.common.Status.RUNNING
+        
+        # Verify if service is successful or not
+        response = self.future.result()
+        if response.success:
+            self.node.get_logger().info(f"[{self.name}] Service succeeded.")
+            return py_trees.common.Status.SUCCESS
+        else:
+            self.node.get_logger().info(f"[{self.name}] Service failed: {response.message}")
+            return py_trees.common.Status.FAILURE
 
 class ScanOctagonImages(py_trees.composites.Sequence):
     def __init__(self, num_steps_per_side=5):
@@ -501,7 +602,21 @@ class VerifyOctagonImages(py_trees.behaviour.Behaviour):
 
 # ---------------------------------------------------------------------------------------------------------------------
 # ---------------------------------------------------------------------------------------------------------------------
+# -------------------------------------TABLE CLEANUP TIME BAAAAAAAAAAAAAAABY ------------------------------------------
 # ---------------------------------------------------------------------------------------------------------------------
+# ---------------------------------------------------------------------------------------------------------------------
+
+class CleanUpTasks(py_trees.composites.Sequence):
+    def __init__(self, **kwargs):
+        super().__init__("Clean Up Tasks", memory=True)
+        self.grab_only_for_role = kwargs.get('grab_only_for_role', True)
+        self.number_of_items_to_grab = kwargs.get('number_of_items_to_grab', 1)
+        self.items_to_grab = ["bandaid", "nutbolt", "electric", "pill"] # to parametrized
+
+        for i in range(self.number_of_items_to_grab):
+                self.add_children([
+                    DropItemInBasket(item_to_grab=self.items_to_grab[i], **kwargs)])
+
 
 class DropItemInBasket(py_trees.composites.Sequence):
     def __init__(self, item_to_grab="pill", **kwargs):
@@ -510,27 +625,53 @@ class DropItemInBasket(py_trees.composites.Sequence):
         # 1. Go to object 
         go_object_vicinity = vision_behaviours.GoNearObject(
             target_class=item_to_grab,
-            target_distance=4.0,
+            target_distance=0.3,
             tolerance_meters=0.1,
             height_offset=0.1,
             hold_time=3.0
         )
 
-        # 2. Align properly on object Center (make this a 2 parter, one for rotation, useful for rectangle items, one for translation)
-        go_object = GoObject(item_to_grab, **kwargs)
+        # 2. Align properly on object Center with downcam pixels
+        go_object = AlignCameraWithObject(item_to_grab, **kwargs)
 
-        # 3. Grab object and surface (verify that the object is still in grabber)
+        # 3. Move such that the object is aligned on top of the grabber (verify that the object is still in grabber)
+        align_grabber = AlignGrabberWithObject(item_to_grab, **kwargs)
 
-        # 4. Go to respective bin 
+        # 4. Lower depth to have object inside grabber
+        lower_depth = LowerDepthToGrabber(item_to_grab, **kwargs)
+        
+        # 5. Grab object and surface (verify that the object is still in grabber)
+        close_actuators = ActuateGrabber(open=False, **kwargs)
 
-        # 5. Drop the item
+        #6. Surface to a depth where we can go to the respective bin
+        surface_depth = kwargs.get("surface_depth", -0.1)
+        surface_tolerance = kwargs.get("surface_tolerance", 0.1)
+        surface_hold_time = kwargs.get("surface_hold_time", 3.0)
 
-        # 6. Go back to center table and surface
+        surface_octagon = BasicActionBehaviour(
+            name="Surface in Octagon", 
+            goal=set_depth(z=surface_depth, tolerance=surface_tolerance, hold_time=surface_hold_time, timeout=30.0)
+        )
+
+        # 6. Go to respective bin 
+
+        # 7. Drop the item
+
+        # 8. Go back to center table and surface
+
+        self.add_children([
+            go_object_vicinity,
+            go_object,
+            align_grabber,
+            lower_depth,
+            close_actuators,
+            surface_octagon
+        ])
 
 
-class GoObject(py_trees.behaviour.Behaviour):
+class AlignCameraWithObject(py_trees.behaviour.Behaviour):
     def __init__(self, item_to_grab, **kwargs):
-        super().__init__(f"Go Item Object: {item_to_grab}")
+        super().__init__(f"Go Object Align Camera: {item_to_grab}")
         self.blackboard = self.attach_blackboard_client(name="CheckAboveTable Blackboard")
         self.action_status = None 
         self.item_to_grab = item_to_grab
@@ -601,16 +742,181 @@ class GoObject(py_trees.behaviour.Behaviour):
         y_angle = math.radians( (cy - self.camera_height/2) / self.camera_height * self.downcam_fov_vertical)
 
         height_to_table = self.blackboard.mission.octagon_task.height_table
+        #height_to_table = 0.7
         
         x = math.tan(x_angle) * height_to_table/2
         y = math.tan(y_angle) * height_to_table/2
 
-        goal = move_robot_centric(forward=-y, sway=-x, heave=-height_to_table + 0.1, hold_time=3.0)
+        goal = move_robot_centric(forward=-y, sway=-x, heave=-height_to_table + 0.1, tolerance=0.1, hold_time=3.0)
 
         self.navigation_client.send_navigation_goal(goal, self.name, custom_goal_response=self.on_server_goal_response, 
                 custom_goal_result=self.on_server_goal_result)
         self.action_status = ActionStatus.PENDING
         return py_trees.common.Status.RUNNING
+
+class AlignGrabberWithObject(py_trees.behaviour.Behaviour):
+    def __init__(self, item_to_grab, **kwargs):
+        super().__init__(f"Align Grabber with Object: {item_to_grab}")
+        self.blackboard = self.attach_blackboard_client(name="AlignGrabberWithObject Blackboard")
+        self.action_status = None 
+        self.grabber_tf_xyz = kwargs.get("tf_auv_to_grabber.xyz", [0.0, 0.0, 0.0])
+        self.grabber_tf_rpy = kwargs.get("tf_auv_to_grabber.rpy", [0.0, 0.0, 0.0])
+
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.navigation_client = kwargs['shared_nav_client']
+
+        self.blackboard.register_key('/sensors/pose', access=py_trees.common.Access.READ)
+
+        # Set up the TF broadcaster for foxglove visualization if there is a transform parameter
+        if self.grabber_tf_xyz is not None and self.grabber_tf_rpy is not None:
+            self.static_tf_broadcaster = StaticTransformBroadcaster(self.node)
+
+            t = TransformStamped()
+            t.header.frame_id = "auv_link"
+            t.child_frame_id = "grabber_link"
+            xyz = self.grabber_tf_xyz
+            rpy = self.grabber_tf_rpy
+            t.transform.translation.x = xyz[0]
+            t.transform.translation.y = xyz[1]
+            t.transform.translation.z = xyz[2]
+
+            q = quaternion_from_euler(rpy[0], rpy[1], rpy[2], axes='szyx')
+            t.transform.rotation.x = q[0]
+            t.transform.rotation.y = q[1]
+            t.transform.rotation.z = q[2]
+            t.transform.rotation.w = q[3]
+            self.static_tf_broadcaster.sendTransform(t)
+
+    def initialise(self):
+        self.action_status = None
+
+    def on_server_goal_response(self, goal_response: bool):
+        if not goal_response:
+            self.node.get_logger().error(f"[{self.name}] Goal rejected by server.")
+            self.action_status = ActionStatus.FAILED
     
+    def on_server_goal_result(self, goal_success: bool, message: str) -> None:
+        if goal_success:
+            self.action_status = ActionStatus.SUCCEEDED
+        else:
+            self.node.get_logger().error(f"[{self.name}] Failed to align grabber with object. {message}")
+            self.action_status = ActionStatus.FAILED
 
+    def update(self):
+        if self.action_status == ActionStatus.SUCCEEDED:
+            return py_trees.common.Status.SUCCESS
+    
+        if self.action_status == ActionStatus.PENDING:
+            return py_trees.common.Status.RUNNING
+        
+        if self.action_status == ActionStatus.FAILED:
+            return py_trees.common.Status.FAILURE
+        
+        # Reset initial goal pose and distance upon beginning of behaviour
+        desired_grabber_pose = None
+        if hasattr(self.blackboard, 'sensors') and self.blackboard.sensors.pose is not None:
+            desired_grabber_pose = self.blackboard.sensors.pose.pose.position
+        else:
+            self.node.get_logger().warn("Stop table below: No blackboard sensor pose")
+            return py_trees.common.Status.FAILURE
+        
+        # To add
+        goal = move_rigid_component_global(
+            x=desired_grabber_pose.x,
+            y=desired_grabber_pose.y,
+            z=desired_grabber_pose.z,
+            tolerance=0.05,
+            hold_time=5.0,
+            timeout=30.0
+        )
+        self.navigation_client.send_navigation_goal(goal, self.name, custom_goal_response=self.on_server_goal_response, 
+                custom_goal_result=self.on_server_goal_result)
+        self.action_status = ActionStatus.PENDING
 
+        return py_trees.common.Status.RUNNING
+
+class LowerDepthToGrabber(py_trees.behaviour.Behaviour):
+    def __init__(self, name="Lower Depth to Grabber", **kwargs):
+        super().__init__(name)
+        self.blackboard = self.attach_blackboard_client(name="LowerDepthToGrabber Blackboard")
+        self.grabber_tf_xyz = kwargs.get("tf_auv_to_grabber.xyz", [[0.0, 0.0, 0.0]])
+        self.pool_depth = kwargs.get("pool_depth", 2.1)
+        self.action_status = None
+
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.navigation_client = kwargs['shared_nav_client']
+
+        self.blackboard.register_key('/sensors/pose', access=py_trees.common.Access.READ)
+        self.blackboard.register_key('/mission/octagon_task/height_table', access=py_trees.common.Access.READ)
+
+    def initialise(self):
+        self.action_status = ActionStatus.NOT_SENT
+
+    def on_server_goal_response(self, goal_response: bool):
+        if not goal_response:
+            self.node.get_logger().error(f"[{self.name}] Goal rejected by server.")
+            self.action_status = ActionStatus.FAILED
+    
+    def on_server_goal_result(self, goal_success: bool, message: str) -> None:
+        if goal_success:
+            self.action_status = ActionStatus.SUCCEEDED
+        else:
+            self.node.get_logger().error(f"[{self.name}] Failed to lower depth to grabber. {message}")
+            self.action_status = ActionStatus.FAILED
+
+    def update(self):
+        if self.action_status == ActionStatus.SUCCEEDED:
+            return py_trees.common.Status.SUCCESS
+    
+        if self.action_status == ActionStatus.PENDING:
+            return py_trees.common.Status.RUNNING
+        
+        if self.action_status == ActionStatus.FAILED:
+            return py_trees.common.Status.FAILURE
+        
+        # Lower depth to grabber height
+        offset_dougie_grabber_z = self.grabber_tf_xyz[2] if self.grabber_tf_xyz is not None else 0.0
+        desired_depth = self.pool_depth -offset_dougie_grabber_z - \
+            (self.blackboard.mission.octagon_task.height_table + 0.024)  # Add some offset for clearance
+        
+        #desired_depth = self.pool_depth - offset_dougie_grabber_z - (0.70 + 0.024)  # Add some offset for clearance
+        self.node.get_logger().info(f"[{self.name}] Lowering depth to grabber: {desired_depth:.3f} m")
+        goal = set_depth(z=-desired_depth, tolerance=0.05, hold_time=4.0)
+        
+        self.navigation_client.send_navigation_goal(goal, self.name, custom_goal_response=self.on_server_goal_response, 
+                custom_goal_result=self.on_server_goal_result)
+        self.action_status = ActionStatus.PENDING
+
+        return py_trees.common.Status.RUNNING
+
+class ActuateGrabber(py_trees.composites.Sequence):
+    def __init__(self, open=True, **kwargs):
+        super().__init__("Actuate Grabber", memory=True)
+        self.blackboard = self.attach_blackboard_client(name="ActuateGrabber Blackboard")
+
+        actuate_grabber = SendActuateGrabberCommand(open=open, **kwargs)
+
+        # Wait a second to ensure actuator has time to actuate before moving away
+        wait_1s_for_actuator = TimerBehaviour(timer_duration=1.0)
+
+        self.add_children([actuate_grabber, wait_1s_for_actuator])
+
+class SendActuateGrabberCommand(py_trees.behaviour.Behaviour):
+    def __init__(self, name="Actuate Grabber", open=True, **kwargs):
+        super().__init__(name)
+        self.blackboard = self.attach_blackboard_client(name="ActuateGrabber Blackboard")
+        self.open = open
+
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.node.create_publisher(UInt8, "/actuator/grabber", 10)
+
+    def update(self):
+        # Send the command to actuate the grabber
+        msg = UInt8()
+        msg.data = 1 if self.open else 0
+        self.node.publish("/actuator/grabber", msg)
+
+        return py_trees.common.Status.SUCCESS

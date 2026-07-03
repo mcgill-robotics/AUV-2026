@@ -1,8 +1,10 @@
 """Math utilities for the motion package."""
 
 import math
+import numpy as np
 from typing import Tuple
 from geometry_msgs.msg import Point, Quaternion
+from tf_transformations import euler_from_matrix, euler_matrix
 from scipy.spatial.transform import Rotation
 from dataclasses import dataclass
 
@@ -212,3 +214,34 @@ def plane_point_distance(point: Vector2D, plane_point: Vector2D, plane_normal: V
         raise ValueError("Normal vector cannot be zero")
     point_plane_distance /= plane_normal.norm()
     return point_plane_distance
+
+def xyz_rpy_to_homogeneous_matrix(x: float, y: float, z: float, roll: float, pitch: float, yaw: float) -> np.ndarray:
+    """Convert XYZ position and RPY orientation to a homogeneous transformation matrix.""
+    Frame convention:
+        - Rotation: roll (X), pitch (Y), yaw (Z)
+        - Applied in ZYX order (ROS standard)
+    """
+
+    # Rotation from RPY
+    # Note that the return type of euler_matrix is a 4x4 numpy array representing the homogeneous 
+    # transformation matrix with the roation part filled out, not the translation part.
+    homogeneous_matrix = euler_matrix(roll, pitch, yaw, axes='szyx')
+
+    # Translation
+    homogeneous_matrix[0, 3] = x
+    homogeneous_matrix[1, 3] = y
+    homogeneous_matrix[2, 3] = z
+
+    return homogeneous_matrix
+
+
+def homogeneous_to_xyz_rpy(homogeneous_matrix):
+    """
+    Convert 4x4 homogeneous matrix to x, y, z, roll, pitch, yaw
+    """
+    x = homogeneous_matrix[0, 3]
+    y = homogeneous_matrix[1, 3]
+    z = homogeneous_matrix[2, 3]
+    roll, pitch, yaw = euler_from_matrix(homogeneous_matrix, axes='szyx')
+
+    return x, y, z, roll, pitch, yaw
