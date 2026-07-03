@@ -15,6 +15,9 @@ attitude_controller:
         P_wz: 2.0 # v2 -> 2.0
         I_MAX: 3.0
         integral_activation_threshold_deg: 10.0
+        max_slew_rate_roll_deg: 0.0 # [deg/s] (0.0 = disabled)
+        max_slew_rate_pitch_deg: 0.0 # [deg/s]
+        max_slew_rate_yaw_deg: 0.0 # [deg/s]
         buoyancy: 275.4 # [N]
         r_bv_v: [ 0.0, 0.0, 0.0 ] # [m] Tuned in pool tests.    
         enabled: false
@@ -27,6 +30,8 @@ depth_controller:
         KI: 0.15 # may need to modify
         I_MAX: 10.0
         integral_activation_threshold: 0.3
+        derivative_filter_alpha: 0.2
+        max_slew_rate: 0.0 # [m/s] (0.0 = disabled)
         net_buoyancy: 3.5 # Newtons.
         enabled: false
 
@@ -38,6 +43,8 @@ x_controller:
         KI: 0.5
         I_MAX: 10.0
         integral_activation_threshold: 0.5
+        derivative_filter_alpha: 0.8
+        max_slew_rate: 0.0 # [m/s] (0.0 = disabled)
         enabled: false
 
 y_controller:
@@ -48,4 +55,23 @@ y_controller:
         KI: 0.5
         I_MAX: 10.0
         integral_activation_threshold: 0.5
+        derivative_filter_alpha: 0.8
+        max_slew_rate: 0.0 # [m/s] (0.0 = disabled)
         enabled: false
+
+superimposer:
+    ros__parameters:
+        effort_bias_force_x: 0.0
+        effort_bias_force_y: 0.0
+        effort_bias_force_z: 0.0
+        effort_bias_torque_x: 0.0
+        effort_bias_torque_y: 0.0
+        effort_bias_torque_z: 0.0
+        publish_hz: 40.0
+        # Safety Effort Limits (0.0 = disabled)
+        max_planar_effort: 0.0      # Max magnitude of sqrt(Fx^2 + Fy^2) [N]
+        max_depth_effort: 0.0       # Max absolute vertical force [N]
+        max_torque_x: 0.0           # Max absolute roll torque [Nm]
+        max_torque_y: 0.0           # Max absolute pitch torque [Nm]
+        max_torque_z: 0.0           # Max absolute yaw torque [Nm]
+        enabled: true

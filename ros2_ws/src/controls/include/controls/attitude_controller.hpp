@@ -48,6 +48,12 @@ namespace controls
                 double I_MAX_;
                 double integral_activation_threshold_deg_;
                 double integral_activation_threshold_rad_;
+                double max_slew_rate_roll_deg_;
+                double max_slew_rate_pitch_deg_;
+                double max_slew_rate_yaw_deg_;
+                double max_slew_rate_roll_rad_;
+                double max_slew_rate_pitch_rad_;
+                double max_slew_rate_yaw_rad_;
 
                 Mat3 P_e_;
                 Mat3 I_e_;
@@ -70,11 +76,10 @@ namespace controls
 
                 //Target state variables
                 quatd q_iv2_; 
+                quatd target_q_iv2_; 
 
                 // Integral state variables
                 Vec3 integral_error_;
-                quatd last_q_iv2_;
-                double SETPOINT_RESET_EPSILON; 
 
 
 

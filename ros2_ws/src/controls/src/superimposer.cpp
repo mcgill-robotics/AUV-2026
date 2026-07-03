@@ -47,6 +47,10 @@ namespace controls
        this->declare_parameter<double>("effort_bias_torque_z", 0.0);
        this->declare_parameter<double>("publish_hz", 30.0); // publish frequency
        this->declare_parameter<double>("max_planar_effort", 0.0); // 0 = no limit
+       this->declare_parameter<double>("max_depth_effort", 0.0);  // 0 = no limit
+       this->declare_parameter<double>("max_torque_x", 0.0);      // 0 = no limit
+       this->declare_parameter<double>("max_torque_y", 0.0);      // 0 = no limit
+       this->declare_parameter<double>("max_torque_z", 0.0);      // 0 = no limit
        effort_bias_force_x = this->get_parameter("effort_bias_force_x").as_double();
        effort_bias_force_y = this->get_parameter("effort_bias_force_y").as_double();
        effort_bias_force_z = this->get_parameter("effort_bias_force_z").as_double();
@@ -55,6 +59,10 @@ namespace controls
        effort_bias_torque_z = this->get_parameter("effort_bias_torque_z").as_double();
        publish_hz_ = this->get_parameter("publish_hz").as_double();
        max_planar_effort_ = this->get_parameter("max_planar_effort").as_double();
+       max_depth_effort_ = this->get_parameter("max_depth_effort").as_double();
+       max_torque_x_ = this->get_parameter("max_torque_x").as_double();
+       max_torque_y_ = this->get_parameter("max_torque_y").as_double();
+       max_torque_z_ = this->get_parameter("max_torque_z").as_double();
 
        this->declare_parameter<bool>("enabled", true);
        enabled_ = this->get_parameter("enabled").as_bool();
@@ -138,6 +146,16 @@ namespace controls
                 }
                 enabled_ = parameter.as_bool();
                 RCLCPP_INFO(this->get_logger(), "Superimposer enabled: %s", enabled_ ? "true" : "false");
+            } else if (parameter.get_name() == "max_planar_effort") {
+                max_planar_effort_ = parameter.as_double();
+            } else if (parameter.get_name() == "max_depth_effort") {
+                max_depth_effort_ = parameter.as_double();
+            } else if (parameter.get_name() == "max_torque_x") {
+                max_torque_x_ = parameter.as_double();
+            } else if (parameter.get_name() == "max_torque_y") {
+                max_torque_y_ = parameter.as_double();
+            } else if (parameter.get_name() == "max_torque_z") {
+                max_torque_z_ = parameter.as_double();
             }
         }
 
@@ -166,17 +184,30 @@ namespace controls
            }
        }
 
+       // Clamp vertical depth effort if limit is set
+       if (max_depth_effort_ > 0.0) {
+           depth_force_pool.z() = std::clamp(depth_force_pool.z(), -max_depth_effort_, max_depth_effort_);
+       }
+
        Vec3 total_force_pool = depth_force_pool + planar_force_pool;
        Vec3 total_force_body = q_iv_.inverse() * total_force_pool; // Rotate to body frame
 
 
-       // Combine efforts (simple summation)
+       // Combine efforts (simple summation with torque clamping per axis)
+       double tx = attitude_effort_.torque.x + effort_bias_torque_x;
+       double ty = attitude_effort_.torque.y + effort_bias_torque_y;
+       double tz = attitude_effort_.torque.z + effort_bias_torque_z;
+
+       if (max_torque_x_ > 0.0) tx = std::clamp(tx, -max_torque_x_, max_torque_x_);
+       if (max_torque_y_ > 0.0) ty = std::clamp(ty, -max_torque_y_, max_torque_y_);
+       if (max_torque_z_ > 0.0) tz = std::clamp(tz, -max_torque_z_, max_torque_z_);
+
        combined_effort.force.x = total_force_body.x() + effort_bias_force_x;
        combined_effort.force.y = total_force_body.y() + effort_bias_force_y;
        combined_effort.force.z = total_force_body.z() + effort_bias_force_z;
-       combined_effort.torque.x = attitude_effort_.torque.x + effort_bias_torque_x;
-       combined_effort.torque.y = attitude_effort_.torque.y + effort_bias_torque_y;
-       combined_effort.torque.z = attitude_effort_.torque.z + effort_bias_torque_z;
+       combined_effort.torque.x = tx;
+       combined_effort.torque.y = ty;
+       combined_effort.torque.z = tz;
        
        // Publish combined effort
        pub_effort_->publish(combined_effort);
