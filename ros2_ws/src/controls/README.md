@@ -16,6 +16,7 @@ This process occurs in three stages:
   - [Usage](#usage)
     - [Raw Setpoint Publishing](#raw-setpoint-publishing)
     - [Navigation Server (Action Client)](#navigation-server-action-client)
+    - [Automated PID Tuning with CMA-ES (SITL)](#automated-pid-tuning-with-cma-es-sitl)
   - [Nodes](#nodes)
     - [Published Topics](#published-topics)
     - [Subscribed Topics](#subscribed-topics)
@@ -96,8 +97,64 @@ To send a test 3D goal to the Navigation Server via the ROS 2 Action CLI:
 To send a goal programmatically using Python, utilize the `goal_helpers` library included in `controls/goal_helpers.py`. See `test_nav.py` for examples.
 
 
+### Automated PID Tuning with CMA-ES (SITL)
+
+The package includes an automated SITL PID tuning pipeline (`cmaes_tuner.py`) utilizing Covariance Matrix Adaptation Evolution Strategy (CMA-ES). It interfaces directly with our Unity physics engine running in fast-forward via `/clock` and `/simulation/reset`.
+
+#### Prerequisites
+- **Unity Simulation** must be running and publishing `/clock`.
+- **ROS-TCP-Endpoint** must be running to bridge Unity ↔ ROS 2.
+- **No Clamping During Tuning**: Ensure maximum effort/torque clamping is disabled while tuning so CMA-ES observes unclipped mathematical dynamics. Once tuning is complete, add torque/thrust limits for hardware safety and apply slew-rate limiting (ramped setpoints) during mission navigation to prevent camera blur and DVL loss.
+
+#### Exact Commands to Run
+
+**Terminal 1: Launch the controls stack (inside Docker)**
+```bash
+source /home/douglas/AUV-2026/ros2_ws/install/setup.bash
+ros2 launch controls controls.launch.py sim:=true
+```
+
+**Terminal 2: Run the CMA-ES tuner (inside Docker)**
+
+*Phase 1 — Attitude (pick one axis at a time):*
+```bash
+source /home/douglas/AUV-2026/ros2_ws/install/setup.bash
+ros2 run controls cmaes_tuner.py --tune pitch
+```
+```bash
+ros2 run controls cmaes_tuner.py --tune roll
+```
+```bash
+ros2 run controls cmaes_tuner.py --tune yaw
+```
+*(After Phase 1 completes, update `attitude_controller` default parameters in `Controller_params_sim.yaml` with the winning gains before proceeding.)*
+
+*Phase 2 — Depth:*
+```bash
+ros2 run controls cmaes_tuner.py --tune depth
+```
+
+*Phase 3 — Planar (pick one):*
+```bash
+ros2 run controls cmaes_tuner.py --tune surge
+```
+```bash
+ros2 run controls cmaes_tuner.py --tune sway
+```
+
+*Phase 4 — Full joint optimization (all 18 params at once):*
+```bash
+ros2 run controls cmaes_tuner.py --tune full
+```
+
+#### Key Automation Features
+- **Dedicated Tuner Configuration (`cmaes_tuner_params.yaml`)**: All algorithm parameters (`popsize`, `maxiter`, `sim_duration_sec`, penalty weights, absolute overshoot floors) and mode definitions are cleanly defined in [cmaes_tuner_params.yaml](file:///home/sohaib/projects/AUV-2026/ros2_ws/src/controls/params/cmaes_tuner_params.yaml).
+- **Automatic YAML Initial Guesses**: The tuner automatically reads `Controller_params_sim.yaml` upon launch to populate the starting PID gains (`init_kp`, `init_ki`, `init_kd`).
+- **Synchronized Setpoint Randomization**: To ensure robust PID tuning across varying step sizes, the tuner enables `randomize_setpoints:=true` by default, testing candidates against randomized target setpoints within mode-dependent bounds while enforcing absolute overshoot tolerance floors ($1.5^\circ$ for attitude, $0.05\text{m}$ for translation).
+
+
 ## Nodes
-The package provides six ROS nodes: `depth_controller`, `attitude_controller`, `x_controller`, `y_controller`, `superimposer`, and `navigation_server`.
+The package provides seven ROS nodes: `depth_controller`, `attitude_controller`, `x_controller`, `y_controller`, `superimposer`, `navigation_server`, and `cmaes_tuner`.
 
 - `depth_controller` input: `/auv_frame/depth`, `/controls/depth_setpoint`
 
@@ -118,6 +175,10 @@ The package provides six ROS nodes: `depth_controller`, `attitude_controller`, `
 - `navigation_server` input: `/state/pose` (geometry_msgs/PoseStamped)
 
 - `navigation_server` output: Action Server `/motion/navigate`, publishers pointing to `/controls/depth_setpoint`, `/controls/x_setpoint`, `/controls/y_setpoint`, `/controls/quaternion_setpoint`
+
+- `cmaes_tuner` input: `/clock`, `/auv_frame/depth`, `/auv_frame/imu`, `auv_frame/dvl/position`, `/controls/depth_effort`, `/controls/attitude_effort`, `/controls/x_effort`
+
+- `cmaes_tuner` output: `/simulation/reset`, setpoint publishers, and dynamic parameter client calls to active/auxiliary controllers
 
 
 ### Published Topics
@@ -170,6 +231,8 @@ The package provides six ROS nodes: `depth_controller`, `attitude_controller`, `
 - `sensors` - for utility functions
 
 - `scipy` - Used by `navigation_server` and `controls.utils` for 3D coordinate transformations.
+
+- `cma` - Covariance Matrix Adaptation Evolution Strategy library for automated SITL PID tuning (`cmaes_tuner.py`).
 
 ### Building
 
