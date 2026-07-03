@@ -114,13 +114,23 @@ class TorpedoTask(py_trees.composites.Sequence):
                 variable_value=2,
                 overwrite=True
             ),
-            self.board_sequence(),
-            # self.node_base_case(),
-            # py_trees.behaviours.Success(name="Placeholder Torpedo Success")
+            self.strategy_selector()
         ])
 
-    def tick_tree(self):
-        pass
+    def strategy_selector(self)->py_trees.composites.Selector:
+        """
+        Selector for torpedo strategy. If we can find and align to the board, we will try to fire torpedos through the openings. If we fail to find or align to the board, we can fallback to just firing torpedos at random in front of us for partial points.
+
+        returns py_trees.composites.Selector
+        """
+        strategy_selector = py_trees.composites.Selector("Torpedo Strategy Selector", memory=True)
+        strategy_selector.add_children(
+            [
+                self.board_sequence(),
+                self.node_base_case()
+            ]
+         )
+        return strategy_selector
 
     def board_sequence(self)->py_trees.composites.Sequence:
         """
@@ -317,7 +327,7 @@ class TorpedoTask(py_trees.composites.Sequence):
         
         firing_order_selector.add_children(
             [
-                # large_then_small,
+                large_then_small,
                 large_only,
                 # small_only
             ]
@@ -334,7 +344,7 @@ class TorpedoTask(py_trees.composites.Sequence):
         board_type_selector.add_children(
             [
                 self.board_type_strategy(BoardType.FIRE_TOP_LEFT, hole_type),
-                # self.board_type_strategy(BoardType.BLOOD_TOP_LEFT, hole_type)
+                self.board_type_strategy(BoardType.BLOOD_TOP_LEFT, hole_type)
             ]
          )
         return board_type_selector
@@ -479,11 +489,18 @@ class TorpedoTask(py_trees.composites.Sequence):
         returns py_trees.composites.Sequence
         """
 
-        node_base_case = py_trees.composites.Sequence("base_case", memory=True)
+        node_base_case = py_trees.composites.Sequence("Base Case (No Board Alignment)", memory=True)
         node_base_case.add_children(
             [
-                # TODO add behaviours to just fire torpedos at random in front of us for partial points
-                py_trees.behaviours.Success(name="Placeholder Torpedo Success")
+                py_trees.behaviours.CheckBlackboardVariableValue(
+                    name="Check torpedo count is at least 1",
+                    check=py_trees.common.ComparisonExpression(
+                        variable="/torpedo/count",
+                        value=1,
+                        operator=operator.ge,
+                    )
+                ),
+                FireTorpedo(launch_function=self.launch_function, firing_buffer_time=self.torpedo_firing_buffer_time)
             ]
         )
         return node_base_case
