@@ -38,6 +38,7 @@ class DepthController(Node):
         self.declare_parameter("I_MAX", 0.0)
         self.declare_parameter("integral_activation_threshold", 1.0)
         self.declare_parameter("net_buoyancy", 0.0)
+        self.declare_parameter("max_slew_rate", 0.0)
         self.declare_parameter("enabled", False)
 
         # PID controller parameters
@@ -48,6 +49,7 @@ class DepthController(Node):
         self.I_MAX = float(self.get_parameter("I_MAX").value)
         self.integral_activation_threshold = float(self.get_parameter("integral_activation_threshold").value)
         self.net_buoyancy = float(self.get_parameter("net_buoyancy").value)
+        self.max_slew_rate = float(self.get_parameter("max_slew_rate").value)
         self.enabled = bool(self.get_parameter("enabled").value)
 
         self.parameter_callback_handle = self.add_on_set_parameters_callback(self.parameters_callback)
@@ -55,6 +57,7 @@ class DepthController(Node):
         self.pid = PID(self.KP, self.KD, self.KI, self.I_MAX, self.integral_activation_threshold)
 
         self.setpoint_depth = 0.25  # Desired depth in meters. TODO: Change default value to AUV float depth
+        self.target_setpoint_depth = 0.25
         self.current_depth = 0.0   # Current depth in meters
         self.previous_depth = 0.0  # Previous depth for derivative calculation
         self.time_step = 1.0 / self.control_loop_hz
@@ -66,22 +69,24 @@ class DepthController(Node):
         self.timer = self.create_timer(self.time_step, self.control_loop_callback)
 
     def depth_callback(self, msg):
-        self.previous_depth = self.current_depth
         self.current_depth = msg.data
 
     def setpoint_callback(self, msg):
-        self.setpoint_depth = msg.data
+        self.target_setpoint_depth = msg.data
+        if self.max_slew_rate <= 0.0 or not self.enabled:
+            self.setpoint_depth = self.target_setpoint_depth
 
     def setpoint_srv_callback(self, request, response):
-        self.setpoint_depth = request.data
+        self.target_setpoint_depth = request.data
+        if self.max_slew_rate <= 0.0 or not self.enabled:
+            self.setpoint_depth = self.target_setpoint_depth
         response.success = True
-        response.message = f"Setpoint updated to {self.setpoint_depth}."
+        response.message = f"Setpoint updated to {self.target_setpoint_depth}."
         return response
 
     def parameters_callback(self, parameters):
         result = SetParametersResult()
         result.successful = True
-
         for parameter in parameters:
             if parameter.name == "enabled":
                 if parameter.type_ != parameter.Type.BOOL:
@@ -91,17 +96,85 @@ class DepthController(Node):
                 new_enabled = bool(parameter.value)
                 if new_enabled and not self.enabled:
                     self.setpoint_depth = self.current_depth
+                    self.target_setpoint_depth = self.current_depth
                 self.enabled = new_enabled
                 self.get_logger().info(f"Depth controller enabled: {self.enabled}")
+            elif parameter.name == "max_slew_rate":
+                if parameter.type_ not in [parameter.Type.DOUBLE, parameter.Type.INTEGER]:
+                    result.successful = False
+                    result.reason = "'max_slew_rate' must be a double/int"
+                    return result
+                self.max_slew_rate = float(parameter.value)
+                self.get_logger().info(f"Updated max_slew_rate: {self.max_slew_rate:.4f}")
+            elif parameter.name == "KP":
+                if parameter.type_ not in [parameter.Type.DOUBLE, parameter.Type.INTEGER]:
+                    result.successful = False
+                    result.reason = "'KP' must be a double/int"
+                    return result
+                self.KP = float(parameter.value)
+                self.pid.KP = self.KP
+                self.get_logger().info(f"Updated KP: {self.KP:.4f}")
+            elif parameter.name == "KI":
+                if parameter.type_ not in [parameter.Type.DOUBLE, parameter.Type.INTEGER]:
+                    result.successful = False
+                    result.reason = "'KI' must be a double/int"
+                    return result
+                self.KI = float(parameter.value)
+                self.pid.KI = self.KI
+                self.get_logger().info(f"Updated KI: {self.KI:.4f}")
+            elif parameter.name == "KD":
+                if parameter.type_ not in [parameter.Type.DOUBLE, parameter.Type.INTEGER]:
+                    result.successful = False
+                    result.reason = "'KD' must be a double/int"
+                    return result
+                self.KD = float(parameter.value)
+                self.pid.KD = self.KD
+                self.get_logger().info(f"Updated KD: {self.KD:.4f}")
+            elif parameter.name == "I_MAX":
+                if parameter.type_ not in [parameter.Type.DOUBLE, parameter.Type.INTEGER]:
+                    result.successful = False
+                    result.reason = "'I_MAX' must be a double/int"
+                    return result
+                self.I_MAX = float(parameter.value)
+                self.pid.I_MAX = self.I_MAX
+                self.get_logger().info(f"Updated I_MAX: {self.I_MAX:.4f}")
+            elif parameter.name == "integral_activation_threshold":
+                if parameter.type_ not in [parameter.Type.DOUBLE, parameter.Type.INTEGER]:
+                    result.successful = False
+                    result.reason = "'integral_activation_threshold' must be a double/int"
+                    return result
+                self.integral_activation_threshold = float(parameter.value)
+                self.pid.integral_activation_threshold = self.integral_activation_threshold
+                self.get_logger().info(f"Updated integral_activation_threshold: {self.integral_activation_threshold:.4f}")
+            elif parameter.name == "net_buoyancy":
+                if parameter.type_ not in [parameter.Type.DOUBLE, parameter.Type.INTEGER]:
+                    result.successful = False
+                    result.reason = "'net_buoyancy' must be a double/int"
+                    return result
+                self.net_buoyancy = float(parameter.value)
+                self.feed_forward = -self.net_buoyancy
+                self.get_logger().info(f"Updated net_buoyancy: {self.net_buoyancy:.4f}, feed_forward: {self.feed_forward:.4f}")
 
         return result
 
     def control_loop_callback(self):
+        # Apply setpoint slew-rate limiting if enabled
+        if self.enabled and self.max_slew_rate > 0.0:
+            max_step = self.max_slew_rate * self.time_step
+            diff = self.target_setpoint_depth - self.setpoint_depth
+            if abs(diff) > max_step:
+                self.setpoint_depth += math.copysign(max_step, diff)
+            else:
+                self.setpoint_depth = self.target_setpoint_depth
+        else:
+            self.setpoint_depth = self.target_setpoint_depth
+
         # Publish effort command
         effort_msg = Wrench()
         if self.enabled:
             # +Z is up, so invert depth values for PID calculations
             self.pid.compute_errors(-self.setpoint_depth, -self.current_depth, -self.previous_depth, self.time_step)
+            self.previous_depth = self.current_depth
             effort_output = self.pid.compute_effort()
             effort_msg.force.z = effort_output + self.feed_forward
         else:

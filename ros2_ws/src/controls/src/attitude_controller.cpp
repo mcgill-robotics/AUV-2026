@@ -16,6 +16,9 @@ namespace controls
         this->declare_parameter<double>("P_wz", 1.0);
         this->declare_parameter<double>("I_MAX", 10.0);
         this->declare_parameter<double>("integral_activation_threshold_deg", std::numeric_limits<double>::infinity());
+        this->declare_parameter<double>("max_slew_rate_roll_deg", 0.0);
+        this->declare_parameter<double>("max_slew_rate_pitch_deg", 0.0);
+        this->declare_parameter<double>("max_slew_rate_yaw_deg", 0.0);
         this->declare_parameter<double>("buoyancy", 278.0); // Newtons
         this->declare_parameter<std::vector<double>>("r_bv_v", {0.0, 0.0, 0.023}); // [m] From CAD Model
         this->declare_parameter<double>("control_loop_hz", 25.0); // Control loop frequency
@@ -33,6 +36,12 @@ namespace controls
         this->get_parameter("I_MAX", I_MAX_);
         this->get_parameter("integral_activation_threshold_deg", integral_activation_threshold_deg_);
         integral_activation_threshold_rad_ = integral_activation_threshold_deg_ * (M_PI / 180.0);
+        this->get_parameter("max_slew_rate_roll_deg", max_slew_rate_roll_deg_);
+        this->get_parameter("max_slew_rate_pitch_deg", max_slew_rate_pitch_deg_);
+        this->get_parameter("max_slew_rate_yaw_deg", max_slew_rate_yaw_deg_);
+        max_slew_rate_roll_rad_ = max_slew_rate_roll_deg_ * (M_PI / 180.0);
+        max_slew_rate_pitch_rad_ = max_slew_rate_pitch_deg_ * (M_PI / 180.0);
+        max_slew_rate_yaw_rad_ = max_slew_rate_yaw_deg_ * (M_PI / 180.0);
         this->get_parameter("buoyancy", buoyancy_);
         this->get_parameter("r_bv_v", r_bv_v_);
         this->get_parameter("control_loop_hz", control_loop_hz_);
@@ -41,10 +50,9 @@ namespace controls
         q_iv_ = quatd::Identity(); // Initial orientation: identity quaternion
         w_iv_ = Vec3::Zero(); // Initial angular velocity: zero vector
         q_iv2_ = quatd::Identity(); // Initial target orientation: identity quaternion
+        target_q_iv2_ = quatd::Identity();
 
         integral_error_ = Vec3::Zero();
-        last_q_iv2_ = quatd::Identity();
-        SETPOINT_RESET_EPSILON = 1e-3;
 
         P_e_ << P_ex_, 0, 0,
                 0, P_ey_, 0,
@@ -105,12 +113,15 @@ namespace controls
 
     void AttitudeController::target_orientation_callback(const geometry_msgs::msg::Quaternion::SharedPtr msg)
     {
-        q_iv2_ = quatd(
+        target_q_iv2_ = quatd(
             msg->w,
             msg->x,
             msg->y,
             msg->z
         );
+        if ((max_slew_rate_roll_rad_ <= 0.0 && max_slew_rate_pitch_rad_ <= 0.0 && max_slew_rate_yaw_rad_ <= 0.0) || !enabled_) {
+            q_iv2_ = target_q_iv2_;
+        }
     }
 
     void AttitudeController::setpoint_service_callback (const std::shared_ptr<auv_msgs::srv::SetAttitudeEuler::Request> request,
@@ -124,9 +135,12 @@ namespace controls
         );
 
         // Convert Euler angles to quaternion
-        q_iv2_ = Eigen::AngleAxisd(euler_rad.z(),   Eigen::Vector3d::UnitZ())
+        target_q_iv2_ = Eigen::AngleAxisd(euler_rad.z(),   Eigen::Vector3d::UnitZ())
          * Eigen::AngleAxisd(euler_rad.y(), Eigen::Vector3d::UnitY())
          * Eigen::AngleAxisd(euler_rad.x(),  Eigen::Vector3d::UnitX());
+        if ((max_slew_rate_roll_rad_ <= 0.0 && max_slew_rate_pitch_rad_ <= 0.0 && max_slew_rate_yaw_rad_ <= 0.0) || !enabled_) {
+            q_iv2_ = target_q_iv2_;
+        }
 
         response->success = true;
         response->message = "Target orientation set to " + std::to_string(request->roll) + " deg, " + std::to_string(request->pitch) + " deg, " + std::to_string(request->yaw) + " deg.";
@@ -135,13 +149,6 @@ namespace controls
 
     Vec3 AttitudeController::feedback_effort(const quatd& q_iv2)
     {
-        // Detect setpoint change using dot product
-        double dot = std::abs(q_iv2.dot(last_q_iv2_));
-        if (1.0 - dot > SETPOINT_RESET_EPSILON) {
-            integral_error_ = Vec3::Zero();
-            last_q_iv2_ = q_iv2;
-        }
-
         quatd q_error = q_iv_.conjugate() * q_iv2;
         q_error = sensors::math::canonicalizeShortest(q_error);
         Vec3 error_vector = Vec3(q_error.x(), q_error.y(), q_error.z());
@@ -187,6 +194,41 @@ namespace controls
 
     void AttitudeController::control_loop_callback()
     {
+        // Apply setpoint slew-rate limiting if enabled
+        if (enabled_ && (max_slew_rate_roll_rad_ > 0.0 || max_slew_rate_pitch_rad_ > 0.0 || max_slew_rate_yaw_rad_ > 0.0)) {
+            quatd q_diff = q_iv2_.conjugate() * target_q_iv2_;
+            q_diff = sensors::math::canonicalizeShortest(q_diff);
+            Eigen::AngleAxisd aa(q_diff);
+            double angle = aa.angle();
+            if (std::abs(angle) > 1e-6) {
+                Vec3 d_angle = angle * aa.axis();
+                double dt = 1.0 / control_loop_hz_;
+                if (max_slew_rate_roll_rad_ > 0.0) {
+                    double max_step = max_slew_rate_roll_rad_ * dt;
+                    if (std::abs(d_angle.x()) > max_step) d_angle.x() = std::copysign(max_step, d_angle.x());
+                }
+                if (max_slew_rate_pitch_rad_ > 0.0) {
+                    double max_step = max_slew_rate_pitch_rad_ * dt;
+                    if (std::abs(d_angle.y()) > max_step) d_angle.y() = std::copysign(max_step, d_angle.y());
+                }
+                if (max_slew_rate_yaw_rad_ > 0.0) {
+                    double max_step = max_slew_rate_yaw_rad_ * dt;
+                    if (std::abs(d_angle.z()) > max_step) d_angle.z() = std::copysign(max_step, d_angle.z());
+                }
+                double new_angle = d_angle.norm();
+                if (new_angle > 1e-6) {
+                    quatd q_step(Eigen::AngleAxisd(new_angle, d_angle / new_angle));
+                    q_iv2_ = (q_iv2_ * q_step).normalized();
+                } else {
+                    q_iv2_ = target_q_iv2_;
+                }
+            } else {
+                q_iv2_ = target_q_iv2_;
+            }
+        } else {
+            q_iv2_ = target_q_iv2_;
+        }
+
         wrench_msg effort;
         if (enabled_)
         {
@@ -226,6 +268,7 @@ namespace controls
                 bool new_enabled = parameter.as_bool();
                 if (new_enabled && !enabled_) {
                     q_iv2_ = q_iv_; // Snap target orientation to current orientation on enable
+                    target_q_iv2_ = q_iv_;
                 }
                 enabled_ = new_enabled;
                 RCLCPP_INFO(
@@ -246,6 +289,18 @@ namespace controls
                 integral_activation_threshold_deg_ = parameter.as_double();
                 integral_activation_threshold_rad_ = integral_activation_threshold_deg_ * (M_PI / 180.0);
             }
+            else if (parameter.get_name() == "max_slew_rate_roll_deg") {
+                max_slew_rate_roll_deg_ = parameter.as_double();
+                max_slew_rate_roll_rad_ = max_slew_rate_roll_deg_ * (M_PI / 180.0);
+            }
+            else if (parameter.get_name() == "max_slew_rate_pitch_deg") {
+                max_slew_rate_pitch_deg_ = parameter.as_double();
+                max_slew_rate_pitch_rad_ = max_slew_rate_pitch_deg_ * (M_PI / 180.0);
+            }
+            else if (parameter.get_name() == "max_slew_rate_yaw_deg") {
+                max_slew_rate_yaw_deg_ = parameter.as_double();
+                max_slew_rate_yaw_rad_ = max_slew_rate_yaw_deg_ * (M_PI / 180.0);
+            }
             else if (parameter.get_name() == "P_ex") { P_ex_ = parameter.as_double(); }
             else if (parameter.get_name() == "P_ey") { P_ey_ = parameter.as_double(); }
             else if (parameter.get_name() == "P_ez") { P_ez_ = parameter.as_double(); }
@@ -256,6 +311,8 @@ namespace controls
             else if (parameter.get_name() == "P_wy") { P_wy_ = parameter.as_double(); }
             else if (parameter.get_name() == "P_wz") { P_wz_ = parameter.as_double(); }
             else if (parameter.get_name() == "I_MAX") { I_MAX_ = parameter.as_double(); }
+            else if (parameter.get_name() == "buoyancy") { buoyancy_ = parameter.as_double(); }
+            else if (parameter.get_name() == "r_bv_v") { r_bv_v_ = parameter.as_double_array(); }
         }
 
         // Reconstruct matrices with updated values
