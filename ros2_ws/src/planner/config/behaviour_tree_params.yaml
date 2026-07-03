@@ -133,7 +133,7 @@ planner_root_tree:
       number_of_items_to_grab: 1          #(items) Number of items to grab from the table, starting from the roles for the current role 
       item_drop_height_relative_bin: 0.1  # (m) Height above the bin to drop the item relative to the bin's height
       tf_auv_to_grabber:                  # (m) and (deg) Transform from the AUV's center of mass to the grabber's open bracket in the AUV body frame
-        xyz: [-0.1125559, -0.1739998, -0.01242304] 
+        xyz: [-0.24594, 0.02938, -0.4877]] 
         rpy: [0.0, 0.0, 0.0] 
         
 
@@ -166,8 +166,8 @@ planner_root_tree:
         sample_every_n_ticks: 2           # Sample orientation every N ticks (to allow for some movement between samples)
 
       auv_to_torpedos:
-        left: [0.1204,-0.0167,0.1624]   # (m) AUV to left torpedo center offset in AUV body frame
-        right: [0.1174, 0.0167,0.1624]   # (m) AUV to right torpedo center offset in AUV body frame
+        left:  [0.10280471,0.3299377,  0.174146]   # (m) AUV to left torpedo center offset in AUV body frame
+        right: [0.102385, -0.03200623, 0.174146]   # (m) AUV to right torpedo center offset in AUV body frame
 
       torpedo_trajectory_coefficients:
         x: [0.0, 1.35, -1.44, 0.701, -0.117]       # Coefficients for polynomial trajectory to torpedo target in forward direction (relative to AUV)
