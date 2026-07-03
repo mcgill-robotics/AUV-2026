@@ -1,86 +1,6 @@
 {
   "configById": {
-    "Indicator!4szxpf": {
-      "path": "/power/batteries/voltage.data[0]",
-      "style": "background",
-      "fontSize": 36,
-      "fallbackColor": "#828282",
-      "fallbackLabel": "B1: N/A",
-      "rules": [
-        {
-          "operator": ">",
-          "rawValue": "15.5",
-          "color": "#00ff20",
-          "label": "B1: >15.5V"
-        },
-        {
-          "operator": "<=",
-          "rawValue": "15.5",
-          "color": "#afc800",
-          "label": "B1: 15.2-15.5V"
-        },
-        {
-          "operator": "<=",
-          "rawValue": "15.2",
-          "color": "#e58700",
-          "label": "B1: 14.0-15.2V"
-        },
-        {
-          "operator": "<=",
-          "rawValue": "14.0",
-          "color": "#fb4700",
-          "label": "B1: 12.6-14.0V"
-        },
-        {
-          "operator": "<=",
-          "rawValue": "12.6",
-          "color": "#ff0000",
-          "label": "B1: <12.6V"
-        }
-      ],
-      "foxglovePanelTitle": "Battery 1 Status"
-    },
-    "Indicator!2jv5r2l": {
-      "path": "/power/batteries/voltage.data[1]",
-      "style": "background",
-      "fontSize": 36,
-      "fallbackColor": "#828282",
-      "fallbackLabel": "B2: N/A",
-      "rules": [
-        {
-          "operator": ">",
-          "rawValue": "15.5",
-          "color": "#00ff20",
-          "label": "B2: >15.5V"
-        },
-        {
-          "operator": "<=",
-          "rawValue": "15.5",
-          "color": "#afc800",
-          "label": "B2: 15.2-15.5V"
-        },
-        {
-          "operator": "<=",
-          "rawValue": "15.2",
-          "color": "#e58700",
-          "label": "B2: 14.0-15.2V"
-        },
-        {
-          "operator": "<=",
-          "rawValue": "14.5",
-          "color": "#fb4700",
-          "label": "B2: 12.6-14.0V"
-        },
-        {
-          "operator": "<=",
-          "rawValue": "12.6",
-          "color": "#ff0000",
-          "label": "B2: <12.6V"
-        }
-      ],
-      "foxglovePanelTitle": "Battery 2 Status"
-    },
-    "Plot!4am3t4e": {
+    "Plot!3nkntiw": {
       "paths": [
         {
           "timestampMethod": "receiveTime",
@@ -109,7 +29,10 @@
       "foxglovePanelTitle": "Battery Voltages",
       "sidebarDimension": 191
     },
-    "Plot!3hdwffz": {
+    "DiagnosticStatusPanel!1bgdxk7": {
+      "topicToRender": "/diagnostics"
+    },
+    "Plot!3q8rmpl": {
       "paths": [
         {
           "timestampMethod": "receiveTime",
@@ -154,7 +77,7 @@
         {
           "timestampMethod": "receiveTime",
           "value": "/power/thrusters/current.data[5]",
-          "enabled": false,
+          "enabled": true,
           "color": "#385dff",
           "id": "4f37cf1a-82ce-4078-8d74-2fb1c0e81cf0",
           "label": "Thruster 6 (heave front left)"
@@ -177,6 +100,244 @@
         }
       ],
       "foxglovePanelTitle": "Thruster Currents"
+    },
+    "Plot!2m28vae": {
+      "paths": [
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/propulsion/microseconds.data[0]",
+          "enabled": true,
+          "color": "#ff4538",
+          "id": "4f37cf1a-82ce-4078-8d74-2fb1c0e81cf0",
+          "label": "Thruster 1 (back right)"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/propulsion/microseconds.data[1]",
+          "enabled": true,
+          "color": "#8fff38",
+          "id": "4f37cf1a-82ce-4078-8d74-2fb1c0e81cf0",
+          "label": "Thruster 2 (heave back right)"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/propulsion/microseconds.data[2]",
+          "enabled": true,
+          "color": "#38f2ff",
+          "id": "4f37cf1a-82ce-4078-8d74-2fb1c0e81cf0",
+          "label": "Thruster 3 (heave front right)"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/propulsion/microseconds.data[3]",
+          "enabled": true,
+          "color": "#a838ff",
+          "id": "4f37cf1a-82ce-4078-8d74-2fb1c0e81cf0",
+          "label": "Thruster 4 (front right)"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/propulsion/microseconds.data[4]",
+          "enabled": true,
+          "color": "#ff38c0",
+          "id": "4f37cf1a-82ce-4078-8d74-2fb1c0e81cf0",
+          "label": "Thruster 5 (front left)"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/propulsion/microseconds.data[5]",
+          "enabled": true,
+          "color": "#385dff",
+          "id": "4f37cf1a-82ce-4078-8d74-2fb1c0e81cf0",
+          "label": "Thruster 6 (heave front left)"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/propulsion/microseconds.data[6]",
+          "enabled": true,
+          "color": "#38ff77",
+          "id": "4f37cf1a-82ce-4078-8d74-2fb1c0e81cf0",
+          "label": "Thruster 7 (heave back left)"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/propulsion/microseconds.data[7]",
+          "enabled": true,
+          "color": "#ffda38",
+          "id": "4f37cf1a-82ce-4078-8d74-2fb1c0e81cf0",
+          "label": "Thruster 8 (back left)"
+        }
+      ],
+      "foxglovePanelTitle": "Propulsion Microseconds",
+      "showPlotValuesInLegend": true
+    },
+    "Plot!1lfrj94": {
+      "paths": [
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/power/teensy/temperature.data",
+          "enabled": true,
+          "color": "#ff4538",
+          "id": "4f37cf1a-82ce-4078-8d74-2fb1c0e81cf0",
+          "label": " "
+        }
+      ],
+      "minYValue": 45,
+      "showPlotValuesInLegend": true,
+      "yAxisLabel": "Temperature (C)",
+      "xAxisLabel": "Time (s)",
+      "legendDisplay": "floating",
+      "showLegend": true,
+      "maxYValue": 75,
+      "foxglovePanelTitle": "Teensy Temperature"
+    },
+    "Plot!2w4ljht": {
+      "paths": [
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/sensors/temperature.data",
+          "enabled": true,
+          "color": "#ff4538",
+          "id": "4f37cf1a-82ce-4078-8d74-2fb1c0e81cf0",
+          "label": " "
+        }
+      ],
+      "minYValue": 20,
+      "showPlotValuesInLegend": true,
+      "yAxisLabel": "Temperature (C)",
+      "xAxisLabel": "Time (s)",
+      "legendDisplay": "floating",
+      "showLegend": true,
+      "maxYValue": 30,
+      "foxglovePanelTitle": "Unknown Sensor Temperature",
+      "showYAxisGridLines": true,
+      "showYAxisLabels": true
+    },
+    "Plot!3jlcvph": {
+      "paths": [
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/temperature.temperature",
+          "enabled": true,
+          "color": "#ff4538",
+          "id": "4f37cf1a-82ce-4078-8d74-2fb1c0e81cf0",
+          "label": " "
+        }
+      ],
+      "minYValue": 45,
+      "showPlotValuesInLegend": true,
+      "yAxisLabel": "Temperature (C)",
+      "xAxisLabel": "Time (s)",
+      "legendDisplay": "floating",
+      "showLegend": true,
+      "maxYValue": 75,
+      "foxglovePanelTitle": "IMU Temperature"
+    },
+    "Indicator!4szxpf": {
+      "path": "/power/batteries/voltage.data[0]",
+      "style": "background",
+      "fontSize": 36,
+      "fallbackColor": "#828282",
+      "fallbackLabel": "B1: N/A",
+      "rules": [
+        {
+          "operator": "<=",
+          "rawValue": "12.6",
+          "color": "#ff0000",
+          "label": "B1: <12.6V"
+        },
+        {
+          "operator": "<=",
+          "rawValue": "14.0",
+          "color": "#fb4700",
+          "label": "B1: 12.6-14.0V"
+        },
+        {
+          "operator": "<=",
+          "rawValue": "15.2",
+          "color": "#e58700",
+          "label": "B1: 14.5-15.2V"
+        },
+        {
+          "operator": "<=",
+          "rawValue": "15.5",
+          "color": "#afc800",
+          "label": "B1: 15.2-15.5V"
+        },
+        {
+          "operator": ">",
+          "rawValue": "15.5",
+          "color": "#00ff20",
+          "label": "B1: >15.5V"
+        }
+      ],
+      "foxglovePanelTitle": "Battery 1 Status"
+    },
+    "Indicator!2jv5r2l": {
+      "path": "/power/batteries/voltage.data[1]",
+      "style": "background",
+      "fontSize": 36,
+      "fallbackColor": "#828282",
+      "fallbackLabel": "B2: N/A",
+      "rules": [
+        {
+          "operator": "<=",
+          "rawValue": "12.6",
+          "color": "#ff0000",
+          "label": "B2: <12.6V"
+        },
+        {
+          "operator": "<=",
+          "rawValue": "14.0",
+          "color": "#fb4700",
+          "label": "B2: 12.6-14.0V"
+        },
+        {
+          "operator": "<=",
+          "rawValue": "15.2",
+          "color": "#e58700",
+          "label": "B2: 14.5-15.2V"
+        },
+        {
+          "operator": "<=",
+          "rawValue": "15.5",
+          "color": "#afc800",
+          "label": "B2: 15.2-15.5V"
+        },
+        {
+          "operator": ">",
+          "rawValue": "15.5",
+          "color": "#00ff20",
+          "label": "B2: >15.5V"
+        }
+      ],
+      "foxglovePanelTitle": "Battery 2 Status"
+    },
+    "Tab!2eb7mfb": {
+      "activeTabIdx": 0,
+      "tabs": [
+        {
+          "title": "Batteries",
+          "layout": "Plot!3nkntiw"
+        },
+        {
+          "title": "Diagnostics",
+          "layout": "DiagnosticStatusPanel!1bgdxk7"
+        }
+      ]
+    },
+    "Tab!3k8sd2c": {
+      "activeTabIdx": 0,
+      "tabs": [
+        {
+          "title": "Currents",
+          "layout": "Plot!3q8rmpl"
+        },
+        {
+          "title": "PWM",
+          "layout": "Plot!2m28vae"
+        }
+      ]
     },
     "Plot!1fjiysg": {
       "paths": [
@@ -211,25 +372,22 @@
       "maxYValue": 5,
       "foxglovePanelTitle": "Sensor Depth"
     },
-    "Plot!2nrk6hi": {
-      "paths": [
+    "Tab!2l7p356": {
+      "activeTabIdx": 0,
+      "tabs": [
         {
-          "timestampMethod": "receiveTime",
-          "value": "/power/teensy/temperature.data",
-          "enabled": true,
-          "color": "#ff4538",
-          "id": "4f37cf1a-82ce-4078-8d74-2fb1c0e81cf0",
-          "label": "Temp"
+          "title": "Teensy",
+          "layout": "Plot!1lfrj94"
+        },
+        {
+          "title": "Sensors?",
+          "layout": "Plot!2w4ljht"
+        },
+        {
+          "title": "IMU",
+          "layout": "Plot!3jlcvph"
         }
-      ],
-      "minYValue": 45,
-      "showPlotValuesInLegend": true,
-      "yAxisLabel": "Temperature (C)",
-      "xAxisLabel": "Time (s)",
-      "legendDisplay": "floating",
-      "showLegend": true,
-      "maxYValue": 75,
-      "foxglovePanelTitle": "Teensy Temperature"
+      ]
     },
     "Plot!3nh5se6": {
       "paths": [
@@ -239,7 +397,7 @@
           "enabled": true,
           "color": "#94ff38",
           "id": "4f37cf1a-82ce-4078-8d74-2fb1c0e81cf0",
-          "label": "Temp"
+          "label": " "
         }
       ],
       "minYValue": 30,
@@ -255,7 +413,7 @@
   "globalVariables": {},
   "userNodes": {
     "aeb136a9-2888-444d-8307-9445f4f65344": {
-      "sourceCode": "// import input types generated by foxglove\nimport { Input, Message } from \"./types.ts\";\n// output is numbers\ntype Output = { sum: number; max: number; average: number };\n// input and output topic\nexport const inputs = [\"/power/thrusters/current\"];\nexport const output = \"/power/thrusters/current/stats\";\n// main function logic\nexport default function script(\n  event: Input<\"/power/thrusters/current\">,\n): Output {\n  let sum = 0;\n  let max = event.message.data[0];\n  for (let i = 0; i < event.message.data.length; i++) {\n    // skip thruster 6 for now since sensor is not perfect\n    const v = event.message.data[i];\n    sum += v;\n    if (v > max) max = v;\n  }\n  let average = sum / (event.message.data.length - 1);\n  return { sum: sum, max: max, average: average };\n}\n",
+      "sourceCode": "// import input types generated by foxglove\nimport { Input, Message } from \"./types.ts\";\n// output is numbers\ntype Output = { sum: number; max: number; average: number };\n// input and output topic\nexport const inputs = [\"/power/thrusters/current\"];\nexport const output = \"/power/thrusters/current/stats\";\n// main function logic\nexport default function script(\n  event: Input<\"/power/thrusters/current\">,\n): Output {\n  let sum = 0;\n  let max = event.message.data[0];\n  for (let i = 0; i < event.message.data.length; i++) {\n    // skip thruster 6 for now since sensor is not perfect\n    // if (i == 5) continue;\n    const v = event.message.data[i];\n    sum += v;\n    if (v > max) max = v;\n  }\n  let average = sum / (event.message.data.length - 1);\n  return { sum: sum, max: max, average: average };\n}\n",
       "name": "aeb136a9"
     }
   },
@@ -269,13 +427,13 @@
         "second": "Indicator!2jv5r2l",
         "direction": "column"
       },
-      "second": "Plot!4am3t4e",
+      "second": "Tab!2eb7mfb",
       "direction": "row",
       "splitPercentage": 30.707876370887337
     },
     "second": {
       "first": {
-        "first": "Plot!3hdwffz",
+        "first": "Tab!3k8sd2c",
         "second": "Plot!1fjiysg",
         "direction": "row",
         "splitPercentage": 69.55177743431221
@@ -283,7 +441,7 @@
       "second": {
         "first": "Plot!3wdvgww",
         "second": {
-          "first": "Plot!2nrk6hi",
+          "first": "Tab!2l7p356",
           "second": "Plot!3nh5se6",
           "direction": "row"
         },
