@@ -30,6 +30,7 @@ depth_controller:
         KI: 0.15 # may need to modify
         I_MAX: 10.0
         integral_activation_threshold: 0.3
+        derivative_filter_alpha: 0.2
         max_slew_rate: 0.0 # [m/s] (0.0 = disabled)
         net_buoyancy: 3.5 # Newtons.
         enabled: false
@@ -42,6 +43,7 @@ x_controller:
         KI: 0.5
         I_MAX: 10.0
         integral_activation_threshold: 0.5
+        derivative_filter_alpha: 0.8
         max_slew_rate: 0.0 # [m/s] (0.0 = disabled)
         enabled: false
 
@@ -53,6 +55,7 @@ y_controller:
         KI: 0.5
         I_MAX: 10.0
         integral_activation_threshold: 0.5
+        derivative_filter_alpha: 0.8
         max_slew_rate: 0.0 # [m/s] (0.0 = disabled)
         enabled: false
 

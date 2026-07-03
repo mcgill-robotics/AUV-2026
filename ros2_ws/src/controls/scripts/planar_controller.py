@@ -84,6 +84,7 @@ class AxisController(Node):
         self.declare_parameter("I_MAX", 0.0)
         self.declare_parameter("integral_activation_threshold", 0.5)
         self.declare_parameter("max_slew_rate", 0.0)
+        self.declare_parameter("derivative_filter_alpha", 0.8)
         self.declare_parameter("enabled", False)
 
         # PID controller parameters
@@ -94,6 +95,7 @@ class AxisController(Node):
         self.I_MAX = float(self.get_parameter("I_MAX").value)
         self.integral_activation_threshold = float(self.get_parameter("integral_activation_threshold").value)
         self.max_slew_rate = float(self.get_parameter("max_slew_rate").value)
+        self.derivative_filter_alpha = float(self.get_parameter("derivative_filter_alpha").value)
         self.enabled = bool(self.get_parameter("enabled").value)
 
         if self.axis_name == 'x':
@@ -105,12 +107,12 @@ class AxisController(Node):
 
         self.parameter_callback_handle = self.add_on_set_parameters_callback(self.parameters_callback)
 
-        self.pid = PID(self.KP, self.KD, self.KI, self.I_MAX, self.integral_activation_threshold)
+        self.pid = PID(self.KP, self.KD, self.KI, self.I_MAX, self.integral_activation_threshold, self.derivative_filter_alpha)
 
         self.setpoint = 0.0  # Setpoint in meters
         self.target_setpoint = 0.0
         self.current_position = 0.0   # Current position in meters
-        self.previous_position = 0.0  # Previous position for derivative calculation
+        self.last_position_time = time.time()
         self.time_step = 1.0 / self.control_loop_hz
 
 
@@ -118,10 +120,13 @@ class AxisController(Node):
         self.timer = self.create_timer(self.time_step, self.control_loop_callback)
 
     def position_callback(self, msg):
-        if self.axis_name == 'x':
-            self.current_position = msg.point.x
-        elif self.axis_name == 'y':
-            self.current_position = msg.point.y
+        now = time.time()
+        dt = now - self.last_position_time
+        pos = msg.point.x if self.axis_name == 'x' else msg.point.y
+        if dt >= 0.05:
+            self.pid.update_derivative(pos, dt)
+            self.last_position_time = now
+        self.current_position = pos
 
     def setpoint_callback(self, msg):
         self.target_setpoint = msg.data
@@ -221,6 +226,14 @@ class AxisController(Node):
                 self.integral_activation_threshold = float(parameter.value)
                 self.pid.integral_activation_threshold = self.integral_activation_threshold
                 self.get_logger().info(f"Updated {self.axis_name} integral_activation_threshold: {self.integral_activation_threshold:.4f}")
+            elif parameter.name == "derivative_filter_alpha":
+                if parameter.type_ not in [parameter.Type.DOUBLE, parameter.Type.INTEGER]:
+                    result.successful = False
+                    result.reason = "'derivative_filter_alpha' must be a double/int"
+                    return result
+                self.derivative_filter_alpha = float(parameter.value)
+                self.pid.derivative_filter_alpha = self.derivative_filter_alpha
+                self.get_logger().info(f"Updated {self.axis_name} derivative_filter_alpha: {self.derivative_filter_alpha:.4f}")
 
         return result
 
@@ -242,8 +255,7 @@ class AxisController(Node):
         # Publish effort command
         effort_msg = Wrench()
         if self.enabled:
-            self.pid.compute_errors(self.setpoint, self.current_position, self.previous_position, self.time_step)
-            self.previous_position = self.current_position
+            self.pid.compute_errors(self.setpoint, self.current_position, self.time_step)
             effort_output = self.pid.compute_effort()
             effort_msg.force.x = effort_output if self.axis_name == 'x' else 0.0
             effort_msg.force.y = effort_output if self.axis_name == 'y' else 0.0

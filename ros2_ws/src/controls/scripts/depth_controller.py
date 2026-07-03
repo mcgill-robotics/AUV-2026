@@ -39,6 +39,7 @@ class DepthController(Node):
         self.declare_parameter("integral_activation_threshold", 1.0)
         self.declare_parameter("net_buoyancy", 0.0)
         self.declare_parameter("max_slew_rate", 0.0)
+        self.declare_parameter("derivative_filter_alpha", 0.2)
         self.declare_parameter("enabled", False)
 
         # PID controller parameters
@@ -50,16 +51,17 @@ class DepthController(Node):
         self.integral_activation_threshold = float(self.get_parameter("integral_activation_threshold").value)
         self.net_buoyancy = float(self.get_parameter("net_buoyancy").value)
         self.max_slew_rate = float(self.get_parameter("max_slew_rate").value)
+        self.derivative_filter_alpha = float(self.get_parameter("derivative_filter_alpha").value)
         self.enabled = bool(self.get_parameter("enabled").value)
 
         self.parameter_callback_handle = self.add_on_set_parameters_callback(self.parameters_callback)
 
-        self.pid = PID(self.KP, self.KD, self.KI, self.I_MAX, self.integral_activation_threshold)
+        self.pid = PID(self.KP, self.KD, self.KI, self.I_MAX, self.integral_activation_threshold, self.derivative_filter_alpha)
 
         self.setpoint_depth = 0.25  # Desired depth in meters. TODO: Change default value to AUV float depth
         self.target_setpoint_depth = 0.25
         self.current_depth = 0.0   # Current depth in meters
-        self.previous_depth = 0.0  # Previous depth for derivative calculation
+        self.last_depth_time = time.time()
         self.time_step = 1.0 / self.control_loop_hz
 
         #Feed-Forward term
@@ -69,6 +71,12 @@ class DepthController(Node):
         self.timer = self.create_timer(self.time_step, self.control_loop_callback)
 
     def depth_callback(self, msg):
+        now = time.time()
+        dt = now - self.last_depth_time
+        if dt >= 0.05:
+            # +Z is up, so invert depth values for PID calculations
+            self.pid.update_derivative(-msg.data, dt)
+            self.last_depth_time = now
         self.current_depth = msg.data
 
     def setpoint_callback(self, msg):
@@ -146,6 +154,14 @@ class DepthController(Node):
                 self.integral_activation_threshold = float(parameter.value)
                 self.pid.integral_activation_threshold = self.integral_activation_threshold
                 self.get_logger().info(f"Updated integral_activation_threshold: {self.integral_activation_threshold:.4f}")
+            elif parameter.name == "derivative_filter_alpha":
+                if parameter.type_ not in [parameter.Type.DOUBLE, parameter.Type.INTEGER]:
+                    result.successful = False
+                    result.reason = "'derivative_filter_alpha' must be a double/int"
+                    return result
+                self.derivative_filter_alpha = float(parameter.value)
+                self.pid.derivative_filter_alpha = self.derivative_filter_alpha
+                self.get_logger().info(f"Updated derivative_filter_alpha: {self.derivative_filter_alpha:.4f}")
             elif parameter.name == "net_buoyancy":
                 if parameter.type_ not in [parameter.Type.DOUBLE, parameter.Type.INTEGER]:
                     result.successful = False
@@ -173,8 +189,7 @@ class DepthController(Node):
         effort_msg = Wrench()
         if self.enabled:
             # +Z is up, so invert depth values for PID calculations
-            self.pid.compute_errors(-self.setpoint_depth, -self.current_depth, -self.previous_depth, self.time_step)
-            self.previous_depth = self.current_depth
+            self.pid.compute_errors(-self.setpoint_depth, -self.current_depth, self.time_step)
             effort_output = self.pid.compute_effort()
             effort_msg.force.z = effort_output + self.feed_forward
         else:

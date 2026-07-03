@@ -9,7 +9,7 @@ from geometry_msgs.msg import Wrench
 class PID:
         SETPOINT_RESET_EPSILON = 1e-3
 
-        def __init__(self, KP, KD, KI, I_MAX=0.0, integral_activation_threshold=float('inf'), derivative_filter_alpha=0.5):
+        def __init__(self, KP, KD, KI, I_MAX=0.0, integral_activation_threshold=float('inf'), derivative_filter_alpha=0.2):
                 self.KP = KP
                 self.KD = KD
                 self.KI = KI
@@ -25,7 +25,16 @@ class PID:
                 self.last_setpoint = 0.0
                 
 
-        def compute_errors(self, setpoint, position, previous_position, time_step):
+        def update_derivative(self, position, time_step):
+                if time_step > 1e-6:
+                        raw_derivative = (position - self.previous_position) / time_step
+                        raw_derivative = np.clip(raw_derivative, -3.0, 3.0)  # Clamp to physical velocity limits
+                        alpha = self.derivative_filter_alpha
+                        self.derivative_error = alpha * raw_derivative + (1.0 - alpha) * self.derivative_error
+                self.previous_position = position
+                return self.derivative_error
+
+        def compute_errors(self, setpoint, position, time_step, previous_position=None):
                 # Reset integral on setpoint change
                 if abs(setpoint - self.last_setpoint) > self.SETPOINT_RESET_EPSILON:
                         self.integral_error = 0.0
@@ -38,12 +47,13 @@ class PID:
                         self.integral_error += self.position_error * time_step
                         self.integral_error = np.clip(self.integral_error, -self.I_MAX, self.I_MAX)
 
-                # Differentiate position to avoid derivative kick, with EMA low-pass filter
-                raw_derivative = (position - previous_position) / time_step
-                alpha = self.derivative_filter_alpha
-                self.derivative_error = alpha * raw_derivative + (1.0 - alpha) * self.derivative_error
+                if previous_position is not None:
+                        raw_derivative = (position - previous_position) / time_step
+                        raw_derivative = np.clip(raw_derivative, -3.0, 3.0)  # Clamp to physical velocity limits
+                        alpha = self.derivative_filter_alpha
+                        self.derivative_error = alpha * raw_derivative + (1.0 - alpha) * self.derivative_error
+                        self.previous_position = position
                 
-                self.previous_position = position
                 return self.position_error, self.integral_error, self.derivative_error
         
         def compute_effort(self):
@@ -61,16 +71,14 @@ class CascadedController:
 
         def compute_effort(self, target_position, current_position, current_velocity, dt):
                 # Outer loop computes desired velocity
-                self.pid_outer.compute_errors(target_position, current_position, self.pid_outer.previous_position, dt)
+                self.pid_outer.compute_errors(target_position, current_position, dt, self.pid_outer.previous_position)
                 desired_velocity = self.pid_outer.compute_effort()
                 desired_velocity = np.clip(desired_velocity, -self.max_outer_output, self.max_outer_output)
 
                 # Inner loop computes control effort to achieve desired velocity
-                self.pid_inner.compute_errors(desired_velocity, current_velocity, self.pid_inner.previous_position, dt)
+                self.pid_inner.compute_errors(desired_velocity, current_velocity, dt, self.pid_inner.previous_position)
                 control_effort = self.pid_inner.compute_effort()
 
                 return control_effort
-        
-
 
 
