@@ -321,9 +321,9 @@ class TorpedoTask(py_trees.composites.Sequence):
         
         firing_order_selector.add_children(
             [
-                large_then_small,
+                # large_then_small,
                 large_only,
-                small_only
+                # small_only
             ]
          )
         return firing_order_selector
@@ -392,7 +392,7 @@ class TorpedoTask(py_trees.composites.Sequence):
         hole_selector.add_children(
             [
                 self.distance_strategy_selector(icon1,self.icon_to_nearest_hole[board_type][icon1]),
-                self.distance_strategy_selector(icon2,self.icon_to_nearest_hole[board_type][icon2])
+                # self.distance_strategy_selector(icon2,self.icon_to_nearest_hole[board_type][icon2])
             ]
         )                                          
         return hole_selector
@@ -408,7 +408,7 @@ class TorpedoTask(py_trees.composites.Sequence):
         distance_strategy_selector.add_children(
             [
                 self.distance_strategy(self.farther_distance_threshold,icon, offset_to_hole),
-                self.distance_strategy(self.far_distance_threshold,icon, offset_to_hole),
+                # self.distance_strategy(self.far_distance_threshold,icon, offset_to_hole),
             ]
          )
         return distance_strategy_selector
