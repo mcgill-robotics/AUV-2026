@@ -40,14 +40,12 @@ foreach(dep IN LISTS CPP_LIBS)
 endforeach()
 
 
-
 # ---Object Map library---
 add_library(object_map_lib SHARED
     ${PROJECT_NAME}/object_map/object_tracker.cpp
     ${PROJECT_NAME}/external/hungarian.cpp
     ${PROJECT_NAME}/external/kalman.cpp
 )
-
 
 
 target_include_directories(object_map_lib PUBLIC
@@ -64,7 +62,6 @@ add_executable(object_map
     include/${PROJECT_NAME}/object_map.hpp
     ${PROJECT_NAME}/object_map_main.cpp
 )
-
 
 target_include_directories(object_map PUBLIC
       $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

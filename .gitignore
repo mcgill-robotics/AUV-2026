@@ -83,3 +83,4 @@ core.*
 *.mcap
 *.db3
 rosbags/**/*.yaml
+*.zip

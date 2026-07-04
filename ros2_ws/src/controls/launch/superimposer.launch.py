@@ -1,25 +1,45 @@
+import os
+
 from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
+from launch.conditions import IfCondition, UnlessCondition
 from launch_ros.actions import Node
+from ament_index_python.packages import get_package_share_directory
+
 
 def generate_launch_description():
-        # No launch configuration variables
+    declare_sim = DeclareLaunchArgument(
+        "sim",
+        default_value="false",
+        description="true for simulation params, false for real-world params",
+    )
+    sim = LaunchConfiguration("sim")
 
-        superimposer = Node(
-                package='controls',
-                executable='superimposer',
-                name='superimposer',
-                output='screen',
-                parameters=[{
-                        'effort_bias_force_x': 0.0,
-                        'effort_bias_force_y': 0.0,
-                        'effort_bias_force_z': 0.0,
-                        'effort_bias_torque_x': 0.0,
-                        'effort_bias_torque_y': 0.0,
-                        'effort_bias_torque_z': 0.0,
-                        'publish_hz': 40.0,
-                        'max_planar_effort': 30.0
-                }]
-        )
-        return LaunchDescription([
-                superimposer
-        ])
+    pkg_share = get_package_share_directory("controls")
+    sim_yaml  = os.path.join(pkg_share, "params", "Controller_params_sim.yaml")
+    real_yaml = os.path.join(pkg_share, "params", "Controller_params_real.yaml")
+
+    superimposer_sim = Node(
+        package="controls",
+        executable="superimposer",
+        name="superimposer",
+        output="screen",
+        parameters=[sim_yaml],
+        condition=IfCondition(sim),
+    )
+
+    superimposer_real = Node(
+        package="controls",
+        executable="superimposer",
+        name="superimposer",
+        output="screen",
+        parameters=[real_yaml],
+        condition=UnlessCondition(sim),
+    )
+
+    return LaunchDescription([
+        declare_sim,
+        superimposer_sim,
+        superimposer_real,
+    ])
