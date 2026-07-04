@@ -1,0 +1,9 @@
+sensors:
+  dvl_monitor:
+    ros__parameters:
+      hardware_id: "dvl_monitor"
+      stale_threshold_sec: 1.0
+      dvl_beam_count: 4
+      velocity_topic: "/dvl/velocity"
+      dead_reckoning_topic: "/dvl/dead_reckoning"
+      odometry_topic: "/dvl/odometry"

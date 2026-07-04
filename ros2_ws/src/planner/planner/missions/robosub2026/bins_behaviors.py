@@ -486,7 +486,7 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
                 self.node.get_logger().info("Detected wrong task type, going to other bin.")
                 return py_trees.common.Status.FAILURE
         
-            elif self.bin_lined_up_frames >= self.bin_lined_up_threshold:
+            elif self.bin_lined_up_frames >= 5:
                 self.node.get_logger().info("Bin has been lined up for multiple frames, assuming aligned and succeeding.")
                 return py_trees.common.Status.SUCCESS
 

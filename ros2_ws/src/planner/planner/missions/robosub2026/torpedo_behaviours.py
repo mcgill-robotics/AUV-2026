@@ -656,6 +656,7 @@ class AlignTorpedoToHole(Navigation):
         # whether to orient left or right torpedo
         self.blackboard.register_key(key="/torpedo/count", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/torpedo/icon_position", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/torpedo/trajectory_time", access=py_trees.common.Access.WRITE)
         
     def update(self):
         match self.action_status:
@@ -690,36 +691,38 @@ class AlignTorpedoToHole(Navigation):
                         self.node.get_logger().error(f"[{self.name}] Invalid torpedo count {self.blackboard.torpedo.count}. Expected 1 or 2.")
                         return py_trees.common.Status.FAILURE
                 self.auv_to_torpedo = self.auv_to_torpedos[side]
-                
+                                
+                self.node.get_logger().info(f"[{self.name}] Trajectory coeffs: Forward: {self.forward_trajectory.coef}, Lateral: {self.lateral_trajectory.coef}, Vertical: {self.vertical_trajectory.coef}")
                 # after alignment, torpedo launch should be aligned with the hole
-                # to know how much to shift back by, we need to know the trajectory time such that both lateral and vertical trajectories are 0
-                # thus we find the roots of both trajectories and plug that into the forward trajectory to find the distance to shift back by
+                # to know how much to shift back by, we need to know the trajectory time such that forward trajectory is equal to the hole offset, and then we can use that time to find the lateral and vertical offsets
                 
-                # TODO: since lateral trajectory is literally 0, we can just use the roots of the vertical trajectory, but for robustness, we will find the common roots of both trajectories
-                # take only real part of the root
-                #! lateral_roots = sorted([root.real for root in self.lateral_trajectory.roots()])
-                vertical_roots = sorted([root.real for root in self.vertical_trajectory.roots()])
-                # round the roots to 6 decimal so taking the common roots is more robust to numerical errors
-                # filter out roots that are not within tolerance
-                # set both and take intersection to find common roots
-                #! common_roots = sorted(
-                #!     t for t in set(round(t, 6) for t in lateral_roots) & set(round(t, 6) for t in vertical_roots)
-                #!     if abs(self.forward_trajectory(t)) < self.position_tolerance
-                #! )
-                common_roots = vertical_roots
+                self.forward_trajectory.coef[0] += self.to_hole_offset[0]
+                self.lateral_trajectory.coef[0] += self.to_hole_offset[1]
+                self.vertical_trajectory.coef[0] += self.to_hole_offset[2]
+                self.node.get_logger().info(f"[{self.name}] Adjusted trajectories coeffs for hole offset: F {self.forward_trajectory.coef}, L {self.lateral_trajectory.coef}, V {self.vertical_trajectory.coef}")
+                forward_roots = sorted(r.real for r in self.forward_trajectory.roots() if np.isreal(r))
+                
                 # 0 is always solution since all trajectories start at 0
-                if len(common_roots) < 2:
-                    #! self.node.get_logger().error(f"[{self.name}] Torpedo lateral and vertical trajectories do not intersect within tolerance beyond trivial 0 case. Lateral roots: {lateral_roots}, Vertical roots: {vertical_roots}, Common roots: {common_roots}")
-                    self.node.get_logger().error(f"[{self.name}] Torpedo vertical trajectory does have non trivial roots. Vertical roots: {vertical_roots}")
+                if len(forward_roots) < 1:
+                    self.node.get_logger().error(f"[{self.name}] Torpedo forward trajectory does not have roots. Forward roots: {forward_roots}")
                     return py_trees.common.Status.FAILURE
                 
-                backward_offset = self.forward_trajectory(common_roots[1])
+                self.node.get_logger().info(f"[{self.name}] Torpedo forward trajectory intersects with hole at roots: {forward_roots}. Corresponding forward trajectory values: {[self.forward_trajectory(root) for root in forward_roots]}. Corresponding vertical trajectory values: {[self.vertical_trajectory(root) for root in forward_roots]}. Corresponding lateral trajectory values: {[self.lateral_trajectory(root) for root in forward_roots]}")
+
+                trajectory_time = forward_roots[0]
+                backward_offset = self.forward_trajectory(trajectory_time) 
+                rightward_offset = self.lateral_trajectory(trajectory_time)
+                downward_offset = self.vertical_trajectory(trajectory_time) 
+                
+                self.node.get_logger().info(f"[{self.name}] Torpedo trajectory time to reach hole: {trajectory_time:.2f}s. Corresponding backward offset: {backward_offset:.2f}m, Corresponding downward offset: {downward_offset:.2f}m, rightward offset: {rightward_offset:.2f}m")
+                
+                self.blackboard.torpedo.trajectory_time = trajectory_time
                 target_orientation = geometry.rotate_quaternion(self.blackboard.board.orientation, 0, 0, math.pi)
                 
                 offset_vector = Point(
-                    x=self.to_hole_offset[0] - self.auv_to_torpedo[0] - backward_offset,
-                    y=self.to_hole_offset[1] - self.auv_to_torpedo[1],
-                    z=self.to_hole_offset[2] - self.auv_to_torpedo[2]
+                    x= self.to_hole_offset[0] - self.auv_to_torpedo[0] + backward_offset,
+                    y= self.to_hole_offset[1] - self.auv_to_torpedo[1] + rightward_offset,
+                    z= self.to_hole_offset[2] - self.auv_to_torpedo[2] + downward_offset
                 )
                 
                 self.node.get_logger().info(f"[{self.name}] Aligning torpedo to hole offset from icon position: {offset_vector}")
@@ -749,37 +752,85 @@ class AlignTorpedoToHole(Navigation):
                 self.navigation_client.send_navigation_goal(goal, self.name, self.on_server_goal_response, self.on_server_goal_result)
                 self.action_status = ActionStatus.PENDING
                 return py_trees.common.Status.RUNNING
-        
-        
+
+class FireState(Enum):
+    PAUSING = 0
+    FIRING = 1
+   
 class FireTorpedo(Action):
     """
     Action to fire a torpedo.
+    launch_function: callaback that takes a TorpedoSide and fires the corresponding torpedo
+    firing_buffer_time: time in seconds to wait before and after firing to ensure the torpedo is launched properly and the AUV is stable
     """
-    def __init__(self, launch_function: Callable[[TorpedoSide], None]):
+    def __init__(self, launch_function: Callable[[TorpedoSide], None], firing_buffer_time: float):
         super().__init__("Fire Torpedo")
         self.launch_function = launch_function
+        self.firing_buffer_time = firing_buffer_time
+        self.has_fired: bool = False
+        self.fire_state: FireState = FireState.PAUSING
+        # Pause tracking        
+        self.pause_start_time: float = 0.0
+        self.is_pausing: bool = False
+        self.pause_time_total: float = self.firing_buffer_time
 
     def setup(self, **kwargs):
         super().setup(**kwargs)
         self.blackboard.register_key(key="/torpedo/count", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key="/torpedo/trajectory_time", access=py_trees.common.Access.READ)
         self.node = kwargs['node']
+        
+    def initialise(self):
+        super().initialise()
+        self.has_fired = False
+        self.pause_start_time = 0.0
+        self.is_pausing = False
+        self.pause_time_total = self.firing_buffer_time
+        self.fire_state = FireState.PAUSING
 
     def update(self):
-        if not hasattr(self.blackboard, 'torpedo') or self.blackboard.torpedo.count is None:
-            self.node.get_logger().error(f"[{self.name}] No torpedo count available on blackboard.")
-            return py_trees.common.Status.FAILURE
-        if self.blackboard.torpedo.count <= 0:
-            self.node.get_logger().error(f"[{self.name}] No torpedos left. Cannot fire.")
-            return py_trees.common.Status.FAILURE
-        match self.blackboard.torpedo.count:
-            case 1:
-                side = TorpedoSide.LEFT
-            case 2:
-                side = TorpedoSide.RIGHT
-            case _:
-                self.node.get_logger().error(f"[{self.name}] Invalid torpedo count: {self.blackboard.torpedo.count}. Cannot determine which torpedo to fire.")
-                return py_trees.common.Status.FAILURE
-        self.launch_function(side)
-        self.blackboard.torpedo.count -= 1
-        self.node.get_logger().info(f"[{self.name}] Fired torpedo. New count: {self.blackboard.torpedo.count}")
-        return py_trees.common.Status.SUCCESS
+        match self.fire_state:
+            case FireState.PAUSING:
+                # pause before firing to ensure AUV is stable
+                elapsed = (self.node.get_clock().now().nanoseconds / 1e9) - self.pause_start_time
+                self.pause_time_total = self.firing_buffer_time
+                if self.has_fired:
+                    if not hasattr(self.blackboard, 'torpedo') or self.blackboard.torpedo.trajectory_time is None:
+                        self.node.get_logger().error(f"[{self.name}] No torpedo trajectory time found on blackboard. Assuming no trajectory delay after firing.")
+                    self.pause_time_total += self.blackboard.torpedo.trajectory_time
+                if not self.is_pausing:
+                    self.node.get_logger().info(f"[{self.name}] Pausing for {self.firing_buffer_time:.2f}s.")
+                    self.pause_start_time = self.node.get_clock().now().nanoseconds / 1e9
+                    self.is_pausing = True
+                    return py_trees.common.Status.RUNNING
+                elif elapsed < self.pause_time_total:
+                    return py_trees.common.Status.RUNNING
+                else:
+                    if not self.has_fired:
+                        self.node.get_logger().info(f"[{self.name}] Firing torpedo after {elapsed:.2f}s pause.")
+                        self.fire_state = FireState.FIRING
+                        return py_trees.common.Status.RUNNING
+                    else:
+                        self.node.get_logger().info(f"[{self.name}] Finished firing torpedo after {elapsed:.2f}s pause.")
+                        return py_trees.common.Status.SUCCESS                        
+            case FireState.FIRING:
+                if not hasattr(self.blackboard, 'torpedo') or self.blackboard.torpedo.count is None:
+                    self.node.get_logger().error(f"[{self.name}] No torpedo count available on blackboard.")
+                    return py_trees.common.Status.FAILURE
+                if self.blackboard.torpedo.count <= 0:
+                    self.node.get_logger().error(f"[{self.name}] No torpedos left. Cannot fire.")
+                    return py_trees.common.Status.FAILURE
+                match self.blackboard.torpedo.count:
+                    case 1:
+                        side = TorpedoSide.RIGHT
+                    case 2:
+                        side = TorpedoSide.LEFT
+                    case _:
+                        self.node.get_logger().error(f"[{self.name}] Invalid torpedo count: {self.blackboard.torpedo.count}. Cannot determine which torpedo to fire.")
+                        return py_trees.common.Status.FAILURE
+                self.launch_function(side)
+                self.blackboard.torpedo.count -= 1
+                self.node.get_logger().info(f"[{self.name}] Fired torpedo. New count: {self.blackboard.torpedo.count}")
+                self.has_fired = True
+                self.fire_state = FireState.PAUSING
+                return py_trees.common.Status.RUNNING
