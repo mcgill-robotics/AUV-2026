@@ -1,7 +1,7 @@
 import py_trees
 from numpy.polynomial.polynomial import Polynomial
 from .torpedo_behaviours import *
-from ..vision_behaviours import SearchSweepBehaviour, CircleAroundToFindBehaviour
+from ..vision_behaviours import SearchSweepBehaviour, CircleAroundToFindBehaviour, GoNearObject
 import operator
 from typing import List, cast, Tuple, Callable
 class HoleType(Enum):
@@ -163,6 +163,24 @@ class TorpedoTask(py_trees.composites.Sequence):
             name="Search Sweep for Board"
         )
         
+        approach_board_far = GoNearObject(
+            target_class="board",
+            target_distance=self.initial_distance_from_board*4,
+            height_offset=None,
+            tolerance_meters=self.position_tolerance,
+            hold_time=self.hold_time / 2,
+            name="Approach Board Far"
+        )
+        
+        approach_board_near = GoNearObject(
+            target_class="board",
+            target_distance=self.initial_distance_from_board*2,
+            height_offset=None,
+            tolerance_meters=self.position_tolerance,
+            hold_time=self.hold_time / 2,
+            name="Approach Board Near"
+        )
+
         circle_board = CircleAroundToFindBehaviour(
             reference_class="board",
             z_reference=self.z_reference,
@@ -203,6 +221,8 @@ class TorpedoTask(py_trees.composites.Sequence):
         board_rough_position.add_children(
             [
                 ss_board,
+                approach_board_far,
+                approach_board_near,
                 circle_board,
                 find_board_orientation_one_sample,
                 move_to_front_of_board,
