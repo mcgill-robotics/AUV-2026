@@ -133,7 +133,7 @@ planner_root_tree:
       number_of_items_to_grab: 1          #(items) Number of items to grab from the table, starting from the roles for the current role 
       item_drop_height_relative_bin: 0.1  # (m) Height above the bin to drop the item relative to the bin's height
       tf_auv_to_grabber:                  # (m) and (deg) Transform from the AUV's center of mass to the grabber's open bracket in the AUV body frame
-        xyz: [-0.24594, 0.02938, -0.4877]] 
+        xyz: [-0.24594, 0.02938, -0.4877]
         rpy: [0.0, 0.0, 0.0] 
         
 
@@ -150,10 +150,10 @@ planner_root_tree:
     torpedo:
       launch_topic: /actuators/torpedo
       initial_distance_from_board: 2.0      # (m) Initial "safe" distance from the board during rough positioning
-      z_reference: -1.0                     # (m) Depth to maintain during torpedo task
+      z_reference: -0.6                    # (m) Depth to maintain during torpedo task
       scan_pause_time: 1.0                  # (s) Seconds to pause after each scan rotation
-      position_tolerance: 0.1               # (m) Position convergence threshold for board alignment
-      yaw_tolerance_deg: 1.0                # (deg) Yaw convergence threshold for board alignment
+      position_tolerance: 0.3               # (m) Position convergence threshold for board alignment
+      yaw_tolerance_deg: 10.0                # (deg) Yaw convergence threshold for board alignment
       hold_time: 0.5                        # (s) Seconds to hold navigation within tolerance before SUCCESS
       timeout: 30.0                         # (s) Seconds before navigation steps fail with FAILURE
       firing_pause_time: 5.0                # (s) Seconds to pause before and after firing torpedo

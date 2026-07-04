@@ -61,6 +61,20 @@ def generate_launch_description():
         ],
     )
 
+    # Not the best placement since it shouldn't belong to sensors but for now it's okay
+    actuator_serial_group = GroupAction(
+        condition=UnlessCondition(LaunchConfiguration("sim")),
+        actions=[
+            Node(
+                package="micro_ros_agent",
+                executable="micro_ros_agent",
+                name="actuator_micro_ros_agent",
+                output="screen",
+                arguments=["serial", "--dev", "/dev/actuator", "--baud-rate", "115200"],
+            ),
+        ],
+    )
+
     state_aggregator = GroupAction(
         actions=[
             Node(
@@ -103,6 +117,7 @@ def generate_launch_description():
             dvl_condition,
             state_aggregator,
             serial_group,
+            actuator_serial_group,
             launch_Xsens_Driver,
             launch_dvl_a50_serial,
             depth_processor,
