@@ -9,7 +9,7 @@ import geometry_msgs.msg._pose
 import transforms3d
 
 class ApproachObject(py_trees.composites.Sequence): 
-    def __init__(self, target_class: str, target_distance: float, height_offset: float):
+    def __init__(self, target_class: str, bins_params: dict):
         super().__init__("Approach" + target_class.capitalize(), memory=True)
 
         go_4m_away_node = vision_behaviours.GoNearObject(
@@ -18,12 +18,12 @@ class ApproachObject(py_trees.composites.Sequence):
             tolerance_meters=0.5,
             hold_time=0.0)
 
-        look_at_bin_structure = vision_behaviours.SearchSweepBehaviour(target_class=target_class)
+        look_at_bin_structure = vision_behaviours.SearchSweepBehaviour(target_class=target_class, num_steps=bins_params['search_sweep_steps'], step_timeout=bins_params['search_sweep_step_timeout'])
         
         go_2m_away_node = vision_behaviours.GoNearObject(
             target_class=target_class,
-            target_distance=target_distance,
-            height_offset=height_offset,
+            target_distance=bins_params['bin_structure_distance'],
+            height_offset=bins_params['go_above_bin_structure_height'],
             tolerance_meters=0.5,
             hold_time=0.0
         )
@@ -35,11 +35,11 @@ class ApproachObject(py_trees.composites.Sequence):
         ])
 
 class FindBinStructure(py_trees.composites.Selector):
-    def __init__(self, target_distance: float, height_offset: float):
+    def __init__(self, bins_params: dict):
         super().__init__("FindBinStructure", memory=True)
 
-        try_bin_structure = ApproachObject(target_class="bin_structure", target_distance=target_distance, height_offset=height_offset)
-        try_bins = ApproachObject(target_class="bin", target_distance=target_distance, height_offset=height_offset)
+        try_bin_structure = ApproachObject(target_class="bin_structure", bins_params=bins_params)
+        try_bins = ApproachObject(target_class="bin", bins_params=bins_params)
 
         self.add_children([
             try_bin_structure,
@@ -385,8 +385,10 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
         self.camera_height = self.bins_params['downcam_image_height']
         self.bin_moving_average_weight = self.bins_params['bin_moving_average_weight']
         self.go_above_bin_height = self.bins_params['go_above_bin_height']
+        self.send_setpoint_interval = self.bins_params['send_setpoint_interval']
         self.wrong_task_type_threshold = self.bins_params['wrong_task_type_threshold']
         self.bin_lined_up_threshold = self.bins_params['bin_lined_up_threshold']
+        self.bin_lined_up_frames_required = self.bins_params['bin_lined_up_frames']
         self.no_detection_timeout = self.bins_params.get('no_detection_timeout', 10.0)
 
         self.down_cam_bin_position = None
@@ -397,6 +399,7 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
         self.blood_detections = 0
         
         self.bin_lined_up_frames = 0
+        self.frames_until_next_setpoint = 1
     
     def setup(self, **kwargs):
         self.navigation_client = kwargs['shared_nav_client']
@@ -414,8 +417,8 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
         try:
             self.role = self.blackboard.gate.selected_role
         except Exception as e:
-            self.node.get_logger().error("Accessing /gate/selected_role failed, using search_rescue")
-            self.role = "search_rescue"
+            self.role = self.bins_params['fallback_role']
+            self.node.get_logger().error(f"Accessing /gate/selected_role failed, using {self.role}")
         self.down_cam_bin_position = None
         self.expected_failures = 0
         self.fire_detections = 0
@@ -451,12 +454,6 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
             # return py_trees.common.Status.SUCCESS
             pass
         
-        # If not sent, send it
-        if self.action_status is ActionStatus.NOT_SENT:
-            self.navigation_client.send_navigation_goal(self.goal, self.name, self.on_server_goal_response, self.on_server_goal_result)
-            self.action_status = ActionStatus.PENDING
-            return py_trees.common.Status.RUNNING
-        
         if hasattr(self.blackboard, 'vision') and self.blackboard.vision.down_cam.detections is not None:
             downcam_bins = []
 
@@ -486,7 +483,7 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
                 self.node.get_logger().info("Detected wrong task type, going to other bin.")
                 return py_trees.common.Status.FAILURE
         
-            elif self.bin_lined_up_frames >= 5:
+            elif self.bin_lined_up_frames >= self.bin_lined_up_frames_required:
                 self.node.get_logger().info("Bin has been lined up for multiple frames, assuming aligned and succeeding.")
                 return py_trees.common.Status.SUCCESS
 
@@ -525,20 +522,30 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
                 (self.down_cam_bin_position[1] * PREV_WEIGHT + current_bin_position[1] * self.bin_moving_average_weight)
             ) if self.down_cam_bin_position is not None else current_bin_position
                         
-            # Get the angle based on fov
-            x_angle = math.radians(self.down_cam_bin_position[0] / self.camera_width * self.downcam_fov_horizontal)
-            y_angle = math.radians(self.down_cam_bin_position[1] / self.camera_height * self.downcam_fov_vertical)
+            # calculate and send the new goal every n frames
+            self.frames_until_next_setpoint -= 1
+            if self.frames_until_next_setpoint <= 0:
+                self.frames_until_next_setpoint = self.send_setpoint_interval
+                # Get the angle based on fov
+                x_angle = math.radians(self.down_cam_bin_position[0] / self.camera_width * self.downcam_fov_horizontal)
+                y_angle = math.radians(self.down_cam_bin_position[1] / self.camera_height * self.downcam_fov_vertical)
 
-            forward_goal = -math.tan(y_angle) * (self.go_above_bin_height - 0.1)
-            sway_goal = -math.tan(x_angle) * (self.go_above_bin_height - 0.1)
-            self.node.get_logger().info(f"[{self.name}] Calculated physical goal -> Forward: {forward_goal:.3f}m, Sway: {sway_goal:.3f}m")
+                forward_goal = -math.tan(y_angle) * (self.go_above_bin_height - 0.1)
+                sway_goal = -math.tan(x_angle) * (self.go_above_bin_height - 0.1)
+                self.node.get_logger().info(f"[{self.name}] Calculated physical goal -> Forward: {forward_goal:.3f}m, Sway: {sway_goal:.3f}m")
 
-            self.expected_failures += 1  # current goal will fail once, ignore that failure
+                self.expected_failures += 1  # current goal will fail once, ignore that failure
 
-            # We know the bin is 1.0m below us, so calculate the bin position
-            self.goal = move_robot_centric(forward=forward_goal, sway=sway_goal)
-            # self.goal = move_robot_centric(forward=-self.down_cam_bin_position[1] / CAMERA_HEIGHT, sway=-self.down_cam_bin_position[0] / CAMERA_WIDTH)
-            self.action_status = ActionStatus.NOT_SENT  # Next tick, new goal will be sent automatically
+                # We know the bin is 1.0m below us, so calculate the bin position
+                self.goal = move_robot_centric(forward=forward_goal, sway=sway_goal)
+                # self.goal = move_robot_centric(forward=-self.down_cam_bin_position[1] / CAMERA_HEIGHT, sway=-self.down_cam_bin_position[0] / CAMERA_WIDTH)
+                self.action_status = ActionStatus.NOT_SENT  # Next tick, new goal will be sent automatically
+
+        # After potentially updating the goal, if the goal should be sent, send it
+        if self.action_status is ActionStatus.NOT_SENT:
+            self.node.get_logger().info(f"[{self.name}] Sending new navigation goal based on downcam detection.")
+            self.navigation_client.send_navigation_goal(self.goal, self.name, self.on_server_goal_response, self.on_server_goal_result)
+            self.action_status = ActionStatus.PENDING
 
         return py_trees.common.Status.RUNNING
 
