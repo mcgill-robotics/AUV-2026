@@ -117,9 +117,10 @@ class AlignClosestBin(py_trees.composites.Sequence):
         self.bin_lined_up_threshold = self.bins_params['bin_lined_up_threshold']
         go_above_closest_bin = GoAboveClosestBin(self.bins_params)
         follow_downcam_bin = FollowDowncamBin(self.bins_params)
+        offset_grabber = BasicActionBehaviour(name="OffsetGrabber", goal=move_robot_centric(forward=self.bins_params['grabber_to_downcam_x'], sway=self.bins_params['grabber_to_downcam_y'], hold_time=self.bins_params['alignment_hold_time']))
         drop_marker = DropMarker(self.bins_params)
 
-        self.add_children([go_above_closest_bin, follow_downcam_bin, drop_marker])
+        self.add_children([go_above_closest_bin, follow_downcam_bin, offset_grabber, drop_marker])
 
 class AlignBinsAttempt(py_trees.composites.Sequence):
     def __init__(self, bins_params: dict = None):
@@ -367,7 +368,7 @@ class GoToOtherSide(py_trees.composites.Sequence):
         switch_height = self.bins_params['switch_sides_height']
         get_bin_structure_pos = GetBinStructurePos(bins_params)
         go_up = GoToBlackboardBinStructure(height_offset=switch_height, bins_params=bins_params)
-        go_forward = BasicActionBehaviour(name="GoForwardForSwitchSides", goal=move_robot_centric(forward=2.0, hold_time=0.0))
+        go_forward = BasicActionBehaviour(name="GoForwardForSwitchSides", goal=move_robot_centric(forward=self.bins_params['bin_structure_distance'], dyaw=math.pi, hold_time=0.0))
         switch_sides = SwitchSides(self.bins_params)
 
         self.add_children([get_bin_structure_pos, go_up, go_forward, switch_sides])
@@ -383,6 +384,8 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
         self.downcam_fov_vertical = self.bins_params['downcam_fov_vertical']
         self.camera_width = self.bins_params['downcam_image_width']
         self.camera_height = self.bins_params['downcam_image_height']
+        self.x_offset = self.bins_params['grabber_to_downcam_x']
+        self.y_offset = self.bins_params['grabber_to_downcam_y']
         self.bin_moving_average_weight = self.bins_params['bin_moving_average_weight']
         self.go_above_bin_height = self.bins_params['go_above_bin_height']
         self.send_setpoint_interval = self.bins_params['send_setpoint_interval']
@@ -555,7 +558,6 @@ class GoAboveClosestBin(py_trees.behaviour.Behaviour):
         self.blackboard = self.attach_blackboard_client(name=self.name)
         self.action_status = ActionStatus.NOT_SENT
         self.bins_params = bins_params or {}
-        # cache configured go height from yaml (fail if missing)
         self.go_height = self.bins_params['go_above_bin_height']
 
     def setup(self, **kwargs):
@@ -596,7 +598,7 @@ class GoAboveClosestBin(py_trees.behaviour.Behaviour):
                 bin_position = bins[0].pose
                 bins[0].visited = True
 
-            goal = move_global(bin_position.x, bin_position.y, bin_position.z + self.go_height)
+            goal = move_global(bin_position.x, bin_position.y, bin_position.z + self.go_height, hold_time=0.0)
             self.navigation_client.send_navigation_goal(goal, self.name, custom_goal_response=self.on_server_goal_response, custom_goal_result=self.on_server_goal_result)
 
             self.action_status = ActionStatus.PENDING
