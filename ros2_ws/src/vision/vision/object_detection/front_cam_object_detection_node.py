@@ -30,6 +30,7 @@ from std_msgs.msg import Float64
 from std_srvs.srv import Trigger
 from tf2_ros import TransformBroadcaster
 from tf_transformations import concatenate_matrices, inverse_matrix, quaternion_matrix, euler_from_quaternion
+from ament_index_python.packages import get_package_share_directory
 
 from vision.object_detection.utils import (
     bbox_from_xyxy,
@@ -80,7 +81,9 @@ class FrontCamObjectDetectorNode():
     def __init__(self, node: Node):
         self.node = node
         self.node.declare_parameter('model_class_names', Parameter.Type.STRING_ARRAY)
-        self.node.declare_parameter('model_path', Parameter.Type.STRING)
+        self.node.declare_parameter('model_relative_path_override', Parameter.Type.STRING)
+        self.node.declare_parameter('model_relative_path.sim', Parameter.Type.STRING)
+        self.node.declare_parameter('model_relative_path.real', Parameter.Type.STRING)
         self.node.declare_parameter('queue_size', Parameter.Type.INTEGER)
         self.node.declare_parameter('publish_annotated', Parameter.Type.BOOL)
         self.node.declare_parameter('publish_annotated_every_n_frames', Parameter.Type.INTEGER)
@@ -203,7 +206,12 @@ class FrontCamObjectDetectorNode():
         self.node.create_service(Trigger, '/vision/front_cam/get_camera_settings', self._get_camera_settings_callback)
         self.class_names = list(self.node.get_parameter('model_class_names').get_parameter_value().string_array_value)
         self.node.get_logger().info(f"Class names: {self.class_names}")
-        model_path = self.node.get_parameter('model_path').get_parameter_value().string_value
+        self.sim = self.node.get_parameter('sim').get_parameter_value().bool_value
+        sim = self.sim
+        rel_path = self.node.get_parameter('model_relative_path_override').get_parameter_value().string_value
+        if not rel_path:
+            rel_path = self.node.get_parameter('model_relative_path.sim' if sim else 'model_relative_path.real').get_parameter_value().string_value
+        model_path = os.path.join(get_package_share_directory('vision'), rel_path)
         self.detection_frame_topic = (
             self.node.get_parameter('detection_frame_topic').get_parameter_value().string_value
         )
@@ -254,9 +262,6 @@ class FrontCamObjectDetectorNode():
         self.zed_depth_stabilization = (
             self.node.get_parameter('zed_depth_stabilization').get_parameter_value().integer_value
         )
-        sim = self.node.get_parameter('sim').get_parameter_value().bool_value
-        self.sim = sim
-        
         self.node.declare_parameter("zed_positional_tracking_mode.sim", "GEN_1")
         self.node.declare_parameter("zed_positional_tracking_mode.real", "GEN_3")
         self.zed_positional_tracking_mode_name = self.node.get_parameter(

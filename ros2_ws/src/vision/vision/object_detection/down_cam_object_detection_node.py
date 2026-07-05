@@ -23,6 +23,7 @@ from std_srvs.srv import Trigger
 from auv_msgs.srv import SetDownCamProjectionHeights
 import math
 from tf_transformations import quaternion_matrix, quaternion_from_euler, quaternion_multiply
+from ament_index_python.packages import get_package_share_directory
 
 from vision.object_detection.utils import (
     get_detections,
@@ -69,7 +70,9 @@ class DownCamObjectDetectorNode():
 
         # ── Model / detection parameters ─────────────────────────
         self.node.declare_parameter('model_class_names', Parameter.Type.STRING_ARRAY)
-        self.node.declare_parameter('model_path', Parameter.Type.STRING)
+        self.node.declare_parameter('model_relative_path_override', Parameter.Type.STRING)
+        self.node.declare_parameter('model_relative_path.sim', Parameter.Type.STRING)
+        self.node.declare_parameter('model_relative_path.real', Parameter.Type.STRING)
         self.node.declare_parameter('detection_topic', Parameter.Type.STRING)
         self.node.declare_parameter('queue_size', Parameter.Type.INTEGER)
         self.node.declare_parameter('publish_annotated', Parameter.Type.BOOL)
@@ -136,7 +139,11 @@ class DownCamObjectDetectorNode():
         )
         self.node.get_logger().info(f"Class names: {self.class_names}")
 
-        model_path = self.node.get_parameter('model_path').get_parameter_value().string_value
+        self.sim = self.node.get_parameter('sim').get_parameter_value().bool_value
+        rel_path = self.node.get_parameter('model_relative_path_override').get_parameter_value().string_value
+        if not rel_path:
+            rel_path = self.node.get_parameter('model_relative_path.sim' if self.sim else 'model_relative_path.real').get_parameter_value().string_value
+        model_path = os.path.join(get_package_share_directory('vision'), rel_path)
         detection_topic = self.node.get_parameter('detection_topic').get_parameter_value().string_value
         queue_size = self.node.get_parameter('queue_size').get_parameter_value().integer_value
         self.publish_annotated_image = (
@@ -152,7 +159,6 @@ class DownCamObjectDetectorNode():
         self.enable_object_detection = (
             self.node.get_parameter('enable_object_detection').get_parameter_value().bool_value
         )
-        self.sim = self.node.get_parameter('sim').get_parameter_value().bool_value
         self.image_topic = self.node.get_parameter('image_topic').get_parameter_value().string_value
         
         depth_scale_param = 'depth_scale.sim' if self.sim else 'depth_scale.real'

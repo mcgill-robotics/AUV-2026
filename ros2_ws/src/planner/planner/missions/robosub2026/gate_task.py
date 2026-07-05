@@ -400,6 +400,7 @@ class GateTask(py_trees.composites.Sequence):
         do_style_roll: bool = False,
         style_roll_degrees: float = 720.0,
         style_roll_torque: float = 15.0,
+        style_roll_coast_degrees: float = 180.0,
     ):
         super().__init__("Gate Task", memory=True)
 
@@ -497,6 +498,7 @@ class GateTask(py_trees.composites.Sequence):
                 create_style_rolling_flip_sequence(
                     roll_torque=style_roll_torque,
                     target_degrees=style_roll_degrees,
+                    coast_degrees=style_roll_coast_degrees,
                     timeout_sec=scan_timeout,
                 )
             )

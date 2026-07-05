@@ -112,6 +112,12 @@ def main():
     node.declare_parameter("gate.initial_alignment_tolerance_deg", 5.0)
     node.declare_parameter("gate.initial_alignment_hold_time", 1.0)
     node.declare_parameter("gate.initial_alignment_timeout", 15.0)
+    node.declare_parameter("gate.do_style_yaw", False)
+    node.declare_parameter("gate.style_yaw_degrees", 360.0)
+    node.declare_parameter("gate.do_style_roll", False)
+    node.declare_parameter("gate.style_roll_degrees", 720.0)
+    node.declare_parameter("gate.style_roll_torque", 15.0)
+    node.declare_parameter("gate.style_roll_coast_degrees", 180.0)
 
     gate_params = {
         "position_tolerance": node.get_parameter("gate.position_tolerance").get_parameter_value().double_value,
@@ -131,6 +137,12 @@ def main():
         "initial_alignment_tolerance_deg": node.get_parameter("gate.initial_alignment_tolerance_deg").get_parameter_value().double_value,
         "initial_alignment_hold_time": node.get_parameter("gate.initial_alignment_hold_time").get_parameter_value().double_value,
         "initial_alignment_timeout": node.get_parameter("gate.initial_alignment_timeout").get_parameter_value().double_value,
+        "do_style_yaw": node.get_parameter("gate.do_style_yaw").get_parameter_value().bool_value,
+        "style_yaw_degrees": node.get_parameter("gate.style_yaw_degrees").get_parameter_value().double_value,
+        "do_style_roll": node.get_parameter("gate.do_style_roll").get_parameter_value().bool_value,
+        "style_roll_degrees": node.get_parameter("gate.style_roll_degrees").get_parameter_value().double_value,
+        "style_roll_torque": node.get_parameter("gate.style_roll_torque").get_parameter_value().double_value,
+        "style_roll_coast_degrees": node.get_parameter("gate.style_roll_coast_degrees").get_parameter_value().double_value,
     }
 
     
@@ -349,6 +361,14 @@ def main():
     node.declare_parameter("return_home.hold_time", 1.0)
     node.declare_parameter("return_home.timeout", 30.0)
     node.declare_parameter("return_home.global_yaw_lock", True)
+    node.declare_parameter("return_home.do_style_yaw_before", False)
+    node.declare_parameter("return_home.do_style_yaw_after", False)
+    node.declare_parameter("return_home.style_yaw_degrees", 360.0)
+    node.declare_parameter("return_home.do_style_roll_before", False)
+    node.declare_parameter("return_home.do_style_roll_after", False)
+    node.declare_parameter("return_home.style_roll_degrees", 720.0)
+    node.declare_parameter("return_home.style_roll_torque", 15.0)
+    node.declare_parameter("return_home.style_roll_coast_degrees", 180.0)
 
     return_home_params = {
         "return_distance": node.get_parameter("return_home.return_distance").get_parameter_value().double_value,
@@ -359,6 +379,14 @@ def main():
         "hold_time": node.get_parameter("return_home.hold_time").get_parameter_value().double_value,
         "timeout": node.get_parameter("return_home.timeout").get_parameter_value().double_value,
         "global_yaw_lock": node.get_parameter("return_home.global_yaw_lock").get_parameter_value().bool_value,
+        "do_style_yaw_before": node.get_parameter("return_home.do_style_yaw_before").get_parameter_value().bool_value,
+        "do_style_yaw_after": node.get_parameter("return_home.do_style_yaw_after").get_parameter_value().bool_value,
+        "style_yaw_degrees": node.get_parameter("return_home.style_yaw_degrees").get_parameter_value().double_value,
+        "do_style_roll_before": node.get_parameter("return_home.do_style_roll_before").get_parameter_value().bool_value,
+        "do_style_roll_after": node.get_parameter("return_home.do_style_roll_after").get_parameter_value().bool_value,
+        "style_roll_degrees": node.get_parameter("return_home.style_roll_degrees").get_parameter_value().double_value,
+        "style_roll_torque": node.get_parameter("return_home.style_roll_torque").get_parameter_value().double_value,
+        "style_roll_coast_degrees": node.get_parameter("return_home.style_roll_coast_degrees").get_parameter_value().double_value,
     }
     
     

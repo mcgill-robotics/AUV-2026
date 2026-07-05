@@ -36,6 +36,12 @@ planner_root_tree:
       initial_alignment_tolerance_deg: 10.0 # (deg) Yaw tolerance to reach when snapping back to yaw=0 at start
       initial_alignment_hold_time: 1.0      # (s) Seconds to hold the yaw=0 orientation before SUCCESS
       initial_alignment_timeout: 30.0       # (s) Seconds before the snap-back alignment fails and times out
+      do_style_yaw: false                   # Whether to perform style yaw spin after passing through gate
+      style_yaw_degrees: 360.0              # (deg) Total yaw angle to spin (360 or 720)
+      do_style_roll: false                  # Whether to perform style rolling flip (barrel roll) after passing through gate
+      style_roll_degrees: 720.0             # (deg) Total roll angle to flip (360 or 720)
+      style_roll_torque: 15.0               # (Nm) Open-loop roll torque to apply during rolling flip
+      style_roll_coast_degrees: 180.0       # (deg) How many degrees before target angle to cut open-loop torque and coast
 
     pre_qual:
       angular_tolerance: 0.5         # (rad) TODO: convert to deg for consistency
@@ -116,7 +122,7 @@ planner_root_tree:
       COM_to_dvl_height: 0.1              # (m) Distance from the center of mass to the DVL in the vertical direction
       
       # Shortcuts to have shorter form of the mission. These params are either or (xor).
-      navigation_only: False               # (bool) If true, only perform navigation steps (align, surface, dive) and skip item drop
+      navigation_only: True               # (bool) If true, only perform navigation steps (align, surface, dive) and skip item drop
       item_drop_only: False               # (bool) If true, only perform item drop and skip navigation steps (align, surface, dive)
       
       # Navigate to table
@@ -155,6 +161,14 @@ planner_root_tree:
       hold_time: 1.0                      # (s)
       timeout: 60.0                       # (s)
       global_yaw_lock: true               # (bool) Assumes passing back through at exactly opposite of global forward
+      do_style_yaw_before: false          # Whether to perform style yaw spin before passing through return gate
+      do_style_yaw_after: false           # Whether to perform style yaw spin after passing through return gate
+      style_yaw_degrees: 360.0            # (deg) Total yaw angle to spin (360 or 720)
+      do_style_roll_before: false         # Whether to perform style rolling flip before passing through return gate
+      do_style_roll_after: false          # Whether to perform style rolling flip after passing through return gate
+      style_roll_degrees: 720.0           # (deg) Total roll angle to flip (360 or 720)
+      style_roll_torque: 15.0             # (Nm) Open-loop roll torque to apply during rolling flip
+      style_roll_coast_degrees: 180.0     # (deg) How many degrees before target angle to cut open-loop torque and coast
 
     torpedo:
       launch_topic: /actuators/torpedo
