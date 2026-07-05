@@ -306,8 +306,8 @@ class MoveToFrontOfBoard(Navigation):
                 
                 # shift by half of size to get board center
                 board_center_xy:Vector2D = Vector2D (
-                    x = board_vo.pose.position.x + 0.5 * board_vo.size.x,
-                    y = board_vo.pose.position.y + 0.5 * board_vo.size.y
+                    x = board_vo.pose.position.x,
+                    y = board_vo.pose.position.y
                 )
                 
                 target_xy = compute_target_in_front_of_point_on_board(board_center_xy, self.blackboard.board.orientation, self.distance_from_board)
@@ -866,9 +866,9 @@ class FireTorpedo(Action):
                     return py_trees.common.Status.FAILURE
                 match self.blackboard.torpedo.count:
                     case 1:
-                        side = TorpedoSide.RIGHT
-                    case 2:
                         side = TorpedoSide.LEFT
+                    case 2:
+                        side = TorpedoSide.RIGHT
                     case _:
                         self.node.get_logger().error(f"[{self.name}] Invalid torpedo count: {self.blackboard.torpedo.count}. Cannot determine which torpedo to fire.")
                         return py_trees.common.Status.FAILURE
