@@ -9,6 +9,7 @@ from ..action_status_enum import ActionStatus
 from ..mission_behaviour_components import BasicActionBehaviour
 from ..vision_behaviours import ScanBehaviour, SearchSweepBehaviour
 from .slalom_behaviours import ForceBlindDriveBehaviour
+from .gate_behaviours import create_style_yaw_spin_sequence, create_style_rolling_flip_sequence
 
 
 class PlanGateTraversalBehaviour(py_trees.behaviour.Behaviour):
@@ -394,6 +395,11 @@ class GateTask(py_trees.composites.Sequence):
         initial_alignment_tolerance_deg: float = 5.0,
         initial_alignment_hold_time: float = 1.0,
         initial_alignment_timeout: float = 15.0,
+        do_style_yaw: bool = False,
+        style_yaw_degrees: float = 360.0,
+        do_style_roll: bool = False,
+        style_roll_degrees: float = 720.0,
+        style_roll_torque: float = 15.0,
     ):
         super().__init__("Gate Task", memory=True)
 
@@ -473,4 +479,26 @@ class GateTask(py_trees.composites.Sequence):
                 ),
             ]
         )
+
+        if do_style_yaw:
+            steps = 6 if style_yaw_degrees >= 720.0 else 3
+            vision_sequence.add_child(
+                create_style_yaw_spin_sequence(
+                    total_degrees=style_yaw_degrees,
+                    num_steps=steps,
+                    angular_tolerance_deg=scan_angular_tolerance_deg,
+                    hold_time_s=scan_hold_time,
+                    timeout_s=scan_timeout,
+                )
+            )
+
+        if do_style_roll:
+            vision_sequence.add_child(
+                create_style_rolling_flip_sequence(
+                    roll_torque=style_roll_torque,
+                    target_degrees=style_roll_degrees,
+                    timeout_sec=scan_timeout,
+                )
+            )
+
         self.add_child(vision_sequence)

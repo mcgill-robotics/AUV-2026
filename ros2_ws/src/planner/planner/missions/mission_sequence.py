@@ -10,6 +10,8 @@ from .debugNavigation.test_yaw_behaviour import TestYawBehaviour
 from .debugNavigation.test_dive_behaviour import TestDiveBehaviour
 from .debugNavigation.test_serivce_call_behaviour import TestServiceCallBehaviour
 from .debugNavigation.comprehensive_test_mission import ComprehensiveTestMission
+from .debugNavigation.test_style_yaw_spin import TestStyleYawSpin
+from .debugNavigation.test_style_rolling_flip import TestStyleRollingFlip
 
 # --- NEW ROBOSUB 2026 TASKS ---
 from .robosub2026.gate_task import GateTask
@@ -75,7 +77,10 @@ class MissionSpawner(py_trees.behaviour.Behaviour):
                     " 13: Table & Octagon Task\n"
                     " 14: Return Home Task\n"
                     "--- Full Run ---\n"
-                    " 15: FULL COMPETITION RUN"
+                    " 15: FULL COMPETITION RUN\n"
+                    "--- Style Maneuver Tests ---\n"
+                    " 16: Test Style Yaw Spin (360 deg)\n"
+                    " 17: Test Style Rolling Flip (720 deg)"
                 )
                 self.node.get_logger().info(menu_text)
                 self.message_shown = True
@@ -175,6 +180,10 @@ class MissionSpawner(py_trees.behaviour.Behaviour):
                 ReturnHomeTask(**return_home)
             ])
             return full_run
+        elif choice == 16:
+            return TestStyleYawSpin()
+        elif choice == 17:
+            return TestStyleRollingFlip()
         return None
 
 class DynamicMissionSequence(py_trees.composites.Sequence):
