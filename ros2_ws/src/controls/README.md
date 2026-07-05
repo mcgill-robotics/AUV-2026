@@ -16,6 +16,7 @@ This process occurs in three stages:
   - [Usage](#usage)
     - [Raw Setpoint Publishing](#raw-setpoint-publishing)
     - [Navigation Server (Action Client)](#navigation-server-action-client)
+    - [Topside Relay Auto-Tuning](#topside-relay-auto-tuning)
   - [Nodes](#nodes)
     - [Published Topics](#published-topics)
     - [Subscribed Topics](#subscribed-topics)
@@ -96,8 +97,23 @@ To send a test 3D goal to the Navigation Server via the ROS 2 Action CLI:
 To send a goal programmatically using Python, utilize the `goal_helpers` library included in `controls/goal_helpers.py`. See `test_nav.py` for examples.
 
 
+### Topside Relay Auto-Tuning
+The package includes a Topside Relay Feedback (Åström-Hägglund) auto-tuning node (`relay_tuner.py`) designed to eliminate the Sim-to-Real gap by tuning PID controllers directly in physical pool tests without modifying existing controllers.
+
+#### How It Works
+1. **Disable Target Controller**: Calls `/target_controller/set_parameters` to temporarily disable the axis PID loop (`enabled=False`).
+2. **Bang-Bang Limit-Cycle**: Takes direct control of the axis effort topic (e.g., `/controls/depth_effort`) and executes an asymmetric hysteresis relay ($+r_{\text{pos}}, -r_{\text{neg}}$) centered around a baseline effort (`base_effort`, e.g., net buoyancy).
+3. **Adaptive Limit Cycle Convergence**: Dynamically monitors consecutive oscillation cycles during warmup (`min_warmup_cycles` to `max_warmup_cycles`) until relative amplitude and period variations drop below `convergence_tol` (default: 10%), ensuring initial offsets and transient momentum are completely shed before measurement begins. Once stabilized, records zero-crossing timestamps and oscillation peaks over 5 steady-state measurement cycles to calculate the Ultimate Gain ($K_u$) and Ultimate Period ($P_u$).
+4. **Gain Output**: Automatically terminates, re-enables the PID controller, and prints critically damped parallel PID gains using **Tyreus-Luyben** and **No-Overshoot** rules formatted as a YAML block ready for `Controller_params_real.yaml`.
+
+#### Example Pool Test Command (Depth Tuning)
+```bash
+ros2 run controls relay_tuner.py --ros-args -p tune_axis:="depth" -p setpoint:=1.0 -p relay_amp_pos:=15.0 -p relay_amp_neg:=-15.0 -p base_effort:=3.5 -p hysteresis_band:=0.05
+```
+
+
 ## Nodes
-The package provides six ROS nodes: `depth_controller`, `attitude_controller`, `x_controller`, `y_controller`, `superimposer`, and `navigation_server`.
+The package provides seven ROS nodes: `depth_controller`, `attitude_controller`, `x_controller`, `y_controller`, `superimposer`, `navigation_server`, and `relay_tuner`.
 
 - `depth_controller` input: `/auv_frame/depth`, `/controls/depth_setpoint`
 
@@ -118,6 +134,9 @@ The package provides six ROS nodes: `depth_controller`, `attitude_controller`, `
 - `navigation_server` input: `/state/pose` (geometry_msgs/PoseStamped)
 
 - `navigation_server` output: Action Server `/motion/navigate`, publishers pointing to `/controls/depth_setpoint`, `/controls/x_setpoint`, `/controls/y_setpoint`, `/controls/quaternion_setpoint`
+
+- `relay_tuner` input: `auv_frame/depth`, `auv_frame/imu`, `auv_frame/dvl/position`
+- `relay_tuner` output: `/controls/depth_effort`, `/controls/attitude_effort`, `/controls/x_effort`, `/controls/y_effort`, and dynamic parameter client calls to target controllers
 
 
 ### Published Topics
