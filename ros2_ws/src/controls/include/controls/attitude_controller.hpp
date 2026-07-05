@@ -86,6 +86,7 @@ namespace controls
                 rclcpp::TimerBase::SharedPtr control_timer_;
                 rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr parameter_callback_handle_;
                 bool enabled_;
+                bool was_enabled_;
 
                 void imu_callback(const imu_msg::SharedPtr msg);
                 void target_orientation_callback(const geometry_msgs::msg::Quaternion::SharedPtr msg);

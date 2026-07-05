@@ -51,6 +51,7 @@ class DepthController(Node):
         self.max_slew_rate = float(self.get_parameter("max_slew_rate").value)
         self.derivative_filter_alpha = float(self.get_parameter("derivative_filter_alpha").value)
         self.enabled = bool(self.get_parameter("enabled").value)
+        self.was_enabled = self.enabled
 
         self.parameter_callback_handle = self.add_on_set_parameters_callback(self.parameters_callback)
 
@@ -176,16 +177,19 @@ class DepthController(Node):
             self.setpoint_depth = self.target_setpoint_depth
 
         # Publish effort command
-        effort_msg = Wrench()
         if self.enabled:
+            effort_msg = Wrench()
             # +Z is up, so invert depth values for PID calculations
             self.pid.compute_errors(-self.setpoint_depth, -self.current_depth, self.time_step)
             effort_output = self.pid.compute_effort()
             effort_msg.force.z = effort_output + self.feed_forward
-        else:
+            self.pub_effort.publish(effort_msg)  # Published effort is in pool frame
+            self.was_enabled = True
+        elif self.was_enabled:
+            effort_msg = Wrench()
             effort_msg.force.z = 0.0
-
-        self.pub_effort.publish(effort_msg)  # Published effort is in pool frame
+            self.pub_effort.publish(effort_msg)
+            self.was_enabled = False
 
 
 def main():

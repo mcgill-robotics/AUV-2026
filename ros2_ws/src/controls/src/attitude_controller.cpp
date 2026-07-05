@@ -46,6 +46,7 @@ namespace controls
         this->get_parameter("r_bv_v", r_bv_v_);
         this->get_parameter("control_loop_hz", control_loop_hz_);
         this->get_parameter("enabled", enabled_);
+        was_enabled_ = enabled_;
 
         q_iv_ = quatd::Identity(); // Initial orientation: identity quaternion
         w_iv_ = Vec3::Zero(); // Initial angular velocity: zero vector
@@ -202,22 +203,24 @@ namespace controls
             q_iv2_ = target_q_iv2_;
         }
 
-        wrench_msg effort;
         if (enabled_)
         {
-            effort = compute_control_effort();
+            wrench_msg effort = compute_control_effort();
+            pub_effort_->publish(effort);
+            was_enabled_ = true;
         }
-        else
+        else if (was_enabled_)
         {
+            wrench_msg effort;
             effort.force.x = 0.0;
             effort.force.y = 0.0;
             effort.force.z = 0.0;
             effort.torque.x = 0.0;
             effort.torque.y = 0.0;
             effort.torque.z = 0.0;
+            pub_effort_->publish(effort);
+            was_enabled_ = false;
         }
-
-        pub_effort_->publish(effort);
     }
 
     rcl_interfaces::msg::SetParametersResult AttitudeController::parameters_callback(
