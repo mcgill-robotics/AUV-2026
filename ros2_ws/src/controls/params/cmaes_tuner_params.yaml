@@ -10,7 +10,7 @@ cmaes_tuner:
     randomize_setpoints: true
     
     # Cost function weights and penalty thresholds
-    weight_effort: 0.002
+    weight_effort: 0.5
     overshoot_threshold: 0.02
     overshoot_floor_deg: 2.0
     overshoot_floor_meters: 0.1
@@ -33,8 +33,8 @@ cmaes_tuner:
         auxiliary_controllers: []
         # Units: DEGREES (°)
         default_setpoint: 15.0
-        setpoint_min: -180.0
-        setpoint_max: 180.0
+        setpoint_min: -45.0
+        setpoint_max: 45.0
         init_sigma: 3.0
 
       roll:
@@ -49,8 +49,8 @@ cmaes_tuner:
         auxiliary_controllers: []
         # Units: DEGREES (°)
         default_setpoint: 10.0
-        setpoint_min: -180.0
-        setpoint_max: 180.0
+        setpoint_min: -45.0
+        setpoint_max: 45.0
         init_sigma: 3.0
 
       yaw:
@@ -114,7 +114,7 @@ cmaes_tuner:
         # Units: METERS (m)
         default_setpoint: 5.0
         setpoint_min: 2.5
-        setpoint_max: 10.0
+        setpoint_max: 8.5
         init_sigma: 10.0
 
       full:

@@ -70,10 +70,10 @@ class CMAESTunerNode(Node):
         self.declare_parameter('init_sigma', 15.0)            # Initial CMA-ES exploration step size
 
         # Cost function weights and thresholds
-        self.declare_parameter('weight_effort', 0.0001)       # Penalty multiplier for tau^2
+        self.declare_parameter('weight_effort', 0.5)          # Penalty multiplier for tau^2
         self.declare_parameter('overshoot_threshold', 0.02)   # Tolerance before overshoot penalty triggers
-        self.declare_parameter('overshoot_floor_deg', 1.5)    # Absolute minimum overshoot tolerance for angular controllers (degrees)
-        self.declare_parameter('overshoot_floor_meters', 0.05)# Absolute minimum overshoot tolerance for translational controllers (meters)
+        self.declare_parameter('overshoot_floor_deg', 2.0)    # Absolute minimum overshoot tolerance for angular controllers (degrees)
+        self.declare_parameter('overshoot_floor_meters', 0.1) # Absolute minimum overshoot tolerance for translational controllers (meters)
         self.declare_parameter('overshoot_penalty_base', 5000.0)
 
         # Load values
@@ -95,6 +95,12 @@ class CMAESTunerNode(Node):
         self.setpoint_topic = f"{self.target_controller.replace('_controller', '')}_setpoint"
         if not self.setpoint_topic.startswith('/controls/'):
             self.setpoint_topic = f"/controls/{self.setpoint_topic.lstrip('/')}"
+
+        self.weight_effort = float(self.get_parameter('weight_effort').value)
+        self.overshoot_threshold = float(self.get_parameter('overshoot_threshold').value)
+        self.overshoot_floor_deg = float(self.get_parameter('overshoot_floor_deg').value)
+        self.overshoot_floor_meters = float(self.get_parameter('overshoot_floor_meters').value)
+        self.overshoot_penalty_base = float(self.get_parameter('overshoot_penalty_base').value)
 
         # ---------------------------------------------------------
         # Load Tuner Configuration & Mode Definitions from YAML
@@ -150,12 +156,6 @@ class CMAESTunerNode(Node):
 
         # Auto-load initial PID guesses from Controller_params_sim.yaml
         self.load_initial_guesses_from_yaml()
-
-        self.weight_effort = float(self.get_parameter('weight_effort').value)
-        self.overshoot_threshold = float(self.get_parameter('overshoot_threshold').value)
-        self.overshoot_floor_deg = float(self.get_parameter('overshoot_floor_deg').value)
-        self.overshoot_floor_meters = float(self.get_parameter('overshoot_floor_meters').value)
-        self.overshoot_penalty_base = float(self.get_parameter('overshoot_penalty_base').value)
 
         # Reentrant callback group allows concurrent subscription processing and parameter service calls
         self.cb_group = ReentrantCallbackGroup()
@@ -458,7 +458,8 @@ class CMAESTunerNode(Node):
 
         # Use current evaluation setpoint (synchronized per generation)
         eval_sp = getattr(self, 'current_eval_setpoint', self.target_setpoint)
-        sp_norm = max(0.1, abs(eval_sp))
+        min_norm_floor = 10.0 if self.setpoint_topic == '/controls/quaternion_setpoint' else 1.0
+        sp_norm = max(min_norm_floor, abs(eval_sp))
 
         # 1. ITAE (Integral Time Absolute Error), normalized by setpoint magnitude for scale invariance across random setpoints
         error = eval_sp - y_grid
@@ -682,7 +683,8 @@ class CMAESTunerNode(Node):
             t_rel = t_grid - t_grid[0]
             y_grid = np.interp(t_grid, t_vals, y_vals)
             
-            sp_norm = max(0.1, abs(sp))
+            min_norm_floor = 10.0 if axis in ['roll', 'pitch', 'yaw'] else 1.0
+            sp_norm = max(min_norm_floor, abs(sp))
             error = sp - y_grid
             itae = float(np.trapz(t_rel * np.abs(error), t_rel)) / sp_norm
             total_itae += itae
@@ -708,7 +710,7 @@ class CMAESTunerNode(Node):
             t_grid = np.linspace(t_eff[0], t_eff[-1], int(self.sim_duration_sec * 50))
             t_rel = t_grid - t_grid[0]
             u_grid = np.interp(t_grid, t_eff, u_sq)
-            avg_sp_norm_sq = float(np.mean([max(0.1, abs(sp))**2 for sp in sps.values()]))
+            avg_sp_norm_sq = float(np.mean([max(10.0 if k in ['roll', 'pitch', 'yaw'] else 1.0, abs(val))**2 for k, val in sps.items()]))
             eff_pen = float(self.weight_effort * np.trapz(u_grid, t_rel)) / avg_sp_norm_sq
 
         total_cost = total_itae + eff_pen + total_os
