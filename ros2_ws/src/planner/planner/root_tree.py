@@ -139,22 +139,63 @@ def main():
     node.declare_parameter("bins.downcam_fov_vertical", 47.6)
     node.declare_parameter("bins.downcam_image_width", 640)
     node.declare_parameter("bins.downcam_image_height", 480)
+    node.declare_parameter("bins.grabber_to_downcam_x", 0.17894)
+    node.declare_parameter("bins.grabber_to_downcam_y", 0.04062)
+    node.declare_parameter("bins.alignment_hold_time", 5.0)
     node.declare_parameter("bins.search_sweep_steps", 8)
     node.declare_parameter("bins.search_sweep_step_timeout", 0.5)
-    node.declare_parameter("bins.bin_moving_average_weight", 0.5)
+    node.declare_parameter("bins.bin_moving_average_weight", 0.5)    
+    node.declare_parameter("bins.initial_depth", -1.0)
+    node.declare_parameter("bins.initial_depth_tolerance", 0.2)
     node.declare_parameter("bins.bin_structure_distance", 2.0)
     node.declare_parameter("bins.go_above_bin_structure_height", 0.5)
     node.declare_parameter("bins.go_above_bin_height", 0.7)
     node.declare_parameter("bins.switch_sides_height", 1.2)
+    node.declare_parameter("bins.wait_for_bins_time", 2.0)
+    node.declare_parameter("bins.send_setpoint_interval", 6)
     node.declare_parameter("bins.wrong_task_type_threshold", 5)
     node.declare_parameter("bins.task_completion_threshold", 5)
+    node.declare_parameter("bins.bin_lined_up_frames", 5)
     node.declare_parameter("bins.bin_lined_up_threshold", 10)
     node.declare_parameter("bins.num_required_markers", 2)
     node.declare_parameter("bins.num_bins", 4)
     node.declare_parameter("bins.bins_to_bin_structure", 0.3)
     node.declare_parameter("bins.force_fallback_search", False)
     node.declare_parameter("bins.force_fallback_alignment", False)
+    node.declare_parameter("bins.fallback_role", "search_rescue")
     node.declare_parameter("bins.no_detection_timeout", 10.0)
+
+    bins_params = {
+        "downcam_fov_horizontal": node.get_parameter("bins.downcam_fov_horizontal").get_parameter_value().double_value,
+        "downcam_fov_vertical": node.get_parameter("bins.downcam_fov_vertical").get_parameter_value().double_value,
+        "downcam_image_width": node.get_parameter("bins.downcam_image_width").get_parameter_value().integer_value,
+        "downcam_image_height": node.get_parameter("bins.downcam_image_height").get_parameter_value().integer_value,
+        "grabber_to_downcam_x": node.get_parameter("bins.grabber_to_downcam_x").get_parameter_value().double_value,
+        "grabber_to_downcam_y": node.get_parameter("bins.grabber_to_downcam_y").get_parameter_value().double_value,
+        "alignment_hold_time": node.get_parameter("bins.alignment_hold_time").get_parameter_value().double_value,
+        "search_sweep_steps": node.get_parameter("bins.search_sweep_steps").get_parameter_value().integer_value,
+        "search_sweep_step_timeout": node.get_parameter("bins.search_sweep_step_timeout").get_parameter_value().double_value,
+        "bin_moving_average_weight": node.get_parameter("bins.bin_moving_average_weight").get_parameter_value().double_value,
+        "initial_depth": node.get_parameter("bins.initial_depth").get_parameter_value().double_value,
+        "initial_depth_tolerance": node.get_parameter("bins.initial_depth_tolerance").get_parameter_value().double_value,
+        "bin_structure_distance": node.get_parameter("bins.bin_structure_distance").get_parameter_value().double_value,
+        "go_above_bin_structure_height": node.get_parameter("bins.go_above_bin_structure_height").get_parameter_value().double_value,
+        "go_above_bin_height": node.get_parameter("bins.go_above_bin_height").get_parameter_value().double_value,
+        "switch_sides_height": node.get_parameter("bins.switch_sides_height").get_parameter_value().double_value,
+        "wait_for_bins_time": node.get_parameter("bins.wait_for_bins_time").get_parameter_value().double_value,
+        "send_setpoint_interval": node.get_parameter("bins.send_setpoint_interval").get_parameter_value().integer_value,
+        "wrong_task_type_threshold": node.get_parameter("bins.wrong_task_type_threshold").get_parameter_value().integer_value,
+        "task_completion_threshold": node.get_parameter("bins.task_completion_threshold").get_parameter_value().integer_value,
+        "bin_lined_up_frames": node.get_parameter("bins.bin_lined_up_frames").get_parameter_value().integer_value,
+        "bin_lined_up_threshold": node.get_parameter("bins.bin_lined_up_threshold").get_parameter_value().integer_value,
+        "num_required_markers": node.get_parameter("bins.num_required_markers").get_parameter_value().integer_value,
+        "num_bins": node.get_parameter("bins.num_bins").get_parameter_value().integer_value,
+        "bins_to_bin_structure": node.get_parameter("bins.bins_to_bin_structure").get_parameter_value().double_value,
+        "force_fallback_search": node.get_parameter("bins.force_fallback_search").get_parameter_value().bool_value,
+        "force_fallback_alignment": node.get_parameter("bins.force_fallback_alignment").get_parameter_value().bool_value,
+        "fallback_role": node.get_parameter("bins.fallback_role").get_parameter_value().string_value,
+        "no_detection_timeout": node.get_parameter("bins.no_detection_timeout").get_parameter_value().double_value,
+    }
     
     # Torpedo task parameters
     node.declare_parameter("torpedo.initial_distance_from_board", Parameter.Type.DOUBLE)
@@ -184,60 +225,44 @@ def main():
     node.declare_parameter("torpedo.icon_to_nearest_hole.board_2.firetruck", Parameter.Type.DOUBLE_ARRAY)
     node.declare_parameter("torpedo.firing_pause_time", Parameter.Type.DOUBLE)
     node.declare_parameter("torpedo.launch_topic", Parameter.Type.STRING)
-    
-    slalom_params = {
-        "num_layers": node.get_parameter("slalom.num_layers").get_parameter_value().integer_value,
-        "gate_side": node.get_parameter("slalom.gate_side").get_parameter_value().string_value,
-        "scan_angle_deg": node.get_parameter("slalom.scan_angle_deg").get_parameter_value().double_value,
-        "scan_pause_time": node.get_parameter("slalom.scan_pause_time").get_parameter_value().double_value,
-        "collinearity_threshold": node.get_parameter("slalom.collinearity_threshold").get_parameter_value().double_value,
-        "min_forward_dist": node.get_parameter("slalom.min_forward_dist").get_parameter_value().double_value,
-        "layer_distance": node.get_parameter("slalom.layer_distance").get_parameter_value().double_value,
-        "initial_depth": node.get_parameter("slalom.initial_depth").get_parameter_value().double_value,
-        "position_tolerance": node.get_parameter("slalom.position_tolerance").get_parameter_value().double_value,
-        "angular_tolerance_rad": math.radians(node.get_parameter("slalom.angular_tolerance_deg").get_parameter_value().double_value),  # deg -> rad
-        "hold_time": node.get_parameter("slalom.hold_time").get_parameter_value().double_value,
-        "timeout": node.get_parameter("slalom.timeout").get_parameter_value().double_value,
-        "scan_angular_tolerance_rad": math.radians(node.get_parameter("slalom.scan_angular_tolerance_deg").get_parameter_value().double_value),  # deg -> rad
-        "scan_hold_time": node.get_parameter("slalom.scan_hold_time").get_parameter_value().double_value,
-        "scan_timeout": node.get_parameter("slalom.scan_timeout").get_parameter_value().double_value,
-    }
 
-
-    gate_params = {
-        "position_tolerance": node.get_parameter("gate.position_tolerance").get_parameter_value().double_value,
-        "hold_time": node.get_parameter("gate.hold_time").get_parameter_value().double_value,
-        "timeout": node.get_parameter("gate.timeout").get_parameter_value().double_value,
-        "desired_role": node.get_parameter("gate.desired_role").get_parameter_value().string_value,
-        "search_attempts": node.get_parameter("gate.search_attempts").get_parameter_value().integer_value,
-        "scan_angle_deg": node.get_parameter("gate.scan_angle_deg").get_parameter_value().double_value,
-        "scan_pause_time": node.get_parameter("gate.scan_pause_time").get_parameter_value().double_value,
-        "approach_distance": node.get_parameter("gate.approach_distance").get_parameter_value().double_value,
-        "pass_distance": node.get_parameter("gate.pass_distance").get_parameter_value().double_value,
-    }
-
-
-    bins_params = {
-        "downcam_fov_horizontal": node.get_parameter("bins.downcam_fov_horizontal").get_parameter_value().double_value,
-        "downcam_fov_vertical": node.get_parameter("bins.downcam_fov_vertical").get_parameter_value().double_value,
-        "downcam_image_width": node.get_parameter("bins.downcam_image_width").get_parameter_value().integer_value,
-        "downcam_image_height": node.get_parameter("bins.downcam_image_height").get_parameter_value().integer_value,
-        "search_sweep_steps": node.get_parameter("bins.search_sweep_steps").get_parameter_value().integer_value,
-        "search_sweep_step_timeout": node.get_parameter("bins.search_sweep_step_timeout").get_parameter_value().double_value,
-        "bin_moving_average_weight": node.get_parameter("bins.bin_moving_average_weight").get_parameter_value().double_value,
-        "bin_structure_distance": node.get_parameter("bins.bin_structure_distance").get_parameter_value().double_value,
-        "go_above_bin_structure_height": node.get_parameter("bins.go_above_bin_structure_height").get_parameter_value().double_value,
-        "go_above_bin_height": node.get_parameter("bins.go_above_bin_height").get_parameter_value().double_value,
-        "switch_sides_height": node.get_parameter("bins.switch_sides_height").get_parameter_value().double_value,
-        "wrong_task_type_threshold": node.get_parameter("bins.wrong_task_type_threshold").get_parameter_value().integer_value,
-        "task_completion_threshold": node.get_parameter("bins.task_completion_threshold").get_parameter_value().integer_value,
-        "bin_lined_up_threshold": node.get_parameter("bins.bin_lined_up_threshold").get_parameter_value().integer_value,
-        "num_required_markers": node.get_parameter("bins.num_required_markers").get_parameter_value().integer_value,
-        "num_bins": node.get_parameter("bins.num_bins").get_parameter_value().integer_value,
-        "bins_to_bin_structure": node.get_parameter("bins.bins_to_bin_structure").get_parameter_value().double_value,
-        "force_fallback_search": node.get_parameter("bins.force_fallback_search").get_parameter_value().bool_value,
-        "force_fallback_alignment": node.get_parameter("bins.force_fallback_alignment").get_parameter_value().bool_value,
-        "no_detection_timeout": node.get_parameter("bins.no_detection_timeout").get_parameter_value().double_value,
+    torpedo_params = {
+        "initial_distance_from_board": node.get_parameter("torpedo.initial_distance_from_board").get_parameter_value().double_value,
+        "z_reference": node.get_parameter("torpedo.z_reference").get_parameter_value().double_value,
+        "scan_pause_time": node.get_parameter("torpedo.scan_pause_time").get_parameter_value().double_value,
+        "position_tolerance": node.get_parameter("torpedo.position_tolerance").get_parameter_value().double_value,
+        "yaw_tolerance_rad": math.radians(node.get_parameter("torpedo.yaw_tolerance_deg").get_parameter_value().double_value),  # deg -> rad
+        "hold_time": node.get_parameter("torpedo.hold_time").get_parameter_value().double_value,
+        "timeout": node.get_parameter("torpedo.timeout").get_parameter_value().double_value,
+        "refinement_rejection_threshold_rad": math.radians(node.get_parameter("torpedo.refinement.rejection_threshold_deg").get_parameter_value().double_value),  # deg -> rad
+        "refinement_attempts" : node.get_parameter("torpedo.refinement.attempts").get_parameter_value().integer_value,
+        "alignments_per_attempt": node.get_parameter("torpedo.refinement.alignments_per_attempt").get_parameter_value().integer_value,
+        "samples_per_alignment": node.get_parameter("torpedo.refinement.samples_per_alignment").get_parameter_value().integer_value,
+        "refinement_sample_every_n_ticks": node.get_parameter("torpedo.refinement.sample_every_n_ticks").get_parameter_value().integer_value,
+        "auv_to_torpedos": {
+            "left": node.get_parameter("torpedo.auv_to_torpedos.left").get_parameter_value().double_array_value,
+            "right": node.get_parameter("torpedo.auv_to_torpedos.right").get_parameter_value().double_array_value
+        },
+        "torpedo_trajectory_coefficients": {
+            "x": node.get_parameter("torpedo.torpedo_trajectory_coefficients.x").get_parameter_value().double_array_value,
+            "y": node.get_parameter("torpedo.torpedo_trajectory_coefficients.y").get_parameter_value().double_array_value,
+            "z": node.get_parameter("torpedo.torpedo_trajectory_coefficients.z").get_parameter_value().double_array_value
+        },
+        "icon_to_nearest_hole": {
+            "board_1": {
+                "blood": node.get_parameter("torpedo.icon_to_nearest_hole.board_1.blood").get_parameter_value().double_array_value,
+                "fire": node.get_parameter("torpedo.icon_to_nearest_hole.board_1.fire").get_parameter_value().double_array_value,
+                "ambulance": node.get_parameter("torpedo.icon_to_nearest_hole.board_1.ambulance").get_parameter_value().double_array_value,
+                "firetruck": node.get_parameter("torpedo.icon_to_nearest_hole.board_1.firetruck").get_parameter_value().double_array_value
+            },
+            "board_2": {
+                "blood": node.get_parameter("torpedo.icon_to_nearest_hole.board_2.blood").get_parameter_value().double_array_value,
+                "fire": node.get_parameter("torpedo.icon_to_nearest_hole.board_2.fire").get_parameter_value().double_array_value,
+                "ambulance": node.get_parameter("torpedo.icon_to_nearest_hole.board_2.ambulance").get_parameter_value().double_array_value,
+                "firetruck": node.get_parameter("torpedo.icon_to_nearest_hole.board_2.firetruck").get_parameter_value().double_array_value
+            }
+        },
+        "torpedo_firing_buffer_time": node.get_parameter("torpedo.firing_pause_time").get_parameter_value().double_value
     }
 
     node.declare_parameter("octagon.downcam_fov_horizontal", 59.7)
@@ -334,45 +359,6 @@ def main():
         "hold_time": node.get_parameter("return_home.hold_time").get_parameter_value().double_value,
         "timeout": node.get_parameter("return_home.timeout").get_parameter_value().double_value,
         "global_yaw_lock": node.get_parameter("return_home.global_yaw_lock").get_parameter_value().bool_value,
-    }
-    
-    torpedo_params = {
-        "initial_distance_from_board": node.get_parameter("torpedo.initial_distance_from_board").get_parameter_value().double_value,
-        "z_reference": node.get_parameter("torpedo.z_reference").get_parameter_value().double_value,
-        "scan_pause_time": node.get_parameter("torpedo.scan_pause_time").get_parameter_value().double_value,
-        "position_tolerance": node.get_parameter("torpedo.position_tolerance").get_parameter_value().double_value,
-        "yaw_tolerance_rad": math.radians(node.get_parameter("torpedo.yaw_tolerance_deg").get_parameter_value().double_value),  # deg -> rad
-        "hold_time": node.get_parameter("torpedo.hold_time").get_parameter_value().double_value,
-        "timeout": node.get_parameter("torpedo.timeout").get_parameter_value().double_value,
-        "refinement_rejection_threshold_rad": math.radians(node.get_parameter("torpedo.refinement.rejection_threshold_deg").get_parameter_value().double_value),  # deg -> rad
-        "refinement_attempts" : node.get_parameter("torpedo.refinement.attempts").get_parameter_value().integer_value,
-        "alignments_per_attempt": node.get_parameter("torpedo.refinement.alignments_per_attempt").get_parameter_value().integer_value,
-        "samples_per_alignment": node.get_parameter("torpedo.refinement.samples_per_alignment").get_parameter_value().integer_value,
-        "refinement_sample_every_n_ticks": node.get_parameter("torpedo.refinement.sample_every_n_ticks").get_parameter_value().integer_value,
-        "auv_to_torpedos": {
-            "left": node.get_parameter("torpedo.auv_to_torpedos.left").get_parameter_value().double_array_value,
-            "right": node.get_parameter("torpedo.auv_to_torpedos.right").get_parameter_value().double_array_value
-        },
-        "torpedo_trajectory_coefficients": {
-            "x": node.get_parameter("torpedo.torpedo_trajectory_coefficients.x").get_parameter_value().double_array_value,
-            "y": node.get_parameter("torpedo.torpedo_trajectory_coefficients.y").get_parameter_value().double_array_value,
-            "z": node.get_parameter("torpedo.torpedo_trajectory_coefficients.z").get_parameter_value().double_array_value
-        },
-        "icon_to_nearest_hole": {
-            "board_1": {
-                "blood": node.get_parameter("torpedo.icon_to_nearest_hole.board_1.blood").get_parameter_value().double_array_value,
-                "fire": node.get_parameter("torpedo.icon_to_nearest_hole.board_1.fire").get_parameter_value().double_array_value,
-                "ambulance": node.get_parameter("torpedo.icon_to_nearest_hole.board_1.ambulance").get_parameter_value().double_array_value,
-                "firetruck": node.get_parameter("torpedo.icon_to_nearest_hole.board_1.firetruck").get_parameter_value().double_array_value
-            },
-            "board_2": {
-                "blood": node.get_parameter("torpedo.icon_to_nearest_hole.board_2.blood").get_parameter_value().double_array_value,
-                "fire": node.get_parameter("torpedo.icon_to_nearest_hole.board_2.fire").get_parameter_value().double_array_value,
-                "ambulance": node.get_parameter("torpedo.icon_to_nearest_hole.board_2.ambulance").get_parameter_value().double_array_value,
-                "firetruck": node.get_parameter("torpedo.icon_to_nearest_hole.board_2.firetruck").get_parameter_value().double_array_value
-            }
-        },
-        "torpedo_firing_buffer_time": node.get_parameter("torpedo.firing_pause_time").get_parameter_value().double_value
     }
     
     
