@@ -83,7 +83,6 @@ install(PROGRAMS
   scripts/planar_controller.py
   scripts/navigation_server.py
   scripts/debug_setpoint_service.py
-  scripts/relay_tuner.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
