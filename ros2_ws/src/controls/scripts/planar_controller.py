@@ -9,7 +9,6 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPo
 from rcl_interfaces.msg import SetParametersResult
 from controls.pid import PID
 
-from auv_msgs.srv import SetFloat64
 from geometry_msgs.msg import Wrench, PointStamped
 from std_msgs.msg import Float64
 
@@ -75,7 +74,6 @@ class AxisController(Node):
         self.pub_effort = self.create_publisher(Wrench, f'/controls/{axis_name}_effort', qos_profile_sensor_data)
         self.sub_position = self.create_subscription(PointStamped, f'auv_frame/dvl/position', self.position_callback, qos_profile_sensor_data)
         self.setpoint_sub = self.create_subscription(Float64, f'/controls/{axis_name}_setpoint', self.setpoint_callback, qos)
-        self.srv_setpoint = self.create_service(SetFloat64, f'/controls/srv_setpoint_{axis_name}', self.setpoint_srv_callback)
 
         self.declare_parameter('control_loop_hz', 10.0)
         self.declare_parameter("KP", 0.0)
@@ -140,22 +138,6 @@ class AxisController(Node):
                 self.coordinator.setpoint_y = msg.data
         if self.max_slew_rate <= 0.0 or not self.enabled:
             self.setpoint = self.target_setpoint
-
-    def setpoint_srv_callback(self, request, response):
-        self.target_setpoint = request.data
-        if self.axis_name == 'x':
-            self.coordinator.target_x = request.data
-            if self.max_slew_rate <= 0.0 or not self.enabled:
-                self.coordinator.setpoint_x = request.data
-        elif self.axis_name == 'y':
-            self.coordinator.target_y = request.data
-            if self.max_slew_rate <= 0.0 or not self.enabled:
-                self.coordinator.setpoint_y = request.data
-        if self.max_slew_rate <= 0.0 or not self.enabled:
-            self.setpoint = self.target_setpoint
-        response.success = True
-        response.message = f"Setpoint {self.axis_name} updated to {self.target_setpoint}."
-        return response
 
     def parameters_callback(self, parameters):
         result = SetParametersResult()

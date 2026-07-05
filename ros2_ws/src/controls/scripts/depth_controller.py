@@ -9,7 +9,6 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPo
 from rcl_interfaces.msg import SetParametersResult
 from controls.pid import PID
 
-from auv_msgs.srv import SetFloat64
 from geometry_msgs.msg import Wrench
 from std_msgs.msg import Float64
 
@@ -29,7 +28,6 @@ class DepthController(Node):
         self.pub_effort = self.create_publisher(Wrench, '/controls/depth_effort', qos_profile_sensor_data)
         self.sub_depth = self.create_subscription(Float64, 'auv_frame/depth', self.depth_callback, qos_profile_sensor_data)
         self.setpoint_sub = self.create_subscription(Float64, '/controls/depth_setpoint', self.setpoint_callback, qos)
-        self.srv_setpoint_depth = self.create_service(SetFloat64, '/controls/srv_setpoint_depth', self.setpoint_srv_callback)
 
         self.declare_parameter('control_loop_hz', 10.0)
         self.declare_parameter("KP", 0.0)
@@ -83,14 +81,6 @@ class DepthController(Node):
         self.target_setpoint_depth = msg.data
         if self.max_slew_rate <= 0.0 or not self.enabled:
             self.setpoint_depth = self.target_setpoint_depth
-
-    def setpoint_srv_callback(self, request, response):
-        self.target_setpoint_depth = request.data
-        if self.max_slew_rate <= 0.0 or not self.enabled:
-            self.setpoint_depth = self.target_setpoint_depth
-        response.success = True
-        response.message = f"Setpoint updated to {self.target_setpoint_depth}."
-        return response
 
     def parameters_callback(self, parameters):
         result = SetParametersResult()

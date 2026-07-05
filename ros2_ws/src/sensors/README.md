@@ -339,6 +339,32 @@ The package provides 4 main nodes:
 
 ---
 
+### Services
+
+The sensors subsystem exposes hardware reset and calibration services across the IMU, DVL, and depth sensor drivers:
+
+| Service | Type | Subsystem | Description |
+|---|---|---|---|
+| `/xsens/calibrate_gyro` | `std_srvs/srv/Trigger` | IMU (Xsens) | Triggers 10-second Manual Gyro Bias Estimation (MGBE). Do not move the AUV while active! |
+| `/xsens/reset_heading` | `std_srvs/srv/Trigger` | IMU (Xsens) | Resets the IMU yaw (heading) offset to 0.0 in runtime memory. |
+| `/dvl/calibrate_gyro` | `std_srvs/srv/Trigger` | DVL (Waterlinked) | Starts persistent DVL gyroscope calibration (`wcg\n`). |
+| `/dvl/reset_dead_reckoning` | `std_srvs/srv/Trigger` | DVL (Waterlinked) | Resets DVL integrated coordinates (dead reckoning) back to zero (`wcr\n`). |
+| `/depth_processor/calibrate` | `std_srvs/srv/Trigger` | Depth Sensor | Zero-offsets the depth sensor reading at the current surface water level. |
+
+#### Example Usage
+To reset or calibrate the sensors from your terminal while the driver stack is running:
+```bash
+# IMU (Xsens)
+ros2 service call /xsens/calibrate_gyro std_srvs/srv/Trigger
+ros2 service call /xsens/reset_heading std_srvs/srv/Trigger
+
+# DVL (Waterlinked)
+ros2 service call /dvl/calibrate_gyro std_srvs/srv/Trigger
+ros2 service call /dvl/reset_dead_reckoning std_srvs/srv/Trigger
+```
+
+---
+
 ## Installation
 
 ### Dependencies

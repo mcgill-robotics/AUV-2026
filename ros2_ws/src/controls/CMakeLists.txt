@@ -82,6 +82,7 @@ install(PROGRAMS
   scripts/depth_controller.py
   scripts/planar_controller.py
   scripts/navigation_server.py
+  scripts/debug_setpoint_service.py
   scripts/cmaes_tuner.py
   DESTINATION lib/${PROJECT_NAME}
 )

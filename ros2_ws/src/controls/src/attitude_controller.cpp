@@ -79,10 +79,6 @@ namespace controls
             std::bind(&AttitudeController::target_orientation_callback, this, std::placeholders::_1)
         );
 
-        setpoint_service_ = this->create_service<auv_msgs::srv::SetAttitudeEuler>(
-            "/controls/setpoint_attitude_deg",
-            std::bind(&AttitudeController::setpoint_service_callback, this, std::placeholders::_1, std::placeholders::_2)
-        );
         parameter_callback_handle_ = this->add_on_set_parameters_callback(
             std::bind(&AttitudeController::parameters_callback, this, std::placeholders::_1)
         );
@@ -123,29 +119,6 @@ namespace controls
             q_iv2_ = target_q_iv2_;
         }
     }
-
-    void AttitudeController::setpoint_service_callback (const std::shared_ptr<auv_msgs::srv::SetAttitudeEuler::Request> request,
-        std::shared_ptr<auv_msgs::srv::SetAttitudeEuler::Response> response)
-    {
-        // Convert from degrees to radians
-        Vec3 euler_rad(
-            request->roll * (M_PI / 180.0),
-            request->pitch * (M_PI / 180.0),
-            request->yaw * (M_PI / 180.0)
-        );
-
-        // Convert Euler angles to quaternion
-        target_q_iv2_ = Eigen::AngleAxisd(euler_rad.z(),   Eigen::Vector3d::UnitZ())
-         * Eigen::AngleAxisd(euler_rad.y(), Eigen::Vector3d::UnitY())
-         * Eigen::AngleAxisd(euler_rad.x(),  Eigen::Vector3d::UnitX());
-        if ((max_slew_rate_roll_rad_ <= 0.0 && max_slew_rate_pitch_rad_ <= 0.0 && max_slew_rate_yaw_rad_ <= 0.0) || !enabled_) {
-            q_iv2_ = target_q_iv2_;
-        }
-
-        response->success = true;
-        response->message = "Target orientation set to " + std::to_string(request->roll) + " deg, " + std::to_string(request->pitch) + " deg, " + std::to_string(request->yaw) + " deg.";
-    }
-
 
     Vec3 AttitudeController::feedback_effort(const quatd& q_iv2)
     {

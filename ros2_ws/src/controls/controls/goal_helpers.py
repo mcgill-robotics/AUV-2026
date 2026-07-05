@@ -14,7 +14,9 @@ import math
 from typing import Optional
 from geometry_msgs.msg import Pose, Point, Quaternion
 from auv_msgs.action import AUVNavigate
-from controls.utils import quaternion_from_yaw
+from controls.utils import quaternion_from_yaw, xyz_rpy_to_homogeneous_matrix, homogeneous_to_xyz_rpy
+from tf_transformations import inverse_matrix, concatenate_matrices
+import scipy.spatial.transform
 
 # Default tolerances used across all helpers
 _DEFAULT_POS_TOL = 0.1     # meters
@@ -125,7 +127,6 @@ def move_global(
     
     # We construct the quaternion only with the specified values (defaulting others to 0 here,
     # the server will merge them with current orientation)
-    import scipy.spatial.transform
     r = scipy.spatial.transform.Rotation.from_euler('ZYX', [
         yaw if do_yaw else 0.0,
         pitch if do_pitch else 0.0,
@@ -144,6 +145,89 @@ def move_global(
         timeout=timeout,
     )
 
+def move_rigid_component_global(
+    x: float,
+    y: float,
+    z: float = 0.0,
+    roll: float = None,
+    pitch: float = None,
+    yaw: float = None,
+    tolerance: float = _DEFAULT_POS_TOL,
+    angular_tolerance: float = _DEFAULT_ANGULAR_TOL,
+    hold_time: float = _DEFAULT_HOLD,
+    timeout: float = _DEFAULT_TIMEOUT,
+    do_z: bool = True,
+    transform_auv_to_rigid_component: list[float] = [0, 0, 0, 0, 0, 0] # transform of form [x, y, z, roll, pitch, yaw] 
+                                                                       # from AUV body frame
+) -> AUVNavigate.Goal:
+    """Move a desired rigid component to absolute XYZ in pool frame, optionally setting orientation.
+
+    Args:
+        x: Target X position in meters (pool frame).
+        y: Target Y position in meters (pool frame).
+        z: Target Z position in meters (negative = below surface).
+        roll: Target roll in radians. None = don't control roll.
+        pitch: Target pitch in radians. None = don't control pitch.
+        yaw: Target yaw in radians. None = don't control yaw.
+        tolerance: Position convergence threshold in meters.
+        angular_tolerance: Angular convergence threshold in radians.
+        hold_time: Seconds to hold within tolerance before SUCCESS.
+        timeout: Seconds before FAILURE (0 = no timeout).
+        do_z: Whether to actively control depth to target Z.
+    """
+    # Get matrix of transform from AUV to rigid component 
+    matrix_auv_to_rigid_component = xyz_rpy_to_homogeneous_matrix(
+        x=transform_auv_to_rigid_component[0],
+        y=transform_auv_to_rigid_component[1],
+        z=transform_auv_to_rigid_component[2],
+        roll=transform_auv_to_rigid_component[3],
+        pitch=transform_auv_to_rigid_component[4],
+        yaw=transform_auv_to_rigid_component[5]
+    )
+
+    # Get matrix of desired transform from pool to rigid component
+    roll = roll if roll is not None else 0.0
+    pitch = pitch if pitch is not None else 0.0
+    yaw = yaw if yaw is not None else 0.0
+    matrix_pool_to_rigid_component = xyz_rpy_to_homogeneous_matrix(
+        x=x,
+        y=y,
+        z=z,
+        roll=roll,
+        pitch=pitch,
+        yaw=yaw
+    )
+
+    # Find transform from world to AUV when rigid component is at desired pose
+    matrix_pool_to_auv_when_rigid_component_at_desired_pose = concatenate_matrices(matrix_pool_to_rigid_component,
+                                                                                   inverse_matrix(matrix_auv_to_rigid_component))
+    x, y, z, roll, pitch, yaw = homogeneous_to_xyz_rpy(matrix_pool_to_auv_when_rigid_component_at_desired_pose)
+
+    pose = Pose()
+    pose.position = Point(x=x, y=y, z=z)
+
+    # Check if we need to perform certain rotations at all
+    do_roll = roll is not None
+    do_pitch = pitch is not None
+    do_yaw = yaw is not None
+
+    r = scipy.spatial.transform.Rotation.from_euler('ZYX', [
+        yaw if do_yaw else 0.0,
+        pitch if do_pitch else 0.0,
+        roll if do_roll else 0.0
+    ])
+    q = r.as_quat()
+    pose.orientation = Quaternion(x=q[0], y=q[1], z=q[2], w=q[3])
+
+    return _make_goal(
+        target_pose=pose,
+        do_x=True, do_y=True, do_z=do_z,
+        do_roll=do_roll, do_pitch=do_pitch, do_yaw=do_yaw,
+        position_tolerance=tolerance,
+        angular_tolerance=angular_tolerance,
+        hold_time=hold_time,
+        timeout=timeout,
+    )
 
 def set_depth(
     z: float,
@@ -217,8 +301,7 @@ def set_attitude(
     do_roll = roll is not None
     do_pitch = pitch is not None
     do_yaw = yaw is not None
-    
-    import scipy.spatial.transform
+
     r = scipy.spatial.transform.Rotation.from_euler('ZYX', [
         yaw if do_yaw else 0.0,
         pitch if do_pitch else 0.0,
@@ -354,7 +437,6 @@ def move_robot_centric(
     pose = Pose()
     pose.position = Point(x=forward, y=sway, z=heave)
     
-    import scipy.spatial.transform
     r = scipy.spatial.transform.Rotation.from_euler('ZYX', [dyaw, dpitch, droll])
     q = r.as_quat()
     pose.orientation = Quaternion(x=q[0], y=q[1], z=q[2], w=q[3])

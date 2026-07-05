@@ -3,6 +3,7 @@ from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.substitutions import FindPackageShare
+from launch_ros.actions import Node
 
 
 def generate_launch_description():
@@ -91,6 +92,13 @@ def generate_launch_description():
         )
     )
 
+    debug_setpoint_service_node = Node(
+        package="controls",
+        executable="debug_setpoint_service.py",
+        name="debug_setpoint_service",
+        output="screen",
+    )
+    
     return LaunchDescription([
         declare_sim,
         declare_attitude,
@@ -102,5 +110,6 @@ def generate_launch_description():
         depth_controller_launch,
         superimposer_launch,
         planar_controller_launch,
+        debug_setpoint_service_node,
         navigation_server_launch,
     ])
