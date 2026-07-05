@@ -257,22 +257,25 @@ class TorpedoTask(py_trees.composites.Sequence):
         """
         find_board_orientation_sequence = py_trees.composites.Sequence(f"Refinement Board Orientation Sequence {count+1}/{self.alignments_per_attempt+1}", memory=True)
         
-        find_and_aligns = []
-        for _ in range(self.alignments_per_attempt):
-            find_board_orientation = DetermineBoardOrientation (
+        find_and_align_sequence: py_trees.composites.Sequence = py_trees.composites.Sequence("Find and Align", memory=True)
+        find_and_align_sequence.add_children([
+            DetermineBoardOrientation (
                 n_samples=self.samples_per_alignment,
                 sample_every_n_ticks=self.refinement_sample_every_n_ticks,
                 rejection_threshold=self.refinement_rejection_threshold_rad,
                 compare_measurement_with_blackboard=False
-            )
-            find_and_aligns.append(find_board_orientation)
-            align_to_board = AlignToBoard(
+            ),
+            AlignToBoard(
                 position_tolerance=0.5,
                 orientation_tolerance_rad=self.yaw_tolerance_rad,
                 hold_time=self.hold_time,
                 timeout=self.timeout
             )
-            find_and_aligns.append(align_to_board)
+        ])
+        find_and_aligns:List[py_trees.behaviour.Behaviour] = [py_trees.decorators.Repeat(
+            child=find_and_align_sequence, 
+            name=f"Find and Align {count} times",
+            num_success=self.alignments_per_attempt)]
         consistency_check = DetermineBoardOrientation (
                 n_samples=1,
                 sample_every_n_ticks=1,
@@ -331,7 +334,7 @@ class TorpedoTask(py_trees.composites.Sequence):
                     name="Check torpedo count is 1",
                     check=py_trees.common.ComparisonExpression(
                         variable="/torpedo/count",
-                        value=2,
+                        value=1,
                         operator=operator.eq,
                     )
                 ),
