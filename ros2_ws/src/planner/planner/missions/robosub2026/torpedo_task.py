@@ -238,15 +238,18 @@ class TorpedoTask(py_trees.composites.Sequence):
         returns py_trees.composites.Selector
         """
         find_board_orientation_selector = py_trees.composites.Selector("Find Board Orientation Refinement Attempt Selector", memory=True)
+        find_board_orientation_selector.add_child(
+            py_trees.decorators.Retry(
+                child=self.board_orientation_refinement_sequence(),
+                name=f"Refinement Attempt",
+                num_failures=self.refinement_attempts
+            )
+        )
         
-        find_board_orientation_seqs = []
-        for i in range(self.refinement_attempts):
-            find_board_orientation_and_align = self.board_orientation_refinement_sequence(i)
-            find_board_orientation_seqs.append(find_board_orientation_and_align)
-        find_board_orientation_selector.add_children(find_board_orientation_seqs)
+        
         return find_board_orientation_selector
     
-    def board_orientation_refinement_sequence(self, count:int)->py_trees.composites.Sequence:
+    def board_orientation_refinement_sequence(self)->py_trees.composites.Sequence:
         """
         Subtree to find the board orientation and align to it.
         1. Find board orientation with multiple samples rejecting outliers, to get a more stable estimate of the board orientation
@@ -255,7 +258,7 @@ class TorpedoTask(py_trees.composites.Sequence):
 
         returns py_trees.composites.Sequence
         """
-        find_board_orientation_sequence = py_trees.composites.Sequence(f"Refinement Board Orientation Sequence {count+1}/{self.alignments_per_attempt+1}", memory=True)
+        find_board_orientation_sequence = py_trees.composites.Sequence(f"Refinement Board Orientation Sequence", memory=True)
         
         find_and_align_sequence: py_trees.composites.Sequence = py_trees.composites.Sequence("Find and Align", memory=True)
         find_and_align_sequence.add_children([
@@ -272,9 +275,9 @@ class TorpedoTask(py_trees.composites.Sequence):
                 timeout=self.timeout
             )
         ])
-        find_and_aligns:List[py_trees.behaviour.Behaviour] = [py_trees.decorators.Repeat(
+        children:List[py_trees.behaviour.Behaviour] = [py_trees.decorators.Repeat(
             child=find_and_align_sequence, 
-            name=f"Find and Align {count} times",
+            name=f"Find and Align",
             num_success=self.alignments_per_attempt)]
         consistency_check = DetermineBoardOrientation (
                 n_samples=1,
@@ -282,8 +285,8 @@ class TorpedoTask(py_trees.composites.Sequence):
                 rejection_threshold=self.refinement_rejection_threshold_rad,
                 compare_measurement_with_blackboard=True
             )
-        find_and_aligns.append(consistency_check)
-        find_board_orientation_sequence.add_children(find_and_aligns)
+        children.append(consistency_check)
+        find_board_orientation_sequence.add_children(children)
         return find_board_orientation_sequence
 
     def firing_order_strategy_selector(self)->py_trees.composites.Selector:
