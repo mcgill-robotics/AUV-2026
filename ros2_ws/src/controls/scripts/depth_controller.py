@@ -51,6 +51,7 @@ class DepthController(Node):
         self.max_slew_rate = float(self.get_parameter("max_slew_rate").value)
         self.derivative_filter_alpha = float(self.get_parameter("derivative_filter_alpha").value)
         self.enabled = bool(self.get_parameter("enabled").value)
+        self.was_enabled = self.enabled
 
         self.parameter_callback_handle = self.add_on_set_parameters_callback(self.parameters_callback)
 
@@ -78,6 +79,8 @@ class DepthController(Node):
         self.current_depth = msg.data
 
     def setpoint_callback(self, msg):
+        if abs(msg.data - self.target_setpoint_depth) > 1e-3:
+            self.pid.integral_error = 0.0
         self.target_setpoint_depth = msg.data
         if self.max_slew_rate <= 0.0 or not self.enabled:
             self.setpoint_depth = self.target_setpoint_depth
@@ -92,6 +95,8 @@ class DepthController(Node):
                     result.reason = "'enabled' must be a bool"
                     return result
                 new_enabled = bool(parameter.value)
+                if new_enabled != self.enabled:
+                    self.pid.integral_error = 0.0
                 if new_enabled and not self.enabled:
                     self.setpoint_depth = self.current_depth
                     self.target_setpoint_depth = self.current_depth
@@ -165,27 +170,32 @@ class DepthController(Node):
 
     def control_loop_callback(self):
         # Apply setpoint slew-rate limiting if enabled
+        is_slewing = False
         if self.enabled and self.max_slew_rate > 0.0:
             max_step = self.max_slew_rate * self.time_step
             diff = self.target_setpoint_depth - self.setpoint_depth
             if abs(diff) > max_step:
                 self.setpoint_depth += math.copysign(max_step, diff)
+                is_slewing = True
             else:
                 self.setpoint_depth = self.target_setpoint_depth
         else:
             self.setpoint_depth = self.target_setpoint_depth
 
         # Publish effort command
-        effort_msg = Wrench()
         if self.enabled:
+            effort_msg = Wrench()
             # +Z is up, so invert depth values for PID calculations
-            self.pid.compute_errors(-self.setpoint_depth, -self.current_depth, self.time_step)
+            self.pid.compute_errors(-self.setpoint_depth, -self.current_depth, self.time_step, allow_integration=not is_slewing)
             effort_output = self.pid.compute_effort()
             effort_msg.force.z = effort_output + self.feed_forward
-        else:
+            self.pub_effort.publish(effort_msg)  # Published effort is in pool frame
+            self.was_enabled = True
+        elif self.was_enabled:
+            effort_msg = Wrench()
             effort_msg.force.z = 0.0
-
-        self.pub_effort.publish(effort_msg)  # Published effort is in pool frame
+            self.pub_effort.publish(effort_msg)
+            self.was_enabled = False
 
 
 def main():

@@ -95,6 +95,7 @@ class AxisController(Node):
         self.max_slew_rate = float(self.get_parameter("max_slew_rate").value)
         self.derivative_filter_alpha = float(self.get_parameter("derivative_filter_alpha").value)
         self.enabled = bool(self.get_parameter("enabled").value)
+        self.was_enabled = self.enabled
 
         if self.axis_name == 'x':
             self.coordinator.max_slew_rate_x = self.max_slew_rate
@@ -127,6 +128,8 @@ class AxisController(Node):
         self.current_position = pos
 
     def setpoint_callback(self, msg):
+        if abs(msg.data - self.target_setpoint) > 1e-3:
+            self.pid.integral_error = 0.0
         self.target_setpoint = msg.data
         if self.axis_name == 'x':
             self.coordinator.target_x = msg.data
@@ -150,6 +153,8 @@ class AxisController(Node):
                     result.reason = "'enabled' must be a bool"
                     return result
                 new_enabled = bool(parameter.value)
+                if new_enabled != self.enabled:
+                    self.pid.integral_error = 0.0
                 if new_enabled and not self.enabled:
                     self.setpoint = self.current_position
                     self.target_setpoint = self.current_position
@@ -235,13 +240,18 @@ class AxisController(Node):
             self.setpoint = self.coordinator.setpoint_y
 
         # Publish effort command
-        effort_msg = Wrench()
         if self.enabled:
-            self.pid.compute_errors(self.setpoint, self.current_position, self.time_step)
+            effort_msg = Wrench()
+            is_slewing = abs(self.target_setpoint - self.setpoint) > 1e-3
+            self.pid.compute_errors(self.setpoint, self.current_position, self.time_step, allow_integration=not is_slewing)
             effort_output = self.pid.compute_effort()
             effort_msg.force.x = effort_output if self.axis_name == 'x' else 0.0
             effort_msg.force.y = effort_output if self.axis_name == 'y' else 0.0
-        self.pub_effort.publish(effort_msg)  # Published effort is in pool frame
+            self.pub_effort.publish(effort_msg)  # Published effort is in pool frame
+            self.was_enabled = True
+        elif self.was_enabled:
+            self.pub_effort.publish(Wrench())
+            self.was_enabled = False
 
 
 def main():

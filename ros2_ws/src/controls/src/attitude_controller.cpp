@@ -46,6 +46,7 @@ namespace controls
         this->get_parameter("r_bv_v", r_bv_v_);
         this->get_parameter("control_loop_hz", control_loop_hz_);
         this->get_parameter("enabled", enabled_);
+        was_enabled_ = enabled_;
 
         q_iv_ = quatd::Identity(); // Initial orientation: identity quaternion
         w_iv_ = Vec3::Zero(); // Initial angular velocity: zero vector
@@ -109,12 +110,18 @@ namespace controls
 
     void AttitudeController::target_orientation_callback(const geometry_msgs::msg::Quaternion::SharedPtr msg)
     {
-        target_q_iv2_ = quatd(
+        quatd new_target = quatd(
             msg->w,
             msg->x,
             msg->y,
             msg->z
         );
+        quatd q_diff = target_q_iv2_.conjugate() * new_target;
+        q_diff = sensors::math::canonicalizeShortest(q_diff);
+        if (std::abs(Eigen::AngleAxisd(q_diff).angle()) > 1e-3) {
+            integral_error_ = Vec3::Zero();
+        }
+        target_q_iv2_ = new_target;
         if ((max_slew_rate_roll_rad_ <= 0.0 && max_slew_rate_pitch_rad_ <= 0.0 && max_slew_rate_yaw_rad_ <= 0.0) || !enabled_) {
             q_iv2_ = target_q_iv2_;
         }
@@ -128,8 +135,12 @@ namespace controls
 
         double dt = 1.0 / control_loop_hz_;
 
-        // Conditional integration based on magnitude of the error vector
-        if (error_vector.norm() <= integral_activation_threshold_rad_) {
+        // Conditional integration: Only integrate if within threshold AND not actively slewing
+        quatd q_slew_diff = q_iv2.conjugate() * target_q_iv2_;
+        q_slew_diff = sensors::math::canonicalizeShortest(q_slew_diff);
+        bool is_slewing = std::abs(Eigen::AngleAxisd(q_slew_diff).angle()) > 1e-3;
+
+        if (!is_slewing && error_vector.norm() <= integral_activation_threshold_rad_) {
             integral_error_ += error_vector * dt;
             integral_error_ = integral_error_.cwiseMin(I_MAX_).cwiseMax(-I_MAX_);
         }
@@ -202,22 +213,24 @@ namespace controls
             q_iv2_ = target_q_iv2_;
         }
 
-        wrench_msg effort;
         if (enabled_)
         {
-            effort = compute_control_effort();
+            wrench_msg effort = compute_control_effort();
+            pub_effort_->publish(effort);
+            was_enabled_ = true;
         }
-        else
+        else if (was_enabled_)
         {
+            wrench_msg effort;
             effort.force.x = 0.0;
             effort.force.y = 0.0;
             effort.force.z = 0.0;
             effort.torque.x = 0.0;
             effort.torque.y = 0.0;
             effort.torque.z = 0.0;
+            pub_effort_->publish(effort);
+            was_enabled_ = false;
         }
-
-        pub_effort_->publish(effort);
     }
 
     rcl_interfaces::msg::SetParametersResult AttitudeController::parameters_callback(
@@ -239,6 +252,9 @@ namespace controls
                 }
 
                 bool new_enabled = parameter.as_bool();
+                if (new_enabled != enabled_) {
+                    integral_error_ = Vec3::Zero();
+                }
                 if (new_enabled && !enabled_) {
                     q_iv2_ = q_iv_; // Snap target orientation to current orientation on enable
                     target_q_iv2_ = q_iv_;
