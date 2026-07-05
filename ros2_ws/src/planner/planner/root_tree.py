@@ -139,6 +139,9 @@ def main():
     node.declare_parameter("bins.downcam_fov_vertical", 47.6)
     node.declare_parameter("bins.downcam_image_width", 640)
     node.declare_parameter("bins.downcam_image_height", 480)
+    node.declare_parameter("bins.grabber_to_downcam_x", 0.17894)
+    node.declare_parameter("bins.grabber_to_downcam_y", 0.04062)
+    node.declare_parameter("bins.alignment_hold_time", 5.0)
     node.declare_parameter("bins.search_sweep_steps", 8)
     node.declare_parameter("bins.search_sweep_step_timeout", 0.5)
     node.declare_parameter("bins.bin_moving_average_weight", 0.5)    
@@ -167,6 +170,9 @@ def main():
         "downcam_fov_vertical": node.get_parameter("bins.downcam_fov_vertical").get_parameter_value().double_value,
         "downcam_image_width": node.get_parameter("bins.downcam_image_width").get_parameter_value().integer_value,
         "downcam_image_height": node.get_parameter("bins.downcam_image_height").get_parameter_value().integer_value,
+        "grabber_to_downcam_x": node.get_parameter("bins.grabber_to_downcam_x").get_parameter_value().double_value,
+        "grabber_to_downcam_y": node.get_parameter("bins.grabber_to_downcam_y").get_parameter_value().double_value,
+        "alignment_hold_time": node.get_parameter("bins.alignment_hold_time").get_parameter_value().double_value,
         "search_sweep_steps": node.get_parameter("bins.search_sweep_steps").get_parameter_value().integer_value,
         "search_sweep_step_timeout": node.get_parameter("bins.search_sweep_step_timeout").get_parameter_value().double_value,
         "bin_moving_average_weight": node.get_parameter("bins.bin_moving_average_weight").get_parameter_value().double_value,
