@@ -368,7 +368,7 @@ class GoToOtherSide(py_trees.composites.Sequence):
         switch_height = self.bins_params['switch_sides_height']
         get_bin_structure_pos = GetBinStructurePos(bins_params)
         go_up = GoToBlackboardBinStructure(height_offset=switch_height, bins_params=bins_params)
-        go_forward = BasicActionBehaviour(name="GoForwardForSwitchSides", goal=move_robot_centric(forward=self.bins_params['bin_structure_distance'], dyaw=math.pi, hold_time=0.0))
+        go_forward = BasicActionBehaviour(name="GoForwardForSwitchSides", goal=move_robot_centric(forward=self.bins_params['bin_structure_distance'], dyaw=math.pi, hold_time=0.0, tolerance=0.3))
         switch_sides = SwitchSides(self.bins_params)
 
         self.add_children([get_bin_structure_pos, go_up, go_forward, switch_sides])
@@ -524,25 +524,24 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
                 (self.down_cam_bin_position[0] * PREV_WEIGHT + current_bin_position[0] * self.bin_moving_average_weight),
                 (self.down_cam_bin_position[1] * PREV_WEIGHT + current_bin_position[1] * self.bin_moving_average_weight)
             ) if self.down_cam_bin_position is not None else current_bin_position
-                        
-            # calculate and send the new goal every n frames
-            self.frames_until_next_setpoint -= 1
-            if self.frames_until_next_setpoint <= 0:
-                self.frames_until_next_setpoint = self.send_setpoint_interval
-                # Get the angle based on fov
-                x_angle = math.radians(self.down_cam_bin_position[0] / self.camera_width * self.downcam_fov_horizontal)
-                y_angle = math.radians(self.down_cam_bin_position[1] / self.camera_height * self.downcam_fov_vertical)
+            # Get the angle based on fov
+            x_angle = math.radians(self.down_cam_bin_position[0] / self.camera_width * self.downcam_fov_horizontal)
+            y_angle = math.radians(self.down_cam_bin_position[1] / self.camera_height * self.downcam_fov_vertical)
 
-                forward_goal = -math.tan(y_angle) * (self.go_above_bin_height - 0.1)
-                sway_goal = -math.tan(x_angle) * (self.go_above_bin_height - 0.1)
-                self.node.get_logger().info(f"[{self.name}] Calculated physical goal -> Forward: {forward_goal:.3f}m, Sway: {sway_goal:.3f}m")
+            forward_goal = -math.tan(y_angle) * (self.go_above_bin_height - 0.1)
+            sway_goal = -math.tan(x_angle) * (self.go_above_bin_height - 0.1)
+            self.node.get_logger().info(f"[{self.name}] Calculated physical goal -> Forward: {forward_goal:.3f}m, Sway: {sway_goal:.3f}m")
 
-                self.expected_failures += 1  # current goal will fail once, ignore that failure
+            # We know the bin is 1.0m below us, so calculate the bin position
+            self.goal = move_robot_centric(forward=forward_goal, sway=sway_goal)
 
-                # We know the bin is 1.0m below us, so calculate the bin position
-                self.goal = move_robot_centric(forward=forward_goal, sway=sway_goal)
-                # self.goal = move_robot_centric(forward=-self.down_cam_bin_position[1] / CAMERA_HEIGHT, sway=-self.down_cam_bin_position[0] / CAMERA_WIDTH)
-                self.action_status = ActionStatus.NOT_SENT  # Next tick, new goal will be sent automatically
+        # calculate and send the new goal every n frames
+        self.frames_until_next_setpoint -= 1
+        if self.frames_until_next_setpoint <= 0:
+            # self.goal = move_robot_centric(forward=-self.down_cam_bin_position[1] / CAMERA_HEIGHT, sway=-self.down_cam_bin_position[0] / CAMERA_WIDTH)
+            self.expected_failures += 1  # current goal will fail once, ignore that failure
+            self.frames_until_next_setpoint = self.send_setpoint_interval
+            self.action_status = ActionStatus.NOT_SENT  # Next tick, new goal will be sent automatically
 
         # After potentially updating the goal, if the goal should be sent, send it
         if self.action_status is ActionStatus.NOT_SENT:

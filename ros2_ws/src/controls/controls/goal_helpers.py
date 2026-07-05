@@ -429,7 +429,8 @@ def move_robot_centric(
         hold_time: Seconds to hold within tolerance before SUCCESS.
         timeout: Seconds before FAILURE (0 = no timeout).
     """
-    do_pos = (abs(forward) > POSITION_EPSILON or abs(sway) > POSITION_EPSILON or abs(heave) > POSITION_EPSILON)
+    do_pos = (abs(forward) > POSITION_EPSILON or abs(sway) > POSITION_EPSILON)
+    do_z = (abs(heave) > POSITION_EPSILON)
     do_roll = (abs(droll) > ORIENTATION_EPSILON)
     do_pitch = (abs(dpitch) > ORIENTATION_EPSILON)
     do_yaw = (abs(dyaw) > ORIENTATION_EPSILON)
@@ -443,7 +444,7 @@ def move_robot_centric(
     
     return _make_goal(
         target_pose=pose,
-        do_x=do_pos, do_y=do_pos, do_z=do_pos, 
+        do_x=do_pos, do_y=do_pos, do_z=do_z, 
         do_roll=do_roll, do_pitch=do_pitch, do_yaw=do_yaw,
         is_relative=True,
         is_local_frame=True,

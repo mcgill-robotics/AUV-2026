@@ -93,7 +93,7 @@ planner_root_tree:
       wrong_task_type_threshold: 5        # (frames) Difference in number of frames where wrong icon and right icon were detected before deciding its the wrong task
       task_completion_threshold: 5        # (frames) Number of frames where the correct icon was detected before dropping the marker
       bin_lined_up_frames: 5              # (frames) Number of frames where the bin is lined up before dropping the marker
-      bin_lined_up_threshold: 10          # (pixels) How close the center of the bin needs to be to the center of the image to be considered "lined up" for dropping the marker
+      bin_lined_up_threshold: 50          # (pixels) How close the center of the bin needs to be to the center of the image to be considered "lined up" for dropping the marker
       num_required_markers: 2             # (markers) Number of markers that need to be dropped in the correct bins to complete the task
       num_bins: 4                         # (bins) Total number of bins in the bin structure
       bins_to_bin_structure: 0.3          # (m) Approximate distance from center of bin structure to the bins
