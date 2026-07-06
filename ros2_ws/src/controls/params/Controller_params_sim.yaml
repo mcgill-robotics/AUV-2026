@@ -2,32 +2,34 @@ attitude_controller:
     ros__parameters:
         control_loop_rate: 25.0
         # P
-        P_ex: 5.73 # v2 -> 0.01
-        P_ey: 7.53 # v2 -> 0.01
+        P_ex: 5.73 # v2 -> 0.01 10.9388
+        P_ey: 7.46 # v2 -> 0.01 10.9388
         P_ez: 7.53 # v2 -> 3.5
         # I
-        I_ex: 0.2176
-        I_ey: 0.3221
-        I_ez: 0.42565 # may need to modify (0.5 in v2)
+        I_ex: 0.2176 # 0.5008
+        I_ey: 0.3221 # 0.5008
+        I_ez: 0.4565 # may need to modify (0.5 in v2)
         # D
-        P_wx: 2.37  # v2 -> 0.1
-        P_wy: 2.92 # v2 -> 0.1
+        P_wx: 2.37 # v2 -> 0.1 3.1112
+        P_wy: 2.92 # v2 -> 0.1 3.1112
         P_wz: 3.46 # v2 -> 2.0
         I_MAX: 3.0
-        integral_activation_threshold_deg: 10.0
-        max_slew_rate_roll_deg: 30.0 # [deg/s] (0.0 = disabled)
-        max_slew_rate_pitch_deg: 30.0 # [deg/s]
-        max_slew_rate_yaw_deg: 30.0 # [deg/s]
+        integral_activation_threshold_deg: 100000.0
+        max_slew_rate_roll_deg: 0.0 # [deg/s] (0.0 = disabled)
+        max_slew_rate_pitch_deg: 0.0 # [deg/s]
+        max_slew_rate_yaw_deg: 0.0 # [deg/s]
         buoyancy: 275.4 # [N]
         r_bv_v: [ 0.0, 0.0, 0.0 ] # [m] Tuned in pool tests.    
         enabled: true
 
+# P_ex=5.73, I_ex=0.2176, P_wx=2.37, P_ey=7.46, I_ey=0.3221, P_wy=2.92, P_ez=7.53, I_ez=0.4565, P_wz=3.46
+
 depth_controller:
     ros__parameters:
         control_loop_hz: 10.0
-        KP: 58.0
-        KD: 71.0
-        KI: 9.15 # may need to modify
+        KP: 58.92
+        KD: 71.12
+        KI: 9.2821 # may need to modify
         I_MAX: 10.0
         integral_activation_threshold: 0.3
         derivative_filter_alpha: 0.2
@@ -38,25 +40,25 @@ depth_controller:
 x_controller:
     ros__parameters:
         control_loop_hz: 10.0
-        KP: 51.0
-        KD: 47.8
-        KI: 2.7
+        KP: 50.82
+        KD: 50.12
+        KI: 0.9728
         I_MAX: 10.0
         integral_activation_threshold: 0.5
         derivative_filter_alpha: 0.8
-        max_slew_rate: 0.5 # [m/s] (0.0 = disabled)
+        max_slew_rate: 0.0 # [m/s] (0.0 = disabled)
         enabled: true
 
 y_controller:
     ros__parameters:
         control_loop_hz: 10.0
-        KP: 51.0
-        KD: 47.8
-        KI: 2.7
+        KP: 51.82
+        KD: 47.87
+        KI: 2.7884
         I_MAX: 10.0
         integral_activation_threshold: 0.5
         derivative_filter_alpha: 0.8
-        max_slew_rate: 0.5 # [m/s] (0.0 = disabled)
+        max_slew_rate: 0.0 # [m/s] (0.0 = disabled)
         enabled: true
 
 superimposer:
