@@ -211,7 +211,7 @@ class DetermineBoardOrientation(Action):
         # self.node.get_logger().info(f"[{self.name}] Tick {self.tick_counter}/{self.sample_rate}. Sample count: {self.sample_count}/{self.orientation_samples_number}")
         if self.tick_counter % self.sample_rate != 0:
             return py_trees.common.Status.RUNNING
-        if not hasattr(self.blackboard, 'vision') or self.blackboard.vision.object_map is None:
+        if not self.blackboard.exists("/vision/object_map") or self.blackboard.vision.object_map is None:
             self.node.get_logger().error(f"[{self.name}] No object map available.")
             return py_trees.common.Status.FAILURE
         
@@ -237,7 +237,7 @@ class DetermineBoardOrientation(Action):
         if self.sample_count >= self.orientation_samples_number:
             # Compute mean orientation and write to blackboard
             mean_orientation = geometry.compute_mean_orientation(self.orientation_samples)
-            if self.compare_measurement_with_blackboard and hasattr(self.blackboard, 'board') and self.blackboard.board.orientation is not None:
+            if self.compare_measurement_with_blackboard and self.blackboard.exists("/board/orientation") and self.blackboard.board.orientation is not None:
                 if geometry.quaternion_distance(mean_orientation, self.blackboard.board.orientation) > self.rejection_threshold:
                     self.node.get_logger().warning(f"[{self.name}] Computed mean orientation is too different from blackboard orientation.")
                     return py_trees.common.Status.FAILURE
@@ -288,10 +288,10 @@ class MoveToFrontOfBoard(Navigation):
             case ActionStatus.PENDING:
                 return py_trees.common.Status.RUNNING
             case ActionStatus.NOT_SENT:  
-                if not hasattr(self.blackboard, 'board') or self.blackboard.board.orientation is None:
+                if not self.blackboard.exists("/board/orientation") or self.blackboard.board.orientation is None:
                     self.node.get_logger().error(f"[{self.name}] No board orientation available on blackboard.")
                     return py_trees.common.Status.FAILURE
-                if not hasattr(self.blackboard, 'vision') or self.blackboard.vision.object_map is None:
+                if not self.blackboard.exists("/vision/object_map") or self.blackboard.vision.object_map is None:
                     self.node.get_logger().error(f"[{self.name}] No object map available to determine board position.")
                     return py_trees.common.Status.FAILURE
                 # get board position from vision
@@ -306,8 +306,8 @@ class MoveToFrontOfBoard(Navigation):
                 
                 # shift by half of size to get board center
                 board_center_xy:Vector2D = Vector2D (
-                    x = board_vo.pose.position.x + 0.5 * board_vo.size.x,
-                    y = board_vo.pose.position.y + 0.5 * board_vo.size.y
+                    x = board_vo.pose.position.x,
+                    y = board_vo.pose.position.y
                 )
                 
                 target_xy = compute_target_in_front_of_point_on_board(board_center_xy, self.blackboard.board.orientation, self.distance_from_board)
@@ -356,7 +356,7 @@ class AlignToBoard(Navigation):
             case ActionStatus.PENDING:
                 return py_trees.common.Status.RUNNING
             case ActionStatus.NOT_SENT:
-                if not hasattr(self.blackboard, 'board') or self.blackboard.board.orientation is None:
+                if not self.blackboard.exists("/board/orientation") or self.blackboard.board.orientation is None:
                     self.node.get_logger().error(f"[{self.name}] No board orientation available on blackboard.")
                     return py_trees.common.Status.FAILURE
                 board_orientation = self.blackboard.board.orientation
@@ -389,7 +389,7 @@ class DetermineBoardType(Action):
         
     def update(self):
         # Get board and icon position from blackboard
-        if not hasattr(self.blackboard, 'vision') or self.blackboard.vision.object_map is None:
+        if not self.blackboard.exists("/vision/object_map") or self.blackboard.vision.object_map is None:
             self.node.get_logger().error(f"[{self.name}] No object map available.")
             return py_trees.common.Status.FAILURE
         board_vo = None
@@ -471,7 +471,7 @@ class CheckBoardType(Condition):
         self.blackboard.register_key(key="/board/type", access=py_trees.common.Access.READ)
         
     def update(self):
-        if not hasattr(self.blackboard, 'board') or self.blackboard.board.type is None:
+        if not self.blackboard.exists("/board/type") or self.blackboard.board.type is None:
             self.node.get_logger().error(f"[{self.name}] No board type available on blackboard.")
             return py_trees.common.Status.FAILURE
         if self.blackboard.board.type == self.expected_board_type.value:
@@ -532,10 +532,10 @@ class MoveToFrontOfIcon(Navigation):
             case ActionStatus.PENDING:
                 return py_trees.common.Status.RUNNING
             case ActionStatus.NOT_SENT:  
-                if not hasattr(self.blackboard, 'board') or self.blackboard.board.orientation is None:
+                if not self.blackboard.exists("/board/orientation") or self.blackboard.board.orientation is None:
                     self.node.get_logger().error(f"[{self.name}] No board orientation available on blackboard.")
                     return py_trees.common.Status.FAILURE
-                if not hasattr(self.blackboard, 'vision') or self.blackboard.vision.object_map is None:
+                if not self.blackboard.exists("/vision/object_map") or self.blackboard.vision.object_map is None:
                     self.node.get_logger().error(f"[{self.name}] No object map available to determine icon position.")
                     return py_trees.common.Status.FAILURE
                 
@@ -552,7 +552,7 @@ class MoveToFrontOfIcon(Navigation):
                 target_2d_position = Vector2D.from_point(target_icon_vo.pose.position)
                 
                 if self.compute_distance_from_icon:
-                    if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.pose is None:
+                    if not self.blackboard.exists("/sensors/pose") or self.blackboard.sensors.pose is None:
                         self.node.get_logger().warn(f"[{self.name}] Waiting for /sensors/pose to determine distance from icon.")
                         return py_trees.common.Status.RUNNING
                     auv_2d_position = Vector2D.from_point(self.blackboard.sensors.pose.pose.position)
@@ -604,7 +604,7 @@ class DetermineIconPosition(Action):
         self.current_attempt = 0
 
     def update(self):
-        if not hasattr(self.blackboard, 'vision') or self.blackboard.vision.object_map is None:
+        if not self.blackboard.exists("/vision/object_map") or self.blackboard.vision.object_map is None:
             self.node.get_logger().error(f"[{self.name}] No object map available.")
             return py_trees.common.Status.FAILURE
         
@@ -625,14 +625,54 @@ class DetermineIconPosition(Action):
         
         self.blackboard.torpedo.icon_position = target_icon_vo.pose.position
         self.node.get_logger().info(f"[{self.name}] Saved position of {self.target_icon.value} icon: {self.blackboard.torpedo.icon_position}")
-        return py_trees.common.Status.SUCCESS    
+        return py_trees.common.Status.SUCCESS
+    
+    
+class DetermineOffsetToHole(Action):
+    """
+    Action to determine the offset from the icon to the hole and save it to the blackboard, based on board time and icon.
+    """
+
+    def __init__(self, 
+            icon: BoardIcon, 
+            distance_from_board: float,
+            icon_to_nearest_hole: dict[BoardType, dict[BoardIcon, Tuple[float,float,float]]]
+        ):
+        super().__init__(name=f"Resolve Offset for {icon.name} @ {distance_from_board}m")
+        self.icon = icon
+        self.distance_from_board = distance_from_board
+        self.icon_to_nearest_hole = icon_to_nearest_hole
+        self.blackboard = self.attach_blackboard_client()
+
+    def setup(self, **kwargs):
+        super().setup(**kwargs)
+        self.node = kwargs['node']
+        self.blackboard.register_key("/board/type", access=py_trees.common.Access.READ)
+        self.blackboard.register_key("/torpedo/offset_to_hole", access=py_trees.common.Access.WRITE)
+    
+    def update(self):
+        if not self.blackboard.exists("/board/type") or self.blackboard.board.type is None:
+            self.node.get_logger().error(f"[{self.name}] No board type available on blackboard.")
+            return py_trees.common.Status.FAILURE
+        board_type = BoardType(self.blackboard.get("/board/type"))
+        self.node.get_logger().info(f"[{self.name}] Board type: {board_type}, Icon: {self.icon.value}, Distance from board: {self.distance_from_board}")
+        offset_to_hole = self.icon_to_nearest_hole[board_type][self.icon]
+        if offset_to_hole is None:
+            self.node.get_logger().error(f"[{self.name}] Offset to hole not found for icon {self.icon.value} and board type {board_type.value}")
+            return py_trees.common.Status.FAILURE
+        self.blackboard.set("/torpedo/offset_to_hole", (
+            offset_to_hole[0] - self.distance_from_board,
+            offset_to_hole[1],
+            offset_to_hole[2],
+        ))
+        return py_trees.common.Status.SUCCESS
+    
 class AlignTorpedoToHole(Navigation):
     """
     Navigation Action to align the torpedo to the hole.
     """
     def __init__(
             self,
-            projected_offset_to_hole: Tuple[float,float,float],
             auv_to_torpedos : dict[TorpedoSide, Tuple[float,float,float]],
             forward_trajectory : np.polynomial.Polynomial,
             lateral_trajectory : np.polynomial.Polynomial,
@@ -643,10 +683,9 @@ class AlignTorpedoToHole(Navigation):
             hold_time: float = 0.5
         ):
         super(AlignTorpedoToHole, self).__init__(f"Align Torpedo to Hole", position_tolerance, orientation_tolerance_rad, timeout, hold_time)
-        self.lateral_trajectory = lateral_trajectory
-        self.vertical_trajectory = vertical_trajectory
-        self.forward_trajectory = forward_trajectory
-        self.to_hole_offset = projected_offset_to_hole
+        self.lateral_trajectory = lateral_trajectory.copy()
+        self.vertical_trajectory = vertical_trajectory.copy()
+        self.forward_trajectory = forward_trajectory.copy()
         self.auv_to_torpedos = auv_to_torpedos
         
         
@@ -657,6 +696,7 @@ class AlignTorpedoToHole(Navigation):
         self.blackboard.register_key(key="/torpedo/count", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/torpedo/icon_position", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/torpedo/trajectory_time", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key="/torpedo/offset_to_hole", access=py_trees.common.Access.READ)
         
     def update(self):
         match self.action_status:
@@ -669,13 +709,13 @@ class AlignTorpedoToHole(Navigation):
             case ActionStatus.PENDING:
                 return py_trees.common.Status.RUNNING
             case ActionStatus.NOT_SENT:
-                if not hasattr(self.blackboard, 'board') or self.blackboard.board.orientation is None:
+                if not self.blackboard.exists("/board/orientation") or self.blackboard.board.orientation is None:
                     self.node.get_logger().error(f"[{self.name}] No board orientation available on blackboard.")
                     return py_trees.common.Status.FAILURE
-                if not hasattr(self.blackboard, 'torpedo') or self.blackboard.torpedo.icon_position is None:
+                if not self.blackboard.exists("/torpedo/icon_position") or self.blackboard.torpedo.icon_position is None:
                     self.node.get_logger().error(f"[{self.name}] No torpedo icon position available on blackboard.")
                     return py_trees.common.Status.FAILURE
-                if not hasattr(self.blackboard, 'torpedo') or self.blackboard.torpedo.count is None:
+                if not self.blackboard.exists("/torpedo/count") or self.blackboard.torpedo.count is None:
                     self.node.get_logger().error(f"[{self.name}] No torpedo count available on blackboard.")
                     return py_trees.common.Status.FAILURE
                 
@@ -695,10 +735,13 @@ class AlignTorpedoToHole(Navigation):
                 self.node.get_logger().info(f"[{self.name}] Trajectory coeffs: Forward: {self.forward_trajectory.coef}, Lateral: {self.lateral_trajectory.coef}, Vertical: {self.vertical_trajectory.coef}")
                 # after alignment, torpedo launch should be aligned with the hole
                 # to know how much to shift back by, we need to know the trajectory time such that forward trajectory is equal to the hole offset, and then we can use that time to find the lateral and vertical offsets
-                
-                self.forward_trajectory.coef[0] += self.to_hole_offset[0]
-                self.lateral_trajectory.coef[0] += self.to_hole_offset[1]
-                self.vertical_trajectory.coef[0] += self.to_hole_offset[2]
+                if not self.blackboard.exists("/torpedo/offset_to_hole") or self.blackboard.torpedo.offset_to_hole is None:
+                    self.node.get_logger().error(f"[{self.name}] No torpedo offset to hole available on blackboard. Unable to align torpedo to hole.")
+                    return py_trees.common.Status.FAILURE
+                to_hole_offset = self.blackboard.torpedo.offset_to_hole
+                self.forward_trajectory.coef[0] += to_hole_offset[0]
+                self.lateral_trajectory.coef[0] += to_hole_offset[1]
+                self.vertical_trajectory.coef[0] += to_hole_offset[2]
                 self.node.get_logger().info(f"[{self.name}] Adjusted trajectories coeffs for hole offset: F {self.forward_trajectory.coef}, L {self.lateral_trajectory.coef}, V {self.vertical_trajectory.coef}")
                 forward_roots = sorted(r.real for r in self.forward_trajectory.roots() if np.isreal(r))
                 
@@ -720,9 +763,9 @@ class AlignTorpedoToHole(Navigation):
                 target_orientation = geometry.rotate_quaternion(self.blackboard.board.orientation, 0, 0, math.pi)
                 
                 offset_vector = Point(
-                    x= self.to_hole_offset[0] - self.auv_to_torpedo[0] + backward_offset,
-                    y= self.to_hole_offset[1] - self.auv_to_torpedo[1] + rightward_offset,
-                    z= self.to_hole_offset[2] - self.auv_to_torpedo[2] + downward_offset
+                    x= to_hole_offset[0] - self.auv_to_torpedo[0] + backward_offset,
+                    y= to_hole_offset[1] - self.auv_to_torpedo[1] + rightward_offset,
+                    z= to_hole_offset[2] - self.auv_to_torpedo[2] + downward_offset
                 )
                 
                 self.node.get_logger().info(f"[{self.name}] Aligning torpedo to hole offset from icon position: {offset_vector}")
@@ -795,9 +838,10 @@ class FireTorpedo(Action):
                 elapsed = (self.node.get_clock().now().nanoseconds / 1e9) - self.pause_start_time
                 self.pause_time_total = self.firing_buffer_time
                 if self.has_fired:
-                    if not hasattr(self.blackboard, 'torpedo') or self.blackboard.torpedo.trajectory_time is None:
+                    if not self.blackboard.exists("/torpedo/trajectory_time") or self.blackboard.torpedo.trajectory_time is None:
                         self.node.get_logger().error(f"[{self.name}] No torpedo trajectory time found on blackboard. Assuming no trajectory delay after firing.")
-                    self.pause_time_total += self.blackboard.torpedo.trajectory_time
+                    else:
+                        self.pause_time_total += self.blackboard.torpedo.trajectory_time
                 if not self.is_pausing:
                     self.node.get_logger().info(f"[{self.name}] Pausing for {self.firing_buffer_time:.2f}s.")
                     self.pause_start_time = self.node.get_clock().now().nanoseconds / 1e9
@@ -814,7 +858,7 @@ class FireTorpedo(Action):
                         self.node.get_logger().info(f"[{self.name}] Finished firing torpedo after {elapsed:.2f}s pause.")
                         return py_trees.common.Status.SUCCESS                        
             case FireState.FIRING:
-                if not hasattr(self.blackboard, 'torpedo') or self.blackboard.torpedo.count is None:
+                if not self.blackboard.exists("/torpedo/count") or self.blackboard.torpedo.count is None:
                     self.node.get_logger().error(f"[{self.name}] No torpedo count available on blackboard.")
                     return py_trees.common.Status.FAILURE
                 if self.blackboard.torpedo.count <= 0:
@@ -822,9 +866,9 @@ class FireTorpedo(Action):
                     return py_trees.common.Status.FAILURE
                 match self.blackboard.torpedo.count:
                     case 1:
-                        side = TorpedoSide.RIGHT
-                    case 2:
                         side = TorpedoSide.LEFT
+                    case 2:
+                        side = TorpedoSide.RIGHT
                     case _:
                         self.node.get_logger().error(f"[{self.name}] Invalid torpedo count: {self.blackboard.torpedo.count}. Cannot determine which torpedo to fire.")
                         return py_trees.common.Status.FAILURE
