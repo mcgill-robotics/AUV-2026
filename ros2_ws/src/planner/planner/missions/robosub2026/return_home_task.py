@@ -5,6 +5,7 @@ from controls.utils import normalize_angle
 from ..action_status_enum import ActionStatus
 from ..mission_behaviour_components import BasicActionBehaviour
 from ..vision_behaviours import GoNearObject
+from .gate_behaviours import create_style_yaw_spin_sequence, create_style_rolling_flip_sequence
 
 class NavigateToReturnPoint(py_trees.behaviour.Behaviour):
     """
@@ -255,11 +256,19 @@ class ReturnHomeTask(py_trees.composites.Sequence):
         hold_time: float,
         timeout: float,
         global_yaw_lock: bool = False,
+        do_style_yaw_before: bool = False,
+        do_style_yaw_after: bool = False,
+        style_yaw_degrees: float = 360.0,
+        do_style_roll_before: bool = False,
+        do_style_roll_after: bool = False,
+        style_roll_degrees: float = 720.0,
+        style_roll_torque: float = 15.0,
+        style_roll_coast_degrees: float = 180.0,
+        **kwargs,
     ):
         super().__init__("Return Home Task", memory=True)
 
-        return_sequence = py_trees.composites.Sequence("Gate Return Sequence", memory=True)
-        return_sequence.add_children([
+        return_children = [
             NavigateToReturnPoint(
                 return_distance=return_distance,
                 position_tolerance=position_tolerance,
@@ -275,6 +284,31 @@ class ReturnHomeTask(py_trees.composites.Sequence):
                 hold_time=1.0,
                 name="Visually Approach Back of Gate"
             ),
+        ]
+
+        if do_style_yaw_before:
+            steps = 6 if style_yaw_degrees >= 720.0 else 3
+            return_children.append(
+                create_style_yaw_spin_sequence(
+                    total_degrees=style_yaw_degrees,
+                    num_steps=steps,
+                    angular_tolerance_deg=10.0,
+                    hold_time_s=0.5,
+                    timeout_s=30.0,
+                )
+            )
+
+        if do_style_roll_before:
+            return_children.append(
+                create_style_rolling_flip_sequence(
+                    roll_torque=style_roll_torque,
+                    target_degrees=style_roll_degrees,
+                    coast_degrees=style_roll_coast_degrees,
+                    timeout_sec=30.0,
+                )
+            )
+
+        return_children.append(
             PassBackThroughGate(
                 pass_distance=pass_distance,
                 position_tolerance=position_tolerance,
@@ -282,7 +316,32 @@ class ReturnHomeTask(py_trees.composites.Sequence):
                 timeout=timeout,
                 global_yaw_lock=global_yaw_lock,
             )
-        ])
+        )
+
+        if do_style_yaw_after:
+            steps = 6 if style_yaw_degrees >= 720.0 else 3
+            return_children.append(
+                create_style_yaw_spin_sequence(
+                    total_degrees=style_yaw_degrees,
+                    num_steps=steps,
+                    angular_tolerance_deg=10.0,
+                    hold_time_s=0.5,
+                    timeout_s=30.0,
+                )
+            )
+
+        if do_style_roll_after:
+            return_children.append(
+                create_style_rolling_flip_sequence(
+                    roll_torque=style_roll_torque,
+                    target_degrees=style_roll_degrees,
+                    coast_degrees=style_roll_coast_degrees,
+                    timeout_sec=30.0,
+                )
+            )
+
+        return_sequence = py_trees.composites.Sequence("Gate Return Sequence", memory=True)
+        return_sequence.add_children(return_children)
 
         # If anything in the return sequence fails, we still want to surface!
         failsafe_return = py_trees.decorators.FailureIsSuccess(

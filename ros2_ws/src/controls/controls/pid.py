@@ -34,7 +34,7 @@ class PID:
                 self.previous_position = position
                 return self.derivative_error
 
-        def compute_errors(self, setpoint, position, time_step, previous_position=None):
+        def compute_errors(self, setpoint, position, time_step, previous_position=None, allow_integration=True):
                 # Reset integral on setpoint change
                 if abs(setpoint - self.last_setpoint) > self.SETPOINT_RESET_EPSILON:
                         self.integral_error = 0.0
@@ -42,8 +42,8 @@ class PID:
 
                 self.position_error = setpoint - position
 
-                # Conditional Integration: Only integrate if error is within the threshold
-                if abs(self.position_error) <= self.integral_activation_threshold:
+                # Conditional Integration: Only integrate if error is within the threshold AND integration is allowed
+                if allow_integration and abs(self.position_error) <= self.integral_activation_threshold:
                         self.integral_error += self.position_error * time_step
                         self.integral_error = np.clip(self.integral_error, -self.I_MAX, self.I_MAX)
 

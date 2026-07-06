@@ -58,14 +58,14 @@ def generate_launch_description():
     
     front_model_arg = DeclareLaunchArgument(
         "front_model_relative_path",
-        default_value=default_config["front_cam_object_detection"]["ros__parameters"]["model_relative_path"],
-        description="Path to the front camera object detection model file."
+        default_value="",
+        description="Optional override path to the front camera object detection model relative to vision package."
     )
     
     down_model_arg = DeclareLaunchArgument(
         "down_model_relative_path",
-        default_value=default_config["down_cam_object_detection"]["ros__parameters"]["model_relative_path"],
-        description="Path to the down camera object detection model file."
+        default_value="",
+        description="Optional override path to the down camera object detection model relative to vision package."
     )
 
     enable_object_detection_arg = DeclareLaunchArgument(
@@ -153,7 +153,7 @@ def generate_launch_description():
             config_path,
             {
                 "image_topic": front_cam_topic,
-                'model_path': PathJoinSubstitution([vision_dir, LaunchConfiguration("front_model_relative_path")]),
+                'model_relative_path_override': LaunchConfiguration("front_model_relative_path"),
                 'zed_flip_mode': normalize_flip_mode(default_config["front_cam_object_detection"]["ros__parameters"]["zed_flip_mode"]),                
                 'use_sim_time': LaunchConfiguration("sim"),
                 "sim": LaunchConfiguration("sim"),
@@ -263,7 +263,7 @@ def generate_launch_description():
             config_path,
             {
                 "image_topic": down_cam_topic,
-                'model_path': PathJoinSubstitution([vision_dir, LaunchConfiguration("down_model_relative_path")]),
+                'model_relative_path_override': LaunchConfiguration("down_model_relative_path"),
                 'compressed': LaunchConfiguration("compressed"),
                 "sim": LaunchConfiguration("sim"),                
                 'use_sim_time': LaunchConfiguration("sim"),
