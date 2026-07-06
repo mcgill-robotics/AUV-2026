@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from planner.missions.mission_behaviour_components import BasicActionBehaviour
+from planner.missions.mission_behaviour_components import BasicActionBehaviour, TimerBehaviour
 import py_trees
 import math
 import planner.missions.vision_behaviours as vision_behaviours
@@ -120,8 +120,9 @@ class AlignClosestBin(py_trees.composites.Sequence):
         follow_downcam_bin = FollowDowncamBin(self.bins_params)
         offset_grabber = BasicActionBehaviour(name="OffsetGrabber", goal=move_robot_centric(forward=self.bins_params['grabber_to_downcam_x'], sway=self.bins_params['grabber_to_downcam_y'], hold_time=self.bins_params['alignment_hold_time']))
         drop_marker = DropMarker(self.bins_params)
+        wait_after_marker = TimerBehaviour(timer_duration=1.0, name="WaitAfterMarkerDrop")
 
-        self.add_children([go_above_closest_bin, follow_downcam_bin, offset_grabber, drop_marker])
+        self.add_children([go_above_closest_bin, follow_downcam_bin, offset_grabber, drop_marker, wait_after_marker])
 
 class AlignBinsAttempt(py_trees.composites.Sequence):
     def __init__(self, bins_params: dict = None):
