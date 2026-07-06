@@ -7,6 +7,7 @@ from controls.goal_helpers import move_global, move_robot_centric
 from planner.missions.action_status_enum import ActionStatus
 import geometry_msgs.msg._pose
 import transforms3d
+import std_msgs.msg
 
 class ApproachObject(py_trees.composites.Sequence): 
     def __init__(self, target_class: str, bins_params: dict):
@@ -606,21 +607,25 @@ class GoAboveClosestBin(py_trees.behaviour.Behaviour):
         else:
             return py_trees.common.Status.RUNNING
 
-# Placeholder for drop marker
 class DropMarker(py_trees.behaviour.Behaviour):
     def __init__(self, bins_params: dict = None):
         super().__init__("DropMarker")
         self.blackboard = self.attach_blackboard_client(name=self.name)
         self.bins_params = bins_params or {}
         self.required_markers = self.bins_params['num_required_markers']
+        self.actuator_publisher_1 = self.node.create_publisher(std_msgs.msg.Uint8, "/actuators/grabber", 1)
+        self.actuator_publisher_2 = self.node.create_publisher(std_msgs.msg.Uint8, "/actuator/grabber", 1)
     
     def setup(self, **kwargs):
         self.blackboard.register_key(key="/bins_task/number_markers", access=py_trees.common.Access.WRITE)
     
     def update(self) -> py_trees.common.Status:
         if not hasattr(self.blackboard.bins_task, 'number_markers'):
-            return py_trees.common.Status.FAILURE
-        
+            self.node.get_logger().error("Blackboard key /bins_task/number_markers not found. Dropping marker anyways.")
+
+        self.actuator_publisher_1.publish(std_msgs.msg.Uint8(data=0))  # Assuming '1' is the command to drop the marker
+        self.actuator_publisher_2.publish(std_msgs.msg.Uint8(data=0))  # Assuming '1' is the command to drop the marker
+
         self.blackboard.bins_task.number_markers += 1
         if self.blackboard.bins_task.number_markers >= self.required_markers:
             return py_trees.common.Status.SUCCESS
