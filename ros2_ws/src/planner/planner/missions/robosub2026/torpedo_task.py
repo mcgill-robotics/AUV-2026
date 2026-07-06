@@ -203,15 +203,9 @@ class TorpedoTask(py_trees.composites.Sequence):
         )
         
         move_to_front_of_board = MoveToFrontOfBoard(
+            align_to_board=True,
             distance_from_board=self.initial_distance_from_board,
             z_reference=self.z_reference,
-            position_tolerance=self.position_tolerance,
-            orientation_tolerance_rad=self.yaw_tolerance_rad,
-            hold_time=self.hold_time,
-            timeout=self.timeout
-        )
-        
-        align_to_board = AlignToBoard(
             position_tolerance=self.position_tolerance,
             orientation_tolerance_rad=self.yaw_tolerance_rad,
             hold_time=self.hold_time,
@@ -225,8 +219,7 @@ class TorpedoTask(py_trees.composites.Sequence):
                 approach_board_near,
                 circle_board,
                 find_board_orientation_one_sample,
-                move_to_front_of_board,
-                align_to_board
+                move_to_front_of_board
             ]
         )
         return board_rough_position
@@ -380,14 +373,9 @@ class TorpedoTask(py_trees.composites.Sequence):
         distance_strategy.add_children(
             [
                 MoveToFrontOfBoard(
+                    align_to_board=True,
                     distance_from_board=self.initial_distance_from_board,
                     z_reference=self.z_reference,
-                    position_tolerance=self.position_tolerance,
-                    orientation_tolerance_rad=self.yaw_tolerance_rad,
-                    hold_time=self.hold_time,
-                    timeout=self.timeout
-                ),
-                AlignToBoard(
                     position_tolerance=self.position_tolerance,
                     orientation_tolerance_rad=self.yaw_tolerance_rad,
                     hold_time=self.hold_time,

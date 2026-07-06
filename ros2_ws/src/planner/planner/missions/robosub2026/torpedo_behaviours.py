@@ -5,10 +5,9 @@ from typing import Optional, Tuple, Callable
 from ..mission_behaviour_components import BasicActionBehaviour
 import controls.utils as geometry
 from controls.utils import Vector2D
-from controls.goal_helpers import set_attitude_quaternion,move_global
+from controls.goal_helpers import set_attitude_quaternion,move_global, move_to_pose
 from enum import Enum
-from auv_msgs.msg import VisionObject
-from geometry_msgs.msg import Point, Quaternion
+from geometry_msgs.msg import Point, Quaternion, Pose
 
 TORPEDO_COUNT = 2
 
@@ -161,9 +160,11 @@ class DetermineBoardOrientation(Action):
 class MoveToFrontOfBoard(BasicActionBehaviour):
     """
     Navigation Action to move to the front of the board based on the orientation found in the FindBoardOrientation action.
+    align_to_board: if True, will align to the board orientation, if False, will maintain current orientation
     """
     def __init__(
             self,
+            align_to_board: bool,
             distance_from_board: float,
             z_reference: float,
             position_tolerance: float = 0.1,
