@@ -189,7 +189,7 @@ planner_root_tree:
         sample_every_n_ticks: 2           # Sample orientation every N ticks (to allow for some movement between samples)
 
       auv_to_torpedos:
-        left:  [0.10280471,0.3299377,  0.174146]   # (m) AUV to left torpedo center offset in AUV body frame
+        left:  [0.10280471,0.03299377,  0.174146]   # (m) AUV to left torpedo center offset in AUV body frame
         right: [0.102385, -0.03200623, 0.174146]   # (m) AUV to right torpedo center offset in AUV body frame
 
       torpedo_trajectory_coefficients:

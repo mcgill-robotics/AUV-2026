@@ -724,9 +724,9 @@ class AlignTorpedoToHole(Navigation):
                         self.node.get_logger().error(f"[{self.name}] No torpedo detected. Alignment is redundant with absence of torpedo payload.")
                         return py_trees.common.Status.FAILURE
                     case 1:
-                        side = TorpedoSide.RIGHT
-                    case 2:
                         side = TorpedoSide.LEFT
+                    case 2:
+                        side = TorpedoSide.RIGHT
                     case _:
                         self.node.get_logger().error(f"[{self.name}] Invalid torpedo count {self.blackboard.torpedo.count}. Expected 1 or 2.")
                         return py_trees.common.Status.FAILURE
@@ -740,8 +740,6 @@ class AlignTorpedoToHole(Navigation):
                     return py_trees.common.Status.FAILURE
                 to_hole_offset = self.blackboard.torpedo.offset_to_hole
                 self.forward_trajectory.coef[0] += to_hole_offset[0]
-                self.lateral_trajectory.coef[0] += to_hole_offset[1]
-                self.vertical_trajectory.coef[0] += to_hole_offset[2]
                 self.node.get_logger().info(f"[{self.name}] Adjusted trajectories coeffs for hole offset: F {self.forward_trajectory.coef}, L {self.lateral_trajectory.coef}, V {self.vertical_trajectory.coef}")
                 forward_roots = sorted(r.real for r in self.forward_trajectory.roots() if np.isreal(r))
                 
@@ -764,8 +762,8 @@ class AlignTorpedoToHole(Navigation):
                 
                 offset_vector = Point(
                     x= to_hole_offset[0] - self.auv_to_torpedo[0] + backward_offset,
-                    y= to_hole_offset[1] - self.auv_to_torpedo[1] + rightward_offset,
-                    z= to_hole_offset[2] - self.auv_to_torpedo[2] + downward_offset
+                    y= to_hole_offset[1] - self.auv_to_torpedo[1] - rightward_offset,
+                    z= to_hole_offset[2] - self.auv_to_torpedo[2] - downward_offset
                 )
                 
                 self.node.get_logger().info(f"[{self.name}] Aligning torpedo to hole offset from icon position: {offset_vector}")

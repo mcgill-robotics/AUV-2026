@@ -2,17 +2,17 @@ attitude_controller:
     ros__parameters:
         control_loop_rate: 25.0
         # P
-        P_ex: 0.05 # v2 -> 0.01
-        P_ey: 0.05 # v2 -> 0.01
-        P_ez: 6.0 # v2 -> 3.5
+        P_ex: 5.73 # v2 -> 0.01
+        P_ey: 7.53 # v2 -> 0.01
+        P_ez: 7.53 # v2 -> 3.5
         # I
-        I_ex: 0.0
-        I_ey: 0.0
-        I_ez: 0.0 # may need to modify (0.5 in v2)
+        I_ex: 0.2176
+        I_ey: 0.3221
+        I_ez: 0.42565 # may need to modify (0.5 in v2)
         # D
-        P_wx: 0.1 # v2 -> 0.1
-        P_wy: 0.1 # v2 -> 0.1
-        P_wz: 2.0 # v2 -> 2.0
+        P_wx: 2.37  # v2 -> 0.1
+        P_wy: 2.92 # v2 -> 0.1
+        P_wz: 3.46 # v2 -> 2.0
         I_MAX: 3.0
         integral_activation_threshold_deg: 10.0
         max_slew_rate_roll_deg: 30.0 # [deg/s] (0.0 = disabled)
@@ -25,9 +25,9 @@ attitude_controller:
 depth_controller:
     ros__parameters:
         control_loop_hz: 10.0
-        KP: 30.0
-        KD: 50.0
-        KI: 0.15 # may need to modify
+        KP: 58.0
+        KD: 71.0
+        KI: 9.15 # may need to modify
         I_MAX: 10.0
         integral_activation_threshold: 0.3
         derivative_filter_alpha: 0.2
@@ -38,9 +38,9 @@ depth_controller:
 x_controller:
     ros__parameters:
         control_loop_hz: 10.0
-        KP: 10.0
-        KD: 6.0
-        KI: 0.5
+        KP: 51.0
+        KD: 47.8
+        KI: 2.7
         I_MAX: 10.0
         integral_activation_threshold: 0.5
         derivative_filter_alpha: 0.8
@@ -50,9 +50,9 @@ x_controller:
 y_controller:
     ros__parameters:
         control_loop_hz: 10.0
-        KP: 10.0
-        KD: 6.0
-        KI: 0.5
+        KP: 51.0
+        KD: 47.8
+        KI: 2.7
         I_MAX: 10.0
         integral_activation_threshold: 0.5
         derivative_filter_alpha: 0.8
