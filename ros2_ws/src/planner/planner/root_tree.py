@@ -469,15 +469,10 @@ def main():
         initialise_variables={"/vision/down_cam/detections": None},
         qos_profile=qos,
     )
-    actuation_qos = QoSProfile(
-        reliability=ReliabilityPolicy.RELIABLE,
-        durability=DurabilityPolicy.VOLATILE,
-        history=HistoryPolicy.KEEP_LAST,
-        depth=10
-    )
+    
     
     torpedo_launch_topic = node.get_parameter("torpedo.launch_topic").get_parameter_value().string_value
-    torpedo_launch_publisher = node.create_publisher(std_msgs.msg.UInt8, torpedo_launch_topic, actuation_qos)
+    torpedo_launch_publisher = node.create_publisher(std_msgs.msg.UInt8, torpedo_launch_topic, 10)
     torpedo_launch_callback = lambda side: torpedo_launch_publisher.publish(std_msgs.msg.UInt8(data=side.value))
     
     torpedo_params["launch_function"] = torpedo_launch_callback

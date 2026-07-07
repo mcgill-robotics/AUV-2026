@@ -324,7 +324,7 @@ class TorpedoTask(py_trees.composites.Sequence):
                     check=py_trees.common.ComparisonExpression(
                         variable="/torpedo/count",
                         value=1,
-                        operator=operator.eq,
+                        operator=operator.ge,
                     )
                 ),
                 self.hole_selector(HoleType.LARGE)
@@ -333,7 +333,7 @@ class TorpedoTask(py_trees.composites.Sequence):
         
         firing_order_selector.add_children(
             [
-                large_then_small,
+                # large_then_small,
                 large_only
             ]
          )

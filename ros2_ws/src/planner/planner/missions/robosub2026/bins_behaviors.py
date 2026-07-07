@@ -614,18 +614,18 @@ class DropMarker(py_trees.behaviour.Behaviour):
         self.blackboard = self.attach_blackboard_client(name=self.name)
         self.bins_params = bins_params or {}
         self.required_markers = self.bins_params['num_required_markers']
-        self.actuator_publisher_1 = self.node.create_publisher(std_msgs.msg.Uint8, "/actuators/grabber", 1)
-        self.actuator_publisher_2 = self.node.create_publisher(std_msgs.msg.Uint8, "/actuator/grabber", 1)
-    
+        
     def setup(self, **kwargs):
+        self.node = kwargs['node']
+
+        self.actuator_publisher_1 = self.node.create_publisher(std_msgs.msg.UInt8, "/actuators/grabber", 10)
         self.blackboard.register_key(key="/bins_task/number_markers", access=py_trees.common.Access.WRITE)
     
     def update(self) -> py_trees.common.Status:
         if not hasattr(self.blackboard.bins_task, 'number_markers'):
             self.node.get_logger().error("Blackboard key /bins_task/number_markers not found. Dropping marker anyways.")
 
-        self.actuator_publisher_1.publish(std_msgs.msg.Uint8(data=0))  # Assuming '1' is the command to drop the marker
-        self.actuator_publisher_2.publish(std_msgs.msg.Uint8(data=0))  # Assuming '1' is the command to drop the marker
+        self.actuator_publisher_1.publish(std_msgs.msg.UInt8(data=0))  # Assuming '1' is the command to drop the marker
 
         self.blackboard.bins_task.number_markers += 1
         if self.blackboard.bins_task.number_markers >= self.required_markers:
