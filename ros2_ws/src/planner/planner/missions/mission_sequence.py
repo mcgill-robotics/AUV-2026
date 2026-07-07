@@ -12,6 +12,8 @@ from .debugNavigation.test_serivce_call_behaviour import TestServiceCallBehaviou
 from .debugNavigation.comprehensive_test_mission import ComprehensiveTestMission
 from .debugNavigation.test_style_yaw_spin import TestStyleYawSpin
 from .debugNavigation.test_style_rolling_flip import TestStyleRollingFlip
+from .debugNavigation.test_grabber_behaviour import TestGrabberBehaviour
+from .debugNavigation.test_torpedo_behaviour import TestTorpedoBehaviour
 
 # --- NEW ROBOSUB 2026 TASKS ---
 from .robosub2026.gate_task import GateTask
@@ -69,18 +71,21 @@ class MissionSpawner(py_trees.behaviour.Behaviour):
                     "  6: Translation Rectangle (no yaw)\n"
                     "  7: Test Service Call (reset dead reckoning)\n"
                     "  8: Comprehensive Lane Test\n"
-                    "--- RoboSub 2026 Tasks ---\n"
-                    "  9: Gate Task\n"
-                    " 10: Slalom Task\n"
-                    " 11: Bins Task\n"
-                    " 12: Torpedo Task\n"
-                    " 13: Table & Octagon Task\n"
-                    " 14: Return Home Task\n"
-                    "--- Full Run ---\n"
-                    " 15: FULL COMPETITION RUN\n"
                     "--- Style Maneuver Tests ---\n"
-                    " 16: Test Style Yaw Spin (360 deg)\n"
-                    " 17: Test Style Rolling Flip (720 deg)"
+                    "  9: Test Style Yaw Spin (360 deg)\n"
+                    " 10: Test Style Rolling Flip (720 deg)\n"
+                    "--- Actuator Tests ---\n"
+                    " 11: Test Grabber (open 1s, close 1s, open 1s)\n"
+                    " 12: Test Torpedo (close 0, open 1, open 2, close 0)\n"
+                    "--- RoboSub 2026 Tasks ---\n"
+                    " 13: Gate Task\n"
+                    " 14: Slalom Task\n"
+                    " 15: Bins Task\n"
+                    " 16: Torpedo Task\n"
+                    " 17: Table & Octagon Task\n"
+                    " 18: Return Home Task\n"
+                    "--- Full Run ---\n"
+                    " 19: FULL COMPETITION RUN"
                 )
                 self.node.get_logger().info(menu_text)
                 self.message_shown = True
@@ -158,18 +163,26 @@ class MissionSpawner(py_trees.behaviour.Behaviour):
         elif choice == 8:
             return ComprehensiveTestMission(p['position_tolerance'], p['hold_time'], p['timeout'])
         elif choice == 9:
-            return GateTask(**gate)
+            return TestStyleYawSpin()
         elif choice == 10:
-            return SlalomTask(**slalom)
+            return TestStyleRollingFlip()
         elif choice == 11:
-            return BinsTask(**bins)
+            return TestGrabberBehaviour()
         elif choice == 12:
-            return TorpedoTask(**torpedo)
+            return TestTorpedoBehaviour()
         elif choice == 13:
-            return TableOctagonTask(**octagon)
+            return GateTask(**gate)
         elif choice == 14:
-            return ReturnHomeTask(**return_home)
+            return SlalomTask(**slalom)
         elif choice == 15:
+            return BinsTask(**bins)
+        elif choice == 16:
+            return TorpedoTask(**torpedo)
+        elif choice == 17:
+            return TableOctagonTask(**octagon)
+        elif choice == 18:
+            return ReturnHomeTask(**return_home)
+        elif choice == 19:
             full_run = py_trees.composites.Sequence("FULL COMPETITION RUN", memory=True)
             full_run.add_children([
                 GateTask(**gate),
@@ -180,10 +193,6 @@ class MissionSpawner(py_trees.behaviour.Behaviour):
                 ReturnHomeTask(**return_home)
             ])
             return full_run
-        elif choice == 16:
-            return TestStyleYawSpin()
-        elif choice == 17:
-            return TestStyleRollingFlip()
         return None
 
 class DynamicMissionSequence(py_trees.composites.Sequence):
