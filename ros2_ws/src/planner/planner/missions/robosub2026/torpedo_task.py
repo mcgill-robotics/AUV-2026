@@ -1,7 +1,7 @@
 import py_trees
 from numpy.polynomial.polynomial import Polynomial
 from .torpedo_behaviours import *
-from ..vision_behaviours import SearchSweepBehaviour, CircleAroundToFindBehaviour
+from ..vision_behaviours import SearchSweepBehaviour, CircleAroundToFindBehaviour, GoNearObject
 import operator
 from typing import List, cast, Tuple, Callable
 class HoleType(Enum):
@@ -163,6 +163,24 @@ class TorpedoTask(py_trees.composites.Sequence):
             name="Search Sweep for Board"
         )
         
+        approach_board_far = GoNearObject(
+            target_class="board",
+            target_distance=self.initial_distance_from_board*4,
+            height_offset=None,
+            tolerance_meters=self.position_tolerance,
+            hold_time=self.hold_time / 2,
+            name="Approach Board Far"
+        )
+        
+        approach_board_near = GoNearObject(
+            target_class="board",
+            target_distance=self.initial_distance_from_board*2,
+            height_offset=None,
+            tolerance_meters=self.position_tolerance,
+            hold_time=self.hold_time / 2,
+            name="Approach Board Near"
+        )
+
         circle_board = CircleAroundToFindBehaviour(
             reference_class="board",
             z_reference=self.z_reference,
@@ -203,6 +221,8 @@ class TorpedoTask(py_trees.composites.Sequence):
         board_rough_position.add_children(
             [
                 ss_board,
+                approach_board_far,
+                approach_board_near,
                 circle_board,
                 find_board_orientation_one_sample,
                 move_to_front_of_board,
@@ -218,15 +238,18 @@ class TorpedoTask(py_trees.composites.Sequence):
         returns py_trees.composites.Selector
         """
         find_board_orientation_selector = py_trees.composites.Selector("Find Board Orientation Refinement Attempt Selector", memory=True)
+        find_board_orientation_selector.add_child(
+            py_trees.decorators.Retry(
+                child=self.board_orientation_refinement_sequence(),
+                name=f"Refinement Attempt",
+                num_failures=self.refinement_attempts
+            )
+        )
         
-        find_board_orientation_seqs = []
-        for i in range(self.refinement_attempts):
-            find_board_orientation_and_align = self.board_orientation_refinement_sequence(i)
-            find_board_orientation_seqs.append(find_board_orientation_and_align)
-        find_board_orientation_selector.add_children(find_board_orientation_seqs)
+        
         return find_board_orientation_selector
     
-    def board_orientation_refinement_sequence(self, count:int)->py_trees.composites.Sequence:
+    def board_orientation_refinement_sequence(self)->py_trees.composites.Sequence:
         """
         Subtree to find the board orientation and align to it.
         1. Find board orientation with multiple samples rejecting outliers, to get a more stable estimate of the board orientation
@@ -235,32 +258,35 @@ class TorpedoTask(py_trees.composites.Sequence):
 
         returns py_trees.composites.Sequence
         """
-        find_board_orientation_sequence = py_trees.composites.Sequence(f"Refinement Board Orientation Sequence {count+1}/{self.alignments_per_attempt+1}", memory=True)
+        find_board_orientation_sequence = py_trees.composites.Sequence(f"Refinement Board Orientation Sequence", memory=True)
         
-        find_and_aligns = []
-        for _ in range(self.alignments_per_attempt):
-            find_board_orientation = DetermineBoardOrientation (
+        find_and_align_sequence: py_trees.composites.Sequence = py_trees.composites.Sequence("Find and Align", memory=True)
+        find_and_align_sequence.add_children([
+            DetermineBoardOrientation (
                 n_samples=self.samples_per_alignment,
                 sample_every_n_ticks=self.refinement_sample_every_n_ticks,
                 rejection_threshold=self.refinement_rejection_threshold_rad,
                 compare_measurement_with_blackboard=False
-            )
-            find_and_aligns.append(find_board_orientation)
-            align_to_board = AlignToBoard(
+            ),
+            AlignToBoard(
                 position_tolerance=0.5,
                 orientation_tolerance_rad=self.yaw_tolerance_rad,
                 hold_time=self.hold_time,
                 timeout=self.timeout
             )
-            find_and_aligns.append(align_to_board)
+        ])
+        children:List[py_trees.behaviour.Behaviour] = [py_trees.decorators.Repeat(
+            child=find_and_align_sequence, 
+            name=f"Find and Align",
+            num_success=self.alignments_per_attempt)]
         consistency_check = DetermineBoardOrientation (
                 n_samples=1,
                 sample_every_n_ticks=1,
                 rejection_threshold=self.refinement_rejection_threshold_rad,
                 compare_measurement_with_blackboard=True
             )
-        find_and_aligns.append(consistency_check)
-        find_board_orientation_sequence.add_children(find_and_aligns)
+        children.append(consistency_check)
+        find_board_orientation_sequence.add_children(children)
         return find_board_orientation_sequence
 
     def firing_order_strategy_selector(self)->py_trees.composites.Selector:
@@ -286,118 +312,47 @@ class TorpedoTask(py_trees.composites.Sequence):
                         operator=operator.eq,
                     )
                 ),
-                self.board_type_selector(HoleType.LARGE),
-                self.board_type_selector(HoleType.SMALL)
+                self.hole_selector(HoleType.LARGE),
+                self.hole_selector(HoleType.SMALL)
             ]
         )
         large_only = py_trees.composites.Sequence("Large Only Strategy", memory=True)
-        small_only = py_trees.composites.Sequence("Small Only Strategy", memory=True)
-        small_only.add_children(
-            [
-                py_trees.behaviours.CheckBlackboardVariableValue(
-                    name="Check torpedo count is 1",
-                    check=py_trees.common.ComparisonExpression(
-                        variable="/torpedo/count",
-                        value=1,
-                        operator=operator.eq,
-                    )
-                ),
-                self.board_type_selector(HoleType.SMALL)
-            ]
-        )
         large_only.add_children(
             [
                 py_trees.behaviours.CheckBlackboardVariableValue(
                     name="Check torpedo count is 1",
                     check=py_trees.common.ComparisonExpression(
                         variable="/torpedo/count",
-                        value=2,
-                        operator=operator.eq,
+                        value=1,
+                        operator=operator.ge,
                     )
                 ),
-                self.board_type_selector(HoleType.LARGE)
+                self.hole_selector(HoleType.LARGE)
             ]
         )
         
         firing_order_selector.add_children(
             [
                 # large_then_small,
-                large_only,
-                # small_only
+                large_only
             ]
          )
         return firing_order_selector
 
-
-    def board_type_selector(self, hole_type: HoleType)->py_trees.composites.Selector:
-        """
-        Here is where torpedo strategy diverges based on board type
-        """
-        board_type_selector = py_trees.composites.Selector("Board Type Selector", memory=True)
-        
-        board_type_selector.add_children(
-            [
-                self.board_type_strategy(BoardType.FIRE_TOP_LEFT, hole_type),
-                self.board_type_strategy(BoardType.BLOOD_TOP_LEFT, hole_type)
-            ]
-         )
-        return board_type_selector
-        
-    def board_type_strategy(self, board_type: BoardType, hole_type: HoleType) -> py_trees.composites.Sequence:
-        """
-        Check board type, and immediately fail if board type does not match. Otherwise try firing strategies based on board type.
-        TODO: We can make this dynamic to tree is pruned based on which board type we have, see MissionSpawner
-        """
-        board_type_strategy = py_trees.composites.Sequence(f"Board type {board_type.value} Strategy for {hole_type.name} Hole", memory=True)
-        board_type_strategy.add_children(
-            [
-                CheckBoardType(board_type=board_type),
-                self.hole_selector(board_type, hole_type)
-            ]
-         )
-        return board_type_strategy
-        
-    
-    
-    def hole_selector(self, board_type: BoardType, hole_type: HoleType)->py_trees.composites.Selector:
+    def hole_selector(self, hole_type: HoleType)->py_trees.composites.Selector:
         """
         Selector for which hole to fire into
         """
-        hole_selector = py_trees.composites.Selector(f"{hole_type.name} Hole Selector for Board type {board_type.value}", memory=True)
-        match hole_type:
-            case HoleType.LARGE: # hazard icons
-                match board_type:
-                    case BoardType.FIRE_TOP_LEFT:
-                        # top left
-                        icon1 = BoardIcon.FIRE
-                        # bottom right
-                        icon2 = BoardIcon.BLOOD
-                    case BoardType.BLOOD_TOP_LEFT:
-                        # top left
-                        icon1 = BoardIcon.BLOOD
-                        # bottom right
-                        icon2 = BoardIcon.FIRE
-            case HoleType.SMALL: # vehicle icons
-                match board_type:
-                    case BoardType.FIRE_TOP_LEFT:
-                        # bottom left
-                        icon1 = BoardIcon.AMBULANCE
-                        # top right
-                        icon2 = BoardIcon.FIRETRUCK
-                    case BoardType.BLOOD_TOP_LEFT:
-                        # bottom left
-                        icon1 = BoardIcon.FIRETRUCK
-                        # top right
-                        icon2 = BoardIcon.AMBULANCE
-        hole_selector.add_children(
-            [
-                self.distance_strategy_selector(icon1,self.icon_to_nearest_hole[board_type][icon1]),
-                # self.distance_strategy_selector(icon2,self.icon_to_nearest_hole[board_type][icon2])
-            ]
-        )                                          
+        hole_selector = py_trees.composites.Selector(f"{hole_type.name} Hole Selector", memory=True)
+        icons = (BoardIcon.FIRE, BoardIcon.BLOOD) if hole_type == HoleType.LARGE else (BoardIcon.AMBULANCE, BoardIcon.FIRETRUCK)
+
+        hole_selector = py_trees.composites.Selector(f"{hole_type.name} Hole Selector", memory=True)
+        hole_selector.add_children([
+            self.distance_strategy_selector(icon) for icon in icons
+        ])
         return hole_selector
 
-    def distance_strategy_selector(self, icon: BoardIcon, offset_to_hole : Tuple[float, float, float])->py_trees.composites.Selector:
+    def distance_strategy_selector(self, icon: BoardIcon)->py_trees.composites.Selector:
         """
         Distance from board
         1. Farther: 0.46m away
@@ -407,20 +362,19 @@ class TorpedoTask(py_trees.composites.Sequence):
         distance_strategy_selector = py_trees.composites.Selector("Distance Strategy Selector", memory=True)
         distance_strategy_selector.add_children(
             [
-                self.distance_strategy(self.farther_distance_threshold,icon, offset_to_hole),
-                # self.distance_strategy(self.far_distance_threshold,icon, offset_to_hole),
+                self.distance_strategy(self.farther_distance_threshold,icon),
+                self.distance_strategy(self.far_distance_threshold,icon),
             ]
          )
         return distance_strategy_selector
 
 
-    def distance_strategy(self, distance_from_board:  float, icon: BoardIcon, offset_to_hole: Tuple[float, float, float])->py_trees.composites.Sequence:
+    def distance_strategy(self, distance_from_board:  float, icon: BoardIcon)->py_trees.composites.Sequence:
         """
         Build a distance strategy based on the distance from the board
         """
         # include distance from board as negative x
-        offset_from_icon_to_hole = (offset_to_hole[0] - distance_from_board, offset_to_hole[1], offset_to_hole[2])
-        distance_strategy = py_trees.composites.Sequence(f"Distance Strategy {offset_from_icon_to_hole}m from {icon.name}", memory=True)
+        distance_strategy = py_trees.composites.Sequence(f"Distance Strategy {distance_from_board}m from {icon.name}", memory=True)
 
         
         distance_strategy.add_children(
@@ -449,31 +403,34 @@ class TorpedoTask(py_trees.composites.Sequence):
                             timeout=self.timeout
                 ),
                 DetermineIconPosition(icon, attempts=3),
-                self.torpedo_firing_sequence(offset_from_icon_to_hole=offset_from_icon_to_hole)
+                DetermineOffsetToHole(
+                    icon=icon,
+                    distance_from_board=distance_from_board,
+                    icon_to_nearest_hole=self.icon_to_nearest_hole
+                ),
+                self.torpedo_firing_sequence()
             ]
         )
         return distance_strategy
 
-    def torpedo_firing_sequence(self, offset_from_icon_to_hole: Optional[Tuple[float, float, float]] = None)->py_trees.composites.Sequence:
+    def torpedo_firing_sequence(self)->py_trees.composites.Sequence:
         
         torpedo_firing_sequence = py_trees.composites.Sequence(f"Torpedo Firing Sequence", memory=True)
         
-        children: List[py_trees.behaviour.Behaviour] = [FireTorpedo(launch_function=self.launch_function, firing_buffer_time=self.torpedo_firing_buffer_time)]
-        if offset_from_icon_to_hole is not None:
-            children.insert(0, 
+        torpedo_firing_sequence.add_children([
                 AlignTorpedoToHole(
-                    projected_offset_to_hole = offset_from_icon_to_hole,
-                    auv_to_torpedos = self.auv_to_torpedos,
-                    forward_trajectory = self.forward_trajectory,
-                    lateral_trajectory = self.lateral_trajectory,
-                    vertical_trajectory = self.vertical_trajectory,
-                    position_tolerance = self.position_tolerance,
-                    orientation_tolerance_rad = self.yaw_tolerance_rad,
-                    timeout = self.timeout,
-                    hold_time = self.hold_time
-                )
-            )
-        torpedo_firing_sequence.add_children(children)
+                        auv_to_torpedos = self.auv_to_torpedos,
+                        forward_trajectory = self.forward_trajectory,
+                        lateral_trajectory = self.lateral_trajectory,
+                        vertical_trajectory = self.vertical_trajectory,
+                        position_tolerance = self.position_tolerance,
+                        orientation_tolerance_rad = self.yaw_tolerance_rad,
+                        timeout = self.timeout,
+                        hold_time = self.hold_time
+                    ),
+                FireTorpedo(launch_function=self.launch_function, firing_buffer_time=self.torpedo_firing_buffer_time),
+            ]
+        )
         return torpedo_firing_sequence
     
     def node_base_case(self)->py_trees.composites.Sequence:

@@ -23,7 +23,7 @@ class BinsTask(py_trees.composites.Sequence):
         # 2. Initial depth setpoint
         initial_depth = BasicActionBehaviour(
             name="Initial Depth Setpoint",
-            goal=set_depth(bins_params['initial_depth'], tolerance=bins_params['initial_depth_tolerance'], hold_time=0.0)
+            goal=set_depth(bins_params['initial_depth'], tolerance=bins_params['initial_depth_tolerance'], hold_time=2.0)
         )
 
         # 2. Go to bin structure
@@ -48,8 +48,8 @@ class BinsTask(py_trees.composites.Sequence):
         align_correct_bin = AlignCorrectBin(bins_params)
 
         self.add_children([
-            search_for_bin_structure,
             initial_depth,
+            search_for_bin_structure,
             go_near_bin_structure,
             search_for_bins,
             align_correct_bin,

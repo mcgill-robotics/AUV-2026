@@ -232,7 +232,7 @@ down_cam_object_detection:
     power_line_frequency: 2    # 0=disabled 1=50Hz 2=60Hz; default 2
     auto_white_balance: false            # default true; when true, white_balance_temperature is ignored
     white_balance_temperature: 4500      # [2800..6500] step 1; only used when auto_white_balance is false
-    auto_exposure: 1                     # 1=Manual 3=Aperture Priority (auto); default 3
+    auto_exposure: 3                     # 1=Manual 3=Aperture Priority (auto); default 3
     exposure_time_absolute: 40           # [4..5000]  only used when auto_exposure is 1 (Manual); default 625
     auto_focus: false                    # default true; when true, focus_absolute is ignored
     focus_absolute: 7                    # [0..21]    only used when auto_focus is false; default 16

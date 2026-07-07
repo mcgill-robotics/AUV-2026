@@ -8,6 +8,7 @@ import py_trees_ros
 import rclpy
 from rclpy.node import Node
 from std_srvs.srv import Trigger
+from std_msgs.msg import UInt8
 
 # AUV dependencies
 from auv_msgs.action import AUVNavigate
@@ -16,7 +17,8 @@ from auv_msgs.srv import RosbagControl
 # Planner dependencies
 from .action_status_enum import ActionStatus
 
-
+from rcl_interfaces.srv import SetParameters
+from rcl_interfaces.msg import Parameter, ParameterValue, ParameterType
 
 class BasicActionBehaviour(py_trees.behaviour.Behaviour):
         """
@@ -385,22 +387,21 @@ class RosbagRecordingDecorator(py_trees.decorators.Decorator):
                 self.service_client.call_async(req)
             self.started_recording = False
 
-from rcl_interfaces.srv import SetParameters
-from rcl_interfaces.msg import Parameter, ParameterValue, ParameterType
-
 class SetNodeParameterBehaviour(py_trees.behaviour.Behaviour):
         """
         Calls a ROS2 node's ~/set_parameters service to dynamically change a parameter.
         """
-        def __init__(self, node_name: str, param_name: str, param_value, name="SetNodeParameter"):
+        def __init__(self, node_name: str, param_name: str, param_value, name="SetNodeParameter", max_attempts: int = 1):
                 super().__init__(name)
                 self.target_node = node_name
                 self.param_name = param_name
                 self.param_value = param_value
+                self.max_attempts = max_attempts
                 
                 self.service_client = None
                 self.future = None
                 self.request_sent = False
+                self.attempt_count = 0
 
         def setup(self, **kwargs):
                 self.node = kwargs['node']
@@ -409,11 +410,16 @@ class SetNodeParameterBehaviour(py_trees.behaviour.Behaviour):
         def initialise(self):
                 self.future = None
                 self.request_sent = False
+                self.attempt_count = 0
                 
         def update(self):
                 if not self.request_sent:
                         if not self.service_client.wait_for_service(timeout_sec=1.0):
-                                self.node.get_logger().warn(f"[{self.name}] Service {self.target_node}/set_parameters not available.")
+                                self.attempt_count += 1
+                                if self.attempt_count >= self.max_attempts:
+                                        self.node.get_logger().warn(f"[{self.name}] Service {self.target_node}/set_parameters not available after {self.max_attempts} attempts (controls offline?). Proceeding without setting parameter.")
+                                        return py_trees.common.Status.SUCCESS
+                                self.node.get_logger().warn(f"[{self.name}] Service {self.target_node}/set_parameters not available (attempt {self.attempt_count}/{self.max_attempts}).")
                                 return py_trees.common.Status.RUNNING
                                 
                         request = SetParameters.Request()
@@ -457,7 +463,6 @@ class SetNodeParameterBehaviour(py_trees.behaviour.Behaviour):
                 self.node.get_logger().info(f"[{self.name}] Successfully set parameter.")
                 return py_trees.common.Status.SUCCESS
 
-from std_srvs.srv import Trigger
 
 class WaitForTriggerBehaviour(py_trees.behaviour.Behaviour):
         """
@@ -490,3 +495,39 @@ class WaitForTriggerBehaviour(py_trees.behaviour.Behaviour):
                 if self.triggered:
                         return py_trees.common.Status.SUCCESS
                 return py_trees.common.Status.RUNNING
+
+
+class SetActuatorBehaviour(py_trees.behaviour.Behaviour):
+        """
+        Publish a UInt8 command to an actuator topic (e.g. /actuators/grabber or /actuators/torpedo).
+        """
+        def __init__(self, topic_name: str, command_value: int, name: str = None):
+                if name is None:
+                        name = f"Set {topic_name} -> {command_value}"
+                super().__init__(name)
+                self.topic_name = topic_name
+                self.command_value = int(command_value)
+                self.publisher = None
+                self.fallback_publisher = None
+
+        def setup(self, **kwargs):
+                self.node = kwargs['node']
+                self.publisher = self.node.create_publisher(UInt8, self.topic_name, 10)
+                if self.topic_name.startswith("/actuators/"):
+                        fallback_topic = self.topic_name.replace("/actuators/", "/actuator/", 1)
+                        self.fallback_publisher = self.node.create_publisher(UInt8, fallback_topic, 10)
+                elif self.topic_name.startswith("/actuator/"):
+                        fallback_topic = self.topic_name.replace("/actuator/", "/actuators/", 1)
+                        self.fallback_publisher = self.node.create_publisher(UInt8, fallback_topic, 10)
+                self.node.get_logger().info(f"[{self.name}] Created publisher for {self.topic_name}")
+
+        def update(self) -> py_trees.common.Status:
+                if self.publisher is None:
+                        self.node.get_logger().error(f"[{self.name}] Publisher not initialized for {self.topic_name}")
+                        return py_trees.common.Status.FAILURE
+                msg = UInt8(data=self.command_value)
+                self.publisher.publish(msg)
+                if self.fallback_publisher is not None:
+                        self.fallback_publisher.publish(msg)
+                self.node.get_logger().info(f"[{self.name}] Published {self.command_value} to {self.topic_name}")
+                return py_trees.common.Status.SUCCESS
