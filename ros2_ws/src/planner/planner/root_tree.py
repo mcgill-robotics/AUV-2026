@@ -57,6 +57,7 @@ def main():
     # Slalom task parameters
     node.declare_parameter("slalom.num_layers", 3)
     node.declare_parameter("slalom.gate_side", "right")
+    node.declare_parameter("slalom.yaw_inward_offset_deg", 25.0)
     node.declare_parameter("slalom.scan_angle_deg", 60.0)
     node.declare_parameter("slalom.scan_pause_time", 1.0)
     node.declare_parameter("slalom.collinearity_threshold", 0.5)
@@ -72,10 +73,15 @@ def main():
     node.declare_parameter("slalom.scan_timeout", 30.0)
     node.declare_parameter("slalom.force_blind_forward_dist", 0.0)
     node.declare_parameter("slalom.initial_approach_distance", 3.0)
+    node.declare_parameter("slalom.min_pipe_separation", 0.5)
+    node.declare_parameter("slalom.enable_skip_scan", True)
+    node.declare_parameter("slalom.skip_scan_min_dist", 1.5)
+    node.declare_parameter("slalom.skip_scan_max_dist", 3.5)
 
     slalom_params = {
         "num_layers": node.get_parameter("slalom.num_layers").get_parameter_value().integer_value,
         "gate_side": node.get_parameter("slalom.gate_side").get_parameter_value().string_value,
+        "yaw_inward_offset_deg": node.get_parameter("slalom.yaw_inward_offset_deg").get_parameter_value().double_value,
         "scan_angle_deg": node.get_parameter("slalom.scan_angle_deg").get_parameter_value().double_value,
         "scan_pause_time": node.get_parameter("slalom.scan_pause_time").get_parameter_value().double_value,
         "collinearity_threshold": node.get_parameter("slalom.collinearity_threshold").get_parameter_value().double_value,
@@ -91,10 +97,15 @@ def main():
         "scan_timeout": node.get_parameter("slalom.scan_timeout").get_parameter_value().double_value,
         "force_blind_forward_dist": node.get_parameter("slalom.force_blind_forward_dist").get_parameter_value().double_value,
         "initial_approach_distance": node.get_parameter("slalom.initial_approach_distance").get_parameter_value().double_value,
+        "min_pipe_separation": node.get_parameter("slalom.min_pipe_separation").get_parameter_value().double_value,
+        "enable_skip_scan": node.get_parameter("slalom.enable_skip_scan").get_parameter_value().bool_value,
+        "skip_scan_min_dist": node.get_parameter("slalom.skip_scan_min_dist").get_parameter_value().double_value,
+        "skip_scan_max_dist": node.get_parameter("slalom.skip_scan_max_dist").get_parameter_value().double_value,
     }
 
     
     # Gate task parameters
+    node.declare_parameter("gate.initial_depth", -1.2)
     node.declare_parameter("gate.position_tolerance", 0.3)
     node.declare_parameter("gate.hold_time", 1.0)
     node.declare_parameter("gate.timeout", 30.0)
@@ -120,6 +131,7 @@ def main():
     node.declare_parameter("gate.style_roll_coast_degrees", 180.0)
 
     gate_params = {
+        "initial_depth": node.get_parameter("gate.initial_depth").get_parameter_value().double_value,
         "position_tolerance": node.get_parameter("gate.position_tolerance").get_parameter_value().double_value,
         "hold_time": node.get_parameter("gate.hold_time").get_parameter_value().double_value,
         "timeout": node.get_parameter("gate.timeout").get_parameter_value().double_value,
@@ -353,6 +365,9 @@ def main():
 
 
     # Return Home task parameters
+    node.declare_parameter("return_home.exit_octagon_distance", 2.0)
+    node.declare_parameter("return_home.travel_depth", -0.5)
+    node.declare_parameter("return_home.gate_pass_depth", -1.0)
     node.declare_parameter("return_home.return_distance", 5.0)
     node.declare_parameter("return_home.pass_distance", 2.0)
     node.declare_parameter("return_home.approach_distance", 2.0)
@@ -371,6 +386,9 @@ def main():
     node.declare_parameter("return_home.style_roll_coast_degrees", 180.0)
 
     return_home_params = {
+        "exit_octagon_distance": node.get_parameter("return_home.exit_octagon_distance").get_parameter_value().double_value,
+        "travel_depth": node.get_parameter("return_home.travel_depth").get_parameter_value().double_value,
+        "gate_pass_depth": node.get_parameter("return_home.gate_pass_depth").get_parameter_value().double_value,
         "return_distance": node.get_parameter("return_home.return_distance").get_parameter_value().double_value,
         "pass_distance": node.get_parameter("return_home.pass_distance").get_parameter_value().double_value,
         "approach_distance": node.get_parameter("return_home.approach_distance").get_parameter_value().double_value,

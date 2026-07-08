@@ -28,6 +28,7 @@ class MatchPipesBehaviour(py_trees.behaviour.Behaviour):
         yaw_inward_offset_rad: float = math.radians(10.0),
         collinearity_threshold: float = 0.5,
         min_forward_dist: float = 0.5,
+        min_pipe_separation: float = 0.5,
         name="Match Pipes",
     ):
         super().__init__(name)
@@ -35,6 +36,7 @@ class MatchPipesBehaviour(py_trees.behaviour.Behaviour):
         self.yaw_inward_offset_rad = yaw_inward_offset_rad
         self.collinearity_threshold = collinearity_threshold
         self.min_forward_dist = min_forward_dist
+        self.min_pipe_separation = min_pipe_separation
 
         self.blackboard = self.attach_blackboard_client(name=self.name)
 
@@ -107,10 +109,10 @@ class MatchPipesBehaviour(py_trees.behaviour.Behaviour):
         )
 
         if len(red_pipes) == 0:
-            self.node.get_logger().error(f"[{self.name}] No red pipes found in front.")
+            self.node.get_logger().error(f"[{self.name}] No red pipes found in front (dot >= {self.min_forward_dist}m).")
             return py_trees.common.Status.FAILURE
 
-        # --- Closest red pipe ---
+        # --- Closest red pipe in front ---
         closest_red = min(
             red_pipes,
             key=lambda p: math.hypot(p.pose.position.x - auv_x, p.pose.position.y - auv_y),
@@ -147,10 +149,15 @@ class MatchPipesBehaviour(py_trees.behaviour.Behaviour):
             )
             return py_trees.common.Status.SUCCESS
 
-        # --- NOMINAL PATH: Requires at least 1 White Pipe ---
-        if len(white_pipes) == 0:
+        # --- Filter white pipes to ensure they are not too close to the red pipe ---
+        valid_white_pipes = [
+            p for p in white_pipes
+            if math.hypot(p.pose.position.x - red_x, p.pose.position.y - red_y) >= self.min_pipe_separation
+        ]
+
+        if len(valid_white_pipes) == 0:
             self.node.get_logger().error(
-                f"[{self.name}] Need >= 1 white pipe, found 0."
+                f"[{self.name}] Need >= 1 white pipe separated from red pipe by >= {self.min_pipe_separation}m, found 0."
             )
             return py_trees.common.Status.FAILURE
 
@@ -177,17 +184,17 @@ class MatchPipesBehaviour(py_trees.behaviour.Behaviour):
         best_pair = None
         best_perp = float('inf')
 
-        for i in range(len(white_pipes)):
-            for j in range(i + 1, len(white_pipes)):
-                w1 = white_pipes[i]
-                w2 = white_pipes[j]
+        for i in range(len(valid_white_pipes)):
+            for j in range(i + 1, len(valid_white_pipes)):
+                w1 = valid_white_pipes[i]
+                w2 = valid_white_pipes[j]
                 w1x, w1y = w1.pose.position.x, w1.pose.position.y
                 w2x, w2y = w2.pose.position.x, w2.pose.position.y
 
                 line_dx = w2x - w1x
                 line_dy = w2y - w1y
                 line_len = math.hypot(line_dx, line_dy)
-                if line_len < 0.5:
+                if line_len < self.min_pipe_separation:
                     continue
 
                 # Perpendicular distance of red from the w1->w2 line
@@ -209,7 +216,7 @@ class MatchPipesBehaviour(py_trees.behaviour.Behaviour):
             
             # --- 2-Pipe Fallback (1 Red + 1 White) ---
             closest_white = min(
-                white_pipes,
+                valid_white_pipes,
                 key=lambda p: math.hypot(p.pose.position.x - auv_x, p.pose.position.y - auv_y),
             )
             wx, wy = closest_white.pose.position.x, closest_white.pose.position.y
@@ -448,15 +455,22 @@ class NavigateToGapBehaviour(py_trees.behaviour.Behaviour):
 class SkipScanCheckBehaviour(py_trees.behaviour.Behaviour):
     """
     Checks if a cached slalom offset is available and a red pipe is detected
-    close in front of the AUV [1.5m, 3.0m].
+    close in front of the AUV inside [min_dist, max_dist].
     
-    If both conditions are met, returns SUCCESS (allowing the scan phase to be skipped).
+    If both conditions are met (and enabled is True), returns SUCCESS (allowing the scan phase to be skipped).
     Otherwise, returns FAILURE.
     """
-    def __init__(self, min_dist: float = 1.5, max_dist: float = 3.0, name="Skip Scan Check"):
+    def __init__(
+        self,
+        min_dist: float = 1.5,
+        max_dist: float = 3.5,
+        enabled: bool = True,
+        name="Skip Scan Check",
+    ):
         super().__init__(name)
         self.min_dist = min_dist
         self.max_dist = max_dist
+        self.enabled = enabled
         self.blackboard = self.attach_blackboard_client(name=self.name)
 
     def setup(self, **kwargs):
@@ -466,6 +480,8 @@ class SkipScanCheckBehaviour(py_trees.behaviour.Behaviour):
         self.blackboard.register_key(key="/slalom/has_offset", access=py_trees.common.Access.READ)
 
     def update(self):
+        if not self.enabled:
+            return py_trees.common.Status.FAILURE
         # 1. Check if we have a cached offset vector
         has_offset = False
         try:
@@ -745,6 +761,10 @@ class SlalomLayer(py_trees.composites.Selector):
         scan_angular_tolerance_rad: float = math.radians(30.0),
         scan_hold_time: float = 0.1,
         scan_timeout: float = 30.0,
+        enable_skip_scan: bool = True,
+        skip_scan_min_dist: float = 1.5,
+        skip_scan_max_dist: float = 3.5,
+        min_pipe_separation: float = 0.5,
     ):
         super().__init__(f"Slalom Layer {layer_num} Strategy", memory=True)
 
@@ -754,6 +774,7 @@ class SlalomLayer(py_trees.composites.Selector):
             yaw_inward_offset_rad=math.radians(yaw_inward_offset_deg),
             collinearity_threshold=collinearity_threshold,
             min_forward_dist=min_forward_dist,
+            min_pipe_separation=min_pipe_separation,
             name=f"Match Pipes L{layer_num}",
         )
 
@@ -766,34 +787,35 @@ class SlalomLayer(py_trees.composites.Selector):
         # ── OPTIMIZATION: Skip Scan Selector ──────────────────────────────────
         scan_selector = py_trees.composites.Selector(name=f"Scan or Skip L{layer_num}", memory=True)
 
-        # if layer_num > 1:
-        #     skip_scan_check = SkipScanCheckBehaviour(
-        #         min_dist=1.5, 
-        #         max_dist=3.5, 
-        #         name=f"Skip Scan Check L{layer_num}"
-        #     )
-        #     scan_selector.add_children([
-        #         skip_scan_check,
-        #         ScanBehaviour(
-        #             scan_angle_deg=scan_angle_deg,
-        #             pause_time=scan_pause_time,
-        #             angular_tolerance_rad=scan_angular_tolerance_rad,
-        #             turn_hold_time_s=scan_hold_time,
-        #             turn_timeout_s=scan_timeout,
-        #             name=f"Scan Pipes L{layer_num}",
-        #         )
-        #     ])
-        # else:
-        scan_selector.add_child(
-            ScanBehaviour(
-                scan_angle_deg=scan_angle_deg,
-                pause_time=scan_pause_time,
-                angular_tolerance_rad=scan_angular_tolerance_rad,
-                turn_hold_time_s=scan_hold_time,
-                turn_timeout_s=scan_timeout,
-                name=f"Scan Pipes L{layer_num}",
+        if layer_num > 1 and enable_skip_scan:
+            skip_scan_check = SkipScanCheckBehaviour(
+                min_dist=skip_scan_min_dist,
+                max_dist=skip_scan_max_dist,
+                enabled=enable_skip_scan,
+                name=f"Skip Scan Check L{layer_num}",
             )
-        )
+            scan_selector.add_children([
+                skip_scan_check,
+                ScanBehaviour(
+                    scan_angle_deg=scan_angle_deg,
+                    pause_time=scan_pause_time,
+                    angular_tolerance_rad=scan_angular_tolerance_rad,
+                    turn_hold_time_s=scan_hold_time,
+                    turn_timeout_s=scan_timeout,
+                    name=f"Scan Pipes L{layer_num}",
+                )
+            ])
+        else:
+            scan_selector.add_child(
+                ScanBehaviour(
+                    scan_angle_deg=scan_angle_deg,
+                    pause_time=scan_pause_time,
+                    angular_tolerance_rad=scan_angular_tolerance_rad,
+                    turn_hold_time_s=scan_hold_time,
+                    turn_timeout_s=scan_timeout,
+                    name=f"Scan Pipes L{layer_num}",
+                )
+            )
 
         nominal.add_children([
             scan_selector,

@@ -55,6 +55,10 @@ class SlalomTask(py_trees.composites.Sequence):
         scan_timeout: float = 30.0,
         force_blind_forward_dist: float = 0.0,
         initial_approach_distance: float = 3.0,
+        min_pipe_separation: float = 0.5,
+        enable_skip_scan: bool = True,
+        skip_scan_min_dist: float = 1.5,
+        skip_scan_max_dist: float = 3.5,
     ):
         super().__init__("Slalom Task", memory=True)
 
@@ -149,10 +153,13 @@ class SlalomTask(py_trees.composites.Sequence):
                 position_tolerance=position_tolerance,
                 angular_tolerance_rad=angular_tolerance_rad,
                 hold_time=hold_time,
-                timeout=timeout,
                 scan_angular_tolerance_rad=scan_angular_tolerance_rad,
                 scan_hold_time=scan_hold_time,
                 scan_timeout=scan_timeout,
+                enable_skip_scan=enable_skip_scan,
+                skip_scan_min_dist=skip_scan_min_dist,
+                skip_scan_max_dist=skip_scan_max_dist,
+                min_pipe_separation=min_pipe_separation,
             )
             nominal_execution.add_child(layer)
 

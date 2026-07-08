@@ -19,6 +19,7 @@ planner_root_tree:
       service_path: "/rosbag_manager/control"
 
     gate:
+      initial_depth: -1.0          # (m) Depth for the initial dive before gate traversal
       position_tolerance: 0.3      # (m) Convergence threshold for navigation commands (e.g. initial dive)
       hold_time: 5.0               # (s) Seconds to hold within tolerance before SUCCESS for navigation commands
       timeout: 60.0                # (s) Seconds before navigation commands fail and timeout
@@ -75,6 +76,10 @@ planner_root_tree:
       scan_timeout: 45.0           # (s) Timeout before scan turn step FAILURE
       force_blind_forward_dist: 0.0 # (m) If > 0, skips slalom vision and just drives straight this distance in the field X (forward) 
       initial_approach_distance: 0.0 # (m) Distance to approach the first pipe after detecting it during the initial search 
+      min_pipe_separation: 0.5     # (m) Min distance between red and white pipes or between two white pipes
+      enable_skip_scan: true       # If true, skips scan on layers > 1 when cached offset and forward red pipe present
+      skip_scan_min_dist: 1.0      # (m) Min forward distance for skip scan red pipe detection
+      skip_scan_max_dist: 3.0      # (m) Max forward distance for skip scan red pipe detection
 
     bins:
       downcam_fov_horizontal: 59.7        # (deg) Horizontal FOV of down cam while in water
@@ -153,8 +158,11 @@ planner_root_tree:
         
 
     return_home:
-      return_distance: 5.0                # (m) Distance to navigate past the gate initially
-      pass_distance: 2.0                  # (m) Distance to pass through the gate backwards
+      exit_octagon_distance: 2.0          # (m) Distance to drive horizontally at current depth out of Octagon zone before ascending
+      travel_depth: -0.5                  # (m) Depth to travel at across the pool to avoid obstacles
+      gate_pass_depth: -1.0               # (m) Depth to descend to before traversing the return gate
+      return_distance: 3.0                # (m) Distance to navigate past the gate initially
+      pass_distance: 1.0                  # (m) Distance to pass through the gate backwards
       approach_distance: 2.0              # (m) Distance to stop in front of the gate visually
       surface_depth: -0.2                 # (m) Depth to surface at the end
       position_tolerance: 0.3             # (m)
@@ -165,7 +173,7 @@ planner_root_tree:
       do_style_yaw_after: false           # Whether to perform style yaw spin after passing through return gate
       style_yaw_degrees: 360.0            # (deg) Total yaw angle to spin (360 or 720)
       do_style_roll_before: false         # Whether to perform style rolling flip before passing through return gate
-      do_style_roll_after: false          # Whether to perform style rolling flip after passing through return gate
+      do_style_roll_after: true          # Whether to perform style rolling flip after passing through return gate
       style_roll_degrees: 720.0           # (deg) Total roll angle to flip (360 or 720)
       style_roll_torque: 15.0             # (Nm) Open-loop roll torque to apply during rolling flip
       style_roll_coast_degrees: 180.0     # (deg) How many degrees before target angle to cut open-loop torque and coast

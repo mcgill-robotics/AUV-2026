@@ -401,14 +401,15 @@ class GateTask(py_trees.composites.Sequence):
         style_roll_degrees: float = 720.0,
         style_roll_torque: float = 15.0,
         style_roll_coast_degrees: float = 180.0,
+        initial_depth: float = -1.2,
     ):
         super().__init__("Gate Task", memory=True)
 
         self.add_child(
             BasicActionBehaviour(
-                name="Initial Dive (-1.0m)",
+                name=f"Initial Dive ({initial_depth}m)",
                 goal=set_depth(
-                    z=-1.2,
+                    z=initial_depth,
                     tolerance=position_tolerance,
                     hold_time=hold_time,
                     timeout=timeout,

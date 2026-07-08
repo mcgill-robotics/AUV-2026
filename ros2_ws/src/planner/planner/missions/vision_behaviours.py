@@ -781,3 +781,166 @@ class CircleAroundToFindBehaviour(py_trees.behaviour.Behaviour):
             self.action_status = ActionStatus.SUCCEEDED
         else:
             self.action_status = ActionStatus.FAILED
+
+# TODO: honestly shouldn't be in "vision"_behaviours but it's ok for now
+class MoveTowardsTargetByDistance(py_trees.behaviour.Behaviour):
+    """
+    General behaviour that moves from the AUV's current position toward a target point
+    (specified by vision object label(s), blackboard position keys, or explicit coordinates)
+    by a specified distance.
+
+    Can optionally target a specific depth simultaneously (target_z), or move in 3D (use_3d=True),
+    or maintain the current depth (do_z=False when target_z is None and use_3d is False).
+    """
+    def __init__(
+        self,
+        distance: float,
+        target_labels: Optional[List[str]] = None,
+        blackboard_x_key: Optional[str] = None,
+        blackboard_y_key: Optional[str] = None,
+        blackboard_z_key: Optional[str] = None,
+        target_position: Optional[Tuple[float, float, float]] = None,
+        target_z: Optional[float] = None,
+        use_3d: bool = False,
+        position_tolerance: float = 0.3,
+        hold_time: float = 1.0,
+        timeout: float = 30.0,
+        name: str = "Move Towards Target By Distance",
+    ):
+        super().__init__(name)
+        self.distance = distance
+        self.target_labels = target_labels or []
+        self.blackboard_x_key = blackboard_x_key
+        self.blackboard_y_key = blackboard_y_key
+        self.blackboard_z_key = blackboard_z_key
+        self.target_position = target_position
+        self.target_z = target_z
+        self.use_3d = use_3d
+        self.position_tolerance = position_tolerance
+        self.hold_time = hold_time
+        self.timeout = timeout
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+        self.action_status = ActionStatus.NOT_SENT
+
+    def setup(self, **kwargs):
+        self.node = kwargs["node"]
+        self.navigation_client = kwargs["shared_nav_client"]
+        self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
+        if self.blackboard_x_key:
+            self.blackboard.register_key(key=self.blackboard_x_key, access=py_trees.common.Access.READ)
+        if self.blackboard_y_key:
+            self.blackboard.register_key(key=self.blackboard_y_key, access=py_trees.common.Access.READ)
+        if self.blackboard_z_key:
+            self.blackboard.register_key(key=self.blackboard_z_key, access=py_trees.common.Access.READ)
+
+    def initialise(self):
+        self.action_status = ActionStatus.NOT_SENT
+
+    def _get_blackboard_value(self, key_path: str):
+        parts = key_path.strip("/").split("/")
+        curr = self.blackboard
+        for p in parts:
+            if hasattr(curr, p):
+                curr = getattr(curr, p)
+            else:
+                return None
+        return curr
+
+    def update(self):
+        if self.distance <= 0.0:
+            return py_trees.common.Status.SUCCESS
+
+        if self.action_status == ActionStatus.SUCCEEDED:
+            return py_trees.common.Status.SUCCESS
+        if self.action_status == ActionStatus.FAILED:
+            return py_trees.common.Status.FAILURE
+        if self.action_status == ActionStatus.PENDING:
+            return py_trees.common.Status.RUNNING
+
+        if not hasattr(self.blackboard, "sensors") or self.blackboard.sensors.pose is None:
+            return py_trees.common.Status.RUNNING
+
+        auv_pose = self.blackboard.sensors.pose.pose
+        auv_x = auv_pose.position.x
+        auv_y = auv_pose.position.y
+        auv_z = auv_pose.position.z
+
+        tx, ty, tz = None, None, None
+
+        if hasattr(self.blackboard, "vision") and self.blackboard.vision.object_map is not None:
+            for obj in self.blackboard.vision.object_map.array:
+                if obj.label in self.target_labels:
+                    tx = obj.pose.position.x
+                    ty = obj.pose.position.y
+                    tz = obj.pose.position.z
+                    break
+
+        if tx is None or ty is None:
+            if self.blackboard_x_key and self.blackboard_y_key:
+                val_x = self._get_blackboard_value(self.blackboard_x_key)
+                val_y = self._get_blackboard_value(self.blackboard_y_key)
+                if val_x is not None and val_y is not None:
+                    tx, ty = val_x, val_y
+                    if self.blackboard_z_key:
+                        tz = self._get_blackboard_value(self.blackboard_z_key)
+
+        if (tx is None or ty is None) and self.target_position is not None:
+            tx = self.target_position[0]
+            ty = self.target_position[1]
+            if len(self.target_position) > 2:
+                tz = self.target_position[2]
+
+        if tx is None or ty is None:
+            self.node.get_logger().error(f"[{self.name}] Could not resolve target position!")
+            return py_trees.common.Status.FAILURE
+
+        vx = tx - auv_x
+        vy = ty - auv_y
+        vz = (tz - auv_z) if (self.use_3d and tz is not None) else 0.0
+        dist = math.hypot(vx, vy, vz)
+        if dist < 1e-3:
+            dx, dy, dz = 1.0, 0.0, 0.0
+        else:
+            dx, dy, dz = vx / dist, vy / dist, vz / dist
+
+        goal_x = auv_x + dx * self.distance
+        goal_y = auv_y + dy * self.distance
+        if self.target_z is not None:
+            goal_z = self.target_z
+            do_z = True
+        elif self.use_3d and tz is not None:
+            goal_z = auv_z + dz * self.distance
+            do_z = True
+        else:
+            goal_z = auv_z
+            do_z = False
+
+        goal_yaw = math.atan2(dy, dx)
+
+        self.node.get_logger().info(
+            f"[{self.name}] Moving {self.distance}m toward target ({tx:.2f}, {ty:.2f}) to ({goal_x:.2f}, {goal_y:.2f}) [do_z={do_z}, z={goal_z:.2f}]"
+        )
+
+        goal = move_global(
+            x=goal_x,
+            y=goal_y,
+            z=goal_z,
+            yaw=goal_yaw,
+            do_z=do_z,
+            tolerance=self.position_tolerance,
+            hold_time=self.hold_time,
+            timeout=self.timeout,
+        )
+        self.navigation_client.send_navigation_goal(
+            goal, self.name, self._on_goal_response, self._on_goal_result
+        )
+        self.action_status = ActionStatus.PENDING
+        return py_trees.common.Status.RUNNING
+
+    def _on_goal_response(self, goal_response: bool):
+        if not goal_response:
+            self.action_status = ActionStatus.FAILED
+
+    def _on_goal_result(self, goal_success, message):
+        self.action_status = ActionStatus.SUCCEEDED if goal_success else ActionStatus.FAILED

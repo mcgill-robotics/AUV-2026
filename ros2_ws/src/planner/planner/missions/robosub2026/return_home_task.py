@@ -4,8 +4,9 @@ from controls.goal_helpers import move_global, set_depth
 from controls.utils import normalize_angle
 from ..action_status_enum import ActionStatus
 from ..mission_behaviour_components import BasicActionBehaviour
-from ..vision_behaviours import GoNearObject
+from ..vision_behaviours import GoNearObject, MoveTowardsTargetByDistance
 from .gate_behaviours import create_style_yaw_spin_sequence, create_style_rolling_flip_sequence
+
 
 class NavigateToReturnPoint(py_trees.behaviour.Behaviour):
     """
@@ -264,17 +265,48 @@ class ReturnHomeTask(py_trees.composites.Sequence):
         style_roll_degrees: float = 720.0,
         style_roll_torque: float = 15.0,
         style_roll_coast_degrees: float = 180.0,
+        travel_depth: float = -0.5,
+        gate_pass_depth: float = -1.0,
+        exit_octagon_distance: float = 2.0,
         **kwargs,
     ):
         super().__init__("Return Home Task", memory=True)
 
         return_children = [
+            MoveTowardsTargetByDistance(
+                distance=exit_octagon_distance,
+                blackboard_x_key="/gate/center_x",
+                blackboard_y_key="/gate/center_y",
+                use_3d=False,
+                position_tolerance=position_tolerance,
+                hold_time=hold_time,
+                timeout=timeout,
+                name="Exit Octagon Zone Towards Gate",
+            ),
+            BasicActionBehaviour(
+                name=f"Ascend to Travel Depth ({travel_depth}m)",
+                goal=set_depth(
+                    z=travel_depth,
+                    tolerance=position_tolerance,
+                    hold_time=hold_time,
+                    timeout=timeout,
+                ),
+            ),
             NavigateToReturnPoint(
                 return_distance=return_distance,
                 position_tolerance=position_tolerance,
                 hold_time=hold_time,
                 timeout=timeout,
                 global_yaw_lock=global_yaw_lock,
+            ),
+            BasicActionBehaviour(
+                name=f"Descend to Gate Traversal Depth ({gate_pass_depth}m)",
+                goal=set_depth(
+                    z=gate_pass_depth,
+                    tolerance=position_tolerance,
+                    hold_time=hold_time,
+                    timeout=timeout,
+                ),
             ),
             # Search / visually approach the gate from the back
             GoNearObject(
