@@ -19,8 +19,8 @@ from tf_transformations import inverse_matrix, concatenate_matrices
 import scipy.spatial.transform
 
 # Default tolerances used across all helpers
-_DEFAULT_POS_TOL = 0.1     # meters
-_DEFAULT_ANGULAR_TOL = 0.175 # radians (~10 degrees)
+_DEFAULT_POS_TOL = 0.2     # meters
+_DEFAULT_ANGULAR_TOL = 0.262 # radians (~15 degrees)
 _DEFAULT_HOLD = 2.0        # seconds
 _DEFAULT_TIMEOUT = 30.0    # seconds
 POSITION_EPSILON = 1e-5 # small threshold to consider position as "zero" for do_* flags

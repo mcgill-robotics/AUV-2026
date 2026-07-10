@@ -16,6 +16,18 @@ from auv_msgs.srv import RosbagControl
 
 # Planner dependencies
 from .action_status_enum import ActionStatus
+from controls.goal_helpers import (
+        _make_goal,
+        _DEFAULT_POS_TOL,
+        _DEFAULT_ANGULAR_TOL,
+        _DEFAULT_HOLD,
+        _DEFAULT_TIMEOUT,
+        set_global_yaw,
+        move_robot_centric,
+        translate_field_centric,
+)
+from controls.utils import quaternion_from_yaw, yaw_from_quaternion
+from geometry_msgs.msg import Pose, Point, Quaternion
 
 from rcl_interfaces.srv import SetParameters
 from rcl_interfaces.msg import Parameter, ParameterValue, ParameterType
@@ -531,3 +543,124 @@ class SetActuatorBehaviour(py_trees.behaviour.Behaviour):
                         self.fallback_publisher.publish(msg)
                 self.node.get_logger().info(f"[{self.name}] Published {self.command_value} to {self.topic_name}")
                 return py_trees.common.Status.SUCCESS
+
+
+class TaskTransitionBehaviour(py_trees.behaviour.Behaviour):
+        """
+        Optional transition step between mission tasks.
+        If enabled=False (or dx/dy/yaw are unset/zero), returns SUCCESS immediately.
+        If enabled=True, rotates to an absolute target_yaw_deg and/or translates horizontally by (dx, dy)
+        using goal_helpers (set_global_yaw, move_robot_centric, translate_field_centric).
+        """
+        def __init__(
+                self,
+                enabled: bool = False,
+                do_yaw: bool = False,
+                target_yaw_deg: float = 0.0,
+                dx: float = 0.0,
+                dy: float = 0.0,
+                frame: str = "field",
+                position_tolerance: float = _DEFAULT_POS_TOL,
+                angular_tolerance: float = _DEFAULT_ANGULAR_TOL,
+                hold_time: float = _DEFAULT_HOLD,
+                timeout: float = _DEFAULT_TIMEOUT,
+                name: str = "Task Transition",
+        ) -> None:
+                super().__init__(name)
+                self.enabled = bool(enabled)
+                self.do_yaw = bool(do_yaw)
+                self.target_yaw_deg = float(target_yaw_deg) if target_yaw_deg is not None else 0.0
+                self.dx = float(dx)
+                self.dy = float(dy)
+                self.frame = str(frame).lower()
+                self.position_tolerance = position_tolerance
+                self.angular_tolerance = angular_tolerance
+                self.hold_time = hold_time
+                self.timeout = timeout
+                self.blackboard = self.attach_blackboard_client(name=self.name)
+                self.action_status = ActionStatus.NOT_SENT
+                self.result_message = ""
+                self.phase = 0  # 0: yaw turn, 1: translation
+
+        def setup(self, **kwargs) -> None:
+                self.node = kwargs["node"]
+                self.navigation_client = kwargs["shared_nav_client"]
+                self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
+
+        def initialise(self) -> None:
+                self.action_status = ActionStatus.NOT_SENT
+                self.result_message = ""
+                self.phase = 0
+
+        def update(self) -> py_trees.common.Status:
+                if not self.enabled:
+                        return py_trees.common.Status.SUCCESS
+
+                do_yaw = self.do_yaw
+                do_pos = (abs(self.dx) > 1e-4 or abs(self.dy) > 1e-4)
+
+                if not do_yaw and not do_pos:
+                        return py_trees.common.Status.SUCCESS
+
+                if self.action_status == ActionStatus.SUCCEEDED:
+                        if self.phase == 0 and do_yaw and do_pos:
+                                # Yaw turn finished; now start horizontal translation phase
+                                self.phase = 1
+                                self.action_status = ActionStatus.NOT_SENT
+                        else:
+                                return py_trees.common.Status.SUCCESS
+
+                if self.action_status == ActionStatus.FAILED:
+                        return py_trees.common.Status.FAILURE
+                if self.action_status == ActionStatus.PENDING:
+                        return py_trees.common.Status.RUNNING
+
+                if self.action_status == ActionStatus.NOT_SENT:
+                        if self.phase == 0 and do_yaw:
+                                target_yaw_rad = math.radians(float(self.target_yaw_deg))
+                                goal = set_global_yaw(
+                                        yaw_rad=target_yaw_rad,
+                                        tolerance=self.angular_tolerance,
+                                        hold_time=self.hold_time,
+                                        timeout=self.timeout,
+                                )
+                                self.node.get_logger().info(f"[{self.name}] Phase 0: set_global_yaw({self.target_yaw_deg} deg)")
+                        else:
+                                self.phase = 1
+                                if self.frame == "field":
+                                        goal = translate_field_centric(
+                                                dx=self.dx,
+                                                dy=self.dy,
+                                                dz=0.0,
+                                                tolerance=self.position_tolerance,
+                                                hold_time=self.hold_time,
+                                                timeout=self.timeout,
+                                        )
+                                        self.node.get_logger().info(f"[{self.name}] Phase 1: translate_field_centric({self.dx}, {self.dy})")
+                                else:
+                                        goal = move_robot_centric(
+                                                forward=self.dx,
+                                                sway=self.dy,
+                                                heave=0.0,
+                                                tolerance=self.position_tolerance,
+                                                hold_time=self.hold_time,
+                                                timeout=self.timeout,
+                                        )
+                                        self.node.get_logger().info(f"[{self.name}] Phase 1: move_robot_centric({self.dx}, {self.dy})")
+
+                        self.navigation_client.send_navigation_goal(
+                                goal, self.name, self._on_goal_response, self._on_goal_result
+                        )
+                        self.action_status = ActionStatus.PENDING
+                        return py_trees.common.Status.RUNNING
+
+                return py_trees.common.Status.RUNNING
+
+        def _on_goal_response(self, goal_response: bool) -> None:
+                if not goal_response:
+                        self.action_status = ActionStatus.FAILED
+
+        def _on_goal_result(self, goal_success: bool, message: str) -> None:
+                self.result_message = message
+                self.action_status = ActionStatus.SUCCEEDED if goal_success else ActionStatus.FAILED
+

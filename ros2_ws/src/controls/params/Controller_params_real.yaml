@@ -71,7 +71,7 @@ superimposer:
         # Safety Effort Limits (0.0 = disabled)
         max_planar_effort: 30.0      # Max magnitude of sqrt(Fx^2 + Fy^2) [N]
         max_depth_effort: 40.0       # Max absolute vertical force [N]
-        max_torque_x: 10.0           # Max absolute roll torque [Nm]
-        max_torque_y: 10.0           # Max absolute pitch torque [Nm]
-        max_torque_z: 10.0           # Max absolute yaw torque [Nm]
+        max_torque_x: 20.0           # Max absolute roll torque [Nm]
+        max_torque_y: 20.0           # Max absolute pitch torque [Nm]
+        max_torque_z: 20.0           # Max absolute yaw torque [Nm]
         enabled: true

@@ -216,3 +216,46 @@ planner_root_tree:
           fire: [0.0, 0.0, -0.168]
           ambulance: [0.0, 0.193, 0.0]
           firetruck: [0.0, -0.1855, 0.0]
+
+    transitions:
+      position_tolerance: 0.3             # (m) Shared position convergence threshold
+      angular_tolerance_deg: 15.0         # (deg) Shared angular convergence threshold (~0.262 rad)
+      hold_time: 1.0                      # (s) Seconds to hold within tolerance
+      timeout: 30.0                       # (s) Transition timeout
+
+      after_gate:
+        enabled: false
+        do_yaw: false
+        target_yaw_deg: 0.0               # Absolute global heading in degrees
+        dx: 0.0
+        dy: 0.0
+        frame: "field"                    # "field" or "robot"
+      after_slalom:
+        enabled: false
+        do_yaw: false
+        target_yaw_deg: 0.0
+        dx: 0.0
+        dy: 0.0
+        frame: "field"
+      after_bins:
+        enabled: false
+        do_yaw: false
+        target_yaw_deg: 0.0
+        dx: 0.0
+        dy: 0.0
+        frame: "field"
+      after_torpedo:
+        enabled: false
+        do_yaw: false
+        target_yaw_deg: 0.0
+        dx: 0.0
+        dy: 0.0
+        frame: "field"
+      after_octagon:
+        enabled: false
+        do_yaw: false
+        target_yaw_deg: 0.0
+        dx: 0.0
+        dy: 0.0
+        frame: "field"
+

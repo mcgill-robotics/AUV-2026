@@ -408,6 +408,39 @@ def main():
     }
     
     
+    node.declare_parameter("transitions.position_tolerance", 0.3)
+    node.declare_parameter("transitions.angular_tolerance_deg", 15.0)
+    node.declare_parameter("transitions.hold_time", 1.0)
+    node.declare_parameter("transitions.timeout", 30.0)
+
+    transitions_pos_tol = node.get_parameter("transitions.position_tolerance").get_parameter_value().double_value
+    transitions_ang_tol = math.radians(node.get_parameter("transitions.angular_tolerance_deg").get_parameter_value().double_value)
+    transitions_hold_time = node.get_parameter("transitions.hold_time").get_parameter_value().double_value
+    transitions_timeout = node.get_parameter("transitions.timeout").get_parameter_value().double_value
+
+    transition_names = ["after_gate", "after_slalom", "after_bins", "after_torpedo", "after_octagon"]
+    transitions_params = {}
+    for t_name in transition_names:
+        node.declare_parameter(f"transitions.{t_name}.enabled", False)
+        node.declare_parameter(f"transitions.{t_name}.do_yaw", False)
+        node.declare_parameter(f"transitions.{t_name}.target_yaw_deg", 0.0)
+        node.declare_parameter(f"transitions.{t_name}.dx", 0.0)
+        node.declare_parameter(f"transitions.{t_name}.dy", 0.0)
+        node.declare_parameter(f"transitions.{t_name}.frame", "field")
+        transitions_params[t_name] = {
+            "enabled": node.get_parameter(f"transitions.{t_name}.enabled").get_parameter_value().bool_value,
+            "do_yaw": node.get_parameter(f"transitions.{t_name}.do_yaw").get_parameter_value().bool_value,
+            "target_yaw_deg": node.get_parameter(f"transitions.{t_name}.target_yaw_deg").get_parameter_value().double_value,
+            "dx": node.get_parameter(f"transitions.{t_name}.dx").get_parameter_value().double_value,
+            "dy": node.get_parameter(f"transitions.{t_name}.dy").get_parameter_value().double_value,
+            "frame": node.get_parameter(f"transitions.{t_name}.frame").get_parameter_value().string_value,
+            "position_tolerance": transitions_pos_tol,
+            "angular_tolerance": transitions_ang_tol,
+            "hold_time": transitions_hold_time,
+            "timeout": transitions_timeout,
+        }
+
+    
     node.declare_parameter("auto_record.enabled", True)
     node.declare_parameter("auto_record.profile", "all")
     node.declare_parameter("auto_record.bag_prefix", "mission_")
@@ -511,6 +544,7 @@ def main():
         bins_params=bins_params,
         octagon_params=octagon_params,
         return_home_params=return_home_params,
+        transitions_params=transitions_params,
         auto_record_params=auto_record_params,
         startup_delay=startup_delay
     )

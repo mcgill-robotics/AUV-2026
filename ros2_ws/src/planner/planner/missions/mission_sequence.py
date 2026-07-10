@@ -23,7 +23,7 @@ from .robosub2026.torpedo_task import TorpedoTask
 from .robosub2026.table_octagon_task import TableOctagonTask
 from .robosub2026.return_home_task import ReturnHomeTask
 
-from .mission_behaviour_components import RosbagRecordingDecorator, TimerBehaviour, SetNodeParameterBehaviour
+from .mission_behaviour_components import RosbagRecordingDecorator, TimerBehaviour, SetNodeParameterBehaviour, TaskTransitionBehaviour
 
 class MissionSpawner(py_trees.behaviour.Behaviour):
     def __init__(self, placeholder: py_trees.composites.Sequence, **kwargs):
@@ -146,6 +146,7 @@ class MissionSpawner(py_trees.behaviour.Behaviour):
         bins = p.get('bins_params', {})
         octagon = p.get('octagon_params', {})
         return_home = p.get('return_home_params', {})
+        transitions = p.get('transitions_params', {})
         if choice == 1:
             return OrbitQualificationMission(p['angular_tolerance'], p['position_tolerance'], p['hold_time'], p['timeout'], p['orbit_pre_qual_angular_tolerance_scale'], p['orbit_pre_qual_positional_tolerance_scale'], p['orbit_pre_qual_hold_time_initial'], p['orbit_pre_qual_hold_time_segments'])
         elif choice == 2:
@@ -165,7 +166,7 @@ class MissionSpawner(py_trees.behaviour.Behaviour):
         elif choice == 9:
             return TestStyleYawSpin()
         elif choice == 10:
-            return TestStyleRollingFlip()
+            return TestStyleRollingFlip(roll_torque=gate.get('style_roll_torque', 15.0))
         elif choice == 11:
             return TestGrabberBehaviour()
         elif choice == 12:
@@ -186,10 +187,15 @@ class MissionSpawner(py_trees.behaviour.Behaviour):
             full_run = py_trees.composites.Sequence("FULL COMPETITION RUN", memory=True)
             full_run.add_children([
                 GateTask(**gate),
+                TaskTransitionBehaviour(name="Gate -> Slalom Transition", **transitions.get('after_gate', {})),
                 SlalomTask(**slalom),
+                TaskTransitionBehaviour(name="Slalom -> Bins Transition", **transitions.get('after_slalom', {})),
                 BinsTask(**bins),
+                TaskTransitionBehaviour(name="Bins -> Torpedo Transition", **transitions.get('after_bins', {})),
                 TorpedoTask(**torpedo),
+                TaskTransitionBehaviour(name="Torpedo -> Octagon Transition", **transitions.get('after_torpedo', {})),
                 TableOctagonTask(**octagon),
+                TaskTransitionBehaviour(name="Octagon -> Return Home Transition", **transitions.get('after_octagon', {})),
                 ReturnHomeTask(**return_home)
             ])
             return full_run
