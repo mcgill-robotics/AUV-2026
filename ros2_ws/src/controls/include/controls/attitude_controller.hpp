@@ -14,6 +14,7 @@
 #include <memory>
 #include <vector>
 #include <functional>
+#include <algorithm>
 
 namespace controls
 {
@@ -38,11 +39,24 @@ namespace controls
                 double P_ex_;
                 double P_ey_;
                 double P_ez_;
+                double I_ex_;
+                double I_ey_;
+                double I_ez_;
                 double P_wx_;
                 double P_wy_;
                 double P_wz_;
+                double I_MAX_;
+                double integral_activation_threshold_deg_;
+                double integral_activation_threshold_rad_;
+                double max_slew_rate_roll_deg_;
+                double max_slew_rate_pitch_deg_;
+                double max_slew_rate_yaw_deg_;
+                double max_slew_rate_roll_rad_;
+                double max_slew_rate_pitch_rad_;
+                double max_slew_rate_yaw_rad_;
 
                 Mat3 P_e_;
+                Mat3 I_e_;
                 Mat3 P_w_;
 
                 // Control Loop Frequency
@@ -62,12 +76,17 @@ namespace controls
 
                 //Target state variables
                 quatd q_iv2_; 
+                quatd target_q_iv2_; 
+
+                // Integral state variables
+                Vec3 integral_error_;
 
 
 
                 rclcpp::TimerBase::SharedPtr control_timer_;
                 rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr parameter_callback_handle_;
                 bool enabled_;
+                bool was_enabled_;
 
                 void imu_callback(const imu_msg::SharedPtr msg);
                 void target_orientation_callback(const geometry_msgs::msg::Quaternion::SharedPtr msg);

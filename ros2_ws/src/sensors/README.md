@@ -322,6 +322,8 @@ The package provides 4 main nodes:
 | `auv_frame/dvl/velocity` | TwistStamped | AUV's velocity in `pool` frame |
 | `state/pose` | PoseStamped | Aggregated pose of the AUV in `pool` frame | 
 
+**Note on VIO Fallback:** The `state_aggregator` node can optionally use the Visual Inertial Odometry (VIO) pose from the ZED camera instead of the DVL/IMU. This is configured via the `use_vio_for_position` and `use_vio_for_orientation` parameters in `sensors_frames.yaml`. When enabled, X and Y position are taken from the VIO (Z is always from the depth sensor), and orientation is taken from the VIO quaternion. This is highly useful for testing or operating when DVL/IMU hardware is unavailable.
+
 **Note on TF Publishing:** The `state_aggregator` node can optionally publish a TF transform (`publish_pose_tf` parameter in `sensors_frames.yaml`) from the global frame (`pool_link`) to the AUV frame (`auv_link`). This is primarily used for Foxglove visualization and provides an easier ROS-native way to transform poses from the global frame to the AUV frame. This is disabled by default for actual missions to save computation.
 
 ---
@@ -334,6 +336,32 @@ The package provides 4 main nodes:
 | `/sensors/depth/z` | Pressure sensor message | Depth of sensor probe |
 | `/dvl/velocity` | Vendor DVL velocity message | DVL velocity in its body frame |
 | `/dvl/dead_reckoning` | Vendor DVL position message | DVL position in its body frame |
+
+---
+
+### Services
+
+The sensors subsystem exposes hardware reset and calibration services across the IMU, DVL, and depth sensor drivers:
+
+| Service | Type | Subsystem | Description |
+|---|---|---|---|
+| `/xsens/calibrate_gyro` | `std_srvs/srv/Trigger` | IMU (Xsens) | Triggers 10-second Manual Gyro Bias Estimation (MGBE). Do not move the AUV while active! |
+| `/xsens/reset_heading` | `std_srvs/srv/Trigger` | IMU (Xsens) | Resets the IMU yaw (heading) offset to 0.0 in runtime memory. |
+| `/dvl/calibrate_gyro` | `std_srvs/srv/Trigger` | DVL (Waterlinked) | Starts persistent DVL gyroscope calibration (`wcg\n`). |
+| `/dvl/reset_dead_reckoning` | `std_srvs/srv/Trigger` | DVL (Waterlinked) | Resets DVL integrated coordinates (dead reckoning) back to zero (`wcr\n`). |
+| `/depth_processor/calibrate` | `std_srvs/srv/Trigger` | Depth Sensor | Zero-offsets the depth sensor reading at the current surface water level. |
+
+#### Example Usage
+To reset or calibrate the sensors from your terminal while the driver stack is running:
+```bash
+# IMU (Xsens)
+ros2 service call /xsens/calibrate_gyro std_srvs/srv/Trigger
+ros2 service call /xsens/reset_heading std_srvs/srv/Trigger
+
+# DVL (Waterlinked)
+ros2 service call /dvl/calibrate_gyro std_srvs/srv/Trigger
+ros2 service call /dvl/reset_dead_reckoning std_srvs/srv/Trigger
+```
 
 ---
 

@@ -50,7 +50,8 @@ ament_target_dependencies(attitude_controller
   nav_msgs
   message_filters
   Eigen3
-  sensors)
+  sensors
+  auv_msgs)
 
 ament_target_dependencies(superimposer
   rclcpp
@@ -81,6 +82,7 @@ install(PROGRAMS
   scripts/depth_controller.py
   scripts/planar_controller.py
   scripts/navigation_server.py
+  scripts/debug_setpoint_service.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

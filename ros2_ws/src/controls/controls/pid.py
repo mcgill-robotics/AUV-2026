@@ -7,36 +7,53 @@ from rclpy.node import Node
 from geometry_msgs.msg import Wrench
 
 class PID:
-        def __init__(self, KP, KD, KI, I_MAX=0.0):
+        SETPOINT_RESET_EPSILON = 1e-3
+
+        def __init__(self, KP, KD, KI, I_MAX=0.0, integral_activation_threshold=float('inf'), derivative_filter_alpha=0.2):
                 self.KP = KP
                 self.KD = KD
                 self.KI = KI
                 self.I_MAX = I_MAX
-
-
+                self.integral_activation_threshold = integral_activation_threshold
+                self.derivative_filter_alpha = derivative_filter_alpha  # EMA smoothing (0-1, lower = smoother)
 
                 self.position_error = 0.0
                 self.integral_error = 0.0
                 self.derivative_error = 0.0
+                self.previous_position = 0.0
 
                 self.last_setpoint = 0.0
                 
 
-        def compute_errors(self, setpoint, position, previous_position, time_step):
-                if setpoint != self.last_setpoint: # Reset integral term for a new setpoint
+        def update_derivative(self, position, time_step):
+                if time_step > 1e-6:
+                        raw_derivative = (position - self.previous_position) / time_step
+                        raw_derivative = np.clip(raw_derivative, -3.0, 3.0)  # Clamp to physical velocity limits
+                        alpha = self.derivative_filter_alpha
+                        self.derivative_error = alpha * raw_derivative + (1.0 - alpha) * self.derivative_error
+                self.previous_position = position
+                return self.derivative_error
+
+        def compute_errors(self, setpoint, position, time_step, previous_position=None, allow_integration=True):
+                # Reset integral on setpoint change
+                if abs(setpoint - self.last_setpoint) > self.SETPOINT_RESET_EPSILON:
                         self.integral_error = 0.0
                         self.last_setpoint = setpoint
 
                 self.position_error = setpoint - position
 
+                # Conditional Integration: Only integrate if error is within the threshold AND integration is allowed
+                if allow_integration and abs(self.position_error) <= self.integral_activation_threshold:
+                        self.integral_error += self.position_error * time_step
+                        self.integral_error = np.clip(self.integral_error, -self.I_MAX, self.I_MAX)
 
-                self.integral_error += self.position_error * time_step
-                self.integral_error = np.clip(self.integral_error, -self.I_MAX, self.I_MAX)
-
-                # Differentiate position to avoid derivative kick
-                self.derivative_error = (position - previous_position) / time_step
+                if previous_position is not None:
+                        raw_derivative = (position - previous_position) / time_step
+                        raw_derivative = np.clip(raw_derivative, -3.0, 3.0)  # Clamp to physical velocity limits
+                        alpha = self.derivative_filter_alpha
+                        self.derivative_error = alpha * raw_derivative + (1.0 - alpha) * self.derivative_error
+                        self.previous_position = position
                 
-                self.previous_position = position
                 return self.position_error, self.integral_error, self.derivative_error
         
         def compute_effort(self):
@@ -54,16 +71,14 @@ class CascadedController:
 
         def compute_effort(self, target_position, current_position, current_velocity, dt):
                 # Outer loop computes desired velocity
-                self.pid_outer.compute_errors(target_position, current_position, self.pid_outer.previous_position, dt)
+                self.pid_outer.compute_errors(target_position, current_position, dt, self.pid_outer.previous_position)
                 desired_velocity = self.pid_outer.compute_effort()
                 desired_velocity = np.clip(desired_velocity, -self.max_outer_output, self.max_outer_output)
 
                 # Inner loop computes control effort to achieve desired velocity
-                self.pid_inner.compute_errors(desired_velocity, current_velocity, self.pid_inner.previous_position, dt)
+                self.pid_inner.compute_errors(desired_velocity, current_velocity, dt, self.pid_inner.previous_position)
                 control_effort = self.pid_inner.compute_effort()
 
                 return control_effort
-        
-
 
 

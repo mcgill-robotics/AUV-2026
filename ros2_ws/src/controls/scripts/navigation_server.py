@@ -60,6 +60,10 @@ class NavigationServer(Node):
         self._goal_handle = None
         self._goal_lock = threading.Lock()
 
+        # Cache the last published quaternion setpoint to prevent drift
+        # on uncontrolled DOFs when sending successive partial-orientation commands.
+        self._last_quat_setpoint = None
+
         # Callback group for concurrent action + subscriptions
         self.cb_group = ReentrantCallbackGroup()
 
@@ -197,22 +201,13 @@ class NavigationServer(Node):
                 goal, current, target_x, target_y, target_z
             )
             
-            if goal.do_yaw:
-                # Compute orientation error via quaternion difference (q_error = q_target * q_current^-1)
-                r_current = Rotation.from_quat([current.orientation.x, current.orientation.y,
-                                                current.orientation.z, current.orientation.w])
-                r_target = Rotation.from_quat([target_quat.x, target_quat.y,
-                                               target_quat.z, target_quat.w])
-                r_error = r_target * r_current.inv()
-                yaw_error = abs(r_error.as_euler('ZYX', degrees=False)[0])
-            else:
-                yaw_error = 0.0
+            angular_error = self._compute_angular_error(goal, current.orientation, target_quat)
 
             # Check convergence
             pos_converged = pos_error <= goal.position_tolerance
-            yaw_converged = yaw_error <= goal.yaw_tolerance
+            angular_converged = angular_error <= goal.angular_tolerance
 
-            if pos_converged and yaw_converged:
+            if pos_converged and angular_converged:
                 time_in_tolerance += rate_period
             else:
                 time_in_tolerance = 0.0
@@ -225,14 +220,19 @@ class NavigationServer(Node):
                 z=(current.position.z - target_z) if goal.do_z else 0.0
             )
             feedback_msg.position_error = pos_error
-            feedback_msg.yaw_error = yaw_error
+            feedback_msg.angular_error = angular_error
             feedback_msg.time_in_tolerance = time_in_tolerance
             goal_handle.publish_feedback(feedback_msg)
 
             # Success condition
             if time_in_tolerance > goal.hold_time:
                 result.success = True
-                result.message = f'Reached target (held for {goal.hold_time:.1f}s)'
+                elapsed = (self.get_clock().now() - start_time).nanoseconds / 1e9
+                result.message = (
+                    f'Reached target in {elapsed:.1f}s (held for {goal.hold_time:.1f}s, '
+                    f'pos_tol={goal.position_tolerance:.2f}m, '
+                    f'ang_tol={math.degrees(goal.angular_tolerance):.1f}deg)'
+                )
                 goal_handle.succeed()
                 self.get_logger().info(result.message)
                 return result
@@ -244,7 +244,7 @@ class NavigationServer(Node):
                     result.success = False
                     result.message = (
                         f'Timed out after {goal.timeout:.1f}s '
-                        f'(pos_err={pos_error:.3f}m, yaw_err={math.degrees(yaw_error):.1f}deg)'
+                        f'(pos_err={pos_error:.3f}m, ang_err={math.degrees(angular_error):.1f}deg)'
                     )
                     goal_handle.abort()
                     self.get_logger().warn(result.message)
@@ -273,7 +273,11 @@ class NavigationServer(Node):
             target_x = goal.target_pose.position.x
             target_y = goal.target_pose.position.y
             target_z = goal.target_pose.position.z
-            target_quat = goal.target_pose.orientation
+            r_goal = Rotation.from_quat([
+                goal.target_pose.orientation.x, goal.target_pose.orientation.y,
+                goal.target_pose.orientation.z, goal.target_pose.orientation.w
+            ])
+            r_target = r_goal
         else:
             vec_offset = np.array([
                 goal.target_pose.position.x,
@@ -301,10 +305,53 @@ class NavigationServer(Node):
             
             # Local rotation composition: R_target = R_current * R_goal
             r_target = r_current * r_goal
-            q_arr = r_target.as_quat()
-            target_quat = Quaternion(x=q_arr[0], y=q_arr[1], z=q_arr[2], w=q_arr[3])
+
+        # Merged Quaternion Strategy: only use target angles for active DOFs
+        # To prevent drift on uncontrolled DOFs over successive goals, we inherit
+        # from the last explicitly commanded setpoint.
+        if self._last_quat_setpoint is not None:
+            r_base = Rotation.from_quat([
+                self._last_quat_setpoint.x, self._last_quat_setpoint.y,
+                self._last_quat_setpoint.z, self._last_quat_setpoint.w
+            ])
+        else:
+            r_base = r_current
+
+        base_euler = r_base.as_euler('ZYX', degrees=False)
+        target_euler = r_target.as_euler('ZYX', degrees=False)
+        
+        effective_euler = [
+            target_euler[0] if goal.do_yaw else base_euler[0],
+            target_euler[1] if goal.do_pitch else base_euler[1],
+            target_euler[2] if goal.do_roll else base_euler[2],
+        ]
+        
+        r_effective = Rotation.from_euler('ZYX', effective_euler, degrees=False)
+        q_arr = r_effective.as_quat()
+        target_quat = Quaternion(x=q_arr[0], y=q_arr[1], z=q_arr[2], w=q_arr[3])
 
         return target_x, target_y, target_z, target_quat
+
+    def _compute_angular_error(self, goal, current_quat, target_quat):
+        """Compute angular error considering only controlled DOFs."""
+        if not (goal.do_yaw or goal.do_pitch or goal.do_roll):
+            return 0.0
+
+        r_current = Rotation.from_quat([current_quat.x, current_quat.y, current_quat.z, current_quat.w])
+        r_target = Rotation.from_quat([target_quat.x, target_quat.y, target_quat.z, target_quat.w])
+
+        current_euler = r_current.as_euler('ZYX', degrees=False)
+        target_euler = r_target.as_euler('ZYX', degrees=False)
+
+        eval_euler = [
+            target_euler[0] if goal.do_yaw else current_euler[0],
+            target_euler[1] if goal.do_pitch else current_euler[1],
+            target_euler[2] if goal.do_roll else current_euler[2],
+        ]
+
+        r_eval = Rotation.from_euler('ZYX', eval_euler, degrees=False)
+        r_error = r_eval * r_current.inv()
+        return r_error.magnitude()
 
     def _compute_position_error(self, goal, current, target_x, target_y, target_z):
         """Compute position error considering only controlled DOFs."""
@@ -338,8 +385,9 @@ class NavigationServer(Node):
             msg.data = target_y
             self.pub_y_sp.publish(msg)
 
-        if goal.do_yaw:
+        if goal.do_yaw or goal.do_roll or goal.do_pitch:
             self.pub_quat_sp.publish(target_quat)
+            self._last_quat_setpoint = target_quat
 
     # ─────────────────────────────────────────────────────────────────────────
     # Utilities
@@ -354,10 +402,15 @@ class NavigationServer(Node):
             parts.append(f'y={y:.2f}')
         if goal.do_z:
             parts.append(f'z={z:.2f}')
-        if goal.do_yaw:
+        if goal.do_yaw or goal.do_roll or goal.do_pitch:
             r = Rotation.from_quat([target_quat.x, target_quat.y, target_quat.z, target_quat.w])
-            yaw = r.as_euler('ZYX', degrees=True)[0]
-            parts.append(f'yaw={yaw:.1f}deg')
+            euler = r.as_euler('ZYX', degrees=True)
+            if goal.do_yaw:
+                parts.append(f'yaw={euler[0]:.1f}deg')
+            if goal.do_pitch:
+                parts.append(f'pitch={euler[1]:.1f}deg')
+            if goal.do_roll:
+                parts.append(f'roll={euler[2]:.1f}deg')
 
         mode = 'absolute'
         if goal.is_relative and goal.is_local_frame:
@@ -368,7 +421,7 @@ class NavigationServer(Node):
         self.get_logger().info(
             f'Navigating ({mode}): {", ".join(parts)} '
             f'[tol={goal.position_tolerance:.2f}m, '
-            f'yaw_tol={math.degrees(goal.yaw_tolerance):.1f}deg, '
+            f'ang_tol={math.degrees(goal.angular_tolerance):.1f}deg, '
             f'hold={goal.hold_time:.1f}s, '
             f'timeout={goal.timeout:.1f}s]'
         )

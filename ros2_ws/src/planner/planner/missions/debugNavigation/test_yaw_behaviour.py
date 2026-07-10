@@ -18,14 +18,14 @@ class TestYawBehaviour(py_trees.composites.Sequence):
     """
     This PyTrees Sequence is the root of the test translation mission
     """
-    def __init__(self, yaw_tolerance: float, hold_time: float, timeout: float):
+    def __init__(self, angular_tolerance: float, hold_time: float, timeout: float):
         super().__init__("TestYawBehaviour", memory=True)
 
 
 
         # Build the full mission sequence
         # 1. Rotate 180 deg Yaw
-        yaw_rotate_leaf = BasicActionBehaviour("Yaw Test", rotate_relative(dyaw_rad=math.pi, tolerance=yaw_tolerance, hold_time=hold_time, timeout=timeout))
+        yaw_rotate_leaf = BasicActionBehaviour("Yaw Test", rotate_relative(dyaw_rad=math.pi, tolerance=angular_tolerance, hold_time=hold_time, timeout=timeout))
 
 
 

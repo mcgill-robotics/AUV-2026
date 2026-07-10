@@ -1,9 +1,13 @@
 import math
+from enum import Enum
+
+from typing import Optional, Tuple, List
 import py_trees
-from controls.goal_helpers import set_global_yaw, look_at
+from controls.goal_helpers import set_global_yaw, look_at, move_to_and_look_at, move_global, _DEFAULT_POS_TOL, _DEFAULT_HOLD#, _DEFAULT_TIMEOUT,_DEFAULT_YAW_TOL, POSITION_EPSILON
 from controls.utils import yaw_from_quaternion, normalize_angle
 from .action_status_enum import ActionStatus
-
+from auv_msgs.msg import VisionObject
+from controls.utils import Vector2D
 class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
     """
     Rotates the AUV in a full 360-degree sweep, divided into `num_steps`. 
@@ -11,7 +15,19 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
     If it completes `max_attempts` full 360-degree sweeps without finding `target_class`, it fails.
     If the object is seen at any point, it returns SUCCESS immediately.
     """
-    def __init__(self, target_class: str, num_steps: int = 5, max_attempts: int = 2, step_timeout: float = 2.0, clockwise: bool = False, look_at_on_success: bool = True, name="SearchSweep"):
+    def __init__(
+        self,
+        target_class: str,
+        num_steps: int = 5,
+        max_attempts: int = 2,
+        step_timeout: float = 2.0,
+        clockwise: bool = False,
+        look_at_on_success: bool = True,
+        angular_tolerance_rad: float = math.radians(30.0),  # (rad) yaw convergence threshold per turn step
+        turn_hold_time_s: float = 0.1,                   # (s) hold time before turn step SUCCESS
+        turn_timeout_s: float = 30.0,                    # (s) timeout before turn step FAILURE
+        name="SearchSweep",
+    ):
         super().__init__(name)
         self.target_class = target_class
         self.num_steps = num_steps
@@ -19,6 +35,9 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
         self.step_timeout = step_timeout
         self.clockwise = clockwise
         self.look_at_on_success = look_at_on_success
+        self.angular_tolerance_rad = angular_tolerance_rad
+        self.turn_hold_time_s = turn_hold_time_s
+        self.turn_timeout_s = turn_timeout_s
         
         # Calculate how much to turn per step (in radians)
         self.sweep_angle_rad = (2 * math.pi) / float(num_steps)
@@ -32,6 +51,7 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
         self.current_step = 0
         self.action_status = ActionStatus.NOT_SENT
         self.sent_goal = False
+        self.result_message = ''
         
         # Pause tracking
         self.is_pausing = False
@@ -40,12 +60,13 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
         # Absolute angle tracking
         self.start_yaw = None
         
-        # Success alignment tracking
         self.is_looking_at_target = False
         self.target_found_pos = None
+        self.expected_failures = 0
 
     def setup(self, **kwargs):
         self.node = kwargs['node']
+        self.node.get_logger().info(f"[{self.name}] Turn Hold Time: {self.turn_hold_time_s}s, Turn Timeout: {self.turn_timeout_s}s step timeout: {self.step_timeout}s")
         self.navigation_client = kwargs['shared_nav_client']
         self.navigation_client.client_wait_for_server(timeout_sec=5.0) 
         self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
@@ -57,10 +78,12 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
         self.current_step = 0
         self.action_status = ActionStatus.NOT_SENT
         self.sent_goal = False
+        self.result_message = ''
         self.is_pausing = False
         self.start_yaw = None
         self.is_looking_at_target = False
         self.target_found_pos = None
+        self.expected_failures = 0
 
     def update(self):
         # 1. LIVE LOGIC: Check the blackboard for the target object right now
@@ -71,17 +94,17 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
                     if obj.label == self.target_class:
                         self.node.get_logger().info(f"[{self.name}] Found target '{self.target_class}' in vision!")
                         
-                        # Cancel any active sweep turn
-                        if self.action_status == ActionStatus.PENDING:
-                            self.navigation_client.reset_action_client()
-                        
+
                         if self.look_at_on_success:
                             self.node.get_logger().info(f"[{self.name}] Transitioning to final alignment with {self.target_class}.")
                             self.is_looking_at_target = True
                             self.target_found_pos = (obj.pose.position.x, obj.pose.position.y)
+                            if self.action_status == ActionStatus.PENDING:
+                                self.expected_failures += 1
                             self.action_status = ActionStatus.NOT_SENT
                             self.sent_goal = False
                             # Continue update() to send the look_at goal immediately
+
                         else:
                             return py_trees.common.Status.SUCCESS
         
@@ -94,7 +117,7 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
                 return py_trees.common.Status.SUCCESS
             
             if self.action_status == ActionStatus.FAILED:
-                self.node.get_logger().error(f"[{self.name}] Final alignment turn failed.")
+                self.node.get_logger().error(f"[{self.name}] Final alignment turn failed. {self.result_message}")
                 return py_trees.common.Status.FAILURE
             
             if self.action_status == ActionStatus.NOT_SENT:
@@ -110,7 +133,9 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
                     target_y=self.target_found_pos[1],
                     current_x=auv_x,
                     current_y=auv_y,
-                    hold_time=self.step_timeout # Hold a bit to let vision settle on target
+                    tolerance=self.angular_tolerance_rad,   # (rad)
+                    hold_time=self.step_timeout,        # (s) hold to let vision settle on target
+                    timeout=self.turn_timeout_s,        # (s)
                 )
                 
                 self.navigation_client.send_navigation_goal(goal, self.name, self.on_server_goal_response, self.on_server_goal_result)
@@ -127,7 +152,7 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
             
         # If the turn failed unexpectedly
         if self.action_status == ActionStatus.FAILED:
-            self.node.get_logger().error(f"[{self.name}] Turn action failed midway.")
+            self.node.get_logger().error(f"[{self.name}] Turn action failed midway. {self.result_message}")
             return py_trees.common.Status.FAILURE
             
         # If we just finished a turn step, we need to pause
@@ -135,7 +160,7 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
             if not self.is_pausing:
                 self.is_pausing = True
                 self.pause_start_time = self.node.get_clock().now().nanoseconds / 1e9
-                self.node.get_logger().info(f"[{self.name}] Step complete. Pausing for {self.step_timeout}s to stabilize vision.")
+                self.node.get_logger().info(f"[{self.name}] Step complete. Pausing for {self.step_timeout}s to stabilize vision. {self.result_message}")
             
             # Check if pause time has elapsed
             elapsed = (self.node.get_clock().now().nanoseconds / 1e9) - self.pause_start_time
@@ -177,7 +202,12 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
             
             # Send the absolute yaw turn (with a large timeout to ensure it has time to physically turn)
             # We use a tiny hold_time because the behavior itself handles the stabilization pause.
-            goal = set_global_yaw(yaw_rad=target_yaw, hold_time=0.1, tolerance=0.175*3, timeout=30.0)
+            goal = set_global_yaw(
+                yaw_rad=target_yaw,
+                tolerance=self.angular_tolerance_rad,  # (rad)
+                hold_time=self.turn_hold_time_s,   # (s)
+                timeout=self.turn_timeout_s,       # (s)
+            )
             
             self.navigation_client.send_navigation_goal(
                 goal, 
@@ -194,16 +224,723 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
         if not goal_response:
             self.action_status = ActionStatus.FAILED
 
-    def on_server_goal_result(self, goal_success: bool):
+    def on_server_goal_result(self, goal_success: bool, message: str = "Server result callback received with no message."):
+        self.result_message = message
+        if goal_success:
+            self.action_status = ActionStatus.SUCCEEDED
+        elif self.expected_failures > 0:
+            self.expected_failures -= 1
+        else:
+            self.action_status = ActionStatus.FAILED
+
+
+
+
+class ScanBehaviour(py_trees.behaviour.Behaviour):
+    """
+    Performs a ±scan_angle sweep from the current heading to populate
+    the vision object map with nearby objects on both sides.
+
+    Sequence: left -> right -> center -> SUCCESS
+    """
+    def __init__(
+        self,
+        scan_angle_deg: float = 30.0,
+        pause_time: float = 1.0,
+        angular_tolerance_rad: float = math.radians(30.0),  # (rad) yaw convergence threshold per turn
+        turn_hold_time_s: float = 0.1,                   # (s) hold time before turn SUCCESS
+        turn_timeout_s: float = 30.0,                    # (s) timeout before turn FAILURE
+        name="Scan Pipes",
+        num_steps_per_side: int = 1                      # Number of steps to scan, avoid big swings
+    ):
+        super().__init__(name)
+        self.scan_angle_rad = math.radians(scan_angle_deg)
+        self.pause_time = pause_time
+        self.angular_tolerance_rad = angular_tolerance_rad
+        self.turn_hold_time_s = turn_hold_time_s
+        self.turn_timeout_s = turn_timeout_s
+        self.num_steps_per_side = num_steps_per_side
+
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+
+        # State tracking
+        self.center_yaw = None
+        self.current_phase = 0
+        self.action_status = ActionStatus.NOT_SENT
+        self.sent_goal = False
+        self.result_message = ''
+        self.is_pausing = False
+        self.pause_start_time = 0.0
+
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.navigation_client = kwargs['shared_nav_client']
+        self.navigation_client.client_wait_for_server(timeout_sec=5.0)
+        self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
+
+    def initialise(self):
+        self.center_yaw = None
+        self.current_phase = 0
+        self.action_status = ActionStatus.NOT_SENT
+        self.sent_goal = False
+        self.result_message = ''
+        self.is_pausing = False
+
+    def _scan_offsets(self):
+        """Returns the sequence of yaw offsets from center to execute.
+        Pattern: left -> right -> center (3 general moves covering the full scan range).
+        Convention: +yaw = counterclockwise (left), -yaw = clockwise (right).
+        """
+        ccw_yaw_targets = []
+        cw_yaw_targets = []
+
+        if self.num_steps_per_side <= 0:
+            self.node.get_logger().warn(f"Step number per side invalid: {self.num_steps_per_side}")
+            self.num_steps_per_side = 1
+
+        step_size = self.scan_angle_rad / self.num_steps_per_side
+
+        # Sweep left (0 to +scan_angle)
+        for i in range(1, self.num_steps_per_side + 1):
+            ccw_yaw_targets.append(i * step_size)
+            
+        # Sweep right (+scan_angle to -scan_angle)
+        for i in range(1, 2 * self.num_steps_per_side + 1):
+            cw_yaw_targets.append(self.scan_angle_rad - i * step_size)
+
+        # Return to center (-scan_angle to 0)
+        center_targets = []
+        for i in range(1, self.num_steps_per_side + 1):
+            center_targets.append(-self.scan_angle_rad + i * step_size)
+
+        return [*ccw_yaw_targets, *cw_yaw_targets, *center_targets]
+
+    def update(self):
+        # Capture center yaw on first tick
+        if self.center_yaw is None:
+            if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.pose is None:
+                self.node.get_logger().warn(f"[{self.name}] Waiting for /sensors/pose.")
+                return py_trees.common.Status.RUNNING
+            current_quat = self.blackboard.sensors.pose.pose.orientation
+            self.center_yaw = yaw_from_quaternion(current_quat)
+
+        offsets = self._scan_offsets()
+
+        # All phases complete
+        if self.current_phase >= len(offsets):
+            return py_trees.common.Status.SUCCESS
+
+        # Handle pause after a completed rotation
+        if self.is_pausing:
+            elapsed = (self.node.get_clock().now().nanoseconds / 1e9) - self.pause_start_time
+            if elapsed >= self.pause_time:
+                self.is_pausing = False
+                self.current_phase += 1
+                self.action_status = ActionStatus.NOT_SENT
+                self.sent_goal = False
+            return py_trees.common.Status.RUNNING
+
+        # Rotation completed → start pause
+        if self.action_status == ActionStatus.SUCCEEDED:
+            self.is_pausing = True
+            self.pause_start_time = self.node.get_clock().now().nanoseconds / 1e9
+            self.node.get_logger().info(f"[{self.name}] Rotation complete, pausing {self.pause_time}s for vision. {self.result_message}")
+            return py_trees.common.Status.RUNNING
+
+        if self.action_status == ActionStatus.FAILED:
+            self.node.get_logger().error(f"[{self.name}] Rotation failed. {self.result_message}")
+            return py_trees.common.Status.FAILURE
+
+        if self.action_status == ActionStatus.PENDING:
+            return py_trees.common.Status.RUNNING
+
+        # Send rotation goal
+        if self.action_status == ActionStatus.NOT_SENT:
+            offset = offsets[self.current_phase]
+            target_yaw = normalize_angle(self.center_yaw + offset)
+            direction = "left" if offset < 0 else ("right" if offset > 0 else "center")
+            self.node.get_logger().info(
+                f"[{self.name}] Rotating {direction} to {math.degrees(target_yaw):.1f}° "
+                f"(phase {self.current_phase + 1}/{len(offsets)})"
+            )
+            goal = set_global_yaw(
+                yaw_rad=target_yaw,
+                tolerance=self.angular_tolerance_rad,  # (rad)
+                hold_time=self.turn_hold_time_s,   # (s)
+                timeout=self.turn_timeout_s,       # (s)
+            )
+            self.navigation_client.send_navigation_goal(
+                goal, self.name, self._on_goal_response, self._on_goal_result
+            )
+            self.action_status = ActionStatus.PENDING
+            self.sent_goal = True
+            return py_trees.common.Status.RUNNING
+
+    def _on_goal_response(self, goal_response: bool):
+        if not goal_response:
+            self.action_status = ActionStatus.FAILED
+
+    def _on_goal_result(self, goal_success: bool, message: str = "Server result callback received with no message."):
+        self.result_message = message
+        self.action_status = ActionStatus.SUCCEEDED if goal_success else ActionStatus.FAILED
+
+class GoNearObject(py_trees.behaviour.Behaviour):
+    def __init__(self, target_class: str, target_distance: float, height_offset: float | None = None, tolerance_meters: float=_DEFAULT_POS_TOL, hold_time: float=_DEFAULT_HOLD, name: str | None = None):
+        super().__init__(name if name else f"GoNear{target_class}")
+        self.target_class = target_class
+        self.target_planar_distance = target_distance
+        self.height_offset = height_offset
+        self.tolerance_meters = tolerance_meters
+        self.hold_time = hold_time
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+        self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/vision/last_goal_pose", access=py_trees.common.Access.WRITE)
+        self.action_status = ActionStatus.NOT_SENT
+        
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.navigation_client = kwargs['shared_nav_client']
+        self.navigation_client.client_wait_for_server(timeout_sec=5.0) 
+
+    def initialise(self):
+        # Find the target in object map
+        if hasattr(self.blackboard, 'vision') and self.blackboard.vision.object_map is not None \
+           and hasattr(self.blackboard, 'sensors') and self.blackboard.sensors.pose is not None:
+            target_obj = None
+            auv_pose = self.blackboard.sensors.pose.pose.position
+            min_distance = float('inf')
+            for obj in self.blackboard.vision.object_map.array:
+                if obj.label == self.target_class:
+                    distance = math.sqrt((obj.pose.position.x - auv_pose.x) ** 2 + (obj.pose.position.y - auv_pose.y) ** 2)
+                    if distance < min_distance:
+                        target_obj = obj
+                        min_distance = distance
+            
+            if target_obj is None:
+                self.node.get_logger().error(f"[{self.name}] Target '{self.target_class}' not found in vision during setup!")
+                self.action_status = ActionStatus.FAILED
+                return
+            
+            target_x = target_obj.pose.position.x
+            target_y = target_obj.pose.position.y
+
+            current_pose = self.blackboard.sensors.pose.pose.position
+
+            direction_vector = (target_x - current_pose.x, target_y - current_pose.y)
+            magnitude = math.sqrt(direction_vector[0]**2 + direction_vector[1]**2)
+
+            if magnitude <= self.target_planar_distance:
+                self.node.get_logger().info(f"[{self.name}] Already within target distance of {self.target_class} ({magnitude:.2f}m <= {self.target_planar_distance:.2f}m). No movement needed.")
+                self.action_status = ActionStatus.SUCCEEDED
+                return
+            
+            normalized_direction = (direction_vector[0]/magnitude, direction_vector[1]/magnitude)
+
+            goal_x = target_x - normalized_direction[0] * self.target_planar_distance
+            goal_y = target_y - normalized_direction[1] * self.target_planar_distance
+
+            if self.height_offset is None:
+                goal = move_global(goal_x, goal_y, do_z=False, tolerance=self.tolerance_meters, hold_time=self.hold_time)
+            else:
+                goal_z = target_obj.pose.position.z + self.height_offset
+                goal = move_global(goal_x, goal_y, goal_z, do_z=True, tolerance=self.tolerance_meters, hold_time=self.hold_time)
+
+            self.blackboard.vision.last_goal_pose = goal
+            self.navigation_client.send_navigation_goal(goal, self.name, custom_goal_response=self.on_server_goal_response, custom_goal_result=self.on_server_goal_result)
+
+            self.action_status = ActionStatus.PENDING
+
+            return py_trees.common.Status.RUNNING
+
+        else: 
+            self.action_status = ActionStatus.FAILED
+            return
+
+    def on_server_goal_response(self, goal_response: bool):
+        if not goal_response:
+            self.node.get_logger().error(f"[{self.name}] Failed to send goal to navigation server.")
+            self.action_status = ActionStatus.FAILED
+    
+    def on_server_goal_result(self, goal_success: bool, message: str):
+        if goal_success:
+            self.node.get_logger().info(f"[{self.name}] Reached target distance from {self.target_class}. {message}")
+            self.action_status = ActionStatus.SUCCEEDED
+        else:
+            self.node.get_logger().error(f"[{self.name}] Failed to reach target distance from {self.target_class}. {message}")
+            self.action_status = ActionStatus.FAILED
+        
+    def update(self):
+        if self.action_status == ActionStatus.SUCCEEDED:
+            self.node.get_logger().info(f"[{self.name}] Returning SUCCESS.")
+            return py_trees.common.Status.SUCCESS
+        elif self.action_status == ActionStatus.FAILED:
+            self.node.get_logger().info(f"[{self.name}] Returning FAILURE.")
+            return py_trees.common.Status.FAILURE
+        else:
+            return py_trees.common.Status.RUNNING
+
+
+class CircleAroundPhases(Enum):
+    """
+    Phases of the Circle Around To Find behaviour state machine
+    """
+    APPROACH = 0
+    PAUSING = 1
+    CIRCLING = 2
+
+class CircleAroundToFindBehaviour(py_trees.behaviour.Behaviour):
+    """
+    Circles around a reference point while facing it, attempting at the same time to find a target object in vision.
+    This behaviour is mostly intended for the torpedo board, circling around the board to find the icons and thus confirming we are facing the right direction to shoot torpedoes.
+    Behaviour assumes there is only one instance of the reference class visible in vision at a time, and that it is visible from the start of the behaviour. If multiple instances of the reference class are visible, it will use the first one in the object map array, which may be arbritrary.
+    
+    reference_class: The vision class of the reference point to circle around (e.g. "torpedo_board").
+    z_reference: (m) The depth to maintain while circling (e.g. the depth of the center of the board).
+    target_classes: A dictionary mapping vision classes of interest to integer counts of how many of each class to find (e.g. {"blood": 1, "ambulance": 1}).
+    reference_distance: (m) The distance to maintain from the reference point while circling. Distance in 2D (Z provided separately as z_reference).
+    num_circle_steps: The number of discrete steps in the circle (e.g. 8 would be every 45 degrees).
+    max_circling_attempts: The number of full circles (360-degree sweeps) to attempt before giving up.
+    step_timeout: (s) Seconds to pause after each turn step to let vision stabilize.
+    clockwise: Whether to circle in a clockwise direction (True) or counterclockwise (False).
+    position_tolerance: (m) Position convergence threshold for each turn step. Used in navigation client
+    yaw_tolerance_rad: (rad) Yaw convergence threshold for each turn step. Used in navigation client.
+    turn_hold_time_s: (s) Hold time before declaring turn step SUCCESS. Used in navigation client.
+    turn_timeout_s: (s) Timeout before declaring turn step FAILURE. Used in navigation client.
+    """
+    def __init__(
+        self,
+        reference_class: str,
+        z_reference: float,
+        target_classes: dict[str,int],
+        reference_distance: float = 1.0,
+        num_circle_steps: int = 5,
+        max_circling_attempts: int = 2,
+        step_timeout: float = 2.0,
+        clockwise: bool = False,
+        position_tolerance: float = 0.5,                     # (m) position convergence threshold for each turn step
+        yaw_tolerance_rad: float = math.radians(30.0),  # (rad) yaw convergence threshold per turn step
+        turn_hold_time_s: float = 0.1,                   # (s) hold time before turn step SUCCESS
+        turn_timeout_s: float = 30.0,                    # (s) timeout before turn step FAILURE
+        name="CircleAroundToFind",
+    ):
+        # TODO add attempts to find objects to avoid needless scan rotations
+        super().__init__(name)
+        
+        self.reference_class: str = reference_class
+        self.z_reference: float = z_reference
+        self.target_classes: dict[str, int] = target_classes
+        self.reference_distance: float = reference_distance
+        self.num_circle_steps: int = num_circle_steps
+        self.max_circling_attempts: int = max_circling_attempts
+        self.step_timeout: float = step_timeout
+        self.clockwise: bool = clockwise
+        self.position_tolerance: float = position_tolerance
+        self.yaw_tolerance_rad: float = yaw_tolerance_rad
+        self.turn_hold_time_s: float = turn_hold_time_s
+        self.turn_timeout_s: float = turn_timeout_s
+
+        # State tracking
+        self.phase: CircleAroundPhases = CircleAroundPhases.APPROACH
+        self.current_attempt: int = 0
+        self.circle_step: int = 0
+        self.action_status: ActionStatus = ActionStatus.NOT_SENT
+        self.reference_position: Optional[Vector2D] = None
+        
+        self.angle_rad_per_circle_step = (2 * math.pi) / float(num_circle_steps)
+        if self.clockwise:
+            self.angle_rad_per_circle_step = -self.angle_rad_per_circle_step
+        
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+        # Pause tracking        
+        self.pause_start_time: float = 0.0
+        self.is_pausing: bool = False
+        self.result_message=""
+        
+        # Target found tracking
+        self.found_targets: dict[str, int] = {cls: 0 for cls in target_classes.keys()}
+        
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.navigation_client = kwargs['shared_nav_client']
+        self.result_message=""
+        self.navigation_client.client_wait_for_server(timeout_sec=5.0) 
+        self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
+        
+    def initialise(self):
+        # Reset state when this behavior starts
+        self.phase = CircleAroundPhases.APPROACH
+        self.current_attempt = 0
+        self.circle_step = 0
+        self.action_status = ActionStatus.NOT_SENT
+        self.sent_goal = False
+        self.is_pausing = False
+        self.reference_position = None
+        
+    def update(self):
+        # self.node.get_logger().info(f"[{self.name}] Current phase: {self.phase}, action status: {self.action_status}, current attempt: {self.current_attempt}, circle step: {self.circle_step}, found targets: {self.found_targets}",throttle_duration_sec=1.0)
+        match self.phase:
+            case CircleAroundPhases.APPROACH:
+                match self.action_status:
+                    case ActionStatus.SUCCEEDED:  # Approach -> Pause
+                        self.node.get_logger().info(f"[{self.name}] Approach complete. AUV facing {self.reference_class} reference point at {self.reference_distance:0.2f}m away. Navigation result message: {self.result_message}")
+                        self.phase = CircleAroundPhases.PAUSING
+                        self.action_status = ActionStatus.NOT_SENT
+                        self.sent_goal = False
+                        return py_trees.common.Status.RUNNING
+                    case ActionStatus.FAILED:
+                        self.node.get_logger().error(f"[{self.name}] Initial face towards reference failed. Navigation result message: {self.result_message}")
+                        return py_trees.common.Status.FAILURE
+                    case ActionStatus.PENDING:
+                        return py_trees.common.Status.RUNNING
+                    case ActionStatus.NOT_SENT:
+                        self.reference_position = self._find_reference_position()
+                        if self.reference_position is None:
+                            self.node.get_logger().warn(f"[{self.name}] Lost sight of reference object '{self.reference_class}' during initial approach. Unable to continue.")
+                            return py_trees.common.Status.FAILURE
+                        self.node.get_logger().info(f"[{self.name}] Found reference object '{self.reference_class}' at position {self.reference_position}. Starting facing towards it.")
+                        auv_pose = self._determine_auv_pose()
+                        if auv_pose is None:
+                            self.node.get_logger().warn(f"[{self.name}] Waiting for /sensors/pose to determine current position.")
+                            return py_trees.common.Status.RUNNING
+                        auv_2D_position, _, _ = auv_pose
+                        
+                        # determine vector from AUV to reference point
+                        auv_to_ref = self.reference_position - auv_2D_position
+
+                        # scale to desired reference distance
+                        goal_vector = auv_to_ref.normalized() * self.reference_distance
+                        goal_position = self.reference_position - goal_vector  # we want to be behind the reference
+                        
+                        # self.node.get_logger().info(f"[{self.name}] AUV current 2D position: {auv_2D_position}, reference position: {self.reference_position}, AUV to reference vector: {auv_to_ref}, goal position for approach: {goal_position}.")
+
+                        goal = move_to_and_look_at(
+                            target_x=goal_position.x,
+                            target_y=goal_position.y,
+                            target_z=self.z_reference,
+                            reference_x=self.reference_position.x,
+                            reference_y=self.reference_position.y,
+                            position_tolerance=self.position_tolerance,  # (m)
+                            yaw_tolerance=self.yaw_tolerance_rad,  # (rad)
+                            hold_time=self.turn_hold_time_s,   # (s)
+                            timeout=self.turn_timeout_s,       # (s)
+                        )
+                        self.navigation_client.send_navigation_goal(goal, self.name, self.on_server_goal_response, self.on_server_goal_result)
+                        self.action_status = ActionStatus.PENDING
+                        self.sent_goal = True
+                        return py_trees.common.Status.RUNNING
+
+            case CircleAroundPhases.PAUSING:
+                elapsed = (self.node.get_clock().now().nanoseconds / 1e9) - self.pause_start_time
+                # check if this is the first tick of the pause phase to log and start the timer
+                if not self.is_pausing:
+                    self.is_pausing = True
+                    self.pause_start_time = self.node.get_clock().now().nanoseconds / 1e9
+                    self.node.get_logger().info(f"[{self.name}] Pausing for {self.step_timeout}s to stabilize vision before circling.")
+                elif elapsed >= self.step_timeout:
+                    # Transition to circling phase after pause
+                    self.phase = CircleAroundPhases.CIRCLING
+                    # sanity reset
+                    self.action_status = ActionStatus.NOT_SENT
+                    self.sent_goal = False
+                return py_trees.common.Status.RUNNING
+
+            case CircleAroundPhases.CIRCLING:
+                match self.action_status:
+                    case ActionStatus.SUCCEEDED:
+                        self.node.get_logger().info(f"[{self.name}] Circle step {self.circle_step} complete. Navigation result message: {self.result_message}")
+                        self.circle_step += 1
+                        # full rotation
+                        if self.circle_step >= self.num_circle_steps:
+                            self.circle_step = 0
+                            self.current_attempt += 1
+                            # exceeded max attempts
+                            if self.current_attempt >= self.max_circling_attempts:
+                                self.node.get_logger().info(f"[{self.name}] Max circling attempts reached ({self.max_circling_attempts}). Target objects not found: {self.found_targets}.")
+                                return py_trees.common.Status.FAILURE
+                            else:
+                                self.node.get_logger().info(f"[{self.name}] Completed a full circle. Starting attempt {self.current_attempt + 1}/{self.max_circling_attempts}.")
+                                self.action_status = ActionStatus.NOT_SENT
+                                self.sent_goal = False
+                                self.phase = CircleAroundPhases.PAUSING
+                                return py_trees.common.Status.RUNNING
+                        else:
+                            self.node.get_logger().info(f"[{self.name}] Starting circle step {self.circle_step + 1}/{self.num_circle_steps}.")
+                            self.action_status = ActionStatus.NOT_SENT
+                            self.sent_goal = False
+                            self.phase = CircleAroundPhases.PAUSING
+                            return py_trees.common.Status.RUNNING
+                    case ActionStatus.FAILED:
+                        self.node.get_logger().error(f"[{self.name}] Failed to circle to next position. Step {self.circle_step}/{self.num_circle_steps}, Attempt {self.current_attempt}/{self.max_circling_attempts}. Navigation result message: {self.result_message}")
+                        return py_trees.common.Status.FAILURE
+                    case ActionStatus.PENDING:
+                        return py_trees.common.Status.RUNNING
+                    case ActionStatus.NOT_SENT:
+                        if self._check_targets_found():
+                            self.node.get_logger().info(f"[{self.name}] Found all target objects: {self.found_targets}.")
+                            return py_trees.common.Status.SUCCESS
+                        self.reference_position = self._find_reference_position()
+                        if self.reference_position is None:
+                            self.node.get_logger().warn(f"[{self.name}] Lost sight of reference object '{self.reference_class}' during circling. Unable to continue.")
+                            return py_trees.common.Status.FAILURE
+                        auv_pose = self._determine_auv_pose()
+                        if auv_pose is None:
+                            self.node.get_logger().warn(f"[{self.name}] Waiting for /sensors/pose to determine current position for circling.")
+                            return py_trees.common.Status.RUNNING
+                        auv_2D_position, _, _ = auv_pose
+                        goal_position = self._compute_circle_goal(
+                            current_position=auv_2D_position,
+                            center=self.reference_position,
+                            radius=self.reference_distance,
+                            arc_angle_rad_offset=self.angle_rad_per_circle_step
+                        )
+                        if goal_position is None:
+                            self.node.get_logger().error(f"[{self.name}] Failed to compute circle goal position. Reference position: {self.reference_position}, Radius: {self.reference_distance}, Arc angle (rad): {self.angle_rad_per_circle_step * self.circle_step}")
+                            return py_trees.common.Status.FAILURE
+                        self.node.get_logger().info(f"[{self.name}] Step {self.circle_step+1}/{self.num_circle_steps} Circling to new goal position: {goal_position} around reference at {self.reference_position}. Goal angle from start: {math.degrees(self.angle_rad_per_circle_step * (self.circle_step+1)):.1f}°/360°.")
+                        # self.node.get_logger().info(f"[{self.name}] AUV current 2D position: {auv_2D_position}, reference position: {self.reference_position}, goal position for circling: {goal_position}.")
+                        goal = move_to_and_look_at(
+                            target_x=goal_position.x,
+                            target_y=goal_position.y,
+                            target_z=self.z_reference,
+                            reference_x=self.reference_position.x,
+                            reference_y=self.reference_position.y,
+                            position_tolerance=self.position_tolerance,  # (m)
+                            yaw_tolerance=self.yaw_tolerance_rad,  # (rad)
+                            hold_time=self.turn_hold_time_s,   # (s)
+                            timeout=self.turn_timeout_s,       # (s)
+                        )
+                        self.navigation_client.send_navigation_goal(goal, self.name, self.on_server_goal_response, self.on_server_goal_result)
+                        self.action_status = ActionStatus.PENDING
+                        self.sent_goal = True
+                        return py_trees.common.Status.RUNNING
+                
+    def _find_reference_position(self) -> Optional[Vector2D]:
+        """Helper function to find the reference point position from the vision object map on the blackboard."""
+        potential_refs = self._find_object_in_map(self.reference_class)
+        if potential_refs:
+            # there should only be one reference object. If there are multiple, we'll use the first one.
+            ref_obj = potential_refs[0]
+            return Vector2D.from_point(ref_obj.pose.position)
+        return None
+    
+    def _find_object_in_map(self,class_name: str)-> List[VisionObject]:
+        """Helper function to find all objects of a given class in the vision object map on the blackboard."""
+        
+        objects: List[VisionObject] = []
+        if hasattr(self.blackboard, 'vision') and self.blackboard.vision.object_map is not None:
+            for obj in self.blackboard.vision.object_map.array:
+                if obj.label == class_name:
+                    objects.append(obj)
+        return objects
+    
+    def _check_targets_found(self) -> bool:
+        """Helper function to check how many of each target class have been found in the vision object map on the blackboard, and return True if we have found at least the required count of each class."""
+        if hasattr(self.blackboard, 'vision') and self.blackboard.vision.object_map is not None:
+            for obj in self.blackboard.vision.object_map.array:
+                if obj.label in self.target_classes.keys():
+                    # store all found targets, even if they exceed the required count, for logging purposes
+                    self.found_targets[obj.label] += 1
+        for class_name, count in self.found_targets.items():
+            self.node.get_logger().info(f"[{self.name}] Found {count}/{self.target_classes[class_name]} of target class '{class_name}'.")
+        for class_name, count in self.target_classes.items():
+            if self.found_targets[class_name] < count:
+                return False
+        return True
+    
+    def _determine_auv_pose(self) -> Optional[Tuple[Vector2D, float, float]]:
+        """Helper function to determine the AUV's current position and yaw from the blackboard. Returns (x, y, z, yaw) or None if pose is not available."""
+        
+        if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.pose is None:
+            return None
+        auv_x = self.blackboard.sensors.pose.pose.position.x
+        auv_y = self.blackboard.sensors.pose.pose.position.y
+        auv_z = self.blackboard.sensors.pose.pose.position.z
+        current_quat = self.blackboard.sensors.pose.pose.orientation
+        auv_yaw = yaw_from_quaternion(current_quat)
+        return (Vector2D(auv_x, auv_y), auv_z, auv_yaw)
+
+    def _compute_circle_goal(self, current_position: Vector2D, center: Vector2D, radius: float, arc_angle_rad_offset: float) -> Optional[Vector2D]:
+        """Helper function to compute the XY goal position based on center, radius and arc angle. Returned position is the point on the circle defined by center and radius at the given arc angle from the reference point."""
+        if center is None or radius is None or radius <= 0 or arc_angle_rad_offset is None:
+            return None
+        # compute the angle from the reference point to the current position, then add the arc angle offset to get the goal position on the circle
+        arc_angle_rad =  math.atan2(current_position.y - center.y, current_position.x - center.x) + arc_angle_rad_offset
+        goal_x = center.x + radius * math.cos(arc_angle_rad)
+        goal_y = center.y + radius * math.sin(arc_angle_rad)
+        return Vector2D(goal_x, goal_y)
+
+    def on_server_goal_response(self, goal_response: bool):
+        if not goal_response:
+            self.action_status = ActionStatus.FAILED
+
+    def on_server_goal_result(self, goal_success: bool, message: str = "Server result callback received with no message."):
+        self.result_message = message
         if goal_success:
             self.action_status = ActionStatus.SUCCEEDED
         else:
             self.action_status = ActionStatus.FAILED
 
-    def terminate(self, new_status):
-        if new_status == py_trees.common.Status.INVALID:
-            if hasattr(self, 'node') and self.node:
-                self.node.get_logger().warn(f"[{self.name}] Aborted. Canceling sweep turn.")
-            if hasattr(self, 'navigation_client') and self.navigation_client:
-                self.navigation_client.reset_action_client()
+# TODO: honestly shouldn't be in "vision"_behaviours but it's ok for now
+class MoveTowardsTargetByDistance(py_trees.behaviour.Behaviour):
+    """
+    General behaviour that moves from the AUV's current position toward a target point
+    (specified by vision object label(s), blackboard position keys, or explicit coordinates)
+    by a specified distance.
 
+    Can optionally target a specific depth simultaneously (target_z), or move in 3D (use_3d=True),
+    or maintain the current depth (do_z=False when target_z is None and use_3d is False).
+    """
+    def __init__(
+        self,
+        distance: float,
+        target_labels: Optional[List[str]] = None,
+        blackboard_x_key: Optional[str] = None,
+        blackboard_y_key: Optional[str] = None,
+        blackboard_z_key: Optional[str] = None,
+        target_position: Optional[Tuple[float, float, float]] = None,
+        target_z: Optional[float] = None,
+        use_3d: bool = False,
+        position_tolerance: float = 0.3,
+        hold_time: float = 1.0,
+        timeout: float = 30.0,
+        name: str = "Move Towards Target By Distance",
+    ):
+        super().__init__(name)
+        self.distance = distance
+        self.target_labels = target_labels or []
+        self.blackboard_x_key = blackboard_x_key
+        self.blackboard_y_key = blackboard_y_key
+        self.blackboard_z_key = blackboard_z_key
+        self.target_position = target_position
+        self.target_z = target_z
+        self.use_3d = use_3d
+        self.position_tolerance = position_tolerance
+        self.hold_time = hold_time
+        self.timeout = timeout
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+        self.action_status = ActionStatus.NOT_SENT
+
+    def setup(self, **kwargs):
+        self.node = kwargs["node"]
+        self.navigation_client = kwargs["shared_nav_client"]
+        self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
+        if self.blackboard_x_key:
+            self.blackboard.register_key(key=self.blackboard_x_key, access=py_trees.common.Access.READ)
+        if self.blackboard_y_key:
+            self.blackboard.register_key(key=self.blackboard_y_key, access=py_trees.common.Access.READ)
+        if self.blackboard_z_key:
+            self.blackboard.register_key(key=self.blackboard_z_key, access=py_trees.common.Access.READ)
+
+    def initialise(self):
+        self.action_status = ActionStatus.NOT_SENT
+
+    def _get_blackboard_value(self, key_path: str):
+        parts = key_path.strip("/").split("/")
+        curr = self.blackboard
+        for p in parts:
+            if hasattr(curr, p):
+                curr = getattr(curr, p)
+            else:
+                return None
+        return curr
+
+    def update(self):
+        if self.distance <= 0.0:
+            return py_trees.common.Status.SUCCESS
+
+        if self.action_status == ActionStatus.SUCCEEDED:
+            return py_trees.common.Status.SUCCESS
+        if self.action_status == ActionStatus.FAILED:
+            return py_trees.common.Status.FAILURE
+        if self.action_status == ActionStatus.PENDING:
+            return py_trees.common.Status.RUNNING
+
+        if not hasattr(self.blackboard, "sensors") or self.blackboard.sensors.pose is None:
+            return py_trees.common.Status.RUNNING
+
+        auv_pose = self.blackboard.sensors.pose.pose
+        auv_x = auv_pose.position.x
+        auv_y = auv_pose.position.y
+        auv_z = auv_pose.position.z
+
+        tx, ty, tz = None, None, None
+
+        if hasattr(self.blackboard, "vision") and self.blackboard.vision.object_map is not None:
+            for obj in self.blackboard.vision.object_map.array:
+                if obj.label in self.target_labels:
+                    tx = obj.pose.position.x
+                    ty = obj.pose.position.y
+                    tz = obj.pose.position.z
+                    break
+
+        if tx is None or ty is None:
+            if self.blackboard_x_key and self.blackboard_y_key:
+                val_x = self._get_blackboard_value(self.blackboard_x_key)
+                val_y = self._get_blackboard_value(self.blackboard_y_key)
+                if val_x is not None and val_y is not None:
+                    tx, ty = val_x, val_y
+                    if self.blackboard_z_key:
+                        tz = self._get_blackboard_value(self.blackboard_z_key)
+
+        if (tx is None or ty is None) and self.target_position is not None:
+            tx = self.target_position[0]
+            ty = self.target_position[1]
+            if len(self.target_position) > 2:
+                tz = self.target_position[2]
+
+        if tx is None or ty is None:
+            self.node.get_logger().error(f"[{self.name}] Could not resolve target position!")
+            return py_trees.common.Status.FAILURE
+
+        vx = tx - auv_x
+        vy = ty - auv_y
+        vz = (tz - auv_z) if (self.use_3d and tz is not None) else 0.0
+        dist = math.hypot(vx, vy, vz)
+        if dist < 1e-3:
+            dx, dy, dz = 1.0, 0.0, 0.0
+        else:
+            dx, dy, dz = vx / dist, vy / dist, vz / dist
+
+        goal_x = auv_x + dx * self.distance
+        goal_y = auv_y + dy * self.distance
+        if self.target_z is not None:
+            goal_z = self.target_z
+            do_z = True
+        elif self.use_3d and tz is not None:
+            goal_z = auv_z + dz * self.distance
+            do_z = True
+        else:
+            goal_z = auv_z
+            do_z = False
+
+        goal_yaw = math.atan2(dy, dx)
+
+        self.node.get_logger().info(
+            f"[{self.name}] Moving {self.distance}m toward target ({tx:.2f}, {ty:.2f}) to ({goal_x:.2f}, {goal_y:.2f}) [do_z={do_z}, z={goal_z:.2f}]"
+        )
+
+        goal = move_global(
+            x=goal_x,
+            y=goal_y,
+            z=goal_z,
+            yaw=goal_yaw,
+            do_z=do_z,
+            tolerance=self.position_tolerance,
+            hold_time=self.hold_time,
+            timeout=self.timeout,
+        )
+        self.navigation_client.send_navigation_goal(
+            goal, self.name, self._on_goal_response, self._on_goal_result
+        )
+        self.action_status = ActionStatus.PENDING
+        return py_trees.common.Status.RUNNING
+
+    def _on_goal_response(self, goal_response: bool):
+        if not goal_response:
+            self.action_status = ActionStatus.FAILED
+
+    def _on_goal_result(self, goal_success, message):
+        self.action_status = ActionStatus.SUCCEEDED if goal_success else ActionStatus.FAILED

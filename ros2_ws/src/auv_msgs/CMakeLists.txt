@@ -20,14 +20,19 @@ set(msg_files
 	"msg/VisionDetection.msg"
 	"msg/VisionDetectionFrame.msg"
 	"msg/VisionObject.msg"
+	"msg/FoxgloveObject.msg"
+	"msg/FoxgloveObjectArray.msg"
 	"msg/VisionObjectArray.msg"
 )
 
 set(srv_files
 	"srv/SetInt32.srv"
+	"srv/AUVSetpoint.srv"
 	"srv/AutomaticCapture.srv"
 	"srv/ShootTorpedo.srv"
 	"srv/SetGripper.srv"
+	"srv/RosbagControl.srv"
+	"srv/SetDownCamProjectionHeights.srv"
 )
 
 set(action_files

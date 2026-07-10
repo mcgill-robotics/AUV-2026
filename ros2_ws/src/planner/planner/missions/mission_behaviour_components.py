@@ -8,14 +8,29 @@ import py_trees_ros
 import rclpy
 from rclpy.node import Node
 from std_srvs.srv import Trigger
+from std_msgs.msg import UInt8
 
 # AUV dependencies
 from auv_msgs.action import AUVNavigate
+from auv_msgs.srv import RosbagControl
 
 # Planner dependencies
 from .action_status_enum import ActionStatus
+from controls.goal_helpers import (
+        _make_goal,
+        _DEFAULT_POS_TOL,
+        _DEFAULT_ANGULAR_TOL,
+        _DEFAULT_HOLD,
+        _DEFAULT_TIMEOUT,
+        set_global_yaw,
+        move_robot_centric,
+        translate_field_centric,
+)
+from controls.utils import quaternion_from_yaw, yaw_from_quaternion
+from geometry_msgs.msg import Pose, Point, Quaternion
 
-
+from rcl_interfaces.srv import SetParameters
+from rcl_interfaces.msg import Parameter, ParameterValue, ParameterType
 
 class BasicActionBehaviour(py_trees.behaviour.Behaviour):
         """
@@ -48,6 +63,7 @@ class BasicActionBehaviour(py_trees.behaviour.Behaviour):
             self.sent_goal = False
             self.action_status = ActionStatus.NOT_SENT # Either succeeded, pending, failed or not sent
             self.is_waiting_for_result = False
+            self.result_message = ""
             
         def setup(self, **kwargs) -> None:
             """
@@ -72,7 +88,7 @@ class BasicActionBehaviour(py_trees.behaviour.Behaviour):
             """
             # Reset field needed to keep track of goal
             self.action_status = ActionStatus.NOT_SENT
-
+            self.result_message = ""
                 
         def update(self) -> py_trees.common.Status:
             """
@@ -93,12 +109,12 @@ class BasicActionBehaviour(py_trees.behaviour.Behaviour):
                 
             # Check for failure condition from the async callbacks (goal response and goal result)
             if self.action_status is ActionStatus.FAILED:
-                self.node.get_logger().error(f"[{self.name}] Action failed midway.")
+                self.node.get_logger().error(f"[{self.name}] Action failed: {self.result_message}")
                 return py_trees.common.Status.FAILURE
                 
             # Completion check
             if self.action_status is ActionStatus.SUCCEEDED:
-                self.node.get_logger().info(f"[{self.name}] Completed goal.")
+                self.node.get_logger().info(f"[{self.name}] Completed goal. {self.result_message}")
                 return py_trees.common.Status.SUCCESS
 
             # Block loop if currently navigating to a waypoint
@@ -125,29 +141,24 @@ class BasicActionBehaviour(py_trees.behaviour.Behaviour):
             if not goal_response:
                 self.action_status = ActionStatus.FAILED
 
-        def on_server_goal_result(self, goal_success) -> None:
+        def on_server_goal_result(self, goal_success: bool, message: str) -> None:
             """
             Description: This function provides customized logic to be executed when
             the goal is finished. In this case, the custom implementation updates the status of the mission
             depending on whether or not the goal was successful or failed. Pass this function as an input 
             to the navigation_client.send_navigation_goal
 
-            Inputs: goal_success: str, The client will call this function with true upon success, and false upon failure
+            Inputs: goal_success: bool, The client will call this function with true upon success, and false upon failure
+                    message: str, The result message from the action server
 
             Outputs: None
             """
+            self.result_message = message
             if goal_success:
                 self.action_status = ActionStatus.SUCCEEDED
             else:
                 self.action_status = ActionStatus.FAILED
 
-        def terminate(self, new_status: py_trees.common.Status):
-            """Called if the tree aborts this branch or if it naturally finishes."""
-            if new_status == py_trees.common.Status.INVALID:
-                if hasattr(self, 'node') and self.node:
-                    self.node.get_logger().warn(f"[{self.name}] Aborted branch. Canceling active goal.")
-                if hasattr(self, 'navigation_client') and self.navigation_client:
-                    self.navigation_client.reset_action_client()
 
 
 class BasicTriggerServiceBehaviour(py_trees.behaviour.Behaviour):
@@ -334,3 +345,322 @@ class TimerBehaviour(py_trees.behaviour.Behaviour):
                         return py_trees.common.Status.SUCCESS
                 
                 return py_trees.common.Status.RUNNING
+
+class RosbagRecordingDecorator(py_trees.decorators.Decorator):
+    """
+    A decorator that automatically starts a rosbag recording when the decorated mission
+    starts, and stops the recording when the mission ends (whether success, failure, or interrupted).
+    """
+    def __init__(self, child: py_trees.behaviour.Behaviour, profile: str = "all", bag_name: str = "", service_path: str = "/rosbag_manager/control") -> None:
+        super().__init__(name="Rosbag Recording Decorator", child=child)
+        self.profile = profile
+        self.bag_name = bag_name
+        self.service_path = service_path
+        self.started_recording = False
+        
+    def setup(self, **kwargs) -> None:
+        self.node = kwargs['node']
+        self.service_client = self.node.create_client(RosbagControl, self.service_path)
+        
+    def initialise(self) -> None:
+        if self.service_client.wait_for_service(timeout_sec=1.0):
+            req = RosbagControl.Request()
+            req.action = RosbagControl.Request.START_RECORD
+            req.profile = self.profile
+            req.bag_name = self.bag_name
+            
+            self.node.get_logger().info(f"[{self.name}] Starting auto-recording (profile: {self.profile}, bag: {self.bag_name})...")
+            future = self.service_client.call_async(req)
+            
+            def done_callback(f):
+                try:
+                    response = f.result()
+                    if response.success:
+                        self.started_recording = True
+                    else:
+                        self.node.get_logger().info(f"[{self.name}] Auto-record didn't start: {response.message} (Is a bag already recording?)")
+                except Exception as e:
+                    self.node.get_logger().error(f"[{self.name}] Service call failed: {e}")
+                    
+            future.add_done_callback(done_callback)
+        else:
+            self.node.get_logger().warn(f"[{self.name}] {self.service_path} service not available. Skipping auto-record.")
+            
+    def update(self) -> py_trees.common.Status:
+        return self.decorated.status
+        
+    def terminate(self, new_status: py_trees.common.Status) -> None:
+        if new_status != py_trees.common.Status.RUNNING and self.started_recording:
+            if self.service_client.wait_for_service(timeout_sec=1.0):
+                req = RosbagControl.Request()
+                req.action = RosbagControl.Request.STOP_RECORD
+                
+                self.node.get_logger().info(f"[{self.name}] Stopping auto-recording...")
+                self.service_client.call_async(req)
+            self.started_recording = False
+
+class SetNodeParameterBehaviour(py_trees.behaviour.Behaviour):
+        """
+        Calls a ROS2 node's ~/set_parameters service to dynamically change a parameter.
+        """
+        def __init__(self, node_name: str, param_name: str, param_value, name="SetNodeParameter", max_attempts: int = 1):
+                super().__init__(name)
+                self.target_node = node_name
+                self.param_name = param_name
+                self.param_value = param_value
+                self.max_attempts = max_attempts
+                
+                self.service_client = None
+                self.future = None
+                self.request_sent = False
+                self.attempt_count = 0
+
+        def setup(self, **kwargs):
+                self.node = kwargs['node']
+                self.service_client = self.node.create_client(SetParameters, f'{self.target_node}/set_parameters')
+                
+        def initialise(self):
+                self.future = None
+                self.request_sent = False
+                self.attempt_count = 0
+                
+        def update(self):
+                if not self.request_sent:
+                        if not self.service_client.wait_for_service(timeout_sec=1.0):
+                                self.attempt_count += 1
+                                if self.attempt_count >= self.max_attempts:
+                                        self.node.get_logger().warn(f"[{self.name}] Service {self.target_node}/set_parameters not available after {self.max_attempts} attempts (controls offline?). Proceeding without setting parameter.")
+                                        return py_trees.common.Status.SUCCESS
+                                self.node.get_logger().warn(f"[{self.name}] Service {self.target_node}/set_parameters not available (attempt {self.attempt_count}/{self.max_attempts}).")
+                                return py_trees.common.Status.RUNNING
+                                
+                        request = SetParameters.Request()
+                        param = Parameter()
+                        param.name = self.param_name
+                        val = ParameterValue()
+                        
+                        if isinstance(self.param_value, bool):
+                                val.type = ParameterType.PARAMETER_BOOL
+                                val.bool_value = self.param_value
+                        elif isinstance(self.param_value, int):
+                                val.type = ParameterType.PARAMETER_INTEGER
+                                val.integer_value = self.param_value
+                        elif isinstance(self.param_value, float):
+                                val.type = ParameterType.PARAMETER_DOUBLE
+                                val.double_value = self.param_value
+                        elif isinstance(self.param_value, str):
+                                val.type = ParameterType.PARAMETER_STRING
+                                val.string_value = self.param_value
+                                
+                        param.value = val
+                        request.parameters = [param]
+                        
+                        self.future = self.service_client.call_async(request)
+                        self.request_sent = True
+                        self.node.get_logger().info(f"[{self.name}] Setting {self.param_name}={self.param_value} on {self.target_node}")
+                        return py_trees.common.Status.RUNNING
+                        
+                if not self.future.done():
+                        return py_trees.common.Status.RUNNING
+                        
+                if self.future.exception() is not None:
+                        self.node.get_logger().error(f"[{self.name}] SetParameters failed: {self.future.exception()}")
+                        return py_trees.common.Status.FAILURE
+                        
+                response = self.future.result()
+                if not response.results[0].successful:
+                        self.node.get_logger().error(f"[{self.name}] Failed to set parameter: {response.results[0].reason}")
+                        return py_trees.common.Status.FAILURE
+                        
+                self.node.get_logger().info(f"[{self.name}] Successfully set parameter.")
+                return py_trees.common.Status.SUCCESS
+
+
+class WaitForTriggerBehaviour(py_trees.behaviour.Behaviour):
+        """
+        Waits until a ROS 2 service on the planner node is called to trigger the mission.
+        """
+        def __init__(self, service_name: str = "~/start_mission", name="Wait For Trigger"):
+                super().__init__(name)
+                self.service_name = service_name
+                self.triggered = False
+                self.srv = None
+                
+        def setup(self, **kwargs):
+                self.node = kwargs['node']
+                self.srv = self.node.create_service(Trigger, self.service_name, self.trigger_callback)
+                self.node.get_logger().info(f"[{self.name}] Hosted trigger service at {self.service_name}")
+                
+        def trigger_callback(self, request, response):
+                self.triggered = True
+                response.success = True
+                response.message = "Mission Triggered!"
+                self.node.get_logger().info(f"[{self.name}] Received trigger via service call.")
+                return response
+                
+        def initialise(self):
+                # We don't reset triggered here, because once triggered, it should stay triggered
+                # unless explicitly reset for a new run.
+                pass
+                
+        def update(self):
+                if self.triggered:
+                        return py_trees.common.Status.SUCCESS
+                return py_trees.common.Status.RUNNING
+
+
+class SetActuatorBehaviour(py_trees.behaviour.Behaviour):
+        """
+        Publish a UInt8 command to an actuator topic (e.g. /actuators/grabber or /actuators/torpedo).
+        """
+        def __init__(self, topic_name: str, command_value: int, name: str = None):
+                if name is None:
+                        name = f"Set {topic_name} -> {command_value}"
+                super().__init__(name)
+                self.topic_name = topic_name
+                self.command_value = int(command_value)
+                self.publisher = None
+                self.fallback_publisher = None
+
+        def setup(self, **kwargs):
+                self.node = kwargs['node']
+                self.publisher = self.node.create_publisher(UInt8, self.topic_name, 10)
+                if self.topic_name.startswith("/actuators/"):
+                        fallback_topic = self.topic_name.replace("/actuators/", "/actuator/", 1)
+                        self.fallback_publisher = self.node.create_publisher(UInt8, fallback_topic, 10)
+                elif self.topic_name.startswith("/actuator/"):
+                        fallback_topic = self.topic_name.replace("/actuator/", "/actuators/", 1)
+                        self.fallback_publisher = self.node.create_publisher(UInt8, fallback_topic, 10)
+                self.node.get_logger().info(f"[{self.name}] Created publisher for {self.topic_name}")
+
+        def update(self) -> py_trees.common.Status:
+                if self.publisher is None:
+                        self.node.get_logger().error(f"[{self.name}] Publisher not initialized for {self.topic_name}")
+                        return py_trees.common.Status.FAILURE
+                msg = UInt8(data=self.command_value)
+                self.publisher.publish(msg)
+                if self.fallback_publisher is not None:
+                        self.fallback_publisher.publish(msg)
+                self.node.get_logger().info(f"[{self.name}] Published {self.command_value} to {self.topic_name}")
+                return py_trees.common.Status.SUCCESS
+
+
+class TaskTransitionBehaviour(py_trees.behaviour.Behaviour):
+        """
+        Optional transition step between mission tasks.
+        If enabled=False (or dx/dy/yaw are unset/zero), returns SUCCESS immediately.
+        If enabled=True, rotates to an absolute target_yaw_deg and/or translates horizontally by (dx, dy)
+        using goal_helpers (set_global_yaw, move_robot_centric, translate_field_centric).
+        """
+        def __init__(
+                self,
+                enabled: bool = False,
+                do_yaw: bool = False,
+                target_yaw_deg: float = 0.0,
+                dx: float = 0.0,
+                dy: float = 0.0,
+                frame: str = "field",
+                position_tolerance: float = _DEFAULT_POS_TOL,
+                angular_tolerance: float = _DEFAULT_ANGULAR_TOL,
+                hold_time: float = _DEFAULT_HOLD,
+                timeout: float = _DEFAULT_TIMEOUT,
+                name: str = "Task Transition",
+        ) -> None:
+                super().__init__(name)
+                self.enabled = bool(enabled)
+                self.do_yaw = bool(do_yaw)
+                self.target_yaw_deg = float(target_yaw_deg) if target_yaw_deg is not None else 0.0
+                self.dx = float(dx)
+                self.dy = float(dy)
+                self.frame = str(frame).lower()
+                self.position_tolerance = position_tolerance
+                self.angular_tolerance = angular_tolerance
+                self.hold_time = hold_time
+                self.timeout = timeout
+                self.blackboard = self.attach_blackboard_client(name=self.name)
+                self.action_status = ActionStatus.NOT_SENT
+                self.result_message = ""
+                self.phase = 0  # 0: yaw turn, 1: translation
+
+        def setup(self, **kwargs) -> None:
+                self.node = kwargs["node"]
+                self.navigation_client = kwargs["shared_nav_client"]
+                self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
+
+        def initialise(self) -> None:
+                self.action_status = ActionStatus.NOT_SENT
+                self.result_message = ""
+                self.phase = 0
+
+        def update(self) -> py_trees.common.Status:
+                if not self.enabled:
+                        return py_trees.common.Status.SUCCESS
+
+                do_yaw = self.do_yaw
+                do_pos = (abs(self.dx) > 1e-4 or abs(self.dy) > 1e-4)
+
+                if not do_yaw and not do_pos:
+                        return py_trees.common.Status.SUCCESS
+
+                if self.action_status == ActionStatus.SUCCEEDED:
+                        if self.phase == 0 and do_yaw and do_pos:
+                                # Yaw turn finished; now start horizontal translation phase
+                                self.phase = 1
+                                self.action_status = ActionStatus.NOT_SENT
+                        else:
+                                return py_trees.common.Status.SUCCESS
+
+                if self.action_status == ActionStatus.FAILED:
+                        return py_trees.common.Status.FAILURE
+                if self.action_status == ActionStatus.PENDING:
+                        return py_trees.common.Status.RUNNING
+
+                if self.action_status == ActionStatus.NOT_SENT:
+                        if self.phase == 0 and do_yaw:
+                                target_yaw_rad = math.radians(float(self.target_yaw_deg))
+                                goal = set_global_yaw(
+                                        yaw_rad=target_yaw_rad,
+                                        tolerance=self.angular_tolerance,
+                                        hold_time=self.hold_time,
+                                        timeout=self.timeout,
+                                )
+                                self.node.get_logger().info(f"[{self.name}] Phase 0: set_global_yaw({self.target_yaw_deg} deg)")
+                        else:
+                                self.phase = 1
+                                if self.frame == "field":
+                                        goal = translate_field_centric(
+                                                dx=self.dx,
+                                                dy=self.dy,
+                                                dz=0.0,
+                                                tolerance=self.position_tolerance,
+                                                hold_time=self.hold_time,
+                                                timeout=self.timeout,
+                                        )
+                                        self.node.get_logger().info(f"[{self.name}] Phase 1: translate_field_centric({self.dx}, {self.dy})")
+                                else:
+                                        goal = move_robot_centric(
+                                                forward=self.dx,
+                                                sway=self.dy,
+                                                heave=0.0,
+                                                tolerance=self.position_tolerance,
+                                                hold_time=self.hold_time,
+                                                timeout=self.timeout,
+                                        )
+                                        self.node.get_logger().info(f"[{self.name}] Phase 1: move_robot_centric({self.dx}, {self.dy})")
+
+                        self.navigation_client.send_navigation_goal(
+                                goal, self.name, self._on_goal_response, self._on_goal_result
+                        )
+                        self.action_status = ActionStatus.PENDING
+                        return py_trees.common.Status.RUNNING
+
+                return py_trees.common.Status.RUNNING
+
+        def _on_goal_response(self, goal_response: bool) -> None:
+                if not goal_response:
+                        self.action_status = ActionStatus.FAILED
+
+        def _on_goal_result(self, goal_success: bool, message: str) -> None:
+                self.result_message = message
+                self.action_status = ActionStatus.SUCCEEDED if goal_success else ActionStatus.FAILED
+

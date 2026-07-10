@@ -66,13 +66,21 @@ $RECYCLE.BIN/
 *.onnx
 # TensorRT engine files
 *.engine
-
+*.md5
 
 #xsens ros2 driver lib 
 ros2_ws/src/xsens_mti_ros2_driver/lib/**
 
+#model hash files
+*.md5
 
 # zed sdk recordings 
 *.svo
 *.svo2
 core.*
+
+# ROS bags
+*.mcap
+*.db3
+rosbags/**/*.yaml
+*.zip

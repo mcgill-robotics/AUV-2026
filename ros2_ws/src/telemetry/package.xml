@@ -18,6 +18,8 @@
   <exec_depend>foxglove_bridge</exec_depend>
   <exec_depend>ros2launch</exec_depend>
   <exec_depend>propulsion</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+
 
   <export>
     <build_type>ament_python</build_type>

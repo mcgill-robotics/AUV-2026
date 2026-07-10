@@ -1,40 +1,77 @@
 attitude_controller:
     ros__parameters:
-        control_loop_rate: 10.0
-        P_ex: 6.0
-        P_ey: 6.0
-        P_ez: 6.0
-        P_wx: 1.0
-        P_wy: 1.0
-        P_wz: 1.0
-        buoyancy: 264.09 # [N]
-        r_bv_v: [ 0.0, 0.0, 0.0 ] # [m] From CAD Model    
+        control_loop_rate: 25.0
+        # P
+        P_ex: 0.05 # v2 -> 0.01
+        P_ey: 0.05 # v2 -> 0.01
+        P_ez: 6.0 # v2 -> 3.5
+        # I
+        I_ex: 0.0
+        I_ey: 0.0
+        I_ez: 0.0 # may need to modify (0.5 in v2)
+        # D
+        P_wx: 0.1 # v2 -> 0.1
+        P_wy: 0.1 # v2 -> 0.1
+        P_wz: 2.0 # v2 -> 2.0
+        I_MAX: 3.0
+        integral_activation_threshold_deg: 10.0
+        max_slew_rate_roll_deg: 30.0 # [deg/s] (0.0 = disabled)
+        max_slew_rate_pitch_deg: 30.0 # [deg/s]
+        max_slew_rate_yaw_deg: 30.0 # [deg/s]
+        buoyancy: 275.4 # [N]
+        r_bv_v: [ 0.0, 0.0, 0.0 ] # [m] Tuned in pool tests.    
         enabled: true
 
 depth_controller:
     ros__parameters:
         control_loop_hz: 10.0
-        KP: 10.0
+        KP: 30.0
         KD: 50.0
-        KI: 0.0
+        KI: 0.15 # may need to modify
         I_MAX: 10.0
-        net_buoyancy: 9.03 # Newtons
+        integral_activation_threshold: 0.3
+        derivative_filter_alpha: 0.2
+        max_slew_rate: 0.0 # [m/s] (0.0 = disabled)
+        net_buoyancy: 1.0 # Newtons.
         enabled: true
 
 x_controller:
     ros__parameters:
         control_loop_hz: 10.0
-        KP: 15.0
-        KD: 50.0
-        KI: 0.0
+        KP: 20.0
+        KD: 15.0
+        KI: 0.5
         I_MAX: 10.0
+        integral_activation_threshold: 0.5
+        derivative_filter_alpha: 0.8
+        max_slew_rate: 0.5 # [m/s] (0.0 = disabled)
         enabled: true
 
 y_controller:
     ros__parameters:
         control_loop_hz: 10.0
-        KP: 15.0
-        KD: 50.0
-        KI: 0.0
+        KP: 20.0
+        KD: 15.0
+        KI: 0.5
         I_MAX: 10.0
+        integral_activation_threshold: 0.5
+        derivative_filter_alpha: 0.8
+        max_slew_rate: 0.5 # [m/s] (0.0 = disabled)
+        enabled: true
+
+superimposer:
+    ros__parameters:
+        effort_bias_force_x: 0.0
+        effort_bias_force_y: 0.0
+        effort_bias_force_z: 0.0
+        effort_bias_torque_x: 0.0
+        effort_bias_torque_y: 0.0
+        effort_bias_torque_z: 0.0
+        publish_hz: 40.0
+        # Safety Effort Limits (0.0 = disabled)
+        max_planar_effort: 30.0      # Max magnitude of sqrt(Fx^2 + Fy^2) [N]
+        max_depth_effort: 40.0       # Max absolute vertical force [N]
+        max_torque_x: 20.0           # Max absolute roll torque [Nm]
+        max_torque_y: 20.0           # Max absolute pitch torque [Nm]
+        max_torque_z: 20.0           # Max absolute yaw torque [Nm]
         enabled: true

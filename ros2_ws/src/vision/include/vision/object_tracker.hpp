@@ -69,6 +69,12 @@ public:
 
     ~ObjectTracker() = default;
 
+    void clear() {
+        tracks.clear();
+        track_id_counter = 1;
+        matches.clear();
+    }
+
     KalmanFilter create_kf(const Eigen::Vector3d& initial_pos);
 
     // Accepts current frame data and returns the list of CONFIRMED tracks
@@ -84,6 +90,8 @@ public:
         bool has_observer_position,
         const std::vector<std::pair<std::string, Eigen::Vector3d>>& persistent_positions = {}
     ); 
+
+    const std::vector<Track>& get_tracks() const { return tracks; }
 
 private:
     // Breaking down the update() logic into specific steps

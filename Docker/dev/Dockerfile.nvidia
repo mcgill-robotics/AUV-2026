@@ -141,6 +141,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ros-${ROS_DISTRO}-diagnostic-updater \
         ros-${ROS_DISTRO}-usb-cam \
         ros-${ROS_DISTRO}-zed-msgs \
+        ros-${ROS_DISTRO}-rosbag2-storage-mcap \
         # Planner packages
         ros-${ROS_DISTRO}-py-trees \
         ros-${ROS_DISTRO}-py-trees-ros-interfaces \
@@ -271,7 +272,7 @@ RUN if getent group $USER_GID; then \
         && useradd --uid $USER_UID --gid $USER_GID -m -s /bin/bash $USERNAME \
         && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
         && chmod 0440 /etc/sudoers.d/$USERNAME \
-        && usermod -aG video,render -s /bin/bash $USERNAME
+        && usermod -aG video,render,dialout -s /bin/bash $USERNAME
 
 # Install fixuid for dynamic UID/GID remapping at runtime
 ARG FIXUID_VERSION=0.6.0
