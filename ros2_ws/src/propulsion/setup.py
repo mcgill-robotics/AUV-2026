@@ -26,6 +26,7 @@ setup(
             'thrust_mapper = propulsion.thrust_mapper:main',
             'drytest = propulsion.drytest:main',  # ros2 run propulsion drytest
             'mechtest_exec = propulsion.mechtest2:main',
+            'jetson_assassin = propulsion.jetson_assassin:main',
         ],
     },
 )
