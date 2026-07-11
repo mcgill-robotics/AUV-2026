@@ -33,6 +33,8 @@ class JetsonAssassin(Node):
             # PID 1 is the host systemd init process. We enter host namespaces via nsenter
             # to trigger a clean host shutdown.
             commands_to_try = [
+                ['sudo', 'nsenter', '-t', '1', '-m', '-u', '-i', '-n', '-p', '--', 'systemctl', 'poweroff'],
+                ['sudo', 'nsenter', '-t', '1', '-m', '-u', '-i', '-n', '-p', '--', 'shutdown', '-h', 'now'],
                 ['nsenter', '-t', '1', '-m', '-u', '-i', '-n', '-p', '--', 'systemctl', 'poweroff'],
                 ['nsenter', '-t', '1', '-m', '-u', '-i', '-n', '-p', '--', 'shutdown', '-h', 'now']
             ]
@@ -50,8 +52,10 @@ class JetsonAssassin(Node):
             # Emergency SysRq fallback if nsenter failed
             try:
                 self.get_logger().warn('Fallback: attempting emergency SysRq assassination via /proc/sysrq-trigger')
-                with open('/proc/sysrq-trigger', 'w') as f:
-                    f.write('o')
+                res = subprocess.run(['sudo', 'sh', '-c', 'echo o > /proc/sysrq-trigger'], check=False)
+                if res.returncode != 0:
+                    with open('/proc/sysrq-trigger', 'w') as f:
+                        f.write('o')
             except Exception as e:
                 self.get_logger().error(f"Emergency SysRq assassination failed: {e}")
 
