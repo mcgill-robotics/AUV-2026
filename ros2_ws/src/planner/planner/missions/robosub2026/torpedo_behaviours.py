@@ -7,6 +7,7 @@ import controls.utils as geometry
 from controls.utils import Vector2D
 from controls.goal_helpers import set_attitude_quaternion,move_global, move_to_pose
 from enum import Enum
+from auv_msgs.msg import VisionObject
 from geometry_msgs.msg import Point, Quaternion, Pose
 
 TORPEDO_COUNT = 2
@@ -73,7 +74,7 @@ def compute_target_in_front_of_point_on_board(point: Vector2D, board_orientation
 
 
 ### Actions:
-class DetermineBoardOrientation(Action):
+class DetermineBoardPose(Action):
     """
     Action to find the orientation of the board and write it to the blackboard. This will be used for downstream alignment to the board when we are close to the board and can no longer rely on vision to find the orientation of the board.
     This is necessary for orientation in particular since position averaging is already handled by a Kalman Filter in the vision pipeline, whereas orientation is inferred based on the icons on the board, and is more susceptible to noise and outliers.
@@ -86,28 +87,37 @@ class DetermineBoardOrientation(Action):
             self,
             n_samples: int = 5,
             sample_every_n_ticks: int = 1,
-            rejection_threshold: float = 0.2,
+            position_rejection_threshold:float = 0.1,
+            orientation_rejection_threshold: float = 0.2,
             compare_measurement_with_blackboard: bool = False
         ):
-        super().__init__("Determine Board Orientation sampling" + (" once" if n_samples == 1 else f" {n_samples} times") + (f" for consistency validation" if compare_measurement_with_blackboard else ""))
+        super().__init__("Determine Board Pose sampling" + (" once" if n_samples == 1 else f" {n_samples} times") + (f" for consistency validation" if compare_measurement_with_blackboard else ""))
         self.orientation_samples_number = n_samples
         self.sample_rate = sample_every_n_ticks
-        self.rejection_threshold = rejection_threshold
+        self.position_rejection_threshold = position_rejection_threshold
+        self.orientation_rejection_threshold = orientation_rejection_threshold
         self.blackboard = self.attach_blackboard_client(name=self.name)
-        self.sample_count = 0
         self.tick_counter = 0
         self.compare_measurement_with_blackboard = compare_measurement_with_blackboard
         self.orientation_samples = []
+        self.position_samples = []
+        
+        self.computed_orientation:bool = False
+        self.compute_position:bool = False
+        self.orientation_valid:bool = False
+        self.position_valid:bool = False
+        
+        self.board_pose = Pose()
         
     def setup(self, **kwargs):
         self.node = kwargs['node']
         # self.node.get_logger().info(f"[{self.name}] Setting up with sample_every_n_ticks={self.sample_rate}")
         self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
-        self.blackboard.register_key(key="/board/orientation", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key="/board/pose", access=py_trees.common.Access.WRITE)
         
     def initialise(self):
+        self.position_samples = []
         self.orientation_samples = []
-        self.sample_count = 0
         self.tick_counter = 0
             
     def update(self):
@@ -131,31 +141,74 @@ class DetermineBoardOrientation(Action):
         
         orientation = board_vo.pose.orientation
         if len(self.orientation_samples) > 0:
-            if geometry.is_quaternion_outlier(orientation, self.orientation_samples, self.rejection_threshold):
+            if geometry.is_quaternion_outlier(orientation, self.orientation_samples, self.orientation_rejection_threshold):
                 self.node.get_logger().warning(f"[{self.name}] Rejected outlier orientation sample: {orientation}")
+            else:
+                self.orientation_samples.append(orientation)
+                self.node.get_logger().debug(f"[{self.name}] Collected orientation sample {len(self.orientation_samples)}/{self.orientation_samples_number}: {orientation}")
+
+        if len(self.position_samples) > 0:
+            position = board_vo.pose.position
+            if geometry.is_position_outlier(position, self.position_samples, self.position_rejection_threshold):
+                self.node.get_logger().warning(f"[{self.name}] Rejected outlier position sample: {position}")
                 return py_trees.common.Status.RUNNING
-        self.orientation_samples.append(orientation)
-        self.sample_count += 1
-        self.node.get_logger().debug(f"[{self.name}] Collected orientation sample {self.sample_count}/{self.orientation_samples_number}: {orientation}")
+            else:
+                self.position_samples.append(position)
+                self.node.get_logger().debug(f"[{self.name}] Collected position sample {len(self.position_samples)}/{self.orientation_samples_number}: {position}")
+
         
-        if self.sample_count >= self.orientation_samples_number:
+        if len(self.orientation_samples) >= self.orientation_samples_number:
             # Compute mean orientation and write to blackboard
             mean_orientation = geometry.compute_mean_orientation(self.orientation_samples)
-            if self.compare_measurement_with_blackboard and self.blackboard.exists("/board/orientation") and self.blackboard.board.orientation is not None:
-                if geometry.quaternion_distance(mean_orientation, self.blackboard.board.orientation) > self.rejection_threshold:
+            if self.compare_measurement_with_blackboard:
+                if not self.blackboard.exists("/board/pose") or self.blackboard.board.pose is None:
+                    self.node.get_logger().error(f"[{self.name}] Compare with blackboard: No board pose available on blackboard to compare with computed mean orientation.")
+                    return py_trees.common.Status.FAILURE
+                if geometry.quaternion_distance(mean_orientation, self.blackboard.board.pose.orientation) > self.orientation_rejection_threshold:
                     self.node.get_logger().warning(f"[{self.name}] Computed mean orientation is too different from blackboard orientation.")
                     return py_trees.common.Status.FAILURE
                 else:
                     self.node.get_logger().info(f"[{self.name}] Computed mean orientation is consistent with blackboard orientation.")
-                    return py_trees.common.Status.SUCCESS
+                    self.orientation_valid = True
             
-            self.blackboard.board.orientation = mean_orientation
+            self.board_pose.orientation = mean_orientation
             euler_angles_degrees = [math.degrees(angle) for angle in geometry.quaternion_to_euler(mean_orientation)]
             self.node.get_logger().info(f"[{self.name}] Finalized board orientation: {[f'{angle:.2f}' for angle in euler_angles_degrees]} (Euler angles)")
-        
-            return py_trees.common.Status.SUCCESS
+            self.computed_orientation = True
         else:
             return py_trees.common.Status.RUNNING
+        
+        if len(self.position_samples) >= self.orientation_samples_number:
+            # Compute mean position and write to blackboard
+            mean_position = geometry.compute_mean_position(self.position_samples)
+            if self.compare_measurement_with_blackboard:
+                if not self.blackboard.exists("/board/pose") or self.blackboard.board.pose is None:
+                    self.node.get_logger().error(f"[{self.name}] Compare with blackboard: No board pose available on blackboard to compare with computed mean position.")
+                    return py_trees.common.Status.FAILURE
+                
+                if geometry.position_distance(mean_position, self.blackboard.board.pose.position) > self.position_rejection_threshold:
+                    self.node.get_logger().warning(f"[{self.name}] Computed mean position is too different from blackboard position.")
+                    return py_trees.common.Status.FAILURE
+                else:
+                    self.node.get_logger().info(f"[{self.name}] Computed mean position is consistent with blackboard position.")
+                    self.position_valid = True
+            self.board_pose.position = mean_position
+            self.node.get_logger().info(f"[{self.name}] Finalized board position: {mean_position}")
+            self.position_valid = True
+            
+        if self.compare_measurement_with_blackboard:
+            if self.orientation_valid and self.position_valid:
+                self.node.get_logger().info(f"[{self.name}] Board pose is consistent with blackboard.")
+                return py_trees.common.Status.SUCCESS
+            else:
+                return py_trees.common.Status.RUNNING
+        else:
+            if self.computed_orientation and self.position_valid:
+                self.blackboard.board.pose = self.board_pose
+                self.node.get_logger().info(f"[{self.name}] Board pose written to blackboard: {self.board_pose}")
+                return py_trees.common.Status.SUCCESS
+            else:
+                return py_trees.common.Status.RUNNING
      
 class MoveToFrontOfBoard(BasicActionBehaviour):
     """
@@ -190,8 +243,8 @@ class MoveToFrontOfBoard(BasicActionBehaviour):
     def initialise(self) -> None:
         self.has_failed = False
         super().initialise()
-        if not self.blackboard.exists("/board/orientation") or self.blackboard.board.orientation is None:
-            self.node.get_logger().error(f"[{self.name}] No board orientation available on blackboard.")
+        if not self.blackboard.exists("/board/pose") or self.blackboard.board.pose is None:
+            self.node.get_logger().error(f"[{self.name}] No board pose available on blackboard.")
             self.has_failed = True
             return
         if not self.blackboard.exists("/vision/object_map") or self.blackboard.vision.object_map is None:
@@ -213,15 +266,15 @@ class MoveToFrontOfBoard(BasicActionBehaviour):
             y = board_vo.pose.position.y
         )
         
-        target_xy = compute_target_in_front_of_point_on_board(board_center_xy, self.blackboard.board.orientation, self.distance_from_board)
+        target_xy = compute_target_in_front_of_point_on_board(board_center_xy, self.blackboard.board.pose.orientation, self.distance_from_board)
         
         if self.align_to_board:
-            if not self.blackboard.exists("/board/orientation") or self.blackboard.board.orientation is None:
+            if not self.blackboard.exists("/board/orientation") or self.blackboard.board.pose.orientation is None:
                 self.node.get_logger().error(f"[{self.name}] No board orientation available on blackboard.")
                 self.has_failed = True
                 return
             self.node.get_logger().info(f"[{self.name}] Moving to front of board at {target_xy} and aligning to board orientation.")
-            board_orientation = self.blackboard.board.orientation
+            board_orientation = self.blackboard.board.pose.orientation
             # we want the AUV to face the board, since the board faces us, we want to flip the board orientation by 180 degrees in yaw
             target_orientation = geometry.rotate_quaternion(board_orientation, 0, 0, math.pi)
             target_pose:Pose = Pose(
@@ -298,11 +351,11 @@ class AlignToBoard(BasicActionBehaviour):
     def initialise(self) -> None:
         self.has_failed = False
         super().initialise()
-        if not self.blackboard.exists("/board/orientation") or self.blackboard.board.orientation is None:
+        if not self.blackboard.exists("/board/orientation") or self.blackboard.board.pose.orientation is None:
             self.node.get_logger().error(f"[{self.name}] No board orientation available on blackboard.")
             self.has_failed = True
             return
-        board_orientation = self.blackboard.board.orientation
+        board_orientation = self.blackboard.board.pose.orientation
         # we want the AUV to face the board, since the board faces us, we want to flip the board orientation by 180 degrees in yaw
         target_orientation = geometry.rotate_quaternion(board_orientation, 0, 0, math.pi)
         
@@ -412,7 +465,128 @@ class DetermineBoardType(Action):
             self.node.get_logger().info(f"[{self.name}] Detected board type: {board_type.name}")
 
         return py_trees.common.Status.SUCCESS
+
+class BoardIcon(Enum):
+    FIRE = "fire"
+    BLOOD = "blood"
+    AMBULANCE = "ambulance"
+    FIRETRUCK = "firetruck"
+
+
+class DetermineIconOffsetPairs(Action):
+    def __init__(
+        self,
+        icons: list[BoardIcon],
+        auv_to_torpedos : dict[TorpedoSide, Tuple[float,float,float]],
+        auv_to_front : float,
+        forward_trajectory : np.polynomial.Polynomial,
+        lateral_trajectory : np.polynomial.Polynomial,
+        vertical_trajectory : np.polynomial.Polynomial,
+        distance_from_board: float,
+        icon_to_nearest_hole: dict[BoardType, dict[BoardIcon, Tuple[float,float,float]]]
+    ):
+        super().__init__("Determine Icon Offset Pairs")
+        self.icons = icons
+        self.auv_to_torpedos = auv_to_torpedos
+        self.forward_trajectory = forward_trajectory
+        self.lateral_trajectory = lateral_trajectory
+        self.vertical_trajectory = vertical_trajectory
+        self.distance_from_board = distance_from_board
+        self.icon_to_nearest_hole = icon_to_nearest_hole
+
+    def setup(self, **kwargs):
+        super().setup(**kwargs)
+        self.node = kwargs['node']
+        self.blackboard.register_key(key="/board/type", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/board/hole_offsets", access=py_trees.common.Access.WRITE)
+        
+    def update(self):
+        if not self.blackboard.exists("/board/type") or self.blackboard.board.type is None:
+            self.node.get_logger().error(f"[{self.name}] No board type available on blackboard.")
+            return py_trees.common.Status.FAILURE
+        
+        board_type = BoardType(self.blackboard.get("/board/type"))
+                
+        for icon in self.icons:
+            offset_to_hole = self.icon_to_nearest_hole[board_type].get(icon, None)
+        if offset_to_hole is None:
+            self.node.get_logger().error(f"[{self.name}] Offset to hole not found for icon {icon.value} and board type {board_type.value}")
+            return py_trees.common.Status.FAILURE
+        
+        self.blackboard.set("/torpedo/offset_to_hole", (
+            offset_to_hole[0] - self.distance_from_board,
+            offset_to_hole[1],
+            offset_to_hole[2],
+        ))
+        
+        match self.blackboard.torpedo.count:
+            case 0:
+                self.node.get_logger().error(f"[{self.name}] No torpedo detected. Alignment is redundant with absence of torpedo payload.")
+                self.has_failed = True
+                return
+            case 1:
+                side = TorpedoSide.LEFT
+            case 2:
+                side = TorpedoSide.RIGHT
+            case _:
+                self.node.get_logger().error(f"[{self.name}] Invalid torpedo count {self.blackboard.torpedo.count}. Expected 1 or 2.")
+                self.has_failed = True
+                return
+        self.auv_to_torpedo = self.auv_to_torpedos[side]
+                        
+        self.node.get_logger().info(f"[{self.name}] Trajectory coeffs: Forward: {self.forward_trajectory.coef}, Lateral: {self.lateral_trajectory.coef}, Vertical: {self.vertical_trajectory.coef}")
+        # after alignment, torpedo launch should be aligned with the hole
+        # to know how much to shift back by, we need to know the trajectory time such that forward trajectory is equal to the hole offset, and then we can use that time to find the lateral and vertical offsets
+        if not self.blackboard.exists("/torpedo/offset_to_hole") or self.blackboard.torpedo.offset_to_hole is None:
+            self.node.get_logger().error(f"[{self.name}] No torpedo offset to hole available on blackboard. Unable to align torpedo to hole.")
+            self.has_failed = True
+            return
+        to_hole_offset = self.blackboard.torpedo.offset_to_hole
+        self.forward_trajectory.coef[0] += to_hole_offset[0]
+        self.node.get_logger().info(f"[{self.name}] Adjusted trajectories coeffs for hole offset: F {self.forward_trajectory.coef}, L {self.lateral_trajectory.coef}, V {self.vertical_trajectory.coef}")
+        forward_roots = sorted(r.real for r in self.forward_trajectory.roots() if np.isreal(r))
+        
+        # 0 is always solution since all trajectories start at 0
+        if len(forward_roots) < 1:
+            self.node.get_logger().error(f"[{self.name}] Torpedo forward trajectory does not have roots. Forward roots: {forward_roots}")
+            self.has_failed = True
+            return
+        
+        self.node.get_logger().info(f"[{self.name}] Torpedo forward trajectory intersects with hole at roots: {forward_roots}. F values: {[self.forward_trajectory(root) for root in forward_roots]}. L values: {[self.lateral_trajectory(root) for root in forward_roots]} V values: {[self.vertical_trajectory(root) for root in forward_roots]}")
+
+        trajectory_time = forward_roots[0]
+        backward_offset = self.forward_trajectory(trajectory_time) 
+        rightward_offset = self.lateral_trajectory(trajectory_time)
+        downward_offset = self.vertical_trajectory(trajectory_time) 
+        
+        self.node.get_logger().info(f"[{self.name}] Torpedo trajectory time to reach hole: {trajectory_time:.2f}s. Corresponding offsets: Backward: {backward_offset:.2f}m, Rightward: {rightward_offset:.2f}m, Downward: {downward_offset:.2f}m")
+        
+        self.blackboard.torpedo.trajectory_time = trajectory_time
+        target_orientation = geometry.rotate_quaternion(self.blackboard.board.pose.orientation, 0, 0, math.pi)
+        
+        offset_vector = Point(
+            x= to_hole_offset[0] - self.auv_to_torpedo[0] + backward_offset,
+            y= to_hole_offset[1] - self.auv_to_torpedo[1] - rightward_offset,
+            z= to_hole_offset[2] - self.auv_to_torpedo[2] - downward_offset
+        )
+        
+        self.node.get_logger().info(f"[{self.name}] Aligning torpedo to hole offset from icon position: {offset_vector}")
+        # move from current position to hole position, then move such that torpedo launch is at the AUV CoM, then move back by the forward offset to align the torpedo with the hole
+        goal_offset = geometry.rotate_3d_vector(
+            q=target_orientation,
+            vector=offset_vector
+        )
+        
+        self.node.get_logger().info(f"[{self.name}] Rotated offset vector to hole in board frame: {goal_offset}")
+        
+        goal_position_x = self.blackboard.torpedo.icon_position.x + goal_offset.x
+        goal_position_y = self.blackboard.torpedo.icon_position.y + goal_offset.y
+        goal_position_z = self.blackboard.torpedo.icon_position.z + goal_offset.z
+        
+        
+        return py_trees.common.Status.SUCCESS
     
+
 class CheckBoardType(Condition):
     """
     Condition to check if the board type on the blackboard matches the expected board type.
@@ -436,11 +610,6 @@ class CheckBoardType(Condition):
             self.node.get_logger().info(f"[{self.name}] Board type {self.blackboard.board.type} does not match expected {self.expected_board_type.name}.")
             return py_trees.common.Status.FAILURE
 
-class BoardIcon(Enum):
-    FIRE = "fire"
-    BLOOD = "blood"
-    AMBULANCE = "ambulance"
-    FIRETRUCK = "firetruck"
     
 class MoveToFrontOfIcon(BasicActionBehaviour):
     """
@@ -484,7 +653,7 @@ class MoveToFrontOfIcon(BasicActionBehaviour):
     def initialise(self) -> None:
         self.has_failed = False
         super().initialise()
-        if not self.blackboard.exists("/board/orientation") or self.blackboard.board.orientation is None:
+        if not self.blackboard.exists("/board/orientation") or self.blackboard.board.pose.orientation is None:
             self.node.get_logger().error(f"[{self.name}] No board orientation available on blackboard.")
             self.has_failed = True
             return
@@ -515,12 +684,12 @@ class MoveToFrontOfIcon(BasicActionBehaviour):
             self.distance_from_icon = geometry.plane_point_distance(
                 point=target_2d_position,
                 plane_point=auv_2d_position,
-                plane_normal=geometry.find_normal_from_quaternion(self.blackboard.board.orientation)
+                plane_normal=geometry.find_normal_from_quaternion(self.blackboard.board.pose.orientation)
             )
         # self.compute_distance_from_icon should guarantee that self.distance_from_icon is not None, but we add an assertion here to satisfy the type checker and catch any potential bugs
         assert self.distance_from_icon is not None
         self.node.get_logger().info(f"[{self.name}] Distance from AUV to icon: {self.distance_from_icon:.2f}m")
-        target_xy = compute_target_in_front_of_point_on_board(target_2d_position, self.blackboard.board.orientation, self.distance_from_icon)
+        target_xy = compute_target_in_front_of_point_on_board(target_2d_position, self.blackboard.board.pose.orientation, self.distance_from_icon)
         
         target_z = target_icon_vo.pose.position.z if self.use_icon_z else self.z_reference
         
@@ -679,7 +848,7 @@ class AlignTorpedoToHole(BasicActionBehaviour):
         self.has_failed = False
         super().initialise()
         
-        if not self.blackboard.exists("/board/orientation") or self.blackboard.board.orientation is None:
+        if not self.blackboard.exists("/board/orientation") or self.blackboard.board.pose.orientation is None:
             self.node.get_logger().error(f"[{self.name}] No board orientation available on blackboard.")
             self.has_failed = True
             return 
@@ -735,7 +904,7 @@ class AlignTorpedoToHole(BasicActionBehaviour):
         self.node.get_logger().info(f"[{self.name}] Torpedo trajectory time to reach hole: {trajectory_time:.2f}s. Corresponding offsets: Backward: {backward_offset:.2f}m, Rightward: {rightward_offset:.2f}m, Downward: {downward_offset:.2f}m")
         
         self.blackboard.torpedo.trajectory_time = trajectory_time
-        target_orientation = geometry.rotate_quaternion(self.blackboard.board.orientation, 0, 0, math.pi)
+        target_orientation = geometry.rotate_quaternion(self.blackboard.board.pose.orientation, 0, 0, math.pi)
         
         offset_vector = Point(
             x= to_hole_offset[0] - self.auv_to_torpedo[0] + backward_offset,

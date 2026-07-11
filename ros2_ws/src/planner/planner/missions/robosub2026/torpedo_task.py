@@ -20,7 +20,8 @@ class TorpedoTask(py_trees.composites.Sequence):
             yaw_tolerance_rad: float = 0.3,
             hold_time: float = 0.5,
             timeout: float = 45.0,
-            refinement_rejection_threshold_rad: float = 0.1,
+            orientation_refinement_rejection_threshold_rad: float = 0.1,
+            position_refinement_rejection_threshold: float = 0.1,
             refinement_attempts: int = 3,
             alignments_per_attempt: int = 3,
             samples_per_alignment: int = 5,
@@ -64,7 +65,8 @@ class TorpedoTask(py_trees.composites.Sequence):
         self.z_reference = z_reference
 
         # refinement parameters
-        self.refinement_rejection_threshold_rad:float = refinement_rejection_threshold_rad
+        self.orientation_refinement_rejection_threshold_rad:float = orientation_refinement_rejection_threshold_rad
+        self.position_refinement_rejection_threshold:float = position_refinement_rejection_threshold
         self.refinement_attempts:int = refinement_attempts
         self.alignments_per_attempt:int = alignments_per_attempt
         self.samples_per_alignment:int = samples_per_alignment
@@ -195,10 +197,11 @@ class TorpedoTask(py_trees.composites.Sequence):
             name="Circle Around Board to Find Icons"
         )
         
-        find_board_orientation_one_sample = DetermineBoardOrientation (
+        find_board_orientation_one_sample = DetermineBoardPose (
             n_samples=1,
             sample_every_n_ticks=1,
-            rejection_threshold=self.refinement_rejection_threshold_rad,
+            orientation_rejection_threshold=self.orientation_refinement_rejection_threshold_rad,
+            position_rejection_threshold=self.position_refinement_rejection_threshold,
             compare_measurement_with_blackboard=False
         )
         
@@ -255,10 +258,11 @@ class TorpedoTask(py_trees.composites.Sequence):
         
         find_and_align_sequence: py_trees.composites.Sequence = py_trees.composites.Sequence("Find and Align", memory=True)
         find_and_align_sequence.add_children([
-            DetermineBoardOrientation (
+            DetermineBoardPose (
                 n_samples=self.samples_per_alignment,
                 sample_every_n_ticks=self.refinement_sample_every_n_ticks,
-                rejection_threshold=self.refinement_rejection_threshold_rad,
+                orientation_rejection_threshold=self.orientation_refinement_rejection_threshold_rad,
+                position_rejection_threshold=self.position_refinement_rejection_threshold,
                 compare_measurement_with_blackboard=False
             ),
             AlignToBoard(
@@ -272,10 +276,11 @@ class TorpedoTask(py_trees.composites.Sequence):
             child=find_and_align_sequence, 
             name=f"Find and Align",
             num_success=self.alignments_per_attempt)]
-        consistency_check = DetermineBoardOrientation (
+        consistency_check = DetermineBoardPose (
                 n_samples=1,
                 sample_every_n_ticks=1,
-                rejection_threshold=self.refinement_rejection_threshold_rad,
+                orientation_rejection_threshold=self.orientation_refinement_rejection_threshold_rad,
+                position_rejection_threshold=self.position_refinement_rejection_threshold,
                 compare_measurement_with_blackboard=True
             )
         children.append(consistency_check)

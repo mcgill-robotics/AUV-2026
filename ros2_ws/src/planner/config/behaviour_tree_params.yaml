@@ -190,7 +190,8 @@ planner_root_tree:
       firing_pause_time: 5.0                # (s) Seconds to pause before and after firing torpedo
 
       refinement:
-        rejection_threshold_deg: 10.0     # (deg) Threshold for rejecting outlier orientation samples based on distance from current mean
+        orientation_rejection_threshold_deg: 5.0     # (deg) Threshold for rejecting outlier orientation samples based on distance from current mean
+        position_rejection_threshold: 0.1 # (m) Threshold for rejecting outlier position samples based on distance from current mean
         attempts: 3                       # Number of attempts to refine orientation before giving up
         alignments_per_attempt: 2         # Number of alignment attempts to perform before validating orientation
         samples_per_alignment: 3          # Number of orientation samples to collect for mean orientation estimation
