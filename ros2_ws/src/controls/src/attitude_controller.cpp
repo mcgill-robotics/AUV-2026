@@ -22,6 +22,7 @@ namespace controls
         this->declare_parameter<double>("buoyancy", 278.0); // Newtons
         this->declare_parameter<std::vector<double>>("r_bv_v", {0.0, 0.0, 0.023}); // [m] From CAD Model
         this->declare_parameter<double>("control_loop_hz", 25.0); // Control loop frequency
+        this->declare_parameter<double>("sensor_timeout_sec", 1.0);
         this->declare_parameter<bool>("enabled", false);
 
         this->get_parameter("P_ex", P_ex_);
@@ -45,8 +46,12 @@ namespace controls
         this->get_parameter("buoyancy", buoyancy_);
         this->get_parameter("r_bv_v", r_bv_v_);
         this->get_parameter("control_loop_hz", control_loop_hz_);
+        this->get_parameter("sensor_timeout_sec", sensor_timeout_sec_);
         this->get_parameter("enabled", enabled_);
         was_enabled_ = enabled_;
+        imu_received_ = false;
+        last_imu_time_sec_ = 0.0;
+        was_sensor_ok_ = false;
 
         q_iv_ = quatd::Identity(); // Initial orientation: identity quaternion
         w_iv_ = Vec3::Zero(); // Initial angular velocity: zero vector
@@ -92,6 +97,8 @@ namespace controls
 
     void AttitudeController::imu_callback(const imu_msg::SharedPtr msg)
     {
+        last_imu_time_sec_ = this->now().seconds();
+        imu_received_ = true;
         // Extract orientation quaternion from IMU message
         q_iv_ = quatd(
             msg->orientation.w,
@@ -178,6 +185,30 @@ namespace controls
 
     void AttitudeController::control_loop_callback()
     {
+        double now_sec = this->now().seconds();
+        bool sensor_ok = imu_received_ && ((now_sec - last_imu_time_sec_) <= sensor_timeout_sec_);
+
+        if (enabled_ && !sensor_ok) {
+            RCLCPP_WARN_THROTTLE(
+                this->get_logger(),
+                *this->get_clock(),
+                2000,
+                "IMU watchdog: No IMU orientation received or timed out. Zeroing attitude torque for safety."
+            );
+            wrench_msg effort;
+            pub_effort_->publish(effort);
+            was_enabled_ = true;
+            was_sensor_ok_ = false;
+            return;
+        }
+
+        if (sensor_ok && !was_sensor_ok_ && enabled_) {
+            q_iv2_ = q_iv_;
+            target_q_iv2_ = q_iv_;
+            integral_error_ = Vec3::Zero();
+        }
+        was_sensor_ok_ = sensor_ok;
+
         // Apply setpoint slew-rate limiting if enabled
         if (enabled_ && (max_slew_rate_roll_rad_ > 0.0 || max_slew_rate_pitch_rad_ > 0.0 || max_slew_rate_yaw_rad_ > 0.0)) {
             quatd q_diff = q_iv2_.conjugate() * target_q_iv2_;
@@ -265,6 +296,10 @@ namespace controls
                     "Attitude controller enabled: %s",
                     enabled_ ? "true" : "false"
                 );
+            }
+            else if (parameter.get_name() == "sensor_timeout_sec")
+            {
+                sensor_timeout_sec_ = parameter.as_double();
             }
             else if (parameter.get_name() == "integral_activation_threshold_deg")
             {

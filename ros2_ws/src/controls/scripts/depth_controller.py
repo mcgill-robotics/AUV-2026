@@ -38,6 +38,7 @@ class DepthController(Node):
         self.declare_parameter("net_buoyancy", 0.0)
         self.declare_parameter("max_slew_rate", 0.0)
         self.declare_parameter("derivative_filter_alpha", 0.2)
+        self.declare_parameter("sensor_timeout_sec", 1.0)
         self.declare_parameter("enabled", False)
 
         # PID controller parameters
@@ -50,6 +51,7 @@ class DepthController(Node):
         self.net_buoyancy = float(self.get_parameter("net_buoyancy").value)
         self.max_slew_rate = float(self.get_parameter("max_slew_rate").value)
         self.derivative_filter_alpha = float(self.get_parameter("derivative_filter_alpha").value)
+        self.sensor_timeout_sec = float(self.get_parameter("sensor_timeout_sec").value)
         self.enabled = bool(self.get_parameter("enabled").value)
         self.was_enabled = self.enabled
 
@@ -57,10 +59,13 @@ class DepthController(Node):
 
         self.pid = PID(self.KP, self.KD, self.KI, self.I_MAX, self.integral_activation_threshold, self.derivative_filter_alpha)
 
-        self.setpoint_depth = 0.25  # Desired depth in meters. TODO: Change default value to AUV float depth
+        self.setpoint_depth = 0.25  # Desired depth in meters
         self.target_setpoint_depth = 0.25
         self.current_depth = 0.0   # Current depth in meters
-        self.last_depth_time = time.time()
+        self.last_pid_depth = 0.0
+        self.depth_received = False
+        self.last_depth_time = 0.0
+        self.was_sensor_ok = False
         self.time_step = 1.0 / self.control_loop_hz
 
         #Feed-Forward term
@@ -69,14 +74,13 @@ class DepthController(Node):
         # Timer-based control loop (fires every time_step seconds)
         self.timer = self.create_timer(self.time_step, self.control_loop_callback)
 
+    def _now(self):
+        return self.get_clock().now().nanoseconds / 1e9
+
     def depth_callback(self, msg):
-        now = time.time()
-        dt = now - self.last_depth_time
-        if dt >= 0.05:
-            # +Z is up, so invert depth values for PID calculations
-            self.pid.update_derivative(-msg.data, dt)
-            self.last_depth_time = now
+        self.last_depth_time = self._now()
         self.current_depth = msg.data
+        self.depth_received = True
 
     def setpoint_callback(self, msg):
         if abs(msg.data - self.target_setpoint_depth) > 1e-3:
@@ -109,6 +113,13 @@ class DepthController(Node):
                     return result
                 self.max_slew_rate = float(parameter.value)
                 self.get_logger().info(f"Updated max_slew_rate: {self.max_slew_rate:.4f}")
+            elif parameter.name == "sensor_timeout_sec":
+                if parameter.type_ not in [parameter.Type.DOUBLE, parameter.Type.INTEGER]:
+                    result.successful = False
+                    result.reason = "'sensor_timeout_sec' must be a double/int"
+                    return result
+                self.sensor_timeout_sec = float(parameter.value)
+                self.get_logger().info(f"Updated sensor_timeout_sec: {self.sensor_timeout_sec:.4f}")
             elif parameter.name == "KP":
                 if parameter.type_ not in [parameter.Type.DOUBLE, parameter.Type.INTEGER]:
                     result.successful = False
@@ -169,6 +180,27 @@ class DepthController(Node):
         return result
 
     def control_loop_callback(self):
+        now = self._now()
+        sensor_ok = self.depth_received and ((now - self.last_depth_time) <= self.sensor_timeout_sec)
+
+        if self.enabled and not sensor_ok:
+            self.get_logger().warn(
+                "Depth sensor watchdog: No depth data received or timed out. Disabling thrust for safety.",
+                throttle_duration_sec=2.0,
+            )
+            effort_msg = Wrench()
+            effort_msg.force.z = 0.0
+            self.pub_effort.publish(effort_msg)
+            self.was_enabled = True
+            self.was_sensor_ok = False
+            return
+
+        if sensor_ok and not self.was_sensor_ok and self.enabled:
+            self.setpoint_depth = self.current_depth
+            self.last_pid_depth = self.current_depth
+            self.pid.integral_error = 0.0
+        self.was_sensor_ok = sensor_ok
+
         # Apply setpoint slew-rate limiting if enabled
         is_slewing = False
         if self.enabled and self.max_slew_rate > 0.0:
@@ -186,7 +218,14 @@ class DepthController(Node):
         if self.enabled:
             effort_msg = Wrench()
             # +Z is up, so invert depth values for PID calculations
-            self.pid.compute_errors(-self.setpoint_depth, -self.current_depth, self.time_step, allow_integration=not is_slewing)
+            self.pid.compute_errors(
+                -self.setpoint_depth,
+                -self.current_depth,
+                self.time_step,
+                previous_position=-self.last_pid_depth,
+                allow_integration=not is_slewing,
+            )
+            self.last_pid_depth = self.current_depth
             effort_output = self.pid.compute_effort()
             effort_msg.force.z = effort_output + self.feed_forward
             self.pub_effort.publish(effort_msg)  # Published effort is in pool frame

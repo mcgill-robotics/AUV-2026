@@ -61,6 +61,7 @@ namespace controls
 
                 // Control Loop Frequency
                 double control_loop_hz_;
+                double sensor_timeout_sec_;
 
                 // AUV properties
                 double buoyancy_;
@@ -87,6 +88,9 @@ namespace controls
                 rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr parameter_callback_handle_;
                 bool enabled_;
                 bool was_enabled_;
+                bool imu_received_;
+                double last_imu_time_sec_;
+                bool was_sensor_ok_;
 
                 void imu_callback(const imu_msg::SharedPtr msg);
                 void target_orientation_callback(const geometry_msgs::msg::Quaternion::SharedPtr msg);
