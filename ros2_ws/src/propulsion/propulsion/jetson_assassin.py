@@ -33,10 +33,7 @@ class JetsonAssassin(Node):
             # PID 1 is the host systemd init process. We enter host namespaces via nsenter
             # to trigger a clean host shutdown.
             commands_to_try = [
-                ['sudo', 'nsenter', '-t', '1', '-m', '-u', '-i', '-n', '-p', '--', 'systemctl', 'poweroff'],
-                ['sudo', 'nsenter', '-t', '1', '-m', '-u', '-i', '-n', '-p', '--', 'shutdown', '-h', 'now'],
-                ['nsenter', '-t', '1', '-m', '-u', '-i', '-n', '-p', '--', 'systemctl', 'poweroff'],
-                ['nsenter', '-t', '1', '-m', '-u', '-i', '-n', '-p', '--', 'shutdown', '-h', 'now']
+                ['sudo', 'nsenter', '-t', '1', '-m', '-u', '-i', '-n', '-p', '--', 'systemctl', 'poweroff']
             ]
 
             for cmd in commands_to_try:
