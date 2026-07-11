@@ -30,8 +30,7 @@ def generate_launch_description():
         }]
     )
 
-    # --- Serial connection group 
-    # Example below shows micro-ROS agent; replace with whatever we actually have. 
+    # --- Serial & power monitor group (Hardware only)
     serial_group = GroupAction(
         condition=UnlessCondition(LaunchConfiguration('sim')),
         actions=[
@@ -41,6 +40,13 @@ def generate_launch_description():
                 name='power_micro_ros_agent',
                 output='screen',
                 arguments=["serial", "--dev", "/dev/power", "--baud-rate", "115200"],
+            ),
+            Node(
+                package='propulsion',
+                executable='jetson_assassin',
+                name='jetson_assassin',
+                output='screen',
+                parameters=[{'enable_host_shutdown': True}]
             ),
         ]
     )
