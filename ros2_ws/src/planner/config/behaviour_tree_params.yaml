@@ -127,7 +127,7 @@ planner_root_tree:
       COM_to_dvl_height: 0.1              # (m) Distance from the center of mass to the DVL in the vertical direction
       
       # Shortcuts to have shorter form of the mission. These params are either or (xor).
-      navigation_only: False               # (bool) If true, only perform navigation steps (align, surface, dive) and skip item drop
+      navigation_only: True               # (bool) If true, only perform navigation steps (align, surface, dive) and skip item drop
       item_drop_only: False               # (bool) If true, only perform item drop and skip navigation steps (align, surface, dive)
       
       # Navigate to table
