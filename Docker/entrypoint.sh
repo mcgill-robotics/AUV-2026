@@ -40,11 +40,22 @@ sudo groupmod -g $HOST_VIDEO_GID video 2>/dev/null || sudo groupadd -g $HOST_VID
 # 4. Add douglas to the freshly aligned groups
 sudo usermod -aG render,video douglas
 
-# 5. Source ROS and Workspaces for automated commands (e.g. docker run) that bypass .bashrc
-source /opt/ros/humble/setup.bash
-source /opt/ros/micro_ros_ws/install/local_setup.bash
-source /opt/ros/foxglove_ws/install/local_setup.bash
-source /opt/ros/vision_opencv_ws/install/local_setup.bash
+# 5. Source ROS and optional workspaces for automated commands
+if [ -f /opt/ros/humble/setup.bash ]; then
+    source /opt/ros/humble/setup.bash
+fi
+
+if [ -f /opt/ros/micro_ros_ws/install/local_setup.bash ]; then
+    source /opt/ros/micro_ros_ws/install/local_setup.bash
+fi
+
+if [ -f /opt/ros/foxglove_ws/install/local_setup.bash ]; then
+    source /opt/ros/foxglove_ws/install/local_setup.bash
+fi
+
+if [ -f /opt/ros/vision_opencv_ws/install/local_setup.bash ]; then
+    source /opt/ros/vision_opencv_ws/install/local_setup.bash
+fi
 
 if [ -f "/home/douglas/AUV-2026/ros2_ws/install/setup.bash" ]; then
     source /home/douglas/AUV-2026/ros2_ws/install/setup.bash
@@ -52,5 +63,4 @@ fi
 
 # 6. Execute the original container command (bash or whatever was passed)
 exec "$@"
-
 

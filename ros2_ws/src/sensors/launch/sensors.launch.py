@@ -4,13 +4,13 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.conditions import IfCondition, UnlessCondition
-from launch.substitutions import LaunchConfiguration, AndSubstitution, NotSubstitution
+from launch.substitutions import LaunchConfiguration, AndSubstitution, NotSubstitution, PathJoinSubstitution
 from launch_ros.actions import Node
+from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
     # Get dynamic paths to packages
-    xsens_pkg_path = get_package_share_directory("xsens_mti_ros2_driver")
     dvl_a50_pkg_path = get_package_share_directory("dvl_a50_serial_python")
     sensors_pkg_path = get_package_share_directory("sensors")
     params = os.path.join(sensors_pkg_path, "params", "sensors_frames.yaml")
@@ -26,11 +26,12 @@ def generate_launch_description():
     )
     
     # Find other launch files to launch
-    xsens_launch_file = os.path.join(
-        xsens_pkg_path, "launch", "xsens_mti_node.launch.py"
-    )
     launch_Xsens_Driver = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(xsens_launch_file),
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution(
+                [FindPackageShare("xsens_mti_ros2_driver"), "launch", "xsens_mti_node.launch.py"]
+            )
+        ),
         condition=UnlessCondition(LaunchConfiguration("sim")),
     )
     

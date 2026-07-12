@@ -7,6 +7,7 @@ CLEAN_BUILD=false
 DEBUG_BUILD=false
 OFFLINE_BUILD=false
 PACKAGE_TO_BUILD=""
+SKIP_PACKAGES_ENV="${COLCON_SKIP_PACKAGES:-}"
 
 while getopts ":cdop:" flag; do
     case "${flag}" in
@@ -143,6 +144,13 @@ else
     mapfile -t PKGS < <( colcon list --names-only )
 fi
 
+SKIP_ARGS=()
+if [ -n "$SKIP_PACKAGES_ENV" ]; then
+    read -r -a SKIP_PACKAGES <<< "$SKIP_PACKAGES_ENV"
+    echo "    -> Skipping packages: ${SKIP_PACKAGES[*]}"
+    SKIP_ARGS=(--packages-skip "${SKIP_PACKAGES[@]}")
+fi
+
 
 if [ "$CLEAN_BUILD" = true ]; then
     PACKAGES_TO_CLEAN=""
@@ -170,6 +178,7 @@ if [ "$DEBUG_BUILD" = true ]; then
         --event-handlers console_direct+ \
         --executor sequential \
         --parallel-workers 1 \
+        "${SKIP_ARGS[@]}" \
         --cmake-args \
             -DCMAKE_BUILD_TYPE=RelWithDebInfo  \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
@@ -188,6 +197,7 @@ else
             $OFFLINE_CMAKE_ARGS \
         --event-handlers console_cohesion+ \
         --parallel-workers $(nproc) \
+        "${SKIP_ARGS[@]}" \
         $([ -n "$PACKAGE_TO_BUILD" ] && echo "--packages-up-to $PACKAGE_TO_BUILD")
 fi
 
