@@ -27,9 +27,6 @@ class GoAboveTable(py_trees.composites.Sequence):
         expected_table_items = kwargs.get("expected_table_items", ["table", "pill", "nutbolt", "electric", "bandaid", "warning", "redcross_helmet"])
         self.blackboard.missions.octagon.expected_table_items = expected_table_items
 
-        # 0. Check if already at table
-        align_table_if_present = AlignWithTable(**kwargs)
-
         # 1. Go to a set depth to view the table better. The table is best seen at a shallow depth, since we get to
         # see the top of the table, whereas at a lower depth there is a lot of empty space
         shallow_approach_depth = kwargs.get("shallow_approach_depth", -0.4)
@@ -86,15 +83,21 @@ class GoAboveTable(py_trees.composites.Sequence):
             height_offset=None,
             hold_time=hold_time
         )
+        
+        # 5 Go back to shallow_depth
+        go_shallow_depth_2 = BasicActionBehaviour(
+            name="Octagon: Go Shallow Depth",
+            goal=set_depth(z=shallow_approach_depth, tolerance=shallow_approach_tolerance, hold_time=shallow_approach_hold_time, timeout=timeout)
+        )
 
-        #5 Center around that the table is underneath Dougie
+        # 6 Center around that the table is underneath Dougie
         align_table = AlignWithTable(**kwargs)
         
-        #6 Get the depth of the table using DVL, this is more reliable than using the down cam 
+        # 7 Get the depth of the table using DVL, this is more reliable than using the down cam 
         # since the down cam BB can be noisy and not give a good estimate
         get_table_depth = AcquireTableDepthDVL(**kwargs)
         
-        #7 Surface octagon
+        #8 Surface octagon
         surface_depth = kwargs.get("surface_depth", -0.1)
         surface_tolerance = kwargs.get("surface_tolerance", 0.1)
         surface_hold_time = kwargs.get("surface_hold_time", 3.0)
@@ -105,15 +108,12 @@ class GoAboveTable(py_trees.composites.Sequence):
         )
 
 
-        #7 Scan octagon for images
+        # 9 Scan octagon for images
         scan_images = ScanOctagonImages(**kwargs)
 
         navigation_only = kwargs.get("navigation_only", False)
         children = []
-
-        if not navigation_only:
-            children.append(align_table_if_present)
-
+        
         # TODO: make it fuse when get internets back :D
         children.append(go_shallow_depth)
         children.append(search_for_table)
@@ -121,7 +121,7 @@ class GoAboveTable(py_trees.composites.Sequence):
         children.append(go_to_table2)
         children.append(go_table)
         children.append(go_table_refined)
-        children.append(go_shallow_depth)
+        children.append(go_shallow_depth_2)
 
         if not navigation_only:
             children.append(align_table)
@@ -337,6 +337,7 @@ class CheckAboveTable(py_trees.behaviour.Behaviour):
         potential_pill_detection = None
         # Verify in detections if there are at least number_of_items_to_check items in the down cam detections 
         # to certify we are above the table (not neccesarily centered)
+        self.blackboard.mission.octagon_task.view_table = None
         for detection in self.blackboard.vision.down_cam.detections.detections:
             if detection.label in self.blackboard.missions.octagon.expected_table_items:
                 if detection.label == "table":
@@ -447,6 +448,18 @@ class CenterTable(py_trees.behaviour.Behaviour):
             self.node.get_logger().info("PASS1.5")
             return py_trees.common.Status.RUNNING
         
+        if not hasattr(self.blackboard, 'mission') or self.blackboard.mission is None:
+            self.node.get_logger().error("Blackboard mission key is not set up or mission is None")
+            return py_trees.common.Status.FAILURE
+
+        if not hasattr(self.blackboard.mission, 'octagon_task') or self.blackboard.mission.octagon_task is None:
+            self.node.get_logger().error("Blackboard mission octagon_task key is not set up or octagon_task is None")
+            return py_trees.common.Status.FAILURE
+        
+        if not hasattr(self.blackboard.mission.octagon_task, 'view_table') or self.blackboard.mission.octagon_task.view_table is None:
+            self.node.get_logger().error("Blackboard mission octagon_task view_table key is not set up or view_table is None")
+            return py_trees.common.Status.FAILURE
+
         table = self.blackboard.mission.octagon_task.view_table
         # Find the general direction of the table by looking at which corner the table BB is in.
         # Move in that general direction to try to see more of it.
@@ -629,11 +642,17 @@ class MeasureTableDepthDVL(py_trees.behaviour.Behaviour):
             return py_trees.common.Status.FAILURE
 
 class ScanOctagonImages(py_trees.composites.Sequence):
-    def __init__(self, num_steps_per_side=5):
+    def __init__(self, **kwargs):
         super().__init__("Scan Octagon Images", memory=True)
+        
+        self.scan_octagon_num_steps_per_side = kwargs.get('scan_octagon_num_steps_per_side', 3)
+        self.scan_octagon_yaw_hold_time = kwargs.get('scan_octagon_yaw_hold_time', 2.0)
+        self.scan_octagon_yaw_tolerance = kwargs.get('scan_octagon_yaw_tolerance', 180.0)
 
         # 1. Scan a 360 deg yaw to find images
-        scan_for_objects = vision_behaviours.ScanBehaviour(turn_hold_time_s=2.0, scan_angle_deg=180, num_steps_per_side=num_steps_per_side)
+        scan_for_objects = vision_behaviours.ScanBehaviour(turn_hold_time_s=self.scan_octagon_yaw_hold_time, scan_angle_deg=180, 
+                                                           angular_tolerance_rad=math.radians(self.scan_octagon_yaw_tolerance),
+                                                           num_steps_per_side=self.scan_octagon_num_steps_per_side)
 
         # 2. Verify all images are present and log angles to BB
         verify_images = VerifyOctagonImages()
@@ -708,8 +727,10 @@ class SequenceOfCleanUpTasks(py_trees.composites.Sequence):
         self.grab_only_for_role = kwargs.get('grab_only_for_role', True)
         self.number_of_items_to_grab = kwargs.get('number_of_items_to_grab', 1)
         self.role = kwargs.get('role', 'survey_repair')
-        self.survey_repair_items = kwargs.get('survey_repair_items', {})
-        self.search_rescue_items = kwargs.get('search_rescue_items', {})
+        self.survey_repair_items_item_labels = kwargs.get('survey_repair_items.items_labels', [])
+        self.search_rescue_items_item_labels = kwargs.get('search_rescue_items.items_labels', [])
+        self.survey_repair_items_bin_label = kwargs.get('survey_repair_items.bin_label', [])
+        self.search_rescue_items_bin_label = kwargs.get('search_rescue_items.bin_label', [])
         self.items_to_grab = ["bandaid", "nutbolt", "electric", "pill"]
 
         # Initialize amount of items dropped in good bin on blackboard
@@ -730,16 +751,16 @@ class SequenceOfCleanUpTasks(py_trees.composites.Sequence):
         for i in range(self.number_of_items_to_grab):
             bin_label = None
             item_to_grab = self.items_to_grab[i]
-            if item_to_grab in self.survey_repair_items.items_labels:
-                bin_label = self.survey_repair_items.bin_label
-            elif item_to_grab in self.search_rescue_items.items_labels:
-                bin_label = self.search_rescue_items.bin_label
+            if item_to_grab in self.survey_repair_items_item_labels:
+                bin_label = self.survey_repair_items_bin_label
+            elif item_to_grab in self.search_rescue_items_item_labels:
+                bin_label = self.search_rescue_items_bin_label
             else:
                 # Default label for bin
                 bin_label = "Warning"
 
             self.add_children([
-                DropItemInBasket(item_to_grab=item_to_grab, bin_to_drop_in=bin_label,**kwargs)])
+                DropItemInBasket(item_to_grab="electric", bin_to_drop_in=bin_label,**kwargs)])
 
 
 class DropItemInBasket(py_trees.composites.Sequence):
@@ -748,7 +769,7 @@ class DropItemInBasket(py_trees.composites.Sequence):
 
         self.item_drop_height_relative_bin = kwargs.get('item_drop_height_relative_bin', 0.2)
         self.grab_only_no_drop = kwargs.get('grab_only_no_drop', False)
-        self.role = kwargs.get('role', "survey_repair")      
+        self.chosen_role = kwargs.get('role', "survey_repair")      
         self.table_item_target_distance = kwargs.get('table_item_target_distance', 0.3)
         self.table_item_tolerance_meters = kwargs.get('table_item_tolerance_meters', 0.1)
         self.table_item_height_offset = kwargs.get('table_item_height_offset', 0.1)    
@@ -809,7 +830,7 @@ class DropItemInBasket(py_trees.composites.Sequence):
 
         # 9. Update the expected items on table now that we dropped one by checking
         # item is indeed in bin
-        check_item_dropped_good = CheckItemNotDroppedInBin(object=item_to_grab, bin=bin_to_drop_in, role=self.role, **kwargs)
+        check_item_dropped_good = CheckItemNotDroppedInBin(object=item_to_grab, bin=bin_to_drop_in, chosen_role=self.chosen_role, **kwargs)
          
         # 10. Go back to where table was
         shallow_approach_tolerance = kwargs.get("shallow_approach_tolerance", 0.3)
@@ -830,7 +851,7 @@ class DropItemInBasket(py_trees.composites.Sequence):
 
         surface_octagon = BasicActionBehaviour(
             name="Surface in Octagon", 
-            goal=set_depth(z=surface_depth, tolerance=surface_tolerance, hold_time=surface_hold_time, timeout=timeout)
+            goal=set_depth(z=surface_depth, tolerance=surface_tolerance, hold_time=surface_hold_time, timeout=30.0)
         )
 
         # 12. Go back to center table
@@ -880,6 +901,7 @@ class AlignCameraWithObject(py_trees.behaviour.Behaviour):
 
         self.blackboard.register_key('/vision/down_cam/detections', access=py_trees.common.Access.READ)
         self.blackboard.register_key('/sensors/pose', access=py_trees.common.Access.READ)
+        self.blackboard.register_key('/mission/octagon_task/height_table', access=py_trees.common.Access.READ)
 
     def initialise(self) -> None:
         self.action_status = ActionStatus.NOT_SENT
@@ -1138,12 +1160,12 @@ class CheckItemNotDroppedInBin(py_trees.behaviour.Behaviour):
     # Instead, we double check by making sure we do not detect outside of the box
 
     # Checking item inside the bin is important for the final rotation count at end of task
-    def __init__(self, object="pill", bin="redcross_helmet", role="survey_repair", **kwargs):
+    def __init__(self, object="pill", bin="redcross_helmet", chosen_role="survey_repair", **kwargs):
         super().__init__("Check item dropped in bin")
         self.blackboard = self.attach_blackboard_client(name="LowerDepthToGrabber Blackboard")
         self.item_to_check = object
         self.desired_bin = bin
-        self.role = role
+        self.role = chosen_role
         self.survey_repair_items = kwargs.get('survey_repair_items', {})
         self.search_rescue_items = kwargs.get('search_rescue_items', {})
 

@@ -331,10 +331,10 @@ def main():
     node.declare_parameter("octagon.scan_octagon_num_steps_per_side", 5)
     node.declare_parameter("octagon.octagon_images.survey_repair", ["compass", "tools"])
     node.declare_parameter("octagon.octagon_images.search_rescue", ["lifebuoy", "sos"])
-    node.declare_parameter("look_at_image_hold_time_per_step", 0.5)
-    node.declare_parameter("look_at_image_yaw_tolerance", 10.0)     
-    node.declare_parameter("look_at_image_yaw_hold_time", 2.0)
-    node.declare_parameter("look_at_image_yaw_timeout", 30.0)
+    node.declare_parameter("octagon.look_at_image_hold_time_per_step", 0.5)
+    node.declare_parameter("octagon.look_at_image_yaw_tolerance", 10.0)     
+    node.declare_parameter("octagon.look_at_image_yaw_hold_time", 2.0)
+    node.declare_parameter("octagon.look_at_image_yaw_timeout", 30.0)
 
     # Down cam alignment navigation 
     node.declare_parameter("octagon.down_cam_position_tolerance", 0.3)
@@ -439,7 +439,7 @@ def main():
         "table_item_height_offset": node.get_parameter("octagon.table_item_height_offset").get_parameter_value().double_value,
         "table_item_hold_time": node.get_parameter("octagon.table_item_hold_time").get_parameter_value().double_value,
         "bin_target_distance": node.get_parameter("octagon.bin_target_distance").get_parameter_value().double_value,
-        "bin_tolerance_metable_item_hold_timeters": node.get_parameter("octagon.bin_tolerance_metable_item_hold_timeters").get_parameter_value().double_value,
+        "bin_tolerance_meters": node.get_parameter("octagon.bin_tolerance_meters").get_parameter_value().double_value,
         "bin_item_drop_height_relative_bin": node.get_parameter("octagon.bin_item_drop_height_relative_bin").get_parameter_value().double_value,
         "bin_hold_time": node.get_parameter("octagon.bin_hold_time").get_parameter_value().double_value,
         "time_before_abort": node.get_parameter("octagon.time_before_abort").get_parameter_value().double_value,
