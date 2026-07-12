@@ -181,7 +181,7 @@ planner_root_tree:
     torpedo:
       launch_topic: /actuators/torpedo
       initial_distance_from_board: 2.0      # (m) Initial "safe" distance from the board during rough positioning
-      z_reference: -0.6                    # (m) Depth to maintain during torpedo task
+      z_reference: -1.0                    # (m) Depth to maintain during torpedo task
       scan_pause_time: 1.0                  # (s) Seconds to pause after each scan rotation
       position_tolerance: 0.3               # (m) Position convergence threshold for board alignment
       yaw_tolerance_deg: 10.0                # (deg) Yaw convergence threshold for board alignment

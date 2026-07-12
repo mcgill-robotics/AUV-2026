@@ -8,6 +8,7 @@ from controls.utils import Vector2D
 from controls.goal_helpers import set_attitude_quaternion,move_global, move_to_pose
 from enum import Enum
 from auv_msgs.msg import VisionObject
+import copy
 from geometry_msgs.msg import Point, Quaternion, Pose
 
 TORPEDO_COUNT = 2
@@ -459,118 +460,11 @@ class BoardIcon(Enum):
     FIRETRUCK = "firetruck"
 
 
-class DetermineIconOffsetPairs(Action):
-    def __init__(
-        self,
-        icons: list[BoardIcon],
-        auv_to_torpedos : dict[TorpedoSide, Tuple[float,float,float]],
-        auv_to_front : float,
-        forward_trajectory : np.polynomial.Polynomial,
-        lateral_trajectory : np.polynomial.Polynomial,
-        vertical_trajectory : np.polynomial.Polynomial,
-        distance_from_board: float,
-        icon_to_nearest_hole: dict[BoardType, dict[BoardIcon, Tuple[float,float,float]]]
-    ):
-        super().__init__("Determine Icon Offset Pairs")
-        self.icons = icons
-        self.auv_to_torpedos = auv_to_torpedos
-        self.forward_trajectory = forward_trajectory
-        self.lateral_trajectory = lateral_trajectory
-        self.vertical_trajectory = vertical_trajectory
-        self.distance_from_board = distance_from_board
-        self.icon_to_nearest_hole = icon_to_nearest_hole
-
-    def setup(self, **kwargs):
-        super().setup(**kwargs)
-        self.node = kwargs['node']
-        self.blackboard.register_key(key="/board/type", access=py_trees.common.Access.READ)
-        self.blackboard.register_key(key="/board/hole_offsets", access=py_trees.common.Access.WRITE)
-        
-    def update(self):
-        if not self.blackboard.exists("/board/type") or self.blackboard.board.type is None:
-            self.node.get_logger().error(f"[{self.name}] No board type available on blackboard.")
-            return py_trees.common.Status.FAILURE
-        
-        board_type = BoardType(self.blackboard.get("/board/type"))
-                
-        for icon in self.icons:
-            offset_to_hole = self.icon_to_nearest_hole[board_type].get(icon, None)
-        if offset_to_hole is None:
-            self.node.get_logger().error(f"[{self.name}] Offset to hole not found for icon {icon.value} and board type {board_type.value}")
-            return py_trees.common.Status.FAILURE
-        
-        self.blackboard.set("/torpedo/offset_to_hole", (
-            offset_to_hole[0] - self.distance_from_board,
-            offset_to_hole[1],
-            offset_to_hole[2],
-        ))
-        
-        match self.blackboard.torpedo.count:
-            case 0:
-                self.node.get_logger().error(f"[{self.name}] No torpedo detected. Alignment is redundant with absence of torpedo payload.")
-                self.has_failed = True
-                return
-            case 1:
-                side = TorpedoSide.LEFT
-            case 2:
-                side = TorpedoSide.RIGHT
-            case _:
-                self.node.get_logger().error(f"[{self.name}] Invalid torpedo count {self.blackboard.torpedo.count}. Expected 1 or 2.")
-                self.has_failed = True
-                return
-        self.auv_to_torpedo = self.auv_to_torpedos[side]
-                        
-        self.node.get_logger().info(f"[{self.name}] Trajectory coeffs: Forward: {self.forward_trajectory.coef}, Lateral: {self.lateral_trajectory.coef}, Vertical: {self.vertical_trajectory.coef}")
-        # after alignment, torpedo launch should be aligned with the hole
-        # to know how much to shift back by, we need to know the trajectory time such that forward trajectory is equal to the hole offset, and then we can use that time to find the lateral and vertical offsets
-        if not self.blackboard.exists("/torpedo/offset_to_hole") or self.blackboard.torpedo.offset_to_hole is None:
-            self.node.get_logger().error(f"[{self.name}] No torpedo offset to hole available on blackboard. Unable to align torpedo to hole.")
-            self.has_failed = True
-            return
-        to_hole_offset = self.blackboard.torpedo.offset_to_hole
-        self.forward_trajectory.coef[0] += to_hole_offset[0]
-        self.node.get_logger().info(f"[{self.name}] Adjusted trajectories coeffs for hole offset: F {self.forward_trajectory.coef}, L {self.lateral_trajectory.coef}, V {self.vertical_trajectory.coef}")
-        forward_roots = sorted(r.real for r in self.forward_trajectory.roots() if np.isreal(r))
-        
-        # 0 is always solution since all trajectories start at 0
-        if len(forward_roots) < 1:
-            self.node.get_logger().error(f"[{self.name}] Torpedo forward trajectory does not have roots. Forward roots: {forward_roots}")
-            self.has_failed = True
-            return
-        
-        self.node.get_logger().info(f"[{self.name}] Torpedo forward trajectory intersects with hole at roots: {forward_roots}. F values: {[self.forward_trajectory(root) for root in forward_roots]}. L values: {[self.lateral_trajectory(root) for root in forward_roots]} V values: {[self.vertical_trajectory(root) for root in forward_roots]}")
-
-        trajectory_time = forward_roots[0]
-        backward_offset = self.forward_trajectory(trajectory_time) 
-        rightward_offset = self.lateral_trajectory(trajectory_time)
-        downward_offset = self.vertical_trajectory(trajectory_time) 
-        
-        self.node.get_logger().info(f"[{self.name}] Torpedo trajectory time to reach hole: {trajectory_time:.2f}s. Corresponding offsets: Backward: {backward_offset:.2f}m, Rightward: {rightward_offset:.2f}m, Downward: {downward_offset:.2f}m")
-        
-        self.blackboard.torpedo.trajectory_time = trajectory_time
-        target_orientation = geometry.rotate_quaternion(self.blackboard.board.pose.orientation, 0, 0, math.pi)
-        
-        offset_vector = Point(
-            x= to_hole_offset[0] - self.auv_to_torpedo[0] + backward_offset,
-            y= to_hole_offset[1] - self.auv_to_torpedo[1] - rightward_offset,
-            z= to_hole_offset[2] - self.auv_to_torpedo[2] - downward_offset
-        )
-        
-        self.node.get_logger().info(f"[{self.name}] Aligning torpedo to hole offset from icon position: {offset_vector}")
-        # move from current position to hole position, then move such that torpedo launch is at the AUV CoM, then move back by the forward offset to align the torpedo with the hole
-        goal_offset = geometry.rotate_3d_vector(
-            q=target_orientation,
-            vector=offset_vector
-        )
-        
-        self.node.get_logger().info(f"[{self.name}] Rotated offset vector to hole in board frame: {goal_offset}")
-        
-        goal_position_x = self.blackboard.torpedo.icon_position.x + goal_offset.x
-        goal_position_y = self.blackboard.torpedo.icon_position.y + goal_offset.y
-        goal_position_z = self.blackboard.torpedo.icon_position.z + goal_offset.z
-        
-        
-        return py_trees.common.Status.SUCCESS
+class FiringMode(Enum):
+    LargeThenSmall = 1
+    LargeOnly = 2
+    SmallOnly = 3
+    AllFour = 4
     
 
 class CheckBoardType(Condition):
@@ -799,6 +693,11 @@ class AlignTorpedoToHole(BasicActionBehaviour):
     """
     def __init__(
             self,
+            target_icon: BoardIcon,
+            attempts_to_find_icon: int,
+            auv_to_front : float,
+            distance_from_board: float,
+            icon_to_nearest_hole: dict[BoardType, dict[BoardIcon, Tuple[float,float,float]]],
             auv_to_torpedos : dict[TorpedoSide, Tuple[float,float,float]],
             forward_trajectory : np.polynomial.Polynomial,
             lateral_trajectory : np.polynomial.Polynomial,
@@ -809,11 +708,15 @@ class AlignTorpedoToHole(BasicActionBehaviour):
             hold_time: float = 0.5
         ):
         super(AlignTorpedoToHole, self).__init__(f"Align Torpedo to Hole")
-        self.lateral_trajectory = lateral_trajectory.copy()
-        self.vertical_trajectory = vertical_trajectory.copy()
-        self.forward_trajectory = forward_trajectory.copy()
-        self.auv_to_torpedos = auv_to_torpedos
-        
+        self.target_icon = target_icon
+        self.attempts = attempts_to_find_icon
+        self.distance_from_board = distance_from_board
+        self.icon_to_nearest_hole = copy.deepcopy(icon_to_nearest_hole)
+        self.lateral_trajectory = copy.deepcopy(lateral_trajectory)
+        self.vertical_trajectory = copy.deepcopy(vertical_trajectory)
+        self.forward_trajectory = copy.deepcopy(forward_trajectory)
+        self.auv_to_torpedos = copy.deepcopy(auv_to_torpedos)
+        self.auv_to_front = auv_to_front
         self.position_tolerance = position_tolerance
         self.orientation_tolerance_rad = orientation_tolerance_rad
         self.timeout = timeout
@@ -823,10 +726,11 @@ class AlignTorpedoToHole(BasicActionBehaviour):
         
     def setup(self, **kwargs):
         super(AlignTorpedoToHole, self).setup(**kwargs)
+        self.blackboard.register_key(key="/board/type", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/board/pose", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
         # whether to orient left or right torpedo
         self.blackboard.register_key(key="/torpedo/count", access=py_trees.common.Access.READ)
-        self.blackboard.register_key(key="/torpedo/icon_position", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/torpedo/trajectory_time", access=py_trees.common.Access.WRITE)
         self.blackboard.register_key(key="/torpedo/offset_to_hole", access=py_trees.common.Access.READ)
         
@@ -838,14 +742,33 @@ class AlignTorpedoToHole(BasicActionBehaviour):
             self.node.get_logger().error(f"[{self.name}] No board pose available on blackboard.")
             self.has_failed = True
             return 
-        if not self.blackboard.exists("/torpedo/icon_position") or self.blackboard.torpedo.icon_position is None:
-            self.node.get_logger().error(f"[{self.name}] No torpedo icon position available on blackboard.")
-            self.has_failed = True
-            return 
         if not self.blackboard.exists("/torpedo/count") or self.blackboard.torpedo.count is None:
             self.node.get_logger().error(f"[{self.name}] No torpedo count available on blackboard.")
             self.has_failed = True
             return
+
+        if not self.blackboard.exists("/board/type") or self.blackboard.board.type is None:
+            self.node.get_logger().error(f"[{self.name}] No board type available on blackboard.")
+            return py_trees.common.Status.FAILURE
+        
+        board_type = BoardType(self.blackboard.get("/board/type"))
+
+
+        target_icon_vo = None
+        for vision_object in self.blackboard.vision.object_map.array:
+            if vision_object.label == self.target_icon.value:
+                target_icon_vo = vision_object
+                break
+        
+        if target_icon_vo is None:
+            self.current_attempt += 1
+            if self.current_attempt < self.attempts:
+                self.node.get_logger().warn(f"[{self.name}] Target icon {self.target_icon.value} not found in vision. Retrying...")
+                return py_trees.common.Status.RUNNING
+            else:
+                self.node.get_logger().error(f"[{self.name}] Target icon {self.target_icon.value} not found in vision.")
+                return py_trees.common.Status.FAILURE
+
         
         match self.blackboard.torpedo.count:
             case 0:
@@ -865,12 +788,16 @@ class AlignTorpedoToHole(BasicActionBehaviour):
         self.node.get_logger().info(f"[{self.name}] Trajectory coeffs: Forward: {self.forward_trajectory.coef}, Lateral: {self.lateral_trajectory.coef}, Vertical: {self.vertical_trajectory.coef}")
         # after alignment, torpedo launch should be aligned with the hole
         # to know how much to shift back by, we need to know the trajectory time such that forward trajectory is equal to the hole offset, and then we can use that time to find the lateral and vertical offsets
-        if not self.blackboard.exists("/torpedo/offset_to_hole") or self.blackboard.torpedo.offset_to_hole is None:
-            self.node.get_logger().error(f"[{self.name}] No torpedo offset to hole available on blackboard. Unable to align torpedo to hole.")
-            self.has_failed = True
-            return
-        to_hole_offset = self.blackboard.torpedo.offset_to_hole
-        self.forward_trajectory.coef[0] += to_hole_offset[0]
+
+        offset_to_hole = self.icon_to_nearest_hole[board_type].get(self.target_icon, None)
+        if offset_to_hole is None:
+            self.node.get_logger().error(f"[{self.name}] Offset to hole not found for icon {icon.value} and board type {board_type.value}")
+            return py_trees.common.Status.FAILURE
+        # add backward distance such that front of AUV is at the distance from the board
+        offset_to_hole[0] -= (self.distance_from_board + self.auv_to_front)  
+        self.node.get_logger().info(f"[{self.name}] Offset to hole for icon {self.target_icon.value} and board type {board_type.value}: {offset_to_hole}")
+
+        self.forward_trajectory.coef[0] += offset_to_hole[0]
         self.node.get_logger().info(f"[{self.name}] Adjusted trajectories coeffs for hole offset: F {self.forward_trajectory.coef}, L {self.lateral_trajectory.coef}, V {self.vertical_trajectory.coef}")
         forward_roots = sorted(r.real for r in self.forward_trajectory.roots() if np.isreal(r))
         
@@ -893,9 +820,9 @@ class AlignTorpedoToHole(BasicActionBehaviour):
         target_orientation = geometry.rotate_quaternion(self.blackboard.board.pose.orientation, 0, 0, math.pi)
         
         offset_vector = Point(
-            x= to_hole_offset[0] - self.auv_to_torpedo[0] + backward_offset,
-            y= to_hole_offset[1] - self.auv_to_torpedo[1] - rightward_offset,
-            z= to_hole_offset[2] - self.auv_to_torpedo[2] - downward_offset
+            x= offset_to_hole[0] - self.auv_to_torpedo[0],
+            y= offset_to_hole[1] - self.auv_to_torpedo[1] - rightward_offset,
+            z= offset_to_hole[2] - self.auv_to_torpedo[2] - downward_offset
         )
         
         self.node.get_logger().info(f"[{self.name}] Aligning torpedo to hole offset from icon position: {offset_vector}")
@@ -907,9 +834,9 @@ class AlignTorpedoToHole(BasicActionBehaviour):
         
         self.node.get_logger().info(f"[{self.name}] Rotated offset vector to hole in board frame: {goal_offset}")
         
-        goal_position_x = self.blackboard.torpedo.icon_position.x + goal_offset.x
-        goal_position_y = self.blackboard.torpedo.icon_position.y + goal_offset.y
-        goal_position_z = self.blackboard.torpedo.icon_position.z + goal_offset.z
+        goal_position_x = target_icon_vo.pose.position.x + goal_offset.x
+        goal_position_y = target_icon_vo.pose.position.y + goal_offset.y
+        goal_position_z = target_icon_vo.pose.position.z + goal_offset.z
         
         self.node.get_logger().info(f"[{self.name}] Moving to position in front of hole: ({goal_position_x:.2f}, {goal_position_y:.2f}, {goal_position_z:.2f}) with backward offset: {backward_offset:.2f}m")
         
