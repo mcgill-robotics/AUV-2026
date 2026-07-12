@@ -297,17 +297,21 @@ def main():
         "torpedo_firing_buffer_time": node.get_parameter("torpedo.firing_pause_time").get_parameter_value().double_value
     }
 
+    # General task information parameters
     node.declare_parameter("octagon.downcam_fov_horizontal", 59.7)
     node.declare_parameter("octagon.downcam_fov_vertical", 47.6)
     node.declare_parameter("octagon.downcam_image_width", 640)
     node.declare_parameter("octagon.downcam_image_height", 480)
     node.declare_parameter("octagon.table_avg_height", 0.75)
     node.declare_parameter("octagon.table_max_height", 0.9)
+    node.declare_parameter("octagon.table_min_height", 0.6)
     node.declare_parameter("octagon.height_above_to_measure_table", 0.3)
     node.declare_parameter("octagon.pool_depth", 2.1)
     node.declare_parameter("octagon.COM_to_dvl_height", 0.1)
     node.declare_parameter("octagon.known_height_to_pill", 0.745625)
     node.declare_parameter("octagon.known_pill_area", 16900)
+
+    # Navigate to table
     node.declare_parameter("octagon.shallow_approach_depth", -0.4)
     node.declare_parameter("octagon.shallow_approach_tolerance", 0.2)
     node.declare_parameter("octagon.shallow_approach_hold_time", 1.0)
@@ -315,15 +319,51 @@ def main():
     node.declare_parameter("octagon.surface_tolerance", 0.1)
     node.declare_parameter("octagon.surface_hold_time", 3.0)
     node.declare_parameter("octagon.ending_dive_depth", -0.7)
+
+    # Shortcuts to have shorter form of the mission.
     node.declare_parameter("octagon.navigation_only", True)
     node.declare_parameter("octagon.item_drop_only", False)
+    node.declare_parameter("octagon.grab_only_no_drop", False)
+
+    # Navigate to table
     node.declare_parameter("octagon.position_tolerance", 0.3)
     node.declare_parameter("octagon.hold_time", 1.0)
     node.declare_parameter("octagon.timeout", 30.0)
     node.declare_parameter("octagon.grab_only_for_role", True)
+    node.declare_parameter("octagon.role", "survey_repair")
     node.declare_parameter("octagon.number_of_items_to_grab", 3)
-    node.declare_parameter("octagon.tf_auv_to_grabber.xyz", [-0.1125559, -0.1739998, -0.01242304])
-    node.declare_parameter("octagon.tf_auv_to_grabber.rpy", [0.0, 0.0, 0.0])
+
+    # Octagon scan, look at image, and rolls at end of octagon/table
+    node.declare_parameter("octagon.scan_octagon_yaw_tolerance", 10.0)
+    node.declare_parameter("octagon.scan_octagon_yaw_hold_time", 2.0)
+    node.declare_parameter("octagon.scan_octagon_num_steps_per_side", 5)
+    node.declare_parameter("octagon.octagon_images.survey_repair", ["compass", "tools"])
+    node.declare_parameter("octagon.octagon_images.search_rescue", ["lifebuoy", "sos"])
+    node.declare_parameter("look_at_image_hold_time_per_step", 0.5)
+    node.declare_parameter("look_at_image_yaw_tolerance", 10.0)     
+    node.declare_parameter("look_at_image_yaw_hold_time", 2.0)
+    node.declare_parameter("look_at_image_yaw_timeout", 30.0)
+
+    # Down cam alignment navigation 
+    node.declare_parameter("octagon.down_cam_position_tolerance", 0.3)
+    node.declare_parameter("octagon.down_cam_yaw_tolerance", 10.0)
+    node.declare_parameter("octagon.down_cam_hold_time", 1.0)
+    node.declare_parameter("octagon.down_cam_timeout", 30.0)
+    
+    # Go Near Object for table item params
+    node.declare_parameter("octagon.table_item_target_distance", 0.3)
+    node.declare_parameter("octagon.table_item_tolerance_meters", 10.0)
+    node.declare_parameter("octagon.table_item_height_offset", 1.0)
+    node.declare_parameter("octagon.table_item_hold_time", 30.0)
+
+    # Go Near Object for bin params
+    node.declare_parameter("octagon.bin_target_distance", 0.3)
+    node.declare_parameter("octagon.bin_tolerance_meters", 10.0)
+    node.declare_parameter("octagon.bin_item_drop_height_relative_bin", 1.0)
+    node.declare_parameter("octagon.bin_hold_time", 30.0)
+
+    # Clean up task
+    node.declare_parameter("octagon.time_before_abort", 200.0)
     node.declare_parameter("octagon.expected_table_items",
     ["table", "pill", "nutbolt", "electric", "bandaid", "warning", "redcross_helmet"])
     # Survey repair items (flattened dict)
@@ -334,6 +374,21 @@ def main():
     node.declare_parameter("octagon.search_rescue_items.bin_label", "redcross_helmet")
     node.declare_parameter("octagon.item_drop_height_relative_bin", 0.1)
     node.declare_parameter("octagon.relative_height_to_measure_table", -0.4)
+    # Grabber alignment navigation parameters
+    node.declare_parameter("octagon.grabber_position_tolerance", 0.3)
+    node.declare_parameter("octagon.grabber_yaw_tolerance", -0.4)
+    node.declare_parameter("octagon.grabber_hold_time", -0.4)
+    node.declare_parameter("octagon.grabber_timeout", -0.4)
+    node.declare_parameter("octagon.grabber_clearance_margin", 0.024)
+    # Grabber depth alignment
+    node.declare_parameter("octagon.grabber_desired_depth_tolerance", 0.3)
+    node.declare_parameter("octagon.grabber_desired_depth_hold_time", -0.4)
+    node.declare_parameter("octagon.grabber_desired_depth_timeout", -0.4)
+    # Transforms relevant for task
+    node.declare_parameter("octagon.tf_auv_to_grabber.xyz", [-0.1125559, -0.1739998, -0.01242304])
+    node.declare_parameter("octagon.tf_auv_to_grabber.rpy", [0.0, 0.0, 0.0])
+    node.declare_parameter("octagon.tf_auv_to_down_cam.xyz", [-0.067, 0.07, -0.014])
+    node.declare_parameter("octagon.tf_auv_to_down_cam.rpy", [0.0, 0.0, 0.0])
 
     octagon_params = {
         "downcam_fov_horizontal": node.get_parameter("octagon.downcam_fov_horizontal").get_parameter_value().double_value,
@@ -341,6 +396,7 @@ def main():
         "downcam_image_width": node.get_parameter("octagon.downcam_image_width").get_parameter_value().integer_value,
         "downcam_image_height": node.get_parameter("octagon.downcam_image_height").get_parameter_value().integer_value,
         "table_max_height": node.get_parameter("octagon.table_max_height").get_parameter_value().double_value,
+        "table_min_height": node.get_parameter("octagon.table_min_height").get_parameter_value().double_value,
         "table_avg_height": node.get_parameter("octagon.table_avg_height").get_parameter_value().double_value,
         "height_above_to_measure_table": node.get_parameter("octagon.height_above_to_measure_table").get_parameter_value().double_value,
         "COM_to_dvl_height": node.get_parameter("octagon.COM_to_dvl_height").get_parameter_value().double_value,
@@ -359,15 +415,49 @@ def main():
         "hold_time": node.get_parameter("octagon.hold_time").get_parameter_value().double_value,
         "timeout": node.get_parameter("octagon.timeout").get_parameter_value().double_value,
         "grab_only_for_role": node.get_parameter("octagon.grab_only_for_role").get_parameter_value().bool_value,
+        "role": node.get_parameter("octagon.role").get_parameter_value().string_value,
         "number_of_items_to_grab": node.get_parameter("octagon.number_of_items_to_grab").get_parameter_value().integer_value,
         "tf_auv_to_grabber.xyz": node.get_parameter("octagon.tf_auv_to_grabber.xyz").get_parameter_value().double_array_value,
         "tf_auv_to_grabber.rpy": node.get_parameter("octagon.tf_auv_to_grabber.rpy").get_parameter_value().double_array_value,
+        "tf_auv_to_down_cam.xyz": node.get_parameter("octagon.tf_auv_to_down_cam.xyz").get_parameter_value().double_array_value,
+        "tf_auv_to_down_cam.rpy": node.get_parameter("octagon.tf_auv_to_down_cam.rpy").get_parameter_value().double_array_value,
+        "scan_octagon_yaw_tolerance": node.get_parameter("octagon.scan_octagon_yaw_tolerance").get_parameter_value().double_value,
+        "scan_octagon_yaw_hold_time": node.get_parameter("octagon.scan_octagon_yaw_hold_time").get_parameter_value().double_value,
+        "scan_octagon_num_steps_per_side": node.get_parameter("octagon.scan_octagon_num_steps_per_side").get_parameter_value().integer_value,
+        "octagon_images.survey_repair": node.get_parameter("octagon.octagon_images.survey_repair").get_parameter_value().string_array_value,
+        "octagon_images.search_rescue": node.get_parameter("octagon.octagon_images.search_rescue").get_parameter_value().string_array_value,
+        "look_at_image_hold_time_per_step": node.get_parameter("octagon.look_at_image_hold_time_per_step").get_parameter_value().double_value,
+        "look_at_image_yaw_tolerance": node.get_parameter("octagon.look_at_image_yaw_tolerance").get_parameter_value().double_value,
+        "look_at_image_yaw_hold_time": node.get_parameter("octagon.look_at_image_yaw_hold_time").get_parameter_value().double_value,
+        "look_at_image_yaw_timeout": node.get_parameter("octagon.look_at_image_yaw_timeout").get_parameter_value().double_value,
+        "down_cam_position_tolerance": node.get_parameter("octagon.down_cam_position_tolerance").get_parameter_value().double_value,
+        "down_cam_yaw_tolerance": node.get_parameter("octagon.down_cam_yaw_tolerance").get_parameter_value().double_value,
+        "down_cam_hold_time": node.get_parameter("octagon.down_cam_hold_time").get_parameter_value().double_value,
+        "down_cam_timeout": node.get_parameter("octagon.down_cam_timeout").get_parameter_value().double_value,
+        "grabber_position_tolerance": node.get_parameter("octagon.grabber_position_tolerance").get_parameter_value().double_value,
+        "grabber_yaw_tolerance": node.get_parameter("octagon.grabber_yaw_tolerance").get_parameter_value().double_value,
+        "grabber_hold_time": node.get_parameter("octagon.grabber_hold_time").get_parameter_value().double_value,
+        "grabber_timeout": node.get_parameter("octagon.grabber_timeout").get_parameter_value().double_value,
+        "grabber_clearance_margin": node.get_parameter("octagon.grabber_clearance_margin").get_parameter_value().double_value,
+        "grabber_desired_depth_tolerance": node.get_parameter("octagon.grabber_desired_depth_tolerance").get_parameter_value().double_value,
+        "grabber_desired_depth_hold_time": node.get_parameter("octagon.grabber_desired_depth_hold_time").get_parameter_value().double_value,
+        "grabber_desired_depth_timeout": node.get_parameter("octagon.grabber_desired_depth_timeout").get_parameter_value().double_value,   
+        "table_item_target_distance": node.get_parameter("octagon.table_item_target_distance").get_parameter_value().double_value,
+        "table_item_tolerance_meters": node.get_parameter("octagon.table_item_tolerance_meters").get_parameter_value().double_value,
+        "table_item_height_offset": node.get_parameter("octagon.table_item_height_offset").get_parameter_value().double_value,
+        "table_item_hold_time": node.get_parameter("octagon.table_item_hold_time").get_parameter_value().double_value,
+        "bin_target_distance": node.get_parameter("octagon.bin_target_distance").get_parameter_value().double_value,
+        "bin_tolerance_metable_item_hold_timeters": node.get_parameter("octagon.bin_tolerance_metable_item_hold_timeters").get_parameter_value().double_value,
+        "bin_item_drop_height_relative_bin": node.get_parameter("octagon.bin_item_drop_height_relative_bin").get_parameter_value().double_value,
+        "bin_hold_time": node.get_parameter("octagon.bin_hold_time").get_parameter_value().double_value,
+        "time_before_abort": node.get_parameter("octagon.time_before_abort").get_parameter_value().double_value,
         "expected_table_items": node.get_parameter("octagon.expected_table_items").get_parameter_value().string_array_value,
         "survey_repair_items": {"items_labels": node.get_parameter("octagon.survey_repair_items.items_labels").get_parameter_value().string_array_value,
             "bin_label": node.get_parameter("octagon.survey_repair_items.bin_label").get_parameter_value().string_value,},
         "search_rescue_items": {"items_labels": node.get_parameter("octagon.search_rescue_items.items_labels").get_parameter_value().string_array_value,
             "bin_label": node.get_parameter("octagon.search_rescue_items.bin_label").get_parameter_value().string_value,},
         "item_drop_only": node.get_parameter("octagon.item_drop_only").get_parameter_value().bool_value,
+        "grab_only_no_drop": node.get_parameter("octagon.grab_only_no_drop").get_parameter_value().bool_value,
         "relative_height_to_measure_table": node.get_parameter("octagon.relative_height_to_measure_table").get_parameter_value().double_value,
         }
 
