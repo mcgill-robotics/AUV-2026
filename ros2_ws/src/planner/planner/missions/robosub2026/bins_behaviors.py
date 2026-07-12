@@ -667,14 +667,17 @@ class DropMarker(py_trees.behaviour.Behaviour):
     def setup(self, **kwargs):
         self.node = kwargs['node']
 
-        self.actuator_publisher_1 = self.node.create_publisher(std_msgs.msg.UInt8, "/actuators/grabber", 10)
+        self.actuator_publisher = self.node.create_publisher(std_msgs.msg.UInt8, "/actuators/grabber", 10)
         self.blackboard.register_key(key="/bins_task/number_markers", access=py_trees.common.Access.WRITE)
     
     def update(self) -> py_trees.common.Status:
         if not hasattr(self.blackboard.bins_task, 'number_markers'):
             self.node.get_logger().error("Blackboard key /bins_task/number_markers not found. Dropping marker anyways.")
 
-        self.actuator_publisher_1.publish(std_msgs.msg.UInt8(data=0))  # Assuming '1' is the command to drop the marker
+        grabber_setpoint = self.bins_params['first_bin_grabber_setpoint'] if self.blackboard.bins_task.number_markers == 0 else self.bins_params['second_bin_grabber_setpoint']
+        self.node.get_logger().info(f"Dropping marker with setpoint: {grabber_setpoint}")
+
+        self.actuator_publisher.publish(std_msgs.msg.UInt8(data=grabber_setpoint))
 
         self.blackboard.bins_task.number_markers += 1
         return py_trees.common.Status.SUCCESS

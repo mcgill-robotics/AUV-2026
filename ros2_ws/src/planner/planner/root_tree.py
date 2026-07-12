@@ -190,6 +190,8 @@ def main():
     node.declare_parameter("bins.force_fallback_alignment", False)
     node.declare_parameter("bins.fallback_role", "search_rescue")
     node.declare_parameter("bins.no_detection_timeout", 10.0)
+    node.declare_parameter("bins.first_bin_grabber_setpoint", 128)
+    node.declare_parameter("bins.second_bin_grabber_setpoint", 255)
 
     bins_params = {
         "downcam_fov_horizontal": node.get_parameter("bins.downcam_fov_horizontal").get_parameter_value().double_value,
@@ -223,6 +225,8 @@ def main():
         "force_fallback_alignment": node.get_parameter("bins.force_fallback_alignment").get_parameter_value().bool_value,
         "fallback_role": node.get_parameter("bins.fallback_role").get_parameter_value().string_value,
         "no_detection_timeout": node.get_parameter("bins.no_detection_timeout").get_parameter_value().double_value,
+        "first_bin_grabber_setpoint": node.get_parameter("bins.first_bin_grabber_setpoint").get_parameter_value().integer_value,
+        "second_bin_grabber_setpoint": node.get_parameter("bins.second_bin_grabber_setpoint").get_parameter_value().integer_value,
     }
     
     # Torpedo task parameters

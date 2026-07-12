@@ -82,8 +82,8 @@ planner_root_tree:
       skip_scan_max_dist: 3.0      # (m) Max forward distance for skip scan red pipe detection
 
     bins:
-      downcam_fov_horizontal: 59.7        # (deg) Horizontal FOV of down cam while in water
-      downcam_fov_vertical: 47.6          # (deg) Vertical FOV of down cam while in water
+      downcam_fov_horizontal: 43.85       # (deg) Horizontal FOV of down cam while in water
+      downcam_fov_vertical: 35.24         # (deg) Vertical FOV of down cam while in water
       downcam_image_width: 640            # (px) Width of down cam image
       downcam_image_height: 480           # (px) Height of down cam image
       grabber_to_downcam_x: 0.04          # (m) Distance from downcam to grabber in the lateral direction
@@ -114,6 +114,8 @@ planner_root_tree:
       force_fallback_alignment: True      # (bool) Force behavior to use bins for projection instead of bin structure
       fallback_role: "search_rescue"      # (str) Role to use when falling back to the bins instead of the bin structure
       no_detection_timeout: 10.0          # (s) Timeout if no bins are detected while following downcam bin
+      first_bin_grabber_setpoint: 128     # (0-255) How much to open the grabber to drop the first marker
+      second_bin_grabber_setpoint: 255    # (0-255) How much to open the grabber to drop the second marker
 
     octagon:
       downcam_fov_horizontal: 59.7        # (deg) Horizontal FOV of down cam while in water
