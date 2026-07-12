@@ -85,14 +85,16 @@ class DetermineBoardPose(Action):
     """
     def __init__(
             self,
-            n_samples: int = 5,
+            n_orientation_samples: int = 5,
+            n_position_samples: int = 5,
             sample_every_n_ticks: int = 1,
             position_rejection_threshold:float = 0.1,
             orientation_rejection_threshold: float = 0.2,
             compare_measurement_with_blackboard: bool = False
         ):
-        super().__init__("Determine Board Pose sampling" + (" once" if n_samples == 1 else f" {n_samples} times") + (f" for consistency validation" if compare_measurement_with_blackboard else ""))
-        self.orientation_samples_number = n_samples
+        super().__init__("Determine Board sampling orientation" + (" once" if n_orientation_samples == 1 else f" {n_orientation_samples} times") + " and position" + (" once" if n_position_samples == 1 else f" {n_position_samples} times") + (f" for consistency validation" if compare_measurement_with_blackboard else ""))
+        self.orientation_samples_number = n_orientation_samples
+        self.position_samples_number = n_position_samples
         self.sample_rate = sample_every_n_ticks
         self.position_rejection_threshold = position_rejection_threshold
         self.orientation_rejection_threshold = orientation_rejection_threshold
@@ -122,7 +124,8 @@ class DetermineBoardPose(Action):
             
     def update(self):
         self.tick_counter += 1
-        # self.node.get_logger().info(f"[{self.name}] Tick {self.tick_counter}/{self.sample_rate}. Sample count: {self.sample_count}/{self.orientation_samples_number}")
+        self.node.get_logger().info(f"[{self.name}] Tick {self.tick_counter}/{self.sample_rate}. Sample count: {len(self.orientation_samples)}/{self.orientation_samples_number}")
+        self.node.get_logger().info(f"[{self.name}] Tick {self.tick_counter}/{self.sample_rate}. Sample count: {len(self.position_samples)}/{self.position_samples_number}")
         if self.tick_counter % self.sample_rate != 0:
             return py_trees.common.Status.RUNNING
         if not self.blackboard.exists("/vision/object_map") or self.blackboard.vision.object_map is None:
@@ -140,21 +143,19 @@ class DetermineBoardPose(Action):
             return py_trees.common.Status.FAILURE
         
         orientation = board_vo.pose.orientation
-        if len(self.orientation_samples) > 0:
-            if geometry.is_quaternion_outlier(orientation, self.orientation_samples, self.orientation_rejection_threshold):
-                self.node.get_logger().warning(f"[{self.name}] Rejected outlier orientation sample: {orientation}")
-            else:
-                self.orientation_samples.append(orientation)
-                self.node.get_logger().debug(f"[{self.name}] Collected orientation sample {len(self.orientation_samples)}/{self.orientation_samples_number}: {orientation}")
+        if len(self.orientation_samples) > 0 and geometry.is_quaternion_outlier(orientation, self.orientation_samples, self.orientation_rejection_threshold):
+            self.node.get_logger().warning(f"[{self.name}] Rejected outlier orientation sample: {orientation}")
+        else:
+            self.orientation_samples.append(orientation)
+            self.node.get_logger().debug(f"[{self.name}] Collected orientation sample {len(self.orientation_samples)}/{self.orientation_samples_number}: {orientation}")
 
-        if len(self.position_samples) > 0:
-            position = board_vo.pose.position
-            if geometry.is_position_outlier(position, self.position_samples, self.position_rejection_threshold):
-                self.node.get_logger().warning(f"[{self.name}] Rejected outlier position sample: {position}")
-                return py_trees.common.Status.RUNNING
-            else:
-                self.position_samples.append(position)
-                self.node.get_logger().debug(f"[{self.name}] Collected position sample {len(self.position_samples)}/{self.orientation_samples_number}: {position}")
+        position = board_vo.pose.position
+        if len(self.position_samples) > 0 and geometry.is_position_outlier(position, self.position_samples, self.position_rejection_threshold):
+            self.node.get_logger().warning(f"[{self.name}] Rejected outlier position sample: {position}")
+            return py_trees.common.Status.RUNNING
+        else:
+            self.position_samples.append(position)
+            self.node.get_logger().debug(f"[{self.name}] Collected position sample {len(self.position_samples)}/{self.orientation_samples_number}: {position}")
 
         
         if len(self.orientation_samples) >= self.orientation_samples_number:
@@ -178,7 +179,7 @@ class DetermineBoardPose(Action):
         else:
             return py_trees.common.Status.RUNNING
         
-        if len(self.position_samples) >= self.orientation_samples_number:
+        if len(self.position_samples) >= self.position_samples_number:
             # Compute mean position and write to blackboard
             mean_position = geometry.compute_mean_position(self.position_samples)
             if self.compare_measurement_with_blackboard:
@@ -225,7 +226,7 @@ class MoveToFrontOfBoard(BasicActionBehaviour):
             timeout: float = 30.0,
             hold_time: float = 0.5,
         ):
-        super(MoveToFrontOfBoard, self).__init__("Move to Front of Board and Align")
+        super(MoveToFrontOfBoard, self).__init__("Move to Front of Board" + " and Align" if align_to_board else " Maintaining Orientation")
         self.distance_from_board = distance_from_board
         self.z_reference = z_reference
         self.align_to_board = align_to_board
@@ -237,8 +238,7 @@ class MoveToFrontOfBoard(BasicActionBehaviour):
                 
     def setup(self, **kwargs):
         super(MoveToFrontOfBoard, self).setup(**kwargs)
-        self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
-        self.blackboard.register_key(key="/board/orientation", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/board/pose", access=py_trees.common.Access.READ)
 
     def initialise(self) -> None:
         self.has_failed = False
@@ -247,29 +247,15 @@ class MoveToFrontOfBoard(BasicActionBehaviour):
             self.node.get_logger().error(f"[{self.name}] No board pose available on blackboard.")
             self.has_failed = True
             return
-        if not self.blackboard.exists("/vision/object_map") or self.blackboard.vision.object_map is None:
-            self.node.get_logger().error(f"[{self.name}] No object map available to determine board position.")
-            self.has_failed = True
-            return
-        # get board position from vision
-        board_vo = None
-        for vision_object in self.blackboard.vision.object_map.array:
-            if vision_object.label == "board":
-                board_vo = vision_object
-                break
-        if board_vo is None:
-            self.node.get_logger().error(f"[{self.name}] Board not found in vision.")
-            self.has_failed = True
-            return
         board_center_xy:Vector2D = Vector2D (
-            x = board_vo.pose.position.x,
-            y = board_vo.pose.position.y
+            x = self.blackboard.board.pose.position.x,
+            y = self.blackboard.board.pose.position.y
         )
         
         target_xy = compute_target_in_front_of_point_on_board(board_center_xy, self.blackboard.board.pose.orientation, self.distance_from_board)
         
         if self.align_to_board:
-            if not self.blackboard.exists("/board/orientation") or self.blackboard.board.pose.orientation is None:
+            if not self.blackboard.exists("/board/pose") or self.blackboard.board.pose.orientation is None:
                 self.node.get_logger().error(f"[{self.name}] No board orientation available on blackboard.")
                 self.has_failed = True
                 return
@@ -346,13 +332,13 @@ class AlignToBoard(BasicActionBehaviour):
         
     def setup(self, **kwargs):
         super(AlignToBoard, self).setup(**kwargs)
-        self.blackboard.register_key(key="/board/orientation", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/board/pose", access=py_trees.common.Access.READ)
         
     def initialise(self) -> None:
         self.has_failed = False
         super().initialise()
-        if not self.blackboard.exists("/board/orientation") or self.blackboard.board.pose.orientation is None:
-            self.node.get_logger().error(f"[{self.name}] No board orientation available on blackboard.")
+        if not self.blackboard.exists("/board/pose") or self.blackboard.board.pose.orientation is None:
+            self.node.get_logger().error(f"[{self.name}] No board pose available on blackboard.")
             self.has_failed = True
             return
         board_orientation = self.blackboard.board.pose.orientation
@@ -648,13 +634,13 @@ class MoveToFrontOfIcon(BasicActionBehaviour):
         if self.compute_distance_from_icon:
             self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
-        self.blackboard.register_key(key="/board/orientation", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/board/pose", access=py_trees.common.Access.READ)
         
     def initialise(self) -> None:
         self.has_failed = False
         super().initialise()
-        if not self.blackboard.exists("/board/orientation") or self.blackboard.board.pose.orientation is None:
-            self.node.get_logger().error(f"[{self.name}] No board orientation available on blackboard.")
+        if not self.blackboard.exists("/board/pose") or self.blackboard.board.pose.orientation is None:
+            self.node.get_logger().error(f"[{self.name}] No board pose available on blackboard.")
             self.has_failed = True
             return
         if not self.blackboard.exists("/vision/object_map") or self.blackboard.vision.object_map is None:
@@ -837,7 +823,7 @@ class AlignTorpedoToHole(BasicActionBehaviour):
         
     def setup(self, **kwargs):
         super(AlignTorpedoToHole, self).setup(**kwargs)
-        self.blackboard.register_key(key="/board/orientation", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/board/pose", access=py_trees.common.Access.READ)
         # whether to orient left or right torpedo
         self.blackboard.register_key(key="/torpedo/count", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/torpedo/icon_position", access=py_trees.common.Access.READ)
@@ -848,8 +834,8 @@ class AlignTorpedoToHole(BasicActionBehaviour):
         self.has_failed = False
         super().initialise()
         
-        if not self.blackboard.exists("/board/orientation") or self.blackboard.board.pose.orientation is None:
-            self.node.get_logger().error(f"[{self.name}] No board orientation available on blackboard.")
+        if not self.blackboard.exists("/board/pose") or self.blackboard.board.pose.orientation is None:
+            self.node.get_logger().error(f"[{self.name}] No board pose available on blackboard.")
             self.has_failed = True
             return 
         if not self.blackboard.exists("/torpedo/icon_position") or self.blackboard.torpedo.icon_position is None:

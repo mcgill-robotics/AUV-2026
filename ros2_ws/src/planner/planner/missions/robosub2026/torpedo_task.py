@@ -24,7 +24,8 @@ class TorpedoTask(py_trees.composites.Sequence):
             position_refinement_rejection_threshold: float = 0.1,
             refinement_attempts: int = 3,
             alignments_per_attempt: int = 3,
-            samples_per_alignment: int = 5,
+            orientation_samples_per_alignment: int = 5,
+            position_samples_per_alignment: int = 5,
             refinement_sample_every_n_ticks: int = 3,
             # TODO use tuple instead
             auv_to_torpedos: dict[str, list[float]] = {
@@ -69,7 +70,8 @@ class TorpedoTask(py_trees.composites.Sequence):
         self.position_refinement_rejection_threshold:float = position_refinement_rejection_threshold
         self.refinement_attempts:int = refinement_attempts
         self.alignments_per_attempt:int = alignments_per_attempt
-        self.samples_per_alignment:int = samples_per_alignment
+        self.orientation_samples_per_alignment:int = orientation_samples_per_alignment
+        self.position_samples_per_alignment:int = position_samples_per_alignment
         self.refinement_sample_every_n_ticks:int = refinement_sample_every_n_ticks
 
         # distance thresholds from torpedo board
@@ -135,12 +137,11 @@ class TorpedoTask(py_trees.composites.Sequence):
         returns py_trees.composites.Sequence
         """
         board_strategy = py_trees.composites.Sequence("Board Strategy", memory=True)
-        board_type = DetermineBoardType()
         board_strategy.add_children(
             [
                 self.board_rough_position_sequence(),
                 self.board_orientation_refinement_selector(),
-                board_type,
+                DetermineBoardType(),
                 self.firing_order_strategy_selector()
             ]
          )
@@ -198,7 +199,8 @@ class TorpedoTask(py_trees.composites.Sequence):
         )
         
         find_board_orientation_one_sample = DetermineBoardPose (
-            n_samples=1,
+            n_orientation_samples=1,
+            n_position_samples=1,
             sample_every_n_ticks=1,
             orientation_rejection_threshold=self.orientation_refinement_rejection_threshold_rad,
             position_rejection_threshold=self.position_refinement_rejection_threshold,
@@ -259,7 +261,8 @@ class TorpedoTask(py_trees.composites.Sequence):
         find_and_align_sequence: py_trees.composites.Sequence = py_trees.composites.Sequence("Find and Align", memory=True)
         find_and_align_sequence.add_children([
             DetermineBoardPose (
-                n_samples=self.samples_per_alignment,
+                n_orientation_samples=self.orientation_samples_per_alignment,
+                n_position_samples=self.position_samples_per_alignment,
                 sample_every_n_ticks=self.refinement_sample_every_n_ticks,
                 orientation_rejection_threshold=self.orientation_refinement_rejection_threshold_rad,
                 position_rejection_threshold=self.position_refinement_rejection_threshold,
@@ -277,7 +280,8 @@ class TorpedoTask(py_trees.composites.Sequence):
             name=f"Find and Align",
             num_success=self.alignments_per_attempt)]
         consistency_check = DetermineBoardPose (
-                n_samples=1,
+                n_orientation_samples=1,
+                n_position_samples=1,
                 sample_every_n_ticks=1,
                 orientation_rejection_threshold=self.orientation_refinement_rejection_threshold_rad,
                 position_rejection_threshold=self.position_refinement_rejection_threshold,
