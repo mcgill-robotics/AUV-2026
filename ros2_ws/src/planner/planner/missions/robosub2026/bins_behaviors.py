@@ -168,8 +168,9 @@ class AlignClosestBin(py_trees.composites.Sequence):
         offset_grabber = BasicActionBehaviour(name="OffsetGrabber", goal=move_robot_centric(forward=self.bins_params['grabber_to_downcam_x'], sway=self.bins_params['grabber_to_downcam_y'], hold_time=self.bins_params['alignment_hold_time']))
         drop_marker = DropMarker(self.bins_params)
         wait_after_marker = TimerBehaviour(timer_duration=self.bins_params['grabber_wait_time'], name="WaitAfterMarkerDrop")
+        check_num_markers = CheckNumberOfMarkers(bins_params=self.bins_params)
 
-        self.add_children([go_above_closest_bin, follow_downcam_bin, offset_grabber, drop_marker, wait_after_marker])
+        self.add_children([go_above_closest_bin, follow_downcam_bin, offset_grabber, drop_marker, wait_after_marker, check_num_markers])
 
 class AlignBinsAttempt(py_trees.composites.Sequence):
     def __init__(self, bins_params: dict = None):
@@ -676,7 +677,27 @@ class DropMarker(py_trees.behaviour.Behaviour):
         self.actuator_publisher_1.publish(std_msgs.msg.UInt8(data=0))  # Assuming '1' is the command to drop the marker
 
         self.blackboard.bins_task.number_markers += 1
-        if self.blackboard.bins_task.number_markers >= self.required_markers:
+        return py_trees.common.Status.SUCCESS
+        
+class CheckNumberOfMarkers(py_trees.behaviour.Behaviour):
+    def __init__(self, bins_params: dict = None):
+        super().__init__("CheckNumberOfMarkers")
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+        self.bins_params = bins_params or {}
+        self.required_markers = self.bins_params['num_required_markers']
+        
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.blackboard.register_key(key="/bins_task/number_markers", access=py_trees.common.Access.READ)
+    
+    def update(self) -> py_trees.common.Status:
+        if not hasattr(self.blackboard.bins_task, 'number_markers'):
+            self.node.get_logger().error("Blackboard key /bins_task/number_markers not found. Assuming 0 markers.")
+            current_markers = 0
+        else:
+            current_markers = self.blackboard.bins_task.number_markers
+
+        if current_markers >= self.required_markers:
             return py_trees.common.Status.SUCCESS
         else:
             return py_trees.common.Status.FAILURE
