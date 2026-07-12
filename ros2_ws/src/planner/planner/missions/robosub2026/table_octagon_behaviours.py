@@ -511,8 +511,65 @@ class MeasureTableDepthDVL(py_trees.behaviour.Behaviour):
         # Send the service
         if not self.service_sent:
             # Get the dvl altitude and acquire the table height from it
-            self.blackboard.mission.octagon_task.height_table = self.blackboard.sensors.dvl.velocity.altitude + self.blackboard.sensors.pose.pose.position.z + \
-                self.com_to_dvl 
+            
+            # Set the DVL's unit vector for each transducer beams is 22.5 deg 
+            # from DVL Z axis. 4 arrays in form of [x,y,z].
+            # Each beam is configured at 45, -45, -135, 135 deg on the DVL XY plane
+            x_transducer_proj_magnitude = math.sin(math.radians(22.5)) * math.sin(math.radians(45)) # spherical coords math
+            y_transducer_proj_magnitude = math.cos(math.radians(22.5)) * math.sin(math.radians(45))
+            z_transducer_proj_magnitude = math.cos(math.radians(45.0))
+
+
+            # From the DVL protocol, beams are ordered in CW starting from top right. Axis is FLU convention
+            unit_vectors_dvl = [[x_transducer_proj_magnitude, -y_transducer_proj_magnitude, -z_transducer_proj_magnitude], 
+                                [-x_transducer_proj_magnitude, -y_transducer_proj_magnitude, -z_transducer_proj_magnitude], 
+                                [-x_transducer_proj_magnitude, y_transducer_proj_magnitude, -z_transducer_proj_magnitude],
+                                [x_transducer_proj_magnitude, y_transducer_proj_magnitude, -z_transducer_proj_magnitude]]
+            
+            candidate_table_heights = []
+
+            # Acquire the AUV's roll and pitch
+            quaternion = self.blackboard.sensors.pose.orientation
+            r = Rotation.from_quat([quaternion.x, quaternion.y, quaternion.z, quaternion.w])
+            auv_rotation_in_euler_rpy = r.as_euler('ZYX', degrees=False) # In radians
+            roll = auv_rotation_in_euler_rpy[2]
+            pitch = auv_rotation_in_euler_rpy[1]
+
+            
+            for i in range(0,3):
+                # Acquire DVL transducer beams in order 
+                altitude = self.blackboard.sensors.dvl.velocity.beams[i].distance
+                if altitude == -1:
+                    # Not valid altitude
+                    continue
+
+                # Project altitude onto the Pool Z axis frame
+                unit_vector_for_beam = [component * altitude for component in unit_vectors_dvl[i]]
+                dvl_z_frame_beam_altitude = -math.sin(roll) * unit_vector_for_beam[0] \
+                                            + math.cos(roll) * math.sin(pitch) * unit_vector_for_beam[1] \
+                                            + math.cos(roll) * math.sin(pitch) * unit_vector_for_beam[2]
+                
+                # Flip the sign for it to be positive altitude 
+                dvl_z_frame_beam_altitude *= -1
+
+                # Find the table height from this given altitude
+                table_height_from_floor = self.pool_depth - (-1 * self.blackboard.sensors.pose.pose.position.z + self.com_to_dvl + dvl_z_frame_beam_altitude)
+                candidate_table_heights.append(table_height_from_floor)
+
+            # Filter out altitude values outside expected table height ranges
+            for height in candidate_table_heights:
+                if not (self.table_min_height < height < self.table_max_height):
+                    candidate_table_heights.pop(height)
+
+            # Fuse the remaining measurements
+            if len(candidate_table_heights) == 0:
+                self.node.get_logger().info(f"Transducer altitudes not valid. Using average table height")
+                self.blackboard.mission.octagon_task.height_table = self.table_avg_height
+            else:
+                fused_height = sum(candidate_table_heights)/len(candidate_table_heights)
+                self.blackboard.mission.octagon_task.height_table = fused_height
+            
+            # Send the service to get down cam detection node to calculate pose with new table height as the plane for projections
             self.node.get_logger().info(f"[{self.name}] Acquired table height from DVL: {self.blackboard.mission.octagon_task.height_table:.3f} m")
             request = SetDownCamProjectionHeights.Request()
             request.all_labels = True
