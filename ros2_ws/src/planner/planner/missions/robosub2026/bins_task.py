@@ -14,28 +14,27 @@ class BinsTask(py_trees.composites.Sequence):
         super().__init__("Bins Task", memory=True)
 
         self.blackboard = self.attach_blackboard_client(name="BinsTaskBlackboard")
-        # 1. Search for and locate 3D pipeline/bins structure
-        search_for_bin_structure = vision_behaviours.SearchSweepBehaviour(
-            target_class="bin_structure" if not bins_params.get('force_fallback_search', False) else "bin",
-            num_steps=bins_params['search_sweep_steps'],
-            step_timeout=bins_params['search_sweep_step_timeout'])
         
-        # 2. Initial depth setpoint
+        # 1. Initial depth setpoint
         initial_depth = BasicActionBehaviour(
             name="Initial Depth Setpoint",
             goal=set_depth(bins_params['initial_depth'], tolerance=bins_params['initial_depth_tolerance'], hold_time=2.0)
         )
 
-        # 2. Go to bin structure
+        # 2. Search for and locate 3D pipeline/bins structure
+        # search_for_bin_structure = vision_behaviours.SearchSweepBehaviour(
+        #     target_class="bin_structure" if not bins_params.get('force_fallback_search', False) else "bin",
+        #     num_steps=bins_params['search_sweep_steps'],
+        #     step_timeout=bins_params['search_sweep_step_timeout'])
         if bins_params.get('force_fallback_search', False):
-            go_near_bin_structure = ApproachObject(
+            search_for_bin_structure = ApproachObject(
                 target_class="bin",
+                search_sweep=True,
                 bins_params=bins_params,
             )
         else:
-            go_near_bin_structure = FindBinStructure(
-                bins_params=bins_params
-            )
+            search_for_bin_structure = FindBinStructure(bins_params)
+
 
         # 3. Find the closest bin
         search_for_bins = vision_behaviours.SearchSweepBehaviour(
@@ -50,7 +49,6 @@ class BinsTask(py_trees.composites.Sequence):
         self.add_children([
             initial_depth,
             search_for_bin_structure,
-            go_near_bin_structure,
             search_for_bins,
             align_correct_bin,
         ])
