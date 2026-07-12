@@ -186,17 +186,17 @@ class MissionSpawner(py_trees.behaviour.Behaviour):
         elif choice == 19:
             full_run = py_trees.composites.Sequence("FULL COMPETITION RUN", memory=True)
             full_run.add_children([
-                GateTask(**gate),
+                py_trees.decorators.FailureIsSuccess(name="Resilient Gate Task", child=GateTask(**gate)),
                 TaskTransitionBehaviour(name="Gate -> Slalom Transition", **transitions.get('after_gate', {})),
-                SlalomTask(**slalom),
+                py_trees.decorators.FailureIsSuccess(name="Resilient Slalom Task", child=SlalomTask(**slalom)),
                 TaskTransitionBehaviour(name="Slalom -> Bins Transition", **transitions.get('after_slalom', {})),
-                BinsTask(**bins),
+                py_trees.decorators.FailureIsSuccess(name="Resilient Bins Task", child=BinsTask(**bins)),
                 TaskTransitionBehaviour(name="Bins -> Torpedo Transition", **transitions.get('after_bins', {})),
-                TorpedoTask(**torpedo),
+                py_trees.decorators.FailureIsSuccess(name="Resilient Torpedo Task", child=TorpedoTask(**torpedo)),
                 TaskTransitionBehaviour(name="Torpedo -> Octagon Transition", **transitions.get('after_torpedo', {})),
-                TableOctagonTask(**octagon),
+                py_trees.decorators.FailureIsSuccess(name="Resilient Octagon Task", child=TableOctagonTask(**octagon)),
                 TaskTransitionBehaviour(name="Octagon -> Return Home Transition", **transitions.get('after_octagon', {})),
-                ReturnHomeTask(**return_home)
+                py_trees.decorators.FailureIsSuccess(name="Resilient Return Home Task", child=ReturnHomeTask(**return_home))
             ])
             return full_run
         return None

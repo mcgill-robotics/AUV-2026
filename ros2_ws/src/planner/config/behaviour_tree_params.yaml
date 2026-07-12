@@ -12,7 +12,7 @@ planner_root_tree:
 
     # Auto-recording configuration
     auto_record:
-      enabled: false
+      enabled: true
       # Profiles are defined in: src/telemetry/config/rosbag_profiles.yaml
       profile: "all"
       bag_prefix: "mission_"
