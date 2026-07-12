@@ -38,17 +38,18 @@ class TableOctagonTask(py_trees.composites.Sequence):
         navigation_only = kwargs.get("navigation_only", True)
         ending_dive_depth = kwargs.get("ending_dive_depth", -0.5)
 
-        if navigation_only:
-            dive_back_down = BasicActionBehaviour(
-                name="Dive Back Down (Navigation Only)",
-                goal=set_depth(z=ending_dive_depth, tolerance=position_tolerance, hold_time=hold_time, timeout=timeout)
-            )
-            self.add_children([
-                go_above_table,
-                dive_back_down,
-                py_trees.behaviours.Success(name="Navigation Subtasks Complete")
-            ])
-        else:
+    
+        dive_back_down = BasicActionBehaviour(
+            name="Dive Back Down (Navigation Only)",
+            goal=set_depth(z=ending_dive_depth, tolerance=position_tolerance, hold_time=hold_time, timeout=timeout)
+        )
+        self.add_children([
+            go_above_table,
+            dive_back_down,
+            py_trees.behaviours.Success(name="Navigation Subtasks Complete")
+        ])
+        
+        if not navigation_only:
             # TODO: Add DropItemInBasket here when ready
             self.add_children([
                 clean_up_tasks,
