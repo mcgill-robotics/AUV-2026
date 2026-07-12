@@ -1,7 +1,7 @@
 import py_trees
 from controls.goal_helpers import set_depth
 import planner.missions.vision_behaviours as vision_behaviours
-from .table_octagon_behaviours import GoAboveTable, CleanUpTasks
+from .table_octagon_behaviours import GoAboveTable, TableCleaning, LookAndSpin
 from ..mission_behaviour_components import BasicActionBehaviour
 
 class TableOctagonTask(py_trees.composites.Sequence):
@@ -21,19 +21,13 @@ class TableOctagonTask(py_trees.composites.Sequence):
 
         # 1. Go to a set depth to view the table better. The table is best seen at a shallow depth, since we get to
         # see the top of the table, whereas at a lower depth there is a lot of empty space
-        #3 Go up to table 
         go_above_table = GoAboveTable(**kwargs)
 
-        # 2. Surface inside Octagon
-        # 3. Locate Resupply table and items
-        # 4. Pick up role-specific items
-        clean_up_tasks = CleanUpTasks(**kwargs)
-        # 5. Deliver to correct basket
-        # 6. Optional: Face correct icons and perform rotations
-        # surface_action = BasicActionBehaviour(
-        #     name="Surface in Octagon", 
-        #     goal=set_depth(z=0.0, tolerance=position_tolerance, hold_time=hold_time, timeout=timeout)
-        # )
+        # 2. Clean up tasks
+        clean_up_tasks = TableCleaning(**kwargs)
+
+        # 3 Look at the corresponding image and yaw in front of it
+        look_and_yaw = LookAndSpin(**kwargs)
 
         navigation_only = kwargs.get("navigation_only", True)
         ending_dive_depth = kwargs.get("ending_dive_depth", -0.5)
@@ -53,5 +47,6 @@ class TableOctagonTask(py_trees.composites.Sequence):
             # TODO: Add DropItemInBasket here when ready
             self.add_children([
                 clean_up_tasks,
+                look_and_yaw,
                 py_trees.behaviours.Success(name="Placeholder Table & Octagon Success")
             ])
