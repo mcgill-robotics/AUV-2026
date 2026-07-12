@@ -742,9 +742,9 @@ class SequenceOfCleanUpTasks(py_trees.composites.Sequence):
             self.number_of_items_to_grab = min(self.number_of_items_to_grab, 2)
             
             if self.role == 'survey_repair':
-                self.items_to_grab = ["nutbolt", "electric"]
+                self.items_to_grab = self.survey_repair_items_item_labels
             elif self.role == 'search_rescue':
-                self.items_to_grab = ["bandaid", "pill"]
+                self.items_to_grab = self.search_rescue_items_item_labels
             else:
                 self.items_to_grab = ["bandaid", "pill"]        
 
