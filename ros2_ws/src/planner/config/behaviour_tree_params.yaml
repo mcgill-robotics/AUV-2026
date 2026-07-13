@@ -82,36 +82,40 @@ planner_root_tree:
       skip_scan_max_dist: 3.0      # (m) Max forward distance for skip scan red pipe detection
 
     bins:
-      downcam_fov_horizontal: 59.7        # (deg) Horizontal FOV of down cam while in water
-      downcam_fov_vertical: 47.6          # (deg) Vertical FOV of down cam while in water
+      downcam_fov_horizontal: 43.85       # (deg) Horizontal FOV of down cam while in water
+      downcam_fov_vertical: 35.24         # (deg) Vertical FOV of down cam while in water
       downcam_image_width: 640            # (px) Width of down cam image
       downcam_image_height: 480           # (px) Height of down cam image
-      grabber_to_downcam_x: 0.04       # (m) Distance from downcam to grabber in the lateral direction
-      grabber_to_downcam_y: 0.00       # (m) Distance from downcam to grabber in the forward direction
+      grabber_to_downcam_x: 0.04          # (m) Distance from downcam to grabber in the lateral direction
+      grabber_to_downcam_y: 0.00          # (m) Distance from downcam to grabber in the forward direction
+      bin_wait_before_alignment: 2.0      # (s) Time to wait after moving above the bin before aligning with downcam
       alignment_hold_time: 5.0            # (s) Time to hold the alignment with the bin before dropping the marker
+      grabber_wait_time: 5.0              # (s) Time to wait for the grabber to complete its action
       search_sweep_steps: 8               # (steps) Number of steps to take when doing the search sweep for the bin structure and for the bins themselves
       search_sweep_step_timeout: 1.5      # (s) Seconds to wait at each step of the search sweep for the bin structure and for the bins
       bin_moving_average_weight: 1.0      # (0-1) Weight of current measurement against previous position for moving average
                                           # (0=useless never moves, 1=only current measurement)
       initial_depth: -0.5                 # (m) Depth to dive to before starting the bin structure search
       initial_depth_tolerance: 0.2        # (m) Tolerance for reaching
-      bin_structure_distance: 1.5         # (m) How far away to go from the bin structure to look at it with frontcam to see the bins
+      bin_structure_distance: 2.0         # (m) How far away to go from the bin structure to look at it with frontcam to see the bins
       go_above_bin_structure_height: 0.5  # (m) Height above bin structure when looking at it with frontcam to see the bins
       go_above_bin_height: 0.7            # (m) Height above bin to move to before aligning with downcam
       switch_sides_height: 1.2            # (m) Height above bin structure when switching sides to look at the other bins
       wait_for_bins_time: 2.0             # (s) Time to wait for the bins to be detected after moving above the bin structure
-      send_setpoint_interval: 6           # (frames) Number of frames to wait before sending another setpoint to the controller
+      send_setpoint_interval: 15          # (frames) Number of frames to wait before sending another setpoint to the controller
       wrong_task_type_threshold: 5        # (frames) Difference in number of frames where wrong icon and right icon were detected before deciding its the wrong task
       task_completion_threshold: 5        # (frames) Number of frames where the correct icon was detected before dropping the marker
       bin_lined_up_frames: 5              # (frames) Number of frames where the bin is lined up before dropping the marker
-      bin_lined_up_threshold: 100          # (pixels) How close the center of the bin needs to be to the center of the image to be considered "lined up" for dropping the marker
-      num_required_markers: 1             # (markers) Number of markers that need to be dropped in the correct bins to complete the task
-      num_bins: 2                         # (bins) Total number of bins in the bin structure
+      bin_lined_up_threshold: 50          # (pixels) How close the center of the bin needs to be to the center of the image to be considered "lined up" for dropping the marker
+      num_required_markers: 2             # (markers) Number of markers that need to be dropped in the correct bins to complete the task
+      num_bins: 4                         # (bins) Total number of bins in the bin structure
       bins_to_bin_structure: 0.3          # (m) Approximate distance from center of bin structure to the bins
-      force_fallback_search: True        # (bool) Force behavior to look for bins instead of bin structure first
+      force_fallback_search: False        # (bool) Force behavior to look for bins instead of bin structure first
       force_fallback_alignment: True      # (bool) Force behavior to use bins for projection instead of bin structure
       fallback_role: "search_rescue"      # (str) Role to use when falling back to the bins instead of the bin structure
       no_detection_timeout: 10.0          # (s) Timeout if no bins are detected while following downcam bin
+      first_bin_grabber_setpoint: 128     # (0-255) How much to open the grabber to drop the first marker
+      second_bin_grabber_setpoint: 255    # (0-255) How much to open the grabber to drop the second marker
 
     octagon:
       # Generic task information parameters
