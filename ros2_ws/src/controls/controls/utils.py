@@ -100,6 +100,41 @@ def normalize_angle(angle: float) -> float:
     """
     return math.remainder(angle, 2.0 * math.pi)
 
+def compute_mean_position(positions: list[Point]) -> Point:
+    """Compute the mean position from a list of geometry_msgs Points."""
+    mean_position = Point(x=0.0, y=0.0, z=0.0)
+    for pos in positions:
+        mean_position.x += pos.x
+        mean_position.y += pos.y
+        mean_position.z += pos.z
+    n = len(positions)
+    mean_position.x /= n
+    mean_position.y /= n
+    mean_position.z /= n
+    return mean_position
+
+def position_distance(p1: Point, p2: Point) -> float:
+    """Compute the Euclidean distance between two geometry_msgs Points."""
+    return math.sqrt(
+        (p1.x - p2.x) ** 2 +
+        (p1.y - p2.y) ** 2 +
+        (p1.z - p2.z) ** 2
+    )
+
+def is_position_outlier(new_position: Point, samples: list[Point], rejection_threshold: float) -> bool:
+    """Determine if a new position is an outlier compared to a list of samples."""
+    if len(samples) == 0:
+        return False  # No samples to compare against, so can't be an outlier
+
+    # compute naive average position from samples
+    mean_position = compute_mean_position(samples)
+
+    # Compute distance between new position and mean position
+    distance = position_distance(new_position, mean_position)
+    
+    return distance > rejection_threshold
+
+
 def dot_product(q1: Quaternion, q2: Quaternion) -> float:
     """Compute the dot product of two quaternions. This is used to determine if two quaternions are in the same hemisphere, which is necessary for averaging quaternions."""
     return q1.w*q2.w + q1.x*q2.x + q1.y*q2.y + q1.z*q2.z
