@@ -736,6 +736,8 @@ class SequenceOfCleanUpTasks(py_trees.composites.Sequence):
         # Initialize amount of items dropped in good bin on blackboard
         self.blackboard = self.attach_blackboard_client(name="CheckAboveTable Blackboard")
         self.blackboard.register_key(key="/mission/octagon_task/items_in_good_bin", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key="/mission/octagon_task/height_table", access=py_trees.common.Access.WRITE)
+        self.blackboard.mission.octagon_task.height_table = .71
         self.blackboard.mission.octagon_task.items_in_good_bin = 0
       
         if self.grab_only_for_role:
@@ -772,7 +774,7 @@ class DropItemInBasket(py_trees.composites.Sequence):
         self.chosen_role = kwargs.get('role', "survey_repair")      
         self.table_item_target_distance = kwargs.get('table_item_target_distance', 0.3)
         self.table_item_tolerance_meters = kwargs.get('table_item_tolerance_meters', 0.1)
-        self.table_item_height_offset = kwargs.get('table_item_height_offset', 0.1)    
+        self.table_item_height_offset = kwargs.get('table_item_height_offset', 0.55)    
         self.table_item_hold_time = kwargs.get('table_item_hold_time', 3.0)              
         self.bin_target_distance = kwargs.get('bin_target_distance', 0.3)                 
         self.bin_tolerance_meters = kwargs.get('bin_tolerance_meters', 0.1)               
@@ -784,10 +786,14 @@ class DropItemInBasket(py_trees.composites.Sequence):
             target_class=item_to_grab,
             target_distance=self.table_item_target_distance,
             tolerance_meters=self.table_item_tolerance_meters,
-            height_offset=self.table_item_height_offset,
+            height_offset=None,
             hold_time=self.table_item_hold_time
         )
 
+        go_down = BasicActionBehaviour(
+            name="Go lower object", 
+            goal=set_depth(z=-0.8, tolerance=.1, hold_time=1.5, timeout=30.0)
+        )
         # 2. Align properly on object Center with downcam pixels
         go_object = AlignCameraWithObject(item_to_grab, **kwargs)
 
@@ -857,22 +863,22 @@ class DropItemInBasket(py_trees.composites.Sequence):
         # 12. Go back to center table
         align_table = AlignWithTable(**kwargs)
 
-        children = [go_object_vicinity,
-            go_object,
-            align_grabber,
-            lower_depth,
-            close_actuator,
-            surface_octagon_1,
-            surface_octagon_2]
+        children = [go_object_vicinity, go_down, go_object, align_grabber]
+        #     go_object,
+        #     align_grabber,
+        #     lower_depth,
+        #     close_actuator,
+        #     surface_octagon_1,
+        #     surface_octagon_2]
            
-        if not self.grab_only_no_drop:
-            children.append(go_bin_vicinity)
-            children.append(open_actuator)
-            children.append(check_item_dropped_good)
+        # if not self.grab_only_no_drop:
+        #     children.append(go_bin_vicinity)
+        #     children.append(open_actuator)
+        #     children.append(check_item_dropped_good)
         
-        children.append(go_table)
-        children.append(surface_octagon)
-        children.append(align_table)
+        # children.append(go_table)
+        # children.append(surface_octagon)
+        # children.append(align_table)
             
         self.add_children(children)
 
@@ -880,7 +886,7 @@ class DropItemInBasket(py_trees.composites.Sequence):
 class AlignCameraWithObject(py_trees.behaviour.Behaviour):
     def __init__(self, item_to_grab, **kwargs):
         super().__init__(f"Go Object Align Camera: {item_to_grab}")
-        self.blackboard = self.attach_blackboard_client(name="CheckAboveTable Blackboard")
+        self.blackboard = self.attach_blackboard_client(name="AlignCameraWithObject Blackboard")
         self.action_status = None 
         self.item_to_grab = item_to_grab
         self.rotate_for_specific_items = True
@@ -890,7 +896,7 @@ class AlignCameraWithObject(py_trees.behaviour.Behaviour):
         self.downcam_fov_vertical = kwargs.get("downcam_fov_vertical", 47.6)
         self.table_avg_height = kwargs.get("table_avg_height", 0.75)
 
-        self.down_cam_positional_tolerance = kwargs.get('down_cam_nav_position_tolerance', '0.1')
+        self.down_cam_positional_tolerance = kwargs.get('down_cam_position_tolerance', 0.1)
         self.down_cam_yaw_tolerance = kwargs.get('down_cam_yaw_tolerance', 10.0)
         self.down_cam_hold_time = kwargs.get('down_cam_hold_time', 3.0)
         self.down_cam_timeout = kwargs.get('down_cam_timeout', 30.0)
@@ -1347,7 +1353,7 @@ class SpinIfNeeded(py_trees.composites.Sequence):
         # 2. 
         # Number of yaw needed to be done
         do_yaw = vision_behaviours.ScanBehaviour(turn_hold_time_s=self.look_at_image_hold_time_per_step, \
-                                                             scan_angle_deg=180, num_steps_per_side=self.scan_octagon_num_steps_per_side))
+                                                             scan_angle_deg=180, num_steps_per_side=self.scan_octagon_num_steps_per_side)
         
         self.add_children([check_if_can_spin,
                            do_yaw])

@@ -38,15 +38,15 @@ class TableOctagonTask(py_trees.composites.Sequence):
             goal=set_depth(z=ending_dive_depth, tolerance=position_tolerance, hold_time=hold_time, timeout=timeout)
         )
         self.add_children([
-            go_above_table,
-            dive_back_down,
+            clean_up_tasks,
+            
             py_trees.behaviours.Success(name="Navigation Subtasks Complete")
         ])
         
-        if not navigation_only:
-            # TODO: Add DropItemInBasket here when ready
-            self.add_children([
-                clean_up_tasks,
-                look_and_yaw,
-                py_trees.behaviours.Success(name="Placeholder Table & Octagon Success")
-            ])
+        # if not navigation_only:
+        #     # TODO: Add DropItemInBasket here when ready
+        #     self.add_children([
+        #         clean_up_tasks,
+        #         look_and_yaw,
+        #         py_trees.behaviours.Success(name="Placeholder Table & Octagon Success")
+        #     ])
