@@ -1,5 +1,7 @@
 import py_trees
 from numpy.polynomial.polynomial import Polynomial
+from ..mission_behaviour_components import BasicActionBehaviour
+from controls.goal_helpers import set_depth
 from .torpedo_behaviours import *
 from ..vision_behaviours import SearchSweepBehaviour, CircleAroundToFindBehaviour, GoNearObject
 import operator
@@ -154,6 +156,8 @@ class TorpedoTask(py_trees.composites.Sequence):
         returns py_trees.composites.Sequence
         """
         board_rough_position:py_trees.composites.Sequence = py_trees.composites.Sequence("Board Rough Positioning", memory=True)
+        initial_dive = BasicActionBehaviour("Initial Dive to -1.0", goal=set_depth(z=self.z_reference, tolerance=self.position_tolerance, hold_time=self.hold_time, timeout=self.timeout))
+        
         ss_board = SearchSweepBehaviour(
             target_class="board",
             num_steps=5,
@@ -219,6 +223,7 @@ class TorpedoTask(py_trees.composites.Sequence):
         
         board_rough_position.add_children(
             [
+                initial_dive,
                 ss_board,
                 approach_board_far,
                 approach_board_near,
