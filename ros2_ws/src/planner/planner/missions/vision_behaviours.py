@@ -3,7 +3,7 @@ from enum import Enum
 
 from typing import Optional, Tuple, List
 import py_trees
-from controls.goal_helpers import set_global_yaw, look_at, move_to_and_look_at, move_global, _DEFAULT_POS_TOL, _DEFAULT_HOLD#, _DEFAULT_TIMEOUT,_DEFAULT_YAW_TOL, POSITION_EPSILON
+from controls.goal_helpers import set_global_yaw, look_at, move_to_and_look_at, move_global, set_depth, _DEFAULT_POS_TOL, _DEFAULT_HOLD#, _DEFAULT_TIMEOUT,_DEFAULT_YAW_TOL, POSITION_EPSILON
 from controls.utils import yaw_from_quaternion, normalize_angle
 from .action_status_enum import ActionStatus
 from auv_msgs.msg import VisionObject
@@ -438,7 +438,16 @@ class GoNearObject(py_trees.behaviour.Behaviour):
                     self.action_status = ActionStatus.SUCCEEDED
                     return
                 else:
-                    self.node.get_logger().info(f"[{self.name}] Need to adjust height to reach target offset. Moving vertically.")
+                    self.node.get_logger().info(f"[{self.name}] Need to adjust height to reach target offset. Diving to {target_obj.pose.position.z + self.height_offset}.")
+                    goal_z = target_obj.pose.position.z + self.height_offset
+                    goal = set_depth(goal_z, tolerance=self.tolerance_meters, hold_time=self.hold_time)
+                    self.blackboard.vision.last_goal_pose = goal
+                    self.navigation_client.send_navigation_goal(goal, self.name, custom_goal_response=self.on_server_goal_response, custom_goal_result=self.on_server_goal_result)
+                    self.action_status = ActionStatus.PENDING
+
+                    return py_trees.common.Status.RUNNING 
+
+            self.action_status = ActionStatus.PENDING
             
             normalized_direction = (direction_vector[0]/magnitude, direction_vector[1]/magnitude)
 
