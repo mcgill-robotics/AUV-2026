@@ -1233,15 +1233,52 @@ class CheckItemNotDroppedInBin(py_trees.behaviour.Behaviour):
 
 class LookAndSpin(py_trees.composites.Sequence):
     def __init__(self, **kwargs):
-        super().__init__("Table Cleaning", memory=True)
+        super().__init__("LookAndSpin", memory=True)
 
         self.blackboard = self.attach_blackboard_client(name="Look and Spin Blackboard")
-        self.blackboard.register_key(key="/mission/octagon_task/items_in_good_bin", access=py_trees.common.Access.READ)
-        self.blackboard.register_key(key="/mission/octagon_task/octagon_images", access=py_trees.common.Access.READ)
+        def setup(self, **kwargs):
+            # Children here are added in setup because we need to read from the blackboard to determine which image to look at
+            self.node = kwargs['node']
+            self.navigation_client = kwargs['shared_nav_client']
 
+            self.blackboard.register_key(key="/mission/octagon_task/items_in_good_bin", access=py_trees.common.Access.READ)
+            self.blackboard.register_key(key="/mission/octagon_task/octagon_images", access=py_trees.common.Access.READ)
+            self.blackboard.register_key(key="/mission/octagon_task/octagon_images", access=py_trees.common.Access.READ)
+            
+            # 1. Look at image
+            face_object_related_to_role = FaceObjectRelatedToRole(**kwargs)
+
+            # 2. Do yaws depending on the items droppede in good bin
+            spin_1st_if_needed = SpinIfNeeded(number_item_in_bin_to_check=1, **kwargs)
+
+            pass_on_fail_1 = py_trees.decorators.FailureIsSuccess(
+                name="spin_1st_if_needed fail_is_success",
+                child=spin_1st_if_needed,
+            )
+            spin_2nd_if_needed = SpinIfNeeded(number_item_in_bin_to_check=2, **kwargs)
+
+            pass_on_fail_2 = py_trees.decorators.FailureIsSuccess(
+                name="spin_2nd_if_needed fail_is_success",
+                child=spin_2nd_if_needed,
+            )
+
+
+            self.add_children([face_object_related_to_role,
+                               pass_on_fail_1,
+                               pass_on_fail_2])
+
+class FaceObjectRelatedToRole(py_trees.behaviour.Behaviour):
+    def __init__(self, name="Face Object Related to Role", **kwargs):
+        super().__init__(name)
+        self.blackboard = self.attach_blackboard_client(name="FaceObjectRelatedToRole Blackboard")
         self.role = kwargs.get('role', 'survey_repair')
-        self.octagon_images_survey = kwargs.get('octagon_images.survey_repair', ['compass'])
-        self.octagon_images_search = kwargs.get('octagon_images.search_rescue', ['sos'])
+        self.survey_repair_items_item_labels = kwargs.get('survey_repair_items.items_labels', [])
+        self.search_rescue_items_item_labels = kwargs.get('search_rescue_items.items_labels', [])
+        self.survey_repair_items_bin_label = kwargs.get('survey_repair_items.bin_label', [])
+        self.search_rescue_items_bin_label = kwargs.get('search_rescue_items.bin_label', [])
+        self.look_at_image_yaw_tolerance = kwargs.get('look_at_image_yaw_tolerance', 10.0)
+        self.look_at_image_yaw_hold_time = kwargs.get('look_at_image_yaw_hold_time', 3.0)
+        self.look_at_image_yaw_timeout = kwargs.get('look_at_image_yaw_timeout', 30.0)
 
         self.scan_octagon_yaw_tolerance = kwargs.get('scan_octagon_yaw_tolerance', 10.0)
         self.look_at_image_hold_time_per_step = kwargs.get('look_at_image_hold_time_per_step', 10.0)
@@ -1250,34 +1287,84 @@ class LookAndSpin(py_trees.composites.Sequence):
         self.look_at_image_yaw_hold_time = kwargs.get('look_at_image_yaw_hold_time', 2.0)
         self.look_at_image_yaw_timeout = kwargs.get('look_at_image_yaw_timeout', 30.0)
 
-        # 1. Look at image
-        desired_image = None
-        global_yaw_image = 0.0 # Fallback yaw
-        if 0 < self.blackboard.mission.octagon_task.items_in_good_bin <= 2 :
-            if self.role == 'survey_repair':
-                desired_image = self.octagon_images_survey[self.blackboard.mission.octagon_task.items_in_good_bin - 1]
-            elif self.role == 'search_rescue':
-                desired_image = self.octagon_images_search[self.blackboard.mission.octagon_task.items_in_good_bin - 1]
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.navigation_client = kwargs['shared_nav_client']
+
+        self.blackboard.register_key(key="/mission/octagon_task/items_in_good_bin", access=py_trees.common.Access.READ)
+    
+    def on_server_goal_response(self, goal_response: bool):
+        if not goal_response:
+            self.node.get_logger().error(f"[{self.name}] Goal rejected by server.")
+            self.action_status = ActionStatus.FAILED
+    
+    def on_server_goal_result(self, goal_success: bool, message: str) -> None:
+        if goal_success:
+            self.action_status = ActionStatus.SUCCEEDED
         else:
-            desired_image = self.octagon_images_survey[0]
-
-        if desired_image in self.blackboard.mission.octagon_task.octagon_images:
-            global_yaw_image = self.blackboard.mission.octagon_task.octagon_images[desired_image]
+            self.node.get_logger().error(f"[{self.name}] Failed to align grabber with object. {message}")
+            self.action_status = ActionStatus.FAILED
         
-        children = []
+    def update(self):
+        global_yaw_image = 0.0 # Fallback yaw
+        desired_image = None
 
-        look_at_image = BasicActionBehaviour(f"Look at {global_yaw_image}", set_global_yaw(
-                yaw_rad=global_yaw_image,
-                tolerance=math.radians(self.look_at_image_yaw_tolerance),  # (rad)
-                hold_time=self.look_at_image_yaw_hold_time,    # (s)
-                timeout=self.look_at_image_yaw_timeout         # (s)
-            ))
+        if 0 < self.blackboard.mission.octagon_task.items_in_good_bin <= 2:
+            if self.role == 'survey_repair':
+                desired_image = self.survey_repair_items_item_labels[self.blackboard.mission.octagon_task.items_in_good_bin - 1]
+            elif self.role == 'search_rescue':
+                desired_image = self.search_rescue_items_item_labels[self.blackboard.mission.octagon_task.items_in_good_bin - 1]
+            else:
+                desired_image = self.survey_repair_items_item_labels[0]
 
-        children.append(look_at_image)
+            if desired_image in self.blackboard.mission.octagon_task.octagon_images:
+                global_yaw_image = self.blackboard.mission.octagon_task.octagon_images[desired_image]
+            
+            goal = set_global_yaw(
+                    yaw_rad=global_yaw_image,
+                    tolerance=math.radians(self.look_at_image_yaw_tolerance),
+                    hold_time=self.look_at_image_yaw_hold_time,
+                    timeout=self.look_at_image_yaw_timeout
+                )
+            self.navigation_client.send_navigation_goal(goal, self.name, self.on_server_goal_response, self.on_server_goal_result)
+        return py_trees.common.Status.SUCCESS
+
+class SpinIfNeeded(py_trees.composites.Sequence):
+    def __init__(self, number_item_in_bin_to_check=1, **kwargs):
+        super().__init__("SpinIfNeeded", memory=True)
+        self.look_at_image_hold_time_per_step = kwargs.get('look_at_image_hold_time_per_step', 2.0)
+        self.scan_octagon_num_steps_per_side = kwargs.get('scan_octagon_num_steps_per_side', 5)
+        self.blackboard = self.attach_blackboard_client(name="Look and Spin Blackboard")
         
+        # Children here are added in setup because we need to read from the blackboard to determine which image to look at
+        self.blackboard.register_key(key="/mission/octagon_task/items_in_good_bin", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/mission/octagon_task/octagon_images", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/mission/octagon_task/octagon_images", access=py_trees.common.Access.READ)
+        
+        # 1. Check if we are good to spin depending on object to check
+        check_if_can_spin = CheckIfSpin(number_item_in_bin_to_check=number_item_in_bin_to_check, **kwargs)
+        
+        # 2. 
         # Number of yaw needed to be done
-        for i in range(self.blackboard.mission.octagon_task.items_in_good_bin):
-            children.append(vision_behaviours.ScanBehaviour(turn_hold_time_s=self.look_at_image_hold_time_per_step, \
-                                                            scan_angle_deg=180, num_steps_per_side=self.scan_octagon_num_steps_per_side))
+        do_yaw = vision_behaviours.ScanBehaviour(turn_hold_time_s=self.look_at_image_hold_time_per_step, \
+                                                             scan_angle_deg=180, num_steps_per_side=self.scan_octagon_num_steps_per_side))
+        
+        self.add_children([check_if_can_spin,
+                           do_yaw])
 
-        self.add_children(children)
+
+class CheckIfSpin(py_trees.composites.behaviour.Behaviour):
+    def __init__(self, number_item_in_bin_to_check=1, name="Face Object Related to Role", **kwargs):
+        super().__init__(name)
+        self.blackboard = self.attach_blackboard_client(name="Check for Spin Blackboard")
+        self.number_item_in_bin_to_check = number_item_in_bin_to_check
+
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.blackboard.register_key(key="/mission/octagon_task/items_in_good_bin", access=py_trees.common.Access.READ)
+
+    def update(self):
+        if self.blackboard.mission.octagon_task.items_in_good_bin >= self.number_item_in_bin_to_check:
+            return py_trees.common.Status.SUCCESS
+        else:
+            return py_trees.common.Status.FAILURE
