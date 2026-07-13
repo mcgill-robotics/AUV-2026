@@ -95,7 +95,7 @@ planner_root_tree:
       search_sweep_step_timeout: 1.5      # (s) Seconds to wait at each step of the search sweep for the bin structure and for the bins
       bin_moving_average_weight: 1.0      # (0-1) Weight of current measurement against previous position for moving average
                                           # (0=useless never moves, 1=only current measurement)
-      initial_depth: -0.5                 # (m) Depth to dive to before starting the bin structure search
+      initial_depth: -1.0                 # (m) Depth to dive to before starting the bin structure search
       initial_depth_tolerance: 0.2        # (m) Tolerance for reaching
       bin_structure_distance: 2.0         # (m) How far away to go from the bin structure to look at it with frontcam to see the bins
       go_above_bin_structure_height: 0.5  # (m) Height above bin structure when looking at it with frontcam to see the bins
