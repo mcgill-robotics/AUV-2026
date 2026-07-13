@@ -128,9 +128,7 @@ class GoAboveTable(py_trees.composites.Sequence):
             children.append(get_table_depth)
             
         children.append(surface_octagon)
-
-        if not navigation_only:
-            children.append(scan_images)
+        children.append(scan_images)
 
         self.add_children(children)
 
@@ -648,6 +646,11 @@ class ScanOctagonImages(py_trees.composites.Sequence):
         self.scan_octagon_num_steps_per_side = kwargs.get('scan_octagon_num_steps_per_side', 3)
         self.scan_octagon_yaw_hold_time = kwargs.get('scan_octagon_yaw_hold_time', 2.0)
         self.scan_octagon_yaw_tolerance = kwargs.get('scan_octagon_yaw_tolerance', 180.0)
+        self.navigation_only = kwargs.get('navigation_only', True)
+        self.role = kwargs.get('role', "survey_repair")
+        self.octagon_images_survey_repair = kwargs.get('octagon_images.survey_repair', [])
+        self.octagon_images_search_rescue = kwargs.get('octagon_images.search_rescue', [])
+
 
         # 1. Scan a 360 deg yaw to find images
         scan_for_objects = vision_behaviours.ScanBehaviour(turn_hold_time_s=self.scan_octagon_yaw_hold_time, scan_angle_deg=180, 
@@ -657,10 +660,24 @@ class ScanOctagonImages(py_trees.composites.Sequence):
         # 2. Verify all images are present and log angles to BB
         verify_images = VerifyOctagonImages()
 
-        self.add_children([
-            scan_for_objects,
-            verify_images
-        ])
+        # If navigation only, do search sweep and find image depending on role
+        desired_image = self.octagon_images_survey_repair[0] if self.role == "survey_repair" else self.octagon_images_search_rescue[0]
+        find_role_image = vision_behaviours.SearchSweepBehaviour(
+            target_class=desired_image,
+            num_steps=7,
+            step_timeout=0.5
+        )
+
+        look_at_image_for_5s = TimerBehaviour(timer_duration=5.0)
+
+        if self.navigation_only:
+            self.add_children([
+                find_role_image,
+                look_at_image_for_5s
+            ])
+        else:
+            self.add_children([scan_for_objects,
+                verify_images])
     
 class VerifyOctagonImages(py_trees.behaviour.Behaviour):
     def __init__(self, name="Verify octagon images", octagon_images=["compass", "tools", "lifebuoy", "sos"]):
