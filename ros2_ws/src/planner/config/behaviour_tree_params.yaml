@@ -133,7 +133,7 @@ planner_root_tree:
       item_drop_only: False               # (bool) If true, only perform item drop and skip navigation steps (align, surface, dive)
 
       # Navigate to table
-      shallow_approach_depth: -0.5        # (m) Shallow depth to approach the table from above
+      shallow_approach_depth: -0.6        # (m) Shallow depth to approach the table from above
       shallow_approach_tolerance: 0.2     # (m) Tolerance for reaching the shallow approach depth
       shallow_approach_hold_time: 1.0     # (s) Hold time for the shallow approach depth
       surface_depth: -0.2                 # (m) Depth to surface within the octagon
