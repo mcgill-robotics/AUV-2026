@@ -97,7 +97,17 @@
       "minLogLevel": 1,
       "preload": true,
       "nameFilter": {},
-      "fontSize": 12
+      "fontSize": 12,
+      "showLevel": true,
+      "showDate": true,
+      "showTime": true,
+      "showTimezone": true,
+      "showName": true,
+      "showSourceLocation": false
+    },
+    "RawMessages!30d8y82": {
+      "defaultExpanded": false,
+      "topicPath": "/propulsion/microseconds"
     }
   },
   "globalVariables": {},
@@ -127,7 +137,7 @@
           "splitPercentage": 50
         },
         "direction": "column",
-        "splitPercentage": 51.57821099257993
+        "splitPercentage": 59.89408307957421
       },
       "second": {
         "first": {
@@ -144,11 +154,16 @@
             "splitPercentage": 50
           },
           "direction": "column",
-          "splitPercentage": 50.286672185551254
+          "splitPercentage": 52.111851862561956
         },
         "second": {
           "first": "Plot!3q5gwrq",
-          "second": "RosOut!1",
+          "second": {
+            "first": "RosOut!1",
+            "second": "RawMessages!30d8y82",
+            "direction": "row",
+            "splitPercentage": 58.08188263177022
+          },
           "direction": "row",
           "splitPercentage": 26.22868605817452
         },
@@ -156,7 +171,7 @@
         "splitPercentage": 52.4223609211758
       },
       "direction": "column",
-      "splitPercentage": 36.28535455685403
+      "splitPercentage": 37.895007789934915
     },
     "direction": "column",
     "splitPercentage": 17.75708194582311

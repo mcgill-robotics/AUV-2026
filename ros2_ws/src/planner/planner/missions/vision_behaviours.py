@@ -432,8 +432,7 @@ class GoNearObject(py_trees.behaviour.Behaviour):
 
             if magnitude <= self.target_planar_distance:
                 self.node.get_logger().info(f"[{self.name}] Already within target distance of {self.target_class} ({magnitude:.2f}m <= {self.target_planar_distance:.2f}m). Checking height.")
-
-                if self.height_offset is not None and self.height_offset - current_pose.z <= self.tolerance_meters:
+                if self.height_offset is None or abs((current_pose.z - (target_obj.pose.position.z + self.height_offset))) <= self.tolerance_meters:
                     self.node.get_logger().info(f"[{self.name}] Already within target height offset of {self.target_class} or height not specified. No movement needed.")
                     self.action_status = ActionStatus.SUCCEEDED
                     return
@@ -449,7 +448,10 @@ class GoNearObject(py_trees.behaviour.Behaviour):
 
             self.action_status = ActionStatus.PENDING
             
-            normalized_direction = (direction_vector[0]/magnitude, direction_vector[1]/magnitude)
+            if magnitude < 1e-6:
+                normalized_direction = (1.0, 0.0)
+            else:
+                normalized_direction = (direction_vector[0]/magnitude, direction_vector[1]/magnitude)
 
             goal_x = target_x - normalized_direction[0] * self.target_planar_distance
             goal_y = target_y - normalized_direction[1] * self.target_planar_distance
