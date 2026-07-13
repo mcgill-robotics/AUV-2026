@@ -1347,7 +1347,7 @@ class SpinIfNeeded(py_trees.composites.Sequence):
         # 2. 
         # Number of yaw needed to be done
         do_yaw = vision_behaviours.ScanBehaviour(turn_hold_time_s=self.look_at_image_hold_time_per_step, \
-                                                             scan_angle_deg=180, num_steps_per_side=self.scan_octagon_num_steps_per_side))
+                                                             scan_angle_deg=180, num_steps_per_side=self.scan_octagon_num_steps_per_side)
         
         self.add_children([check_if_can_spin,
                            do_yaw])

@@ -60,7 +60,7 @@ planner_root_tree:
     slalom:
       num_layers: 3               # Number of pipe layers to navigate
       gate_side: "right"           # Default fallback side if /gate/selected_side is not on the blackboard (set by GateTask at runtime)
-      yaw_inward_offset_deg: 25.0  # (deg) Inward angle to hug the centerline and most probably see the red pipe
+      yaw_inward_offset_deg: 15.0  # (deg) Inward angle to hug the centerline and most probably see the red pipe
       scan_angle_deg: 40.0         # (deg) Angle to sweep left/right during pipe scan
       scan_pause_time: 1.0         # (s) Seconds to pause after each scan rotation
       collinearity_threshold: 0.5  # (m) Max perpendicular distance for pipe triplet matching
