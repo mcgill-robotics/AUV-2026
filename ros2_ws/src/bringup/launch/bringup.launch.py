@@ -39,6 +39,12 @@ def generate_launch_description():
         default_value="true",
         description="Launch sensors nodes",
     )
+
+    actuators_condition = DeclareLaunchArgument(
+        "actuators",
+        default_value="true",
+        description="Launch actuators nodes",
+    )
     
     propulsion_condition = DeclareLaunchArgument(
         "propulsion",
@@ -74,6 +80,7 @@ def generate_launch_description():
     enable_object_detection = LaunchConfiguration("enable_object_detection")
     controls = LaunchConfiguration("controls")
     sensors = LaunchConfiguration("sensors")
+    actuators = LaunchConfiguration("actuators")
     propulsion = LaunchConfiguration("propulsion")
     telemetry = LaunchConfiguration("telemetry")
     planner = LaunchConfiguration("planner")
@@ -81,6 +88,7 @@ def generate_launch_description():
     rosbag_prefix = LaunchConfiguration("rosbag_prefix")
 
     sensors_pkg_path = get_package_share_directory("sensors")
+    actuators_pkg_path = get_package_share_directory("actuators")
     propulsion_pkg_path = get_package_share_directory("propulsion")
     controls_pkg_path = get_package_share_directory("controls")
     vision_pkg_path = get_package_share_directory("vision")
@@ -89,6 +97,7 @@ def generate_launch_description():
     telemetry_pkg_path = get_package_share_directory("telemetry")
 
     sensors_launch_file = os.path.join(sensors_pkg_path, "launch", "sensors.launch.py")
+    actuators_launch_file = os.path.join(actuators_pkg_path, "launch", "actuators.launch.py")
     propulsion_pkg_file = os.path.join(propulsion_pkg_path, "launch", "propulsion.launch.py")
     controls_launch_file = os.path.join(controls_pkg_path, "launch", "controls.launch.py")
     vision_launch_file = os.path.join(vision_pkg_path, "launch", "vision_pipeline.launch.py")
@@ -109,6 +118,17 @@ def generate_launch_description():
             )
         ],
     )
+
+    launch_actuators = GroupAction(
+        condition=IfCondition(actuators),
+        actions=[
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(actuators_launch_file),
+                launch_arguments={"sim": sim}.items(),
+            )
+        ],
+    )
+
 
     launch_propulsion = GroupAction(
         condition=IfCondition(propulsion),
@@ -198,12 +218,14 @@ def generate_launch_description():
         enable_object_detection_arg,
         controls_condition,
         sensors_condition,
+        actuators_condition,
         propulsion_condition,
         telemetry_condition,
         planner_condition,
         auto_start_rosbag_arg,
         rosbag_prefix_arg,
         launch_sensors,
+        launch_actuators,
         launch_propulsion,
         launch_controls,
         launch_vision,
