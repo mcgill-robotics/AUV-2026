@@ -39,7 +39,7 @@ planner_root_tree:
       initial_alignment_timeout: 30.0       # (s) Seconds before the snap-back alignment fails and times out
       do_style_yaw: false                   # Whether to perform style yaw spin after passing through gate
       style_yaw_degrees: 360.0              # (deg) Total yaw angle to spin (360 or 720)
-      do_style_roll: false                  # Whether to perform style rolling flip (barrel roll) after passing through gate
+      do_style_roll: true                  # Whether to perform style rolling flip (barrel roll) after passing through gate
       style_roll_degrees: 720.0             # (deg) Total roll angle to flip (360 or 720)
       style_roll_torque: 15.0               # (Nm) Open-loop roll torque to apply during rolling flip
       style_roll_coast_degrees: 180.0       # (deg) How many degrees before target angle to cut open-loop torque and coast
@@ -226,7 +226,7 @@ planner_root_tree:
       do_style_yaw_after: false           # Whether to perform style yaw spin after passing through return gate
       style_yaw_degrees: 360.0            # (deg) Total yaw angle to spin (360 or 720)
       do_style_roll_before: false         # Whether to perform style rolling flip before passing through return gate
-      do_style_roll_after: true          # Whether to perform style rolling flip after passing through return gate
+      do_style_roll_after: false          # Whether to perform style rolling flip after passing through return gate
       style_roll_degrees: 720.0           # (deg) Total roll angle to flip (360 or 720)
       style_roll_torque: 15.0             # (Nm) Open-loop roll torque to apply during rolling flip
       style_roll_coast_degrees: 180.0     # (deg) How many degrees before target angle to cut open-loop torque and coast
