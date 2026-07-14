@@ -4,7 +4,7 @@ from controls.goal_helpers import move_global, set_depth
 from controls.utils import normalize_angle
 from ..action_status_enum import ActionStatus
 from ..mission_behaviour_components import BasicActionBehaviour
-from ..vision_behaviours import GoNearObject, MoveTowardsTargetByDistance
+from ..vision_behaviours import GoNearObject, MoveTowardsTargetByDistance, SearchSweepBehaviour
 from .gate_behaviours import create_style_yaw_spin_sequence, create_style_rolling_flip_sequence
 
 
@@ -78,18 +78,25 @@ class NavigateToReturnPoint(py_trees.behaviour.Behaviour):
                 cy = gate_obj.pose.position.y
 
         if cx is None or cy is None:
-            if hasattr(self.blackboard, "gate") and self.blackboard.gate.center_x is not None:
-                cx = self.blackboard.gate.center_x
-                cy = self.blackboard.gate.center_y
-            else:
-                self.node.get_logger().error(f"[{self.name}] No return point found in map or blackboard!")
-                return py_trees.common.Status.FAILURE
+            try:
+                if self.blackboard.gate.center_x is not None:
+                    cx = self.blackboard.gate.center_x
+                    cy = self.blackboard.gate.center_y
+            except (AttributeError, KeyError):
+                pass
+        if cx is None or cy is None:
+            self.node.get_logger().error(f"[{self.name}] No return point found in map or blackboard!")
+            return py_trees.common.Status.FAILURE
 
         if self.global_yaw_lock:
             yaw = 0.0
-        elif hasattr(self.blackboard, "gate") and hasattr(self.blackboard.gate, "target_yaw") and self.blackboard.gate.target_yaw is not None:
-            yaw = self.blackboard.gate.target_yaw
         else:
+            try:
+                if self.blackboard.gate.target_yaw is not None:
+                    yaw = self.blackboard.gate.target_yaw
+            except (AttributeError, KeyError):
+                pass
+        if yaw is None:
             self.node.get_logger().error(f"[{self.name}] Gate target yaw not found on blackboard!")
             return py_trees.common.Status.FAILURE
 
@@ -197,18 +204,25 @@ class PassBackThroughGate(py_trees.behaviour.Behaviour):
                 cy = rescue.pose.position.y
 
         if cx is None or cy is None:
-            if hasattr(self.blackboard, "gate") and self.blackboard.gate.center_x is not None:
-                cx = self.blackboard.gate.center_x
-                cy = self.blackboard.gate.center_y
-            else:
-                self.node.get_logger().error(f"[{self.name}] No return point found in map or blackboard!")
-                return py_trees.common.Status.FAILURE
+            try:
+                if self.blackboard.gate.center_x is not None:
+                    cx = self.blackboard.gate.center_x
+                    cy = self.blackboard.gate.center_y
+            except (AttributeError, KeyError):
+                pass
+        if cx is None or cy is None:
+            self.node.get_logger().error(f"[{self.name}] No return point found in map or blackboard!")
+            return py_trees.common.Status.FAILURE
 
         if self.global_yaw_lock:
             yaw = 0.0
-        elif hasattr(self.blackboard, "gate") and hasattr(self.blackboard.gate, "target_yaw") and self.blackboard.gate.target_yaw is not None:
-            yaw = self.blackboard.gate.target_yaw
         else:
+            try:
+                if self.blackboard.gate.target_yaw is not None:
+                    yaw = self.blackboard.gate.target_yaw
+            except (AttributeError, KeyError):
+                pass
+        if yaw is None:
             self.node.get_logger().error(f"[{self.name}] Gate target yaw not found on blackboard!")
             return py_trees.common.Status.FAILURE
 
@@ -375,10 +389,78 @@ class ReturnHomeTask(py_trees.composites.Sequence):
         return_sequence = py_trees.composites.Sequence("Gate Return Sequence", memory=True)
         return_sequence.add_children(return_children)
 
-        # If anything in the return sequence fails, we still want to surface!
+        # Fallback 1: Scan for Gate if saved gate center was not found / nominal return failed
+        scan_gate_sequence = py_trees.composites.Sequence("Scan for Gate & Return", memory=True)
+        scan_gate_sequence.add_children([
+            BasicActionBehaviour(
+                name="Ascend for Gate Scan",
+                goal=set_depth(
+                    z=gate_pass_depth,
+                    tolerance=position_tolerance,
+                    hold_time=hold_time,
+                    timeout=timeout,
+                ),
+            ),
+            SearchSweepBehaviour(
+                target_class="gate",
+                num_steps=6,
+                max_attempts=2,
+                step_timeout=1.0,
+                turn_timeout_s=30.0,
+                name="Scan For Gate (Fallback)",
+            ),
+            GoNearObject(
+                target_class="gate",
+                target_distance=approach_distance,
+                tolerance_meters=position_tolerance,
+                hold_time=1.0,
+                name="Approach Gate After Scan",
+            ),
+            PassBackThroughGate(
+                pass_distance=pass_distance,
+                position_tolerance=position_tolerance,
+                hold_time=hold_time,
+                timeout=timeout,
+                global_yaw_lock=global_yaw_lock,
+            ),
+        ])
+
+        # Fallback 2: Worst Case Scenario — Return to Origin (X=0, Y=0)
+        origin_fallback_sequence = py_trees.composites.Sequence("Worst Case Return to Origin", memory=True)
+        origin_fallback_sequence.add_children([
+            BasicActionBehaviour(
+                name="Ascend to Travel Depth for Origin Return",
+                goal=set_depth(
+                    z=travel_depth,
+                    tolerance=position_tolerance,
+                    hold_time=hold_time,
+                    timeout=timeout,
+                ),
+            ),
+            BasicActionBehaviour(
+                name="Return to Origin (X=0, Y=0)",
+                goal=move_global(
+                    x=0.0,
+                    y=0.0,
+                    do_z=False,
+                    tolerance=position_tolerance,
+                    hold_time=hold_time,
+                    timeout=timeout,
+                ),
+            ),
+        ])
+
+        return_strategy = py_trees.composites.Selector("Return Home Strategy", memory=True)
+        return_strategy.add_children([
+            return_sequence,
+            scan_gate_sequence,
+            origin_fallback_sequence,
+        ])
+
+        # If anything in the return strategy fails, we still want to surface!
         failsafe_return = py_trees.decorators.FailureIsSuccess(
             name="Failsafe Return Wrapper",
-            child=return_sequence
+            child=return_strategy
         )
 
         self.add_children([

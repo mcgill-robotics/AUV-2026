@@ -26,6 +26,8 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
         angular_tolerance_rad: float = math.radians(30.0),  # (rad) yaw convergence threshold per turn step
         turn_hold_time_s: float = 0.1,                   # (s) hold time before turn step SUCCESS
         turn_timeout_s: float = 30.0,                    # (s) timeout before turn step FAILURE
+        ignore_behind_x: bool = False,                   # If true, ignore targets whose global X < auv_x + min_forward_x_dist
+        min_forward_x_dist: float = 0.0,                 # (m) minimum forward X distance when ignore_behind_x is true
         name="SearchSweep",
     ):
         super().__init__(name)
@@ -38,6 +40,8 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
         self.angular_tolerance_rad = angular_tolerance_rad
         self.turn_hold_time_s = turn_hold_time_s
         self.turn_timeout_s = turn_timeout_s
+        self.ignore_behind_x = ignore_behind_x
+        self.min_forward_x_dist = min_forward_x_dist
         
         # Calculate how much to turn per step (in radians)
         self.sweep_angle_rad = (2 * math.pi) / float(num_steps)
@@ -90,8 +94,16 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
         # Skip this if we already found it and are just finishing the "look at" turn
         if not self.is_looking_at_target:
             if hasattr(self.blackboard, 'vision') and self.blackboard.vision.object_map is not None:
+                auv_x = None
+                if self.ignore_behind_x and hasattr(self.blackboard, 'sensors') and self.blackboard.sensors.pose is not None:
+                    auv_x = self.blackboard.sensors.pose.pose.position.x
+
                 for obj in self.blackboard.vision.object_map.array:
                     if obj.label == self.target_class:
+                        if self.ignore_behind_x and auv_x is not None:
+                            if (obj.pose.position.x - auv_x) < self.min_forward_x_dist:
+                                continue
+
                         self.node.get_logger().info(f"[{self.name}] Found target '{self.target_class}' in vision!")
                         
 
@@ -856,12 +868,15 @@ class MoveTowardsTargetByDistance(py_trees.behaviour.Behaviour):
     def _get_blackboard_value(self, key_path: str):
         parts = key_path.strip("/").split("/")
         curr = self.blackboard
-        for p in parts:
-            if hasattr(curr, p):
-                curr = getattr(curr, p)
-            else:
-                return None
-        return curr
+        try:
+            for p in parts:
+                if hasattr(curr, p):
+                    curr = getattr(curr, p)
+                else:
+                    return None
+            return curr
+        except (AttributeError, KeyError):
+            return None
 
     def update(self):
         if self.distance <= 0.0:

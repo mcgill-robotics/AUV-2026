@@ -65,6 +65,7 @@ planner_root_tree:
       scan_pause_time: 1.0         # (s) Seconds to pause after each scan rotation
       collinearity_threshold: 0.5  # (m) Max perpendicular distance for pipe triplet matching
       min_forward_dist: 1.0        # (m) Min forward distance to consider pipe as "in front"
+      initial_search_min_forward_dist: 0.5 # (m) Min forward X distance from AUV to consider pipe during initial search & sweep
       layer_distance: 2.0          # (m) Distance between pipe layers
       initial_depth: -1.0          # (m) Depth for the initial dive before slalom
       position_tolerance: 0.3      # (m) Position convergence threshold for gap navigation
