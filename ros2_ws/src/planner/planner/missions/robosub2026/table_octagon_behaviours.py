@@ -666,11 +666,15 @@ class ScanOctagonImages(py_trees.composites.Sequence):
 
         # If navigation only, do search sweep and find image depending on role
         desired_image = self.octagon_images_survey_repair[0] if self.role == "survey_repair" else self.octagon_images_search_rescue[0]
-        find_role_image = vision_behaviours.SearchSweepBehaviour(
-            target_class=desired_image,
-            num_steps=7,
-            step_timeout=0.5
-        )
+        
+        find_role_image = BasicActionBehaviour(goal=set_global_yaw(
+        yaw_rad=math.radians(-45.0)))
+
+        # find_role_image = vision_behaviours.SearchSweepBehaviour(
+        #     target_class=desired_image,
+        #     num_steps=7,
+        #     step_timeout=0.5
+        # )
 
         look_at_image_for_5s = TimerBehaviour(timer_duration=5.0)
 
