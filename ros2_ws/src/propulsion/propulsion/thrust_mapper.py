@@ -61,10 +61,13 @@ class ThrusterMapper(Node):
         self.declare_parameter('dy', float("nan")) # [m]
         self.declare_parameter('alpha', float("nan")) # degrees
 
+        self.declare_parameter('disabled_thrusters', []) # put 4 # List of 1-indexed thruster IDs that are disabled ([4] for front_right)
+
         # Read parameters (raises if missing and no default)
         try:
             self.thruster_lower_limit = self.get_parameter('thruster_PWM_lower_limit').value
             self.thruster_upper_limit = self.get_parameter('thruster_PWM_upper_limit').value
+            disabled_thrusters = self.get_parameter('disabled_thrusters').value
 
             a = self._get_float('a')
             b = self._get_float('b')
@@ -94,7 +97,15 @@ class ThrusterMapper(Node):
             [ np.cos(alpha)*e, -(a+dx), (a-dx), -np.cos(alpha)*e, -np.cos(alpha)*e, (a-dx), -(a+dx), np.cos(alpha)*e],
             # YAW (Z-rotation)
             [ (np.cos(alpha)*(c+dy) + np.sin(alpha)*(d+dx)), 0, 0, -(np.cos(alpha)*(c+dy) + np.sin(alpha)*(d-dx)), (np.cos(alpha)*(c-dy) + np.sin(alpha)*(d-dx)), 0, 0, -(np.cos(alpha)*(c-dy) + np.sin(alpha)*(d+dx))]
-        ])
+        ], dtype=float)
+
+        # Zero out the columns for any disabled thrusters so the pseudo-inverse does not allocate force to them
+        if disabled_thrusters:
+            for t_id in disabled_thrusters:
+                if 1 <= t_id <= 8:
+                    T[:, t_id - 1] = 0.0
+                    self.get_logger().warn(f'Thruster {t_id} disabled in allocation matrix')
+
         self.T_inv = np.linalg.pinv(T)  # Pseudo-inverse (8x6)
 
         # --- Subscriber

@@ -26,7 +26,8 @@ def generate_launch_description():
             'e': 0.004945,                      # [m]
             'alpha': 45.0,                      # [deg]
             'dx': 0.0,                          # [m]
-            'dy': 0.0                           # [m]
+            'dy': 0.0,                          # [m]
+            'disabled_thrusters': []           # put 4 for semi final # List of 1-indexed disabled thrusters (4 = front_right)
         }]
     )
 
