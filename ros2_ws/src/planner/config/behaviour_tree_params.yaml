@@ -173,23 +173,23 @@ planner_root_tree:
       # -- Params for behaviour when at table (includes cleanup) --
       time_before_abort: 150.0 # (s) Time in seconds before moving on from the table cleanup
       relative_height_to_measure_table: -0.4 # (m) Depth to measure the table height with the DVL's altitude reading
-      expected_table_items: ["table", "bandaid", "warning",
+      expected_table_items: ["table", "electric", "warning", 
                              "redcross_helmet"] # (list) List of expected items to see when properly above table
                                                 # param is used to determine if we are properly lined up above the table
-      survey_repair_items: {items_labels: ["electric", "nutbolt"], bin_label: "warning"}
-      search_rescue_items: {items_labels: ["bandaid", "pill"], bin_label: "redcross_helmet"}
+      survey_repair_items: {items_labels: ["electric", "electric"], bin_label: "warning"}
+      search_rescue_items: {items_labels: ["electric", "electric"], bin_label: "redcross_helmet"}
       role: "survey_repair" # [survey_repair | search_rescue] Determines what label to face when spinning at the end of task
       grab_only_for_role: True            # (bool) If true, only grab items for the role that is currently selected
       grab_only_no_drop: False            # When cleaning table, if false, dont drop item in bin just grab and attempt surface
       number_of_items_to_grab: 1          #(items) Number of items to grab from the table, starting from the roles for the current role 
       item_scan_relative_table_height: 0.1 # (m) Height above the table to do the item alignment with downcam
      
-      table_item_target_distance: 0.3     # (m) Target distance for vision behaviour go near object of table items
-      table_item_tolerance_meters: 0.1    # (m) Position tolerance for vision behaviour go near object of table items
-      table_item_height_offset: 0.1       # (m) Table item height offset for vision behaviour go near object of table items
+      table_item_target_distance: 0.07     # (m) Target distance for vision behaviour go near object of table items
+      table_item_tolerance_meters: 0.07    # (m) Position tolerance for vision behaviour go near object of table items
+      table_item_height_offset: 0.65       # (m) Table item height offset for vision behaviour go near object of table items
       table_item_hold_time: 3.0           # (s) Hold time
       bin_target_distance: 0.3            # (m) Target distance for vision behaviour go near object of table items
-      bin_tolerance_metable_item_hold_timeters: 0.1           # (m) Position tolerance for vision behaviour go near object of table items
+      bin_tolerance_meters: 0.1           # (m) Position tolerance for vision behaviour go near object of table items
       bin_item_drop_height_relative_bin: 0.1 # (m) Table item height offset for vision behaviour go near object of table items
       bin_hold_time: 3.0                  # (s) Hold time
 
@@ -205,10 +205,10 @@ planner_root_tree:
       grabber_desired_depth_timeout: 30.0  # (s) Timeout
 
       tf_auv_to_grabber:                  # (m) and (deg) Transform from the AUV's center of mass to the grabber's open bracket in the AUV body frame
-        xyz: [-0.1125559, -0.1739998, -0.01242304] 
+        xyz: [-0.039634, -0.019298, -0.1661]
         rpy: [0.0, 0.0, 0.0]
       tf_auv_to_down_cam:
-        xyz: [-0.067, 0.07, -0.014]
+        xyz: [-0.062173, 0.013, -0.056967]
         rpy: [0.0, 1.57079632679, 0.0] # [Roll, Pitch, Yaw] in radians. 1.57079632679 is exactly 90 degrees pitch forward/down (pointing towards the pool floor).
  
     return_home:
