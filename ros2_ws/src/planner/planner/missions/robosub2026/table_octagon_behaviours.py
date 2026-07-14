@@ -110,6 +110,10 @@ class GoAboveTable(py_trees.composites.Sequence):
 
         # 9 Scan octagon for images
         scan_images = ScanOctagonImages(**kwargs)
+        robust_scan_images = py_trees.decorators.FailureIsSuccess(
+                name="robust_scan_images",
+                child=scan_images,
+            )
 
         navigation_only = kwargs.get("navigation_only", False)
         children = []
@@ -128,7 +132,7 @@ class GoAboveTable(py_trees.composites.Sequence):
             children.append(get_table_depth)
             
         children.append(surface_octagon)
-        children.append(scan_images)
+        children.append(robust_scan_images)
 
         self.add_children(children)
 
