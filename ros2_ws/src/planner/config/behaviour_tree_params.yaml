@@ -261,6 +261,10 @@ planner_root_tree:
         y: [0.0, 0.0, 0.0, 0.0, 0.0]               # Coefficients for polynomial trajectory to torpedo target in lateral direction (relative to AUV)
         z: [0.0, -0.0181, 0.241, -0.172, 0.0332]   # Coefficients for polynomial trajectory to torpedo target in vertical direction (relative to AUV)
 
+      roles:
+        survey_repair: ["fire", "firetruck"]
+        search_rescue: ["blood", "ambulance"]
+
       icon_to_nearest_hole:
         board_1:
           blood: [0.0, 0.0, -0.169]
