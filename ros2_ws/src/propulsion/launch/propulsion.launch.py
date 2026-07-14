@@ -46,7 +46,7 @@ def generate_launch_description():
                 executable='jetson_assassin',
                 name='jetson_assassin',
                 output='screen',
-                parameters=[{'enable_host_shutdown': True}]
+                parameters=[{'enable_host_shutdown': False}]
             ),
         ]
     )

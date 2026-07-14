@@ -21,21 +21,21 @@ class TestGrabberBehaviour(py_trees.composites.Sequence):
             command_value=0,
             name="Open Grabber (0)",
         )
-        wait_1s_1 = TimerBehaviour(timer_duration=1.0, name="Wait 1s (Grabber Open)")
+        wait_1s_1 = TimerBehaviour(timer_duration=5.0, name="Wait 5s (Grabber Open)")
 
         close_grabber = SetActuatorBehaviour(
             topic_name="/actuators/grabber",
-            command_value=1,
-            name="Close Grabber (1)",
+            command_value=255,
+            name="Close Grabber (255)",
         )
-        wait_1s_2 = TimerBehaviour(timer_duration=1.0, name="Wait 1s (Grabber Close)")
+        wait_1s_2 = TimerBehaviour(timer_duration=5.0, name="Wait 5s (Grabber Close)")
 
         open_grabber_2 = SetActuatorBehaviour(
             topic_name="/actuators/grabber",
             command_value=0,
             name="Open Grabber Back (0)",
         )
-        wait_1s_3 = TimerBehaviour(timer_duration=1.0, name="Wait 1s (Grabber Open Back)")
+        wait_1s_3 = TimerBehaviour(timer_duration=5.0, name="Wait 5s (Grabber Open Back)")
 
         self.add_children([
             open_grabber_1,

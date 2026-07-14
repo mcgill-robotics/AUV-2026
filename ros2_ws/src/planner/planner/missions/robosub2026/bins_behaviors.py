@@ -267,7 +267,8 @@ class SwitchSides(py_trees.behaviour.Behaviour):
         
         yaw_goal = math.atan2(structure_pos.y - goal_position[1], structure_pos.x - goal_position[0])
         
-        goal = move_global(goal_position[0], goal_position[1], structure_pos.z + self.go_above_bin_structure_height, yaw=yaw_goal, hold_time=0.0)
+        # TODO add hold time as a parameter
+        goal = move_global(goal_position[0], goal_position[1], structure_pos.z + self.go_above_bin_structure_height, yaw=yaw_goal, hold_time=5.0)
 
         self.navigation_client.send_navigation_goal(goal, self.name, custom_goal_response=self.on_server_goal_response, custom_goal_result=self.on_server_goal_result)
         self.action_status = ActionStatus.PENDING

@@ -3,7 +3,7 @@ planner_root_tree:
     tick_rate        : 3.0   # (Hz) Rate at which the behaviour tree ticks
     sim              : false # Whether the simulation is enabled
     use_ground_truth : false # Whether to use the ground truth for position
-    startup_delay    : 0.0   # (s) Delay before actually starting the mission and enabling the controllers
+    startup_delay    : 15.0   # (s) Delay before actually starting the mission and enabling the controllers
     
     # Force tree to broadcast its state and blackboard to the network continuously
     default_snapshot_stream: true
@@ -39,7 +39,7 @@ planner_root_tree:
       initial_alignment_timeout: 30.0       # (s) Seconds before the snap-back alignment fails and times out
       do_style_yaw: false                   # Whether to perform style yaw spin after passing through gate
       style_yaw_degrees: 360.0              # (deg) Total yaw angle to spin (360 or 720)
-      do_style_roll: true                  # Whether to perform style rolling flip (barrel roll) after passing through gate
+      do_style_roll: false                  # Whether to perform style rolling flip (barrel roll) after passing through gate
       style_roll_degrees: 720.0             # (deg) Total roll angle to flip (360 or 720)
       style_roll_torque: 15.0               # (Nm) Open-loop roll torque to apply during rolling flip
       style_roll_coast_degrees: 180.0       # (deg) How many degrees before target angle to cut open-loop torque and coast
@@ -89,7 +89,7 @@ planner_root_tree:
       downcam_image_height: 480           # (px) Height of down cam image
       grabber_to_downcam_x: 0.04          # (m) Distance from downcam to grabber in the lateral direction
       grabber_to_downcam_y: 0.00          # (m) Distance from downcam to grabber in the forward direction
-      bin_wait_before_alignment: 2.0      # (s) Time to wait after moving above the bin before aligning with downcam
+      bin_wait_before_alignment: 5.0      # (s) Time to wait after moving above the bin before aligning with downcam
       alignment_hold_time: 5.0            # (s) Time to hold the alignment with the bin before dropping the marker
       grabber_wait_time: 5.0              # (s) Time to wait for the grabber to complete its action
       search_sweep_steps: 8               # (steps) Number of steps to take when doing the search sweep for the bin structure and for the bins themselves
@@ -99,9 +99,9 @@ planner_root_tree:
       initial_depth: -1.0                 # (m) Depth to dive to before starting the bin structure search
       initial_depth_tolerance: 0.2        # (m) Tolerance for reaching
       bin_structure_distance: 2.0         # (m) How far away to go from the bin structure to look at it with frontcam to see the bins
-      go_above_bin_structure_height: 0.5  # (m) Height above bin structure when looking at it with frontcam to see the bins
+      go_above_bin_structure_height: 0.2  # (m) Height above bin structure when looking at it with frontcam to see the bins
       go_above_bin_height: 0.7            # (m) Height above bin to move to before aligning with downcam
-      switch_sides_height: 1.2            # (m) Height above bin structure when switching sides to look at the other bins
+      switch_sides_height: 0.7            # (m) Height above bin structure when switching sides to look at the other bins
       wait_for_bins_time: 2.0             # (s) Time to wait for the bins to be detected after moving above the bin structure
       send_setpoint_interval: 15          # (frames) Number of frames to wait before sending another setpoint to the controller
       wrong_task_type_threshold: 5        # (frames) Difference in number of frames where wrong icon and right icon were detected before deciding its the wrong task
@@ -111,7 +111,7 @@ planner_root_tree:
       num_required_markers: 2             # (markers) Number of markers that need to be dropped in the correct bins to complete the task
       num_bins: 4                         # (bins) Total number of bins in the bin structure
       bins_to_bin_structure: 0.3          # (m) Approximate distance from center of bin structure to the bins
-      force_fallback_search: False        # (bool) Force behavior to look for bins instead of bin structure first
+      force_fallback_search: True        # (bool) Force behavior to look for bins instead of bin structure first
       force_fallback_alignment: True      # (bool) Force behavior to use bins for projection instead of bin structure
       fallback_role: "search_rescue"      # (str) Role to use when falling back to the bins instead of the bin structure
       no_detection_timeout: 10.0          # (s) Timeout if no bins are detected while following downcam bin
@@ -138,8 +138,8 @@ planner_root_tree:
       item_drop_only: False               # (bool) If true, only perform item drop and skip navigation steps (align, surface, dive)
 
       # Navigate to table
-      shallow_approach_depth: -0.6        # (m) Shallow depth to approach the table from above
-      shallow_approach_tolerance: 0.2     # (m) Tolerance for reaching the shallow approach depth
+      shallow_approach_depth: -0.9        # (m) Shallow depth to approach the table from above
+      shallow_approach_tolerance: 0.3     # (m) Tolerance for reaching the shallow approach depth
       shallow_approach_hold_time: 1.0     # (s) Hold time for the shallow approach depth
       surface_depth: -0.2                 # (m) Depth to surface within the octagon
       surface_tolerance: 0.1              # (m) Tolerance for reaching the surface depth
