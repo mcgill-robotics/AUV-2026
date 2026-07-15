@@ -61,7 +61,7 @@ class ThrusterMapper(Node):
         self.declare_parameter('dy', float("nan")) # [m]
         self.declare_parameter('alpha', float("nan")) # degrees
 
-        self.declare_parameter('disabled_thrusters', []) # put 4 # List of 1-indexed thruster IDs that are disabled ([4] for front_right)
+        self.declare_parameter('disabled_thrusters', [0]) # Use [0] as default (meaning no valid thruster disabled) so ROS 2 types this as an integer array (`list[int]`). Use [4] to disable front_right.
 
         # Read parameters (raises if missing and no default)
         try:
