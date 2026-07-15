@@ -97,7 +97,7 @@ class ThrusterMapper(Node):
             [ np.cos(alpha)*e, -(a+dx), (a-dx), -np.cos(alpha)*e, -np.cos(alpha)*e, (a-dx), -(a+dx), np.cos(alpha)*e],
             # YAW (Z-rotation)
             [ (np.cos(alpha)*(c+dy) + np.sin(alpha)*(d+dx)), 0, 0, -(np.cos(alpha)*(c+dy) + np.sin(alpha)*(d-dx)), (np.cos(alpha)*(c-dy) + np.sin(alpha)*(d-dx)), 0, 0, -(np.cos(alpha)*(c-dy) + np.sin(alpha)*(d+dx))]
-        ], dtype=float)
+        ])
 
         # Zero out the columns for any disabled thrusters so the pseudo-inverse does not allocate force to them
         if disabled_thrusters:
