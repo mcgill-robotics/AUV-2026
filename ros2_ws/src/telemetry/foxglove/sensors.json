@@ -6,61 +6,247 @@
   },
   "layout": {
     "first": {
-      "first": "CallService!2eqthq4",
+      "first": "Stack!1jqyvhf",
       "second": "Plot!11y8nrv",
       "direction": "column",
-      "splitPercentage": 83.54584092289011
+      "splitPercentage": 76.08408312734093
     },
     "second": {
       "first": {
         "first": "Tab!imu",
         "second": "Tab!depth",
         "direction": "row",
-        "splitPercentage": 49.74729241877255
+        "splitPercentage": 53.00910189894245
       },
       "second": {
         "first": "Tab!dvl",
         "second": "Tab!pose",
         "direction": "row",
-        "splitPercentage": 50
+        "splitPercentage": 30.8993340150323
       },
       "direction": "column",
-      "splitPercentage": 49.86529193529038
+      "splitPercentage": 51.905316326886364
     },
     "direction": "row",
-    "splitPercentage": 29.520295202952028
+    "splitPercentage": 17.151454363089268
   },
   "configById": {
+    "Publish!3kct1pd": {
+      "topicName": "/actuators/grabber",
+      "datatype": "std_msgs/msg/UInt8",
+      "value": "{\n  \"data\": 0\n}"
+    },
+    "Publish!t61rhb": {
+      "topicName": "/actuators/torpedo",
+      "datatype": "std_msgs/msg/UInt8",
+      "value": "{\n  \"data\": 2\n}"
+    },
+    "Publish!mua5aw": {
+      "topicName": "/controls/depth_setpoint",
+      "datatype": "std_msgs/msg/Float64",
+      "value": "{\n  \"data\": 1.0\n}"
+    },
+    "Publish!143ln3a": {
+      "topicName": "/controls/quaternion_setpoint",
+      "datatype": "geometry_msgs/msg/Quaternion",
+      "value": "{\n  \"x\": 0.382683432,\n  \"y\": 0,\n  \"z\": 0,\n  \"w\": 0.923879533\n}"
+    },
+    "Publish!4ezrimt": {
+      "topicName": "/controls/x_setpoint",
+      "datatype": "std_msgs/msg/Float64",
+      "value": "{\n  \"data\": 1.0\n}"
+    },
+    "Publish!iymlgs": {
+      "datatype": "std_msgs/msg/Float64",
+      "value": "{\n  \"data\": -2.0\n}",
+      "topicName": "/controls/y_setpoint"
+    },
+    "Publish!cnmpa4": {
+      "topicName": "/controls/flip_command",
+      "datatype": "auv_msgs/msg/FlipCommand",
+      "value": "{\n  \"axis\": 0, \"count\": 1, \n  \"direction\": 1, \"flip_duration\": 15.0\n}"
+    },
+    "CallService!1y4ckso": {
+      "requestPayload": "{}",
+      "layout": "vertical",
+      "timeoutSeconds": 10,
+      "serviceName": "/dvl/reset_dead_reckoning",
+      "editingMode": false
+    },
+    "CallService!32g2cf4": {
+      "requestPayload": "{}",
+      "layout": "vertical",
+      "timeoutSeconds": 20,
+      "editingMode": false,
+      "serviceName": "/dvl/calibrate_gyro"
+    },
+    "CallService!g3b1pw": {
+      "requestPayload": "{}",
+      "layout": "vertical",
+      "timeoutSeconds": 10,
+      "serviceName": "/dvl/get_config"
+    },
+    "CallService!75odcv": {
+      "requestPayload": "{}",
+      "layout": "vertical",
+      "timeoutSeconds": 10,
+      "serviceName": "/xsens/calibrate_gyro"
+    },
+    "CallService!2a5fnvi": {
+      "requestPayload": "{}",
+      "layout": "vertical",
+      "timeoutSeconds": 10,
+      "serviceName": "/xsens/reset_heading"
+    },
     "RawMessages!imu_raw": {
-      "topicPath": "/imu/data"
+      "topicPath": "/imu/data",
+      "expansion": {
+        "orientation": "c"
+      },
+      "defaultExpanded": true
     },
-    "RawMessages!imu_proc": {
-      "topicPath": "/auv_frame/imu",
-      "defaultExpanded": false
+    "RawMessages!28migfo": {
+      "defaultExpanded": false,
+      "topicPath": "/sensors/zed/imu/data"
     },
-    "Plot!f8j8jt": {
+    "Plot!34mgdy": {
       "paths": [
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/auv_frame/imu.orientation.@rpy.yaw.@degrees",
+          "enabled": true,
+          "showLine": true,
+          "color": "#4e98e2",
+          "id": "b755fcae-0f79-49d1-85a7-4967b6de08d3"
+        },
         {
           "timestampMethod": "receiveTime",
           "value": "/controls/quaternion_setpoint.@rpy.yaw.@degrees",
           "enabled": true,
           "color": "#f5774d",
-          "id": "123412f9-31ef-4df9-aafd-6536b12b5420"
+          "id": "eb80c051-3bbb-45fb-a7d7-cebfd48d7255"
         },
         {
           "timestampMethod": "receiveTime",
-          "value": "/auv_frame/imu.orientation.@rpy.yaw.@degrees",
+          "value": "/controls/attitude_effort.torque.z",
+          "enabled": true,
+          "color": "#f7df71",
+          "id": "dc0820a9-7aac-40de-8836-774e70fc1540"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/sensors/zed/imu/data.orientation.@rpy.yaw.@degrees",
+          "enabled": false,
+          "color": "#5cd6a9",
+          "id": "c1af496b-8a0f-4d97-8143-3b08d22e646e",
+          "label": "ZED IMU YAW"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/imu/data.orientation.@rpy.yaw.@degrees",
+          "enabled": true,
+          "color": "#ff00ee",
+          "id": "8e06e784-f556-443c-a8e9-bb5ed232c8da",
+          "label": "IMU YAW"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/dvl/odometry.pose.pose.orientation.@rpy.yaw.@degrees.@mul(-1)",
+          "enabled": true,
+          "color": "#a395e2",
+          "id": "d615711d-c99d-40ae-a3ce-9bd831d87e07",
+          "label": "DVL YAW"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/controls/total_effort.force.x",
+          "enabled": true,
+          "color": "#cad660",
+          "id": "f99e738c-d70c-4765-a916-fc7d801f4a6c"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/controls/total_effort.force.y",
+          "enabled": true,
+          "color": "#61cbff",
+          "id": "1269fcf0-8de2-4baa-be87-355efe6a6ba2"
+        }
+      ],
+      "showLegend": true
+    },
+    "Plot!4pc3aj": {
+      "paths": [
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/auv_frame/imu.orientation.@rpy.roll.@degrees",
           "enabled": true,
           "color": "#4e98e2",
-          "id": "601cc092-54c4-4219-ae25-5850c2da8591"
+          "id": "da70d380-82e9-4c7b-97f3-830583b206b0"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/controls/quaternion_setpoint.@rpy.roll.@degrees",
+          "enabled": true,
+          "color": "#f5774d",
+          "id": "72dee006-85d3-42c5-a816-f70268290cbe"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/controls/attitude_effort.torque.x",
+          "enabled": true,
+          "color": "#f7df71",
+          "id": "b45724bb-8ea5-4e6c-94a7-a8271eb4c327"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/auv_frame/imu.orientation.@rpy.pitch.@degrees",
+          "enabled": true,
+          "color": "#5cd6a9",
+          "id": "34516f1b-94c5-4e16-9ad5-9696c78fca56"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/controls/attitude_effort.torque.y",
+          "enabled": true,
+          "color": "#61cbff",
+          "id": "6629512a-ac2b-4d0f-ba81-cf103d464ffd"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/controls/quaternion_setpoint.@rpy.pitch.@degrees",
+          "enabled": true,
+          "color": "#a395e2",
+          "id": "90875192-5c47-46f1-9b5d-58dca5c84f35"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/auv_frame/imu.angular_velocity.y",
+          "enabled": true,
+          "color": "#cad660",
+          "id": "f68109f4-7951-4977-95f7-db9b94d907ce"
         }
-      ]
+      ],
+      "showLegend": false
     },
     "RawMessages!depth_raw": {
-      "topicPath": "/sensors/depth/z"
+      "topicPath": "/sensors/depth/z",
+      "defaultExpanded": false
     },
     "RawMessages!depth_proc": {
-      "topicPath": "/auv_frame/depth"
+      "topicPath": "/auv_frame/depth",
+      "defaultExpanded": false
+    },
+    "Plot!jqlgds": {
+      "paths": [
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/auv_frame/depth.data",
+          "enabled": true,
+          "showLine": true,
+          "color": "#4e98e2",
+          "id": "97596b10-3878-4b3a-b608-e9aaa40853e0"
+        }
+      ]
     },
     "Plot!1fswa2v": {
       "paths": [
@@ -77,33 +263,33 @@
           "enabled": true,
           "color": "#f5774d",
           "id": "c3430864-cb33-46a7-a840-82456650ddc9"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/controls/depth_effort.force.z",
+          "enabled": true,
+          "color": "#f7df71",
+          "id": "66b10e41-6d39-48db-9bcb-94f3cafbf9cd"
         }
       ],
       "minYValue": -0.2,
-      "maxYValue": 4
+      "maxYValue": 3
     },
-    "RawMessages!dvl_vel": {
-      "topicPath": "/dvl/velocity"
+    "RawMessages!24vrn7y": {
+      "defaultExpanded": false,
+      "topicPath": "/power/thrusters/current"
     },
-    "RawMessages!dvl_dr": {
-      "topicPath": "/dvl/dead_reckoning"
-    },
-    "RawMessages!dvl_odom": {
-      "topicPath": "/dvl/odometry",
-      "defaultExpanded": false
-    },
-    "3D!pose_viz": {
+    "Image!1k1s411": {
       "cameraState": {
+        "distance": 20,
         "perspective": true,
-        "distance": 5.5477914624333335,
-        "phi": 16.604439786068458,
-        "thetaOffset": 87.48303157709171,
-        "targetOffset": [
-          -0.2783487582741777,
-          -0.8719347642231049,
-          -1.0261750482991814e-17
-        ],
+        "phi": 60,
         "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOffset": [
           0,
           0,
           0
@@ -114,35 +300,16 @@
           0,
           1
         ],
+        "thetaOffset": 60,
         "fovy": 45,
         "near": 0.5,
         "far": 5000
       },
       "followMode": "follow-pose",
-      "followTf": "pool_link",
-      "topics": {
-        "/tf": {
-          "visible": true
-        },
-        "/state/pose": {
-          "visible": true
-        },
-        "/dvl/dead_reckoning": {
-          "visible": false
-        }
-      },
-      "layers": {
-        "grid": {
-          "layerId": "foxglove.Grid",
-          "position": [
-            0,
-            0,
-            0
-          ]
-        }
-      },
       "scene": {},
       "transforms": {},
+      "topics": {},
+      "layers": {},
       "publish": {
         "type": "point",
         "poseTopic": "/move_base_simple/goal",
@@ -152,18 +319,402 @@
         "poseEstimateYDeviation": 0.5,
         "poseEstimateThetaDeviation": 0.26179939
       },
-      "imageMode": {}
+      "synchronize": false,
+      "imageMode": {
+        "imageTopic": "/vision/front_cam/detection_frame/annotated/compressed"
+      }
     },
-    "RawMessages!pose_raw": {
-      "topicPath": "/state/pose",
+    "RawMessages!dvl_vel": {
+      "topicPath": "/dvl/velocity",
+      "defaultExpanded": true,
+      "expansion": {
+        "0~beams": "e",
+        "beams": "e"
+      }
+    },
+    "RawMessages!dvl_dr": {
+      "topicPath": "/dvl/dead_reckoning",
       "defaultExpanded": false
     },
-    "CallService!2eqthq4": {
-      "requestPayload": "{\n \"x\": 0.0,\n \"y\": 0.0,\n \"z\": 1.0,\n \"roll\": 0.0,\n \"pitch\": 0.0,\n \"yaw\": 45.0\n}\n",
-      "layout": "vertical",
-      "timeoutSeconds": 10,
-      "serviceName": "/controls/debug_setpoint",
-      "editingMode": true
+    "RawMessages!dvl_odom": {
+      "topicPath": "/dvl/odometry",
+      "defaultExpanded": false
+    },
+    "Plot!uzvu32": {
+      "xAxisVal": "custom",
+      "paths": [
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/state/pose.pose.position.x",
+          "enabled": true,
+          "color": "#4e98e2",
+          "id": "b410f54f-9e93-4eda-a061-f12631bed8c8",
+          "xValuePath": "/state/pose.pose.position.y.@mul(-1)",
+          "label": "State pose (x,y)"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/foxglove/pose_setpoint.pose.position.x",
+          "enabled": true,
+          "color": "#f5774d",
+          "id": "1a372230-1885-4f29-a069-f350d321ac10",
+          "xValuePath": "/foxglove/pose_setpoint.pose.position.y.@mul(-1)",
+          "showLine": true
+        }
+      ],
+      "axisScalesMode": "lockedScales",
+      "legendDisplay": "floating",
+      "showLegend": false
+    },
+    "Plot!2z3btjr": {
+      "paths": [
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/dvl/velocity.altitude",
+          "enabled": true,
+          "color": "#4e98e2",
+          "id": "721b35ac-6257-40db-ac9c-7683fecaaf76",
+          "label": "DVL Altitude"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/dvl/velocity.beams[:]{id==0}.distance",
+          "enabled": true,
+          "color": "#f5774d",
+          "id": "e804d053-db20-422d-b312-e301a90d6d76",
+          "label": "Beam 1 Dist"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/dvl/velocity.beams[:]{id==1}.distance",
+          "enabled": true,
+          "color": "#f7df71",
+          "id": "f8ff486d-8224-414a-996f-260e5a7ccc31",
+          "label": "Beam 2 Dist"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/dvl/velocity.beams[:]{id==2}.distance",
+          "enabled": true,
+          "color": "#5cd6a9",
+          "id": "6577b809-34bf-49d8-b52e-18b0a0d3da8c",
+          "label": "Beam 3 Dist"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/dvl/velocity.beams[:]{id==3}.distance",
+          "enabled": true,
+          "color": "#61cbff",
+          "id": "3c7f3657-8885-4950-80ec-22b66fbebe0f",
+          "label": "Beam 4 Dist"
+        }
+      ],
+      "showPlotValuesInLegend": true
+    },
+    "Plot!kfawjn": {
+      "paths": [
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/state/pose.pose.position.x",
+          "enabled": true,
+          "color": "#4e98e2",
+          "id": "566d42c6-8eef-418e-a82e-a9ee53963604"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/controls/x_setpoint.data",
+          "enabled": true,
+          "color": "#f5774d",
+          "id": "72337732-22af-4455-b2a6-4b1416a23019"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/controls/x_effort.force.x",
+          "enabled": true,
+          "color": "#f7df71",
+          "id": "4a6da64e-e3e8-4829-8d4a-e9dcb61fea16"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/state/pose.pose.position.y",
+          "enabled": true,
+          "color": "#5cd6a9",
+          "id": "d8a97e4a-1686-42f9-ada0-be310227363e"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/controls/y_effort.force.y",
+          "enabled": true,
+          "color": "#61cbff",
+          "id": "0ecc5cac-ce19-4dd5-92f4-ed4ef8ce8113"
+        }
+      ]
+    },
+    "Image!1grzkyb": {
+      "cameraState": {
+        "distance": 20,
+        "perspective": true,
+        "phi": 60,
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOffset": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "thetaOffset": 60,
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "scene": {},
+      "transforms": {},
+      "topics": {},
+      "layers": {},
+      "publish": {
+        "type": "point",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "synchronize": false,
+      "imageMode": {
+        "imageTopic": "/vision/front_cam/detection_frame/annotated/compressed",
+        "colorMode": "colormap",
+        "maxValue": 15000,
+        "minValue": 0
+      }
+    },
+    "3D!2srd3di": {
+      "cameraState": {
+        "distance": 33.40365140223111,
+        "perspective": true,
+        "phi": 35.22750624883828,
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOffset": [
+          0.3879046800593933,
+          0.38231216467394014,
+          5.88440488278389e-17
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "thetaOffset": 91.37039047223861,
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-position",
+      "scene": {
+        "transforms": {
+          "visible": true,
+          "showLabel": true,
+          "editable": false,
+          "enablePreloading": true
+        }
+      },
+      "transforms": {
+        "frame:down_camera": {
+          "visible": false
+        },
+        "frame:down_camera_optical_frame": {
+          "visible": false
+        },
+        "frame:zed_camera_center": {
+          "visible": false
+        },
+        "frame:zed_left_camera_frame": {
+          "visible": false
+        },
+        "frame:zed_left_camera_frame_optical": {
+          "visible": false
+        },
+        "frame:auv_link": {
+          "visible": true
+        },
+        "frame:auv_vio_link": {
+          "visible": false
+        }
+      },
+      "topics": {
+        "/foxglove/pose_setpoint": {
+          "visible": true
+        },
+        "/state/pose": {
+          "visible": true
+        },
+        "/foxglove/scene_objects": {
+          "visible": true
+        }
+      },
+      "layers": {
+        "grid": {
+          "visible": true,
+          "drawBehind": false,
+          "instanceId": "5b290f7e-07aa-4224-a86f-f651c6f4f350",
+          "layerId": "foxglove.Grid",
+          "size": 50,
+          "divisions": 50,
+          "lineWidth": 1,
+          "color": "#248eff",
+          "position": [
+            0,
+            0,
+            -2.1
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "frameId": "pool_link"
+        }
+      },
+      "publish": {
+        "type": "point",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "synchronize": false,
+      "imageMode": {},
+      "followTf": "auv_link",
+      "fixedFrame": "pool_link"
+    },
+    "Plot!44l53lm": {
+      "paths": [
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/temperature.temperature",
+          "enabled": true,
+          "showLine": true,
+          "color": "#4e98e2",
+          "id": "12101c8f-3522-4ae8-81aa-25d05127c2b4"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/power/teensy/temperature.data",
+          "enabled": false,
+          "color": "#f5774d",
+          "id": "5af52055-892e-45a3-832f-95c79df991b7"
+        }
+      ]
+    },
+    "RawMessages!4gdypca": {
+      "defaultExpanded": false,
+      "topicPath": "/status"
+    },
+    "StateTransitions!3gkxaw0": {
+      "paths": [
+        {
+          "value": "/status.no_rotation_update_status",
+          "timestampMethod": "receiveTime"
+        }
+      ]
+    },
+    "RawMessages!xv41kb": {
+      "defaultExpanded": false,
+      "topicPath": "/propulsion/forces"
+    },
+    "Plot!28nh5xf": {
+      "paths": [
+        {
+          "value": "/controls/total_effort.force.x",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "showLine": true,
+          "color": "#4e98e2",
+          "id": "e282cc0f-f307-442d-9e22-94af1c128304"
+        },
+        {
+          "value": "/controls/total_effort.force.y",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "showLine": true,
+          "color": "#f5774d",
+          "id": "a7074a13-1210-4198-877b-d4219bff3533"
+        }
+      ]
+    },
+    "Publish!2o3sod": {
+      "topicName": "/controls/total_effort",
+      "datatype": "geometry_msgs/msg/Wrench",
+      "value": "{\n  \"force\": {\n    \"x\": 0,\n    \"y\": 0,\n    \"z\": 0\n  },\n  \"torque\": {\n    \"x\": 0,\n    \"y\": 0,\n    \"z\": 0\n  }\n}"
+    },
+    "Stack!1jqyvhf": {
+      "panels": [
+        {
+          "panelId": "Publish!3kct1pd",
+          "size": 0.21996650878813903
+        },
+        {
+          "panelId": "Publish!t61rhb",
+          "size": 0.22367355905977568
+        },
+        {
+          "panelId": "Publish!mua5aw",
+          "size": 0.25
+        },
+        {
+          "panelId": "Publish!143ln3a",
+          "size": 0.33831775300228584
+        },
+        {
+          "panelId": "Publish!4ezrimt",
+          "size": 0.18159531649652355
+        },
+        {
+          "panelId": "Publish!iymlgs",
+          "size": 0.18241035402837838
+        },
+        {
+          "panelId": "Publish!cnmpa4",
+          "size": 0.20697463827582896
+        },
+        {
+          "panelId": "CallService!1y4ckso",
+          "size": 0.09601449488191352
+        },
+        {
+          "panelId": "CallService!32g2cf4",
+          "size": 0.014328067460687224
+        },
+        {
+          "panelId": "CallService!g3b1pw",
+          "size": 0.6269517987987225
+        },
+        {
+          "panelId": "CallService!75odcv",
+          "size": 0.25
+        },
+        {
+          "panelId": "CallService!2a5fnvi",
+          "size": 0.25
+        }
+      ]
     },
     "Plot!11y8nrv": {
       "paths": [
@@ -195,12 +746,16 @@
           "layout": "RawMessages!imu_raw"
         },
         {
-          "title": "IMU (Processed)",
-          "layout": "RawMessages!imu_proc"
+          "title": "ZED IMU (Raw)",
+          "layout": "RawMessages!28migfo"
         },
         {
-          "title": "",
-          "layout": "Plot!f8j8jt"
+          "title": "IMU (Processed)",
+          "layout": "Plot!34mgdy"
+        },
+        {
+          "title": "Roll vs setpoint",
+          "layout": "Plot!4pc3aj"
         }
       ]
     },
@@ -213,16 +768,28 @@
         },
         {
           "title": "Depth (Processed)",
-          "layout": "RawMessages!depth_proc"
+          "layout": {
+            "direction": "row",
+            "second": "Plot!jqlgds",
+            "first": "RawMessages!depth_proc"
+          }
         },
         {
           "title": "Depth vs DSetpoint",
           "layout": "Plot!1fswa2v"
+        },
+        {
+          "title": "",
+          "layout": "RawMessages!24vrn7y"
+        },
+        {
+          "title": "",
+          "layout": "Image!1k1s411"
         }
       ]
     },
     "Tab!dvl": {
-      "activeTabIdx": 2,
+      "activeTabIdx": 3,
       "tabs": [
         {
           "title": "Velocity",
@@ -235,6 +802,18 @@
         {
           "title": "Odometry",
           "layout": "RawMessages!dvl_odom"
+        },
+        {
+          "title": "XY Path",
+          "layout": "Plot!uzvu32"
+        },
+        {
+          "title": "DVL Altitude",
+          "layout": "Plot!2z3btjr"
+        },
+        {
+          "title": "X vs Setpoint",
+          "layout": "Plot!kfawjn"
         }
       ]
     },
@@ -242,12 +821,38 @@
       "activeTabIdx": 1,
       "tabs": [
         {
-          "title": "3D Path",
-          "layout": "3D!pose_viz"
+          "title": "3D Position",
+          "layout": {
+            "first": "Image!1grzkyb",
+            "second": "3D!2srd3di",
+            "direction": "row"
+          }
         },
         {
           "title": "Raw Data",
-          "layout": "RawMessages!pose_raw"
+          "layout": {
+            "first": "Plot!44l53lm",
+            "second": {
+              "direction": "row",
+              "second": "StateTransitions!3gkxaw0",
+              "first": "RawMessages!4gdypca"
+            },
+            "direction": "row"
+          }
+        },
+        {
+          "title": "",
+          "layout": {
+            "first": {
+              "direction": "row",
+              "second": "Plot!28nh5xf",
+              "first": "RawMessages!xv41kb",
+              "splitPercentage": 57.491459527356746
+            },
+            "second": "Publish!2o3sod",
+            "direction": "row",
+            "splitPercentage": 84.47154471544715
+          }
         }
       ]
     }

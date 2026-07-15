@@ -26,7 +26,8 @@ def generate_launch_description():
             'e': 0.004945,                      # [m]
             'alpha': 45.0,                      # [deg]
             'dx': 0.0,                          # [m]
-            'dy': 0.0                           # [m]
+            'dy': 0.0,                          # [m]
+            'disabled_thrusters': [0]           # List of 1-indexed disabled thrusters (e.g. [4] for front right, or [0] for none disabled. NOTE: use [0] instead of [] due to ROS 2 launch array typing)
         }]
     )
 
@@ -46,7 +47,7 @@ def generate_launch_description():
                 executable='jetson_assassin',
                 name='jetson_assassin',
                 output='screen',
-                parameters=[{'enable_host_shutdown': True}]
+                parameters=[{'enable_host_shutdown': False}]
             ),
         ]
     )

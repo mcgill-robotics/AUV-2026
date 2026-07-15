@@ -25,6 +25,9 @@ class BoardType(Enum):
 class TorpedoSide(Enum):
     RIGHT = 1
     LEFT = 2
+class Role(Enum):
+    SURVEY_REPAIR = "survey_repair"
+    SEARCH_RESCUE = "search_rescue"
 
 class Action(py_trees.behaviour.Behaviour):
     def __init__(self, name):
@@ -452,6 +455,71 @@ class DetermineBoardType(Action):
             self.node.get_logger().info(f"[{self.name}] Detected board type: {board_type.name}")
 
         return py_trees.common.Status.SUCCESS
+
+class RoleSelector(py_trees.behaviour.Behaviour):
+    def __init__(self, 
+                 placeholder: py_trees.composites.Sequence, 
+                 role_to_run: dict[Role, py_trees.composites.Sequence], 
+                 default_role: Role
+                ):
+        super().__init__("Role Selector")
+        self.placeholder = placeholder
+        self.role_to_run = role_to_run
+        self.default_role = default_role
+
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+        self.current_role: Optional[Role] = None
+        self.message_shown = False
+        self.configured_roles: set[Role] = set()
+
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.nav_client = kwargs['shared_nav_client']
+        self.blackboard.register_key(key="/gate/selected_role", access=py_trees.common.Access.READ)
+
+    def initialise(self):
+        self.current_role = None
+        self.message_shown = False
+        self.placeholder.remove_all_children()
+
+    def update(self):
+        if not self.blackboard.exists("/gate/selected_role") or self.blackboard.gate.selected_role is None:
+            self.node.get_logger().warn(f"[{self.name}] No selected role available on blackboard. Defaulting to {self.default_role.value}.")
+            selected_role = self.default_role
+        else:
+            selected_role_value = self.blackboard.gate.selected_role
+            selected_role = Role(selected_role_value) if isinstance(selected_role_value, str) else selected_role_value
+
+        if selected_role != self.current_role or len(self.placeholder.children) == 0:
+            self.placeholder.remove_all_children()
+            selected_sequence = self.role_to_run[selected_role]
+
+            if selected_role not in self.configured_roles:
+                py_trees.trees.setup(
+                    root=selected_sequence,
+                    node=self.node,
+                    shared_nav_client=self.nav_client,
+                )
+                self.configured_roles.add(selected_role)
+
+            self.placeholder.add_child(selected_sequence)
+            self.current_role = selected_role
+            self.node.get_logger().info(
+                f"[{self.name}] Loaded role sequence for {selected_role.value}"
+            )
+
+        return py_trees.common.Status.SUCCESS
+
+
+class DynamicRoleSelector(py_trees.composites.Sequence):
+    def __init__(self, role_to_run: dict[Role, py_trees.composites.Sequence],default_role):
+        super().__init__("Dynamic Role Selector", memory=True)
+
+        self.active_role_placeholder = py_trees.composites.Sequence("Active Role", memory=True)
+        self.role_selector = RoleSelector(self.active_role_placeholder, role_to_run,default_role=default_role)
+
+        self.add_children([self.role_selector, self.active_role_placeholder])
+    
 
 class BoardIcon(Enum):
     FIRE = "fire"

@@ -3,7 +3,7 @@ from enum import Enum
 
 from typing import Optional, Tuple, List
 import py_trees
-from controls.goal_helpers import set_global_yaw, look_at, move_to_and_look_at, move_global, _DEFAULT_POS_TOL, _DEFAULT_HOLD#, _DEFAULT_TIMEOUT,_DEFAULT_YAW_TOL, POSITION_EPSILON
+from controls.goal_helpers import set_global_yaw, look_at, move_to_and_look_at, move_global, set_depth, _DEFAULT_POS_TOL, _DEFAULT_HOLD#, _DEFAULT_TIMEOUT,_DEFAULT_YAW_TOL, POSITION_EPSILON
 from controls.utils import yaw_from_quaternion, normalize_angle
 from .action_status_enum import ActionStatus
 from auv_msgs.msg import VisionObject
@@ -26,6 +26,8 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
         angular_tolerance_rad: float = math.radians(30.0),  # (rad) yaw convergence threshold per turn step
         turn_hold_time_s: float = 0.1,                   # (s) hold time before turn step SUCCESS
         turn_timeout_s: float = 30.0,                    # (s) timeout before turn step FAILURE
+        ignore_behind_x: bool = False,                   # If true, ignore targets whose global X < auv_x + min_forward_x_dist
+        min_forward_x_dist: float = 0.0,                 # (m) minimum forward X distance when ignore_behind_x is true
         name="SearchSweep",
     ):
         super().__init__(name)
@@ -38,6 +40,8 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
         self.angular_tolerance_rad = angular_tolerance_rad
         self.turn_hold_time_s = turn_hold_time_s
         self.turn_timeout_s = turn_timeout_s
+        self.ignore_behind_x = ignore_behind_x
+        self.min_forward_x_dist = min_forward_x_dist
         
         # Calculate how much to turn per step (in radians)
         self.sweep_angle_rad = (2 * math.pi) / float(num_steps)
@@ -90,8 +94,16 @@ class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
         # Skip this if we already found it and are just finishing the "look at" turn
         if not self.is_looking_at_target:
             if hasattr(self.blackboard, 'vision') and self.blackboard.vision.object_map is not None:
+                auv_x = None
+                if self.ignore_behind_x and hasattr(self.blackboard, 'sensors') and self.blackboard.sensors.pose is not None:
+                    auv_x = self.blackboard.sensors.pose.pose.position.x
+
                 for obj in self.blackboard.vision.object_map.array:
                     if obj.label == self.target_class:
+                        if self.ignore_behind_x and auv_x is not None:
+                            if (obj.pose.position.x - auv_x) < self.min_forward_x_dist:
+                                continue
+
                         self.node.get_logger().info(f"[{self.name}] Found target '{self.target_class}' in vision!")
                         
 
@@ -432,15 +444,26 @@ class GoNearObject(py_trees.behaviour.Behaviour):
 
             if magnitude <= self.target_planar_distance:
                 self.node.get_logger().info(f"[{self.name}] Already within target distance of {self.target_class} ({magnitude:.2f}m <= {self.target_planar_distance:.2f}m). Checking height.")
-
-                if self.height_offset is not None and self.height_offset - current_pose.z <= self.tolerance_meters:
+                if self.height_offset is None or abs((current_pose.z - (target_obj.pose.position.z + self.height_offset))) <= self.tolerance_meters:
                     self.node.get_logger().info(f"[{self.name}] Already within target height offset of {self.target_class} or height not specified. No movement needed.")
                     self.action_status = ActionStatus.SUCCEEDED
                     return
                 else:
-                    self.node.get_logger().info(f"[{self.name}] Need to adjust height to reach target offset. Moving vertically.")
+                    self.node.get_logger().info(f"[{self.name}] Need to adjust height to reach target offset. Diving to {target_obj.pose.position.z + self.height_offset}.")
+                    goal_z = target_obj.pose.position.z + self.height_offset
+                    goal = set_depth(goal_z, tolerance=self.tolerance_meters, hold_time=self.hold_time)
+                    self.blackboard.vision.last_goal_pose = goal
+                    self.navigation_client.send_navigation_goal(goal, self.name, custom_goal_response=self.on_server_goal_response, custom_goal_result=self.on_server_goal_result)
+                    self.action_status = ActionStatus.PENDING
+
+                    return py_trees.common.Status.RUNNING 
+
+            self.action_status = ActionStatus.PENDING
             
-            normalized_direction = (direction_vector[0]/magnitude, direction_vector[1]/magnitude)
+            if magnitude < 1e-6:
+                normalized_direction = (1.0, 0.0)
+            else:
+                normalized_direction = (direction_vector[0]/magnitude, direction_vector[1]/magnitude)
 
             goal_x = target_x - normalized_direction[0] * self.target_planar_distance
             goal_y = target_y - normalized_direction[1] * self.target_planar_distance
@@ -845,12 +868,15 @@ class MoveTowardsTargetByDistance(py_trees.behaviour.Behaviour):
     def _get_blackboard_value(self, key_path: str):
         parts = key_path.strip("/").split("/")
         curr = self.blackboard
-        for p in parts:
-            if hasattr(curr, p):
-                curr = getattr(curr, p)
-            else:
-                return None
-        return curr
+        try:
+            for p in parts:
+                if hasattr(curr, p):
+                    curr = getattr(curr, p)
+                else:
+                    return None
+            return curr
+        except (AttributeError, KeyError):
+            return None
 
     def update(self):
         if self.distance <= 0.0:

@@ -265,6 +265,8 @@ def main():
     node.declare_parameter("torpedo.icon_to_nearest_hole.board_2.firetruck", Parameter.Type.DOUBLE_ARRAY)
     node.declare_parameter("torpedo.firing_pause_time", Parameter.Type.DOUBLE)
     node.declare_parameter("torpedo.launch_topic", Parameter.Type.STRING)
+    node.declare_parameter("torpedo.roles.survey_repair", Parameter.Type.STRING_ARRAY)
+    node.declare_parameter("torpedo.roles.search_rescue", Parameter.Type.STRING_ARRAY)
 
     torpedo_params = {
         "initial_distance_from_board": node.get_parameter("torpedo.initial_distance_from_board").get_parameter_value().double_value,
@@ -304,7 +306,11 @@ def main():
                 "firetruck": node.get_parameter("torpedo.icon_to_nearest_hole.board_2.firetruck").get_parameter_value().double_array_value
             }
         },
-        "torpedo_firing_buffer_time": node.get_parameter("torpedo.firing_pause_time").get_parameter_value().double_value
+        "torpedo_firing_buffer_time": node.get_parameter("torpedo.firing_pause_time").get_parameter_value().double_value,
+        "role_to_icons": {
+            "survey_repair": node.get_parameter("torpedo.roles.survey_repair").get_parameter_value().string_array_value,
+            "search_rescue": node.get_parameter("torpedo.roles.search_rescue").get_parameter_value().string_array_value
+        }
     }
 
     # General task information parameters

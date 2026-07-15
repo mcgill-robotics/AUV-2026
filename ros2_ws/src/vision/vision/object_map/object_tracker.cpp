@@ -89,6 +89,8 @@ ObjectTracker::ObjectTracker(
     float min_large_structure_separation,
     bool large_structure_pipe_separation_enabled,
     float min_large_structure_pipe_separation,
+    bool same_label_pipe_separation_enabled,
+    float min_same_label_pipe_separation,
     float gating_threshold,
     int min_hits,
     int max_age,
@@ -114,6 +116,8 @@ ObjectTracker::ObjectTracker(
     this->min_large_structure_separation = min_large_structure_separation;
     this->large_structure_pipe_separation_enabled = large_structure_pipe_separation_enabled;
     this->min_large_structure_pipe_separation = min_large_structure_pipe_separation;
+    this->same_label_pipe_separation_enabled = same_label_pipe_separation_enabled;
+    this->min_same_label_pipe_separation = min_same_label_pipe_separation;
     this->gating_threshold = gating_threshold;
     this->min_hits = min_hits;
     this->max_age = max_age;
@@ -483,6 +487,7 @@ void ObjectTracker::create_new_tracks(
     for (int det_idx : unmatched_detections) {
         std::string label = classes[det_idx];
         const bool is_large_structure = large_structure_labels.count(label) > 0;
+        const bool is_pipe = pipe_labels.count(label) > 0;
 
         int current_count = 0;
         for (const auto& t : tracks) {
@@ -552,6 +557,57 @@ void ObjectTracker::create_new_tracks(
                     dist_xy < min_large_structure_separation) {
                     too_close = true;
                     break;
+                }
+            }
+        }
+
+        // Prevent pipes from spawning too close to existing large structures (such as the gate)
+        if (!too_close && is_pipe && large_structure_pipe_separation_enabled) {
+            for (const auto& existing_track : tracks) {
+                if (existing_track.state != TrackState::CONFIRMED) {
+                    continue;
+                }
+                if (large_structure_labels.count(existing_track.label) > 0) {
+                    const double dist_xy = xy_distance(new_pos, existing_track.kf.state());
+                    if (dist_xy < min_large_structure_pipe_separation) {
+                        too_close = true;
+                        break;
+                    }
+                }
+            }
+            if (!too_close) {
+                for (const auto& [persistent_label, persistent_pos] : persistent_positions) {
+                    if (large_structure_labels.count(persistent_label) > 0) {
+                        const double dist_xy = xy_distance(new_pos, persistent_pos);
+                        if (dist_xy < min_large_structure_pipe_separation) {
+                            too_close = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Prevent slalom pipes of the same label (e.g. red_pipe and red_pipe) from spawning too close to each other
+        if (!too_close && is_pipe && same_label_pipe_separation_enabled) {
+            for (const auto& existing_track : tracks) {
+                if (existing_track.label == label) {
+                    const double dist_xy = xy_distance(new_pos, existing_track.kf.state());
+                    if (dist_xy < min_same_label_pipe_separation) {
+                        too_close = true;
+                        break;
+                    }
+                }
+            }
+            if (!too_close) {
+                for (const auto& [persistent_label, persistent_pos] : persistent_positions) {
+                    if (persistent_label == label) {
+                        const double dist_xy = xy_distance(new_pos, persistent_pos);
+                        if (dist_xy < min_same_label_pipe_separation) {
+                            too_close = true;
+                            break;
+                        }
+                    }
                 }
             }
         }

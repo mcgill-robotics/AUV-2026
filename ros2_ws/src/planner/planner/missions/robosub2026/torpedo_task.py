@@ -1,5 +1,7 @@
 import py_trees
 from numpy.polynomial.polynomial import Polynomial
+from ..mission_behaviour_components import BasicActionBehaviour
+from controls.goal_helpers import set_depth
 from .torpedo_behaviours import *
 from ..vision_behaviours import SearchSweepBehaviour, CircleAroundToFindBehaviour, GoNearObject
 import operator
@@ -52,7 +54,11 @@ class TorpedoTask(py_trees.composites.Sequence):
                 }
             },
             launch_function: Callable[[TorpedoSide], None] = lambda side: print(f"Launching {side.name} torpedo"),
-            torpedo_firing_buffer_time: float = 1.0
+            torpedo_firing_buffer_time: float = 1.0,
+            role_to_icons : dict[str, list[str]] = {
+                "survey_repair": ["fire","firetruck"],
+                "search_rescue": ["blood","ambulance"],
+            }
         ):
         super().__init__("Torpedo Task", memory=True)
         
@@ -105,6 +111,13 @@ class TorpedoTask(py_trees.composites.Sequence):
         
         self.torpedo_firing_buffer_time = torpedo_firing_buffer_time
         
+        self.role_to_icons:dict[Role, list[BoardIcon]] = {}
+        
+        for role_name, icon_names in role_to_icons.items():
+            role = Role(role_name)
+            icons = [BoardIcon(icon_name) for icon_name in icon_names]
+            self.role_to_icons[role] = icons
+
         self.add_children([
             py_trees.behaviours.SetBlackboardVariable(
                 name="Set Torpedo Count to 2",
@@ -137,12 +150,20 @@ class TorpedoTask(py_trees.composites.Sequence):
         returns py_trees.composites.Sequence
         """
         board_strategy = py_trees.composites.Sequence("Board Strategy", memory=True)
+        dynamic_role = DynamicRoleSelector(
+            role_to_run={
+                Role.SURVEY_REPAIR: self.role_strategy(self.farther_distance_threshold, Role.SURVEY_REPAIR),
+                Role.SEARCH_RESCUE: self.role_strategy(self.farther_distance_threshold, Role.SEARCH_RESCUE)
+            },
+            default_role=Role.SURVEY_REPAIR,
+        )
+        
         board_strategy.add_children(
             [
                 self.board_rough_position_sequence(),
                 self.board_orientation_refinement_selector(),
                 DetermineBoardType(),
-                self.icon_strategy_selector(self.farther_distance_threshold)
+                dynamic_role
             ]
          )
         return board_strategy
@@ -154,6 +175,8 @@ class TorpedoTask(py_trees.composites.Sequence):
         returns py_trees.composites.Sequence
         """
         board_rough_position:py_trees.composites.Sequence = py_trees.composites.Sequence("Board Rough Positioning", memory=True)
+        initial_dive = BasicActionBehaviour("Initial Dive to -1.0", goal=set_depth(z=self.z_reference, tolerance=self.position_tolerance, hold_time=self.hold_time, timeout=self.timeout))
+        
         ss_board = SearchSweepBehaviour(
             target_class="board",
             num_steps=5,
@@ -219,6 +242,7 @@ class TorpedoTask(py_trees.composites.Sequence):
         
         board_rough_position.add_children(
             [
+                initial_dive,
                 ss_board,
                 approach_board_far,
                 approach_board_near,
@@ -292,25 +316,17 @@ class TorpedoTask(py_trees.composites.Sequence):
         return find_board_orientation_sequence
 
 
-    def icon_strategy_selector(self, distance_from_board:float)->py_trees.composites.Selector:
-        """
-        Distance from board
-        1. Farther: 0.46m away
-        2. Far: 0.3m away
-        3. Close: <0.3m away, just stick torpedo up to board and hope for the best
-        """
-        distance_strategy_selector = py_trees.composites.Selector("Icon Strategy Selector", memory=True)
-        distance_strategy_selector.add_children(
-            [
-                self.icon_strategy(distance_from_board,BoardIcon.FIRE),
-                # self.icon_strategy(distance_from_board,BoardIcon.BLOOD),
-                # self.icon_strategy(distance_from_board,BoardIcon.FIRETRUCK),
-                # self.icon_strategy(distance_from_board,BoardIcon.AMBULANCE)
-            ]
-         )
-        return distance_strategy_selector
 
-
+    def role_strategy(self, distance_from_board: float, role: Role)->py_trees.composites.Sequence:
+        role_strategy_name = f"{role.name} Strategy {distance_from_board}m"
+        return py_trees.composites.Sequence(
+            role_strategy_name, 
+            memory=True,
+            children=[
+                     self.icon_strategy(distance_from_board, icon) for icon in self.role_to_icons[role]
+                ]
+            )
+    
     def icon_strategy(self, distance_from_board:  float, icon: BoardIcon)->py_trees.composites.Sequence:
         """
         Build an icon strategy based on the distance from the board
