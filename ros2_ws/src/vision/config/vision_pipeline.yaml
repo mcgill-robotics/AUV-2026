@@ -159,7 +159,7 @@ front_cam_object_detection:
       enable: true
       mode: "horizontal" # "both", "horizontal", "vertical"
       margin_px: 20 # The number of pixels to exclude from the border
-      labels: ["white_pipe", "red_pipe"] # List of labels to apply border exclusion to
+      labels: ["white_pipe", "red_pipe", "gate", "bin"] # List of labels to apply border exclusion to
 
     publish_camera_info: true # publish CameraInfo for the front camera feed using ZED left-camera intrinsics
     publish_annotated: true # publishes the front camera feed topic at detection_frame_topic + /annotated, toggled raw/annotated at runtime via service

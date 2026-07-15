@@ -92,6 +92,7 @@ planner_root_tree:
       bin_wait_before_alignment: 5.0      # (s) Time to wait after moving above the bin before aligning with downcam
       alignment_hold_time: 5.0            # (s) Time to hold the alignment with the bin before dropping the marker
       grabber_wait_time: 5.0              # (s) Time to wait for the grabber to complete its action
+      height_offset_before_drop: 0.4      # (m) Amount to go down before droppping the marker
       search_sweep_steps: 8               # (steps) Number of steps to take when doing the search sweep for the bin structure and for the bins themselves
       search_sweep_step_timeout: 1.5      # (s) Seconds to wait at each step of the search sweep for the bin structure and for the bins
       bin_moving_average_weight: 1.0      # (0-1) Weight of current measurement against previous position for moving average
@@ -113,6 +114,8 @@ planner_root_tree:
       bins_to_bin_structure: 0.3          # (m) Approximate distance from center of bin structure to the bins
       force_fallback_search: True        # (bool) Force behavior to look for bins instead of bin structure first
       force_fallback_alignment: True      # (bool) Force behavior to use bins for projection instead of bin structure
+      always_drop_markers: True          # (bool) Force behavior to always drop markers even if its the wrong bin type
+      skip_other_side: False              # (bool) Skip other side of the bin structure and only look for bins on one side
       fallback_role: "search_rescue"      # (str) Role to use when falling back to the bins instead of the bin structure
       no_detection_timeout: 10.0          # (s) Timeout if no bins are detected while following downcam bin
       first_bin_grabber_setpoint: 128     # (0-255) How much to open the grabber to drop the first marker
