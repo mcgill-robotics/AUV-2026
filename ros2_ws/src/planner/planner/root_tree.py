@@ -166,6 +166,7 @@ def main():
     node.declare_parameter("bins.grabber_to_downcam_x", 0.17894)
     node.declare_parameter("bins.grabber_to_downcam_y", 0.04062)
     node.declare_parameter("bins.bin_wait_before_alignment", 2.0)
+    node.declare_parameter("bins.height_offset_before_drop", 0.4)
     node.declare_parameter("bins.alignment_hold_time", 5.0)
     node.declare_parameter("bins.grabber_wait_time", 5.0)
     node.declare_parameter("bins.search_sweep_steps", 8)
@@ -186,8 +187,10 @@ def main():
     node.declare_parameter("bins.num_required_markers", 2)
     node.declare_parameter("bins.num_bins", 4)
     node.declare_parameter("bins.bins_to_bin_structure", 0.3)
+    node.declare_parameter("bins.always_drop_markers", False)
     node.declare_parameter("bins.force_fallback_search", False)
     node.declare_parameter("bins.force_fallback_alignment", False)
+    node.declare_parameter("bins.skip_other_side", False)
     node.declare_parameter("bins.fallback_role", "search_rescue")
     node.declare_parameter("bins.no_detection_timeout", 10.0)
     node.declare_parameter("bins.first_bin_grabber_setpoint", 128)
@@ -203,6 +206,7 @@ def main():
         "bin_wait_before_alignment": node.get_parameter("bins.bin_wait_before_alignment").get_parameter_value().double_value,
         "alignment_hold_time": node.get_parameter("bins.alignment_hold_time").get_parameter_value().double_value,
         "grabber_wait_time": node.get_parameter("bins.grabber_wait_time").get_parameter_value().double_value,
+        "height_offset_before_drop": node.get_parameter("bins.height_offset_before_drop").get_parameter_value().double_value,
         "search_sweep_steps": node.get_parameter("bins.search_sweep_steps").get_parameter_value().integer_value,
         "search_sweep_step_timeout": node.get_parameter("bins.search_sweep_step_timeout").get_parameter_value().double_value,
         "bin_moving_average_weight": node.get_parameter("bins.bin_moving_average_weight").get_parameter_value().double_value,
@@ -221,8 +225,10 @@ def main():
         "num_required_markers": node.get_parameter("bins.num_required_markers").get_parameter_value().integer_value,
         "num_bins": node.get_parameter("bins.num_bins").get_parameter_value().integer_value,
         "bins_to_bin_structure": node.get_parameter("bins.bins_to_bin_structure").get_parameter_value().double_value,
+        "always_drop_markers": node.get_parameter("bins.always_drop_markers").get_parameter_value().bool_value,
         "force_fallback_search": node.get_parameter("bins.force_fallback_search").get_parameter_value().bool_value,
         "force_fallback_alignment": node.get_parameter("bins.force_fallback_alignment").get_parameter_value().bool_value,
+        "skip_other_side": node.get_parameter("bins.skip_other_side").get_parameter_value().bool_value,
         "fallback_role": node.get_parameter("bins.fallback_role").get_parameter_value().string_value,
         "no_detection_timeout": node.get_parameter("bins.no_detection_timeout").get_parameter_value().double_value,
         "first_bin_grabber_setpoint": node.get_parameter("bins.first_bin_grabber_setpoint").get_parameter_value().integer_value,
