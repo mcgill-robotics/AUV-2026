@@ -41,26 +41,26 @@ x_controller:
     ros__parameters:
         control_loop_hz: 10.0
         sensor_timeout_sec: 1.0
-        KP: 20.0
-        KD: 15.0
+        KP: 10.0
+        KD: 7.5
         KI: 0.5
         I_MAX: 10.0
         integral_activation_threshold: 0.5
         derivative_filter_alpha: 0.8
-        max_slew_rate: 0.5 # [m/s] (0.0 = disabled)
+        max_slew_rate: 0.0 # [m/s] (0.0 = disabled)
         enabled: true
 
 y_controller:
     ros__parameters:
         control_loop_hz: 10.0
         sensor_timeout_sec: 1.0
-        KP: 20.0
-        KD: 15.0
+        KP: 10.0
+        KD: 7.5
         KI: 0.5
         I_MAX: 10.0
         integral_activation_threshold: 0.5
         derivative_filter_alpha: 0.8
-        max_slew_rate: 0.5 # [m/s] (0.0 = disabled)
+        max_slew_rate: 0.0 # [m/s] (0.0 = disabled)
         enabled: true
 
 superimposer:

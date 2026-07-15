@@ -431,9 +431,14 @@ class GoNearObject(py_trees.behaviour.Behaviour):
             magnitude = math.sqrt(direction_vector[0]**2 + direction_vector[1]**2)
 
             if magnitude <= self.target_planar_distance:
-                self.node.get_logger().info(f"[{self.name}] Already within target distance of {self.target_class} ({magnitude:.2f}m <= {self.target_planar_distance:.2f}m). No movement needed.")
-                self.action_status = ActionStatus.SUCCEEDED
-                return
+                self.node.get_logger().info(f"[{self.name}] Already within target distance of {self.target_class} ({magnitude:.2f}m <= {self.target_planar_distance:.2f}m). Checking height.")
+
+                if self.height_offset is not None and self.height_offset - current_pose.z <= self.tolerance_meters:
+                    self.node.get_logger().info(f"[{self.name}] Already within target height offset of {self.target_class} or height not specified. No movement needed.")
+                    self.action_status = ActionStatus.SUCCEEDED
+                    return
+                else:
+                    self.node.get_logger().info(f"[{self.name}] Need to adjust height to reach target offset. Moving vertically.")
             
             normalized_direction = (direction_vector[0]/magnitude, direction_vector[1]/magnitude)
 

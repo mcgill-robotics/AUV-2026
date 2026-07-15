@@ -60,7 +60,7 @@ planner_root_tree:
     slalom:
       num_layers: 3               # Number of pipe layers to navigate
       gate_side: "right"           # Default fallback side if /gate/selected_side is not on the blackboard (set by GateTask at runtime)
-      yaw_inward_offset_deg: 25.0  # (deg) Inward angle to hug the centerline and most probably see the red pipe
+      yaw_inward_offset_deg: 15.0  # (deg) Inward angle to hug the centerline and most probably see the red pipe
       scan_angle_deg: 40.0         # (deg) Angle to sweep left/right during pipe scan
       scan_pause_time: 1.0         # (s) Seconds to pause after each scan rotation
       collinearity_threshold: 0.5  # (m) Max perpendicular distance for pipe triplet matching
@@ -237,19 +237,21 @@ planner_root_tree:
     torpedo:
       launch_topic: /actuators/torpedo
       initial_distance_from_board: 2.0      # (m) Initial "safe" distance from the board during rough positioning
-      z_reference: -0.6                    # (m) Depth to maintain during torpedo task
+      z_reference: -1.0                    # (m) Depth to maintain during torpedo task
       scan_pause_time: 1.0                  # (s) Seconds to pause after each scan rotation
       position_tolerance: 0.3               # (m) Position convergence threshold for board alignment
       yaw_tolerance_deg: 10.0                # (deg) Yaw convergence threshold for board alignment
-      hold_time: 0.5                        # (s) Seconds to hold navigation within tolerance before SUCCESS
+      hold_time: 2.0                        # (s) Seconds to hold navigation within tolerance before SUCCESS
       timeout: 30.0                         # (s) Seconds before navigation steps fail with FAILURE
       firing_pause_time: 5.0                # (s) Seconds to pause before and after firing torpedo
 
       refinement:
-        rejection_threshold_deg: 10.0     # (deg) Threshold for rejecting outlier orientation samples based on distance from current mean
+        orientation_rejection_threshold_deg: 5.0     # (deg) Threshold for rejecting outlier orientation samples based on distance from current mean
+        position_rejection_threshold: 0.3 # (m) Threshold for rejecting outlier position samples based on distance from current mean
         attempts: 3                       # Number of attempts to refine orientation before giving up
         alignments_per_attempt: 2         # Number of alignment attempts to perform before validating orientation
-        samples_per_alignment: 3          # Number of orientation samples to collect for mean orientation estimation
+        orientation_samples_per_alignment: 3          # Number of orientation samples to collect for mean orientation estimation
+        position_samples_per_alignment: 3          # Number of position samples to collect for mean position estimation
         sample_every_n_ticks: 2           # Sample orientation every N ticks (to allow for some movement between samples)
 
       auv_to_torpedos:

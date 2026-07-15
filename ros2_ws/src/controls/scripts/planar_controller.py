@@ -9,7 +9,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPo
 from rcl_interfaces.msg import SetParametersResult
 from controls.pid import PID
 
-from geometry_msgs.msg import Wrench, PointStamped
+from geometry_msgs.msg import Wrench, PointStamped, TwistStamped
 from std_msgs.msg import Float64
 
 
@@ -71,8 +71,10 @@ class AxisController(Node):
             depth=1,
         )
 
+        self.current_velocity = None
         self.pub_effort = self.create_publisher(Wrench, f'/controls/{axis_name}_effort', qos_profile_sensor_data)
         self.sub_position = self.create_subscription(PointStamped, f'auv_frame/dvl/position', self.position_callback, qos_profile_sensor_data)
+        self.sub_velocity = self.create_subscription(TwistStamped, f'auv_frame/dvl/velocity', self.velocity_callback, qos_profile_sensor_data)
         self.setpoint_sub = self.create_subscription(Float64, f'/controls/{axis_name}_setpoint', self.setpoint_callback, qos)
 
         self.declare_parameter('control_loop_hz', 10.0)
@@ -131,6 +133,10 @@ class AxisController(Node):
         pos = msg.point.x if self.axis_name == 'x' else msg.point.y
         self.current_position = pos
         self.position_received = True
+
+    def velocity_callback(self, msg):
+        vel = msg.twist.linear.x if self.axis_name == 'x' else msg.twist.linear.y
+        self.current_velocity = vel
 
     def setpoint_callback(self, msg):
         if abs(msg.data - self.target_setpoint) > 1e-3:
@@ -285,6 +291,7 @@ class AxisController(Node):
                 self.time_step,
                 previous_position=self.last_pid_pos,
                 allow_integration=not is_slewing,
+                current_velocity=self.current_velocity,
             )
             self.last_pid_pos = self.current_position
             effort_output = self.pid.compute_effort()
