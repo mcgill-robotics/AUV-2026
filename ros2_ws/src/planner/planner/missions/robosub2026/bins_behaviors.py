@@ -562,7 +562,7 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
                 return py_trees.common.Status.SUCCESS
             
             # check if its the wrong label
-            elif ((self.role == "survey_repair" and self.blood_detections > self.fire_detections + self.wrong_task_type_threshold)
+            elif not self.ignore_wrong_task and ((self.role == "survey_repair" and self.blood_detections > self.fire_detections + self.wrong_task_type_threshold)
                 or (self.role == "search_rescue" and self.fire_detections > self.blood_detections + self.wrong_task_type_threshold)):
                 self.node.get_logger().info("Detected wrong task type, going to other bin.")
                 return py_trees.common.Status.FAILURE
