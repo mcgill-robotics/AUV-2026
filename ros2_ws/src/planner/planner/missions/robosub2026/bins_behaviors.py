@@ -683,6 +683,128 @@ class GoAboveClosestBin(py_trees.behaviour.Behaviour):
         else:
             return py_trees.common.Status.RUNNING
 
+class GetDetectionYaw(py_trees.behaviour.Behaviour):
+    def __init__(self, bins_params: dict = None):
+        super().__init__("Find Yaw of detection")
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+        self.bins_params = bins_params or {}
+        self.no_detection_timeout = self.bins_params['no_detection_timeout']
+        self.downcam_bins_detections = []
+        self.detections_count_for_yaw = self.bins_params['detections_count_for_yaw']
+
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+
+        self.blackboard.register_key(key="/bins_task/detection_yaw", access=py_trees.common.Access.WRITE)
+
+    def initialise(self) -> None:
+        self.downcam_bins_detections = []
+
+    def update(self):
+        for detection in self.blackboard.vision.down_cam.detections.detections:
+                # We can get two detections of blood or fire within same image, its ok
+                # since all bins have the same yaw (due to bin structure properties)
+                if detection.label == "blood" or detection.label == "fire": # or detection.label == "bin": # for testing, accept any bin detection as valid
+                    # Get the detection's yaw
+                    q = detection.detections.pose_camera.orientation
+
+                    roll, pitch, yaw = euler_from_quaternion(
+                      [q.x, q.y, q.z, q.w])
+                    norm = math.sqrt(q.x * q.x + q.y*q.y + q.z*q.z + q.w*q.w)
+
+                    if norm < 1e-8:
+                        self.downcam_bins_detections.append(0.0)
+                    
+                    yaw = yaw % math.pi # Squares have 90 deg ambiguity
+
+                    if yaw < math.pi / 4:
+                        yaw = 0.0
+                    else:
+                        yaw =  math.pi / 2
+
+                    self.downcam_bins_detections.append(detection)
+                    self.last_detection_time = self.node.get_clock().now()
+
+        if len(self.downcam_bins_detections) != self.detections_count_for_yaw:
+                time_since_last_detection = (self.node.get_clock().now() - self.last_detection_time).nanoseconds / 1e9
+                if time_since_last_detection > self.no_detection_timeout:
+                    self.node.get_logger().error(f"[{self.name}] No valid bin detected for {self.no_detection_timeout}s. Timing out.")
+                    return py_trees.common.Status.FAILURE
+                self.node.get_logger().info(f"[{self.name}] No 'blood' or 'fire' detected. Waiting...", throttle_duration_sec=2.0)
+                return py_trees.common.Status.RUNNING
+        
+        # Get average of yaw and write it to the blackboard
+        self.blackboard.bins_task.detection_yaw = sum(self.downcam_bins_detections)/len(self.downcam_bins_detections)
+        
+        return py_trees.common.Status.SUCCESS
+
+class YawAboveBin(py_trees.behaviour.Behaviour):
+    def __init__(self, bins_params: dict = None):
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+        self.action_status = ActionStatus.NOT_SENT
+
+        self.yaw_above_bin_tolerance = bins_params['yaw_above_bin_tolerance']
+        self.yaw_above_bin_hold_time = bins_params['yaw_above_bin_hold_time']
+        self.yaw_above_bin_timeout = bins_params['yaw_above_bin_timeout']
+        self.yaw_above_bin_timeout = bins_params['yaw_above_bin_timeout']
+
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.navigation_client = kwargs['shared_nav_client']
+
+        self.blackboard.register_key(key="/bins_task/detection_yaw", access=py_trees.common.Access.READ)
+
+    def initialise(self) -> None:
+            # Reset field needed to keep track of goal
+            self.action_status = ActionStatus.NOT_SENT
+            self.result_message = ""
+
+    def on_server_goal_response(self, goal_response: bool):
+        if not goal_response:
+            self.node.get_logger().error(f"[{self.name}] Goal rejected by server.")
+            self.action_status = ActionStatus.FAILED
+    
+    def on_server_goal_result(self, goal_success: bool, message: str) -> None:
+        if goal_success:
+            self.action_status = ActionStatus.SUCCEEDED
+        else:
+            self.node.get_logger().error(f"[{self.name}] Goal failed. {message}")
+            self.action_status = ActionStatus.FAILED
+            
+    def update(self) -> py_trees.common.Status:
+        # Check if pose is properly registered on the blackboard as controls requires
+        # a pose value. Block execution if the AUV poses are not published yet
+        if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.pose is None:
+            self.node.get_logger().info(f"[{self.name}] Waiting for sensor pose data...", throttle_duration_sec=2.0)
+            return py_trees.common.Status.RUNNING
+            
+        # Check for failure condition from the async callbacks (goal response and goal result)
+        if self.action_status is ActionStatus.FAILED:
+            self.node.get_logger().error(f"[{self.name}] Action failed: {self.result_message}")
+            return py_trees.common.Status.FAILURE
+            
+        # Completion check
+        if self.action_status is ActionStatus.SUCCEEDED:
+            self.node.get_logger().info(f"[{self.name}] Completed goal. {self.result_message}")
+            return py_trees.common.Status.SUCCESS
+
+        # Block loop if currently navigating to a waypoint
+        if self.action_status is ActionStatus.PENDING:
+            return py_trees.common.Status.RUNNING
+            
+        # Send the goal if no goals are ongoing and set the mission status to pending
+        self.node.get_logger().info(f"[{self.name}] Sent goal.")
+        angular_yaw = -self.blackboard.bins_task.detection_yaw 
+
+        goal = set_global_yaw(angular_yaw,
+            self.yaw_above_bin_tolerance,
+            self.yaw_above_bin_hold_time,
+            self.yaw_above_bin_timeout)
+        self.navigation_client.send_navigation_goal(goal, self.name, self.on_server_goal_response, self.on_server_goal_result)
+        self.action_status = ActionStatus.PENDING
+        return py_trees.common.Status.RUNNING
+
+
 class DropMarker(py_trees.behaviour.Behaviour):
     def __init__(self, bins_params: dict = None):
         super().__init__("Drop marker")
