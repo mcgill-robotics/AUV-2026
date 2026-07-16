@@ -158,7 +158,7 @@ class TorpedoTask(py_trees.composites.Sequence):
                 Role.SURVEY_REPAIR: self.role_strategy(self.farther_distance_threshold, Role.SURVEY_REPAIR),
                 Role.SEARCH_RESCUE: self.role_strategy(self.farther_distance_threshold, Role.SEARCH_RESCUE)
             },
-            default_role=Role.SEARCH_RESCUE,
+            default_role=Role.SURVEY_REPAIR,
         )
         
         board_strategy.add_children(

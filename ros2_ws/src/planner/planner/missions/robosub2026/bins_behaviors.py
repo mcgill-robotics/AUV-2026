@@ -549,7 +549,10 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
                 time_since_last_detection = (self.node.get_clock().now() - self.last_detection_time).nanoseconds / 1e9
                 if time_since_last_detection > self.no_detection_timeout:
                     self.node.get_logger().error(f"[{self.name}] No valid bin detected for {self.no_detection_timeout}s. Timing out.")
-                    return py_trees.common.Status.FAILURE
+                    if self.ignore_wrong_task:
+                        return py_trees.common.Status.SUCCESS
+                    else:
+                        return py_trees.common.Status.FAILURE
                 self.node.get_logger().info(f"[{self.name}] No 'blood' or 'fire' detected. Waiting...", throttle_duration_sec=2.0)
                 return py_trees.common.Status.RUNNING
             
