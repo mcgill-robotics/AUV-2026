@@ -3,7 +3,8 @@ from planner.missions.mission_behaviour_components import BasicActionBehaviour, 
 import py_trees
 import math
 import planner.missions.vision_behaviours as vision_behaviours
-from controls.goal_helpers import move_global, move_robot_centric, look_at, set_depth
+from controls.goal_helpers import move_global, move_robot_centric, look_at, set_depth, set_global_yaw
+from tf_transformations import euler_from_quaternion
 from planner.missions.action_status_enum import ActionStatus
 import geometry_msgs.msg._pose
 import transforms3d
@@ -179,14 +180,22 @@ class AlignClosestBin(py_trees.composites.Sequence):
         self.go_above_bin_height = self.bins_params['go_above_bin_height']
         self.wrong_task_type_threshold = self.bins_params['wrong_task_type_threshold']
         self.bin_lined_up_threshold = self.bins_params['bin_lined_up_threshold']
+        self.do_yaw_above_bin = self.bins_params['do_yaw_above_bin']
         go_above_closest_bin = GoAboveClosestBin(self.bins_params)
         follow_downcam_bin = FollowDowncamBin(self.bins_params)
+        find_yaw_of_detection = GetDetectionYaw(self.bins_params)
+        find_yaw_of_detection_resilient = py_trees.decorators.FailureIsSuccess(name="Resilient find bin yaw", child=find_yaw_of_detection)
+        yaw_above_bin = YawAboveBin(self.bins_params)
+        yaw_above_bin_resilient = py_trees.decorators.FailureIsSuccess(name="Resilient yaw above bin", child=yaw_above_bin)
+        follow_downcam_bin_2 = FollowDowncamBin(self.bins_params)
         offset_grabber = BasicActionBehaviour(name="OffsetGrabber", goal=move_robot_centric(forward=self.bins_params['grabber_to_downcam_x'], sway=self.bins_params['grabber_to_downcam_y'], hold_time=self.bins_params['alignment_hold_time']))
         drop_marker = DropMarker(self.bins_params)
         go_down_a_bit = GoDownABit(bins_params=self.bins_params)
         check_num_markers = CheckNumberOfMarkers(bins_params=self.bins_params)
-
-        self.add_children([go_above_closest_bin, follow_downcam_bin, offset_grabber, drop_marker, go_down_a_bit, check_num_markers])
+        if not self.do_yaw_above_bin:
+            self.add_children([go_above_closest_bin, follow_downcam_bin, offset_grabber, drop_marker, go_down_a_bit, check_num_markers])
+        elif self.do_yaw_above_bin:
+            self.add_children([go_above_closest_bin, follow_downcam_bin, find_yaw_of_detection_resilient, yaw_above_bin_resilient, follow_downcam_bin_2, offset_grabber, drop_marker, go_down_a_bit, check_num_markers])
 
 class AlignBinsAttempt(py_trees.composites.Sequence):
     def __init__(self, bins_params: dict = None, num_bins: int = 2):
