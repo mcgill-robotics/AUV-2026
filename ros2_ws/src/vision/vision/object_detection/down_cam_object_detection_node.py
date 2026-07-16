@@ -603,21 +603,33 @@ class DownCamObjectDetectorNode():
                             # Check if bounding box touches the image border
                             height, width = img.shape[:2]
                             margin = self.border_margin
-                            touches_border = (x1 <= margin or y1 <= margin or x2 >= width - margin or y2 >= height - margin)
-                            _yaw_reason = f"touches_border (margin={margin}, x1={x1:.0f},y1={y1:.0f},x2={x2:.0f},y2={y2:.0f} vs {width}x{height})"
+
+                            available_box_pts = []
+
+                            for i in range(len(box)):
+                                if not (box[i][0] <= margin or box[i][0] >= width - margin or box[i][1] <= margin or box[i][1] >= height - margin):
+                                    available_box_pts.append(box[i])
+
+                            #touches_border = (x1 <= margin or y1 <= margin or x2 >= width - margin or y2 >= height - margin)
+                            #_yaw_reason = f"touches_border (margin={margin}, x1={x1:.0f},y1={y1:.0f},x2={x2:.0f},y2={y2:.0f} vs {width}x{height})"
                             
-                            if not touches_border:
-                                p0, p1, p2 = box[0], box[1], box[2]
-                                dist1 = np.linalg.norm(p1 - p0)
-                                dist2 = np.linalg.norm(p2 - p1)
-                                
-                                if dist1 > dist2:
-                                    dx = p1[0] - p0[0]
-                                    dy = p1[1] - p0[1]
-                                else:
-                                    dx = p2[0] - p1[0]
-                                    dy = p2[1] - p1[1]
-                                    
+                            if len(available_box_pts) >=2:
+                                best_pair = available_box_pts[0], available_box_pts[1]
+                                best_dist = float("inf")
+
+                                for i in range(len(available_box_pts)):
+                                    for j in range(i + 1, len(available_box_pts)):
+                                        dist = np.linalg.norm(available_box_pts[i] - available_box_pts[j])
+
+                                        if dist < best_dist:
+                                            best_dist = dist
+                                            best_pair = (available_box_pts[i], available_box_pts[j])
+
+                                p1, p2 = best_pair
+
+                                dx = p2[0] - p1[0]
+                                dy = p2[1] - p1[1]
+
                                 yaw = math.atan2(dy, dx)
                                 _yaw_reason = "ok"
                     else:
