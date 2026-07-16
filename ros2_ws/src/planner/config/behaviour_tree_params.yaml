@@ -119,7 +119,7 @@ planner_root_tree:
       skip_other_side: True              # (bool) Skip other side of the bin structure and only look for bins on one side
       fallback_role: "search_rescue"      # (str) Role to use when falling back to the bins instead of the bin structure
       no_detection_timeout: 10.0          # (s) Timeout if no bins are detected while following downcam bin
-      first_bin_grabber_setpoint: 32      # (0-255) How much to open the grabber to drop the first marker
+      first_bin_grabber_setpoint: 55      # (0-255) How much to open the grabber to drop the first marker
       second_bin_grabber_setpoint: 255    # (0-255) How much to open the grabber to drop the second marker
 
     octagon:
