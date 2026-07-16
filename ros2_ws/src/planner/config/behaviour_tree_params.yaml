@@ -234,6 +234,8 @@ planner_root_tree:
     torpedo:
       launch_topic: /actuators/torpedo
       initial_distance_from_board: 2.0      # (m) Initial "safe" distance from the board during rough positioning
+      farther_distance_threshold: 0.5          # (m) distance to fire torpedo from board in "farther" criteria
+      auv_to_front: 0.0                            # (m) Distance from AUV center of mass to front of AUV in the forward direction
       z_reference: -1.0                    # (m) Depth to maintain during torpedo task
       scan_pause_time: 1.0                  # (s) Seconds to pause after each scan rotation
       position_tolerance: 0.3               # (m) Position convergence threshold for board alignment
