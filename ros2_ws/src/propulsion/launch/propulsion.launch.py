@@ -27,7 +27,7 @@ def generate_launch_description():
             'alpha': 45.0,                      # [deg]
             'dx': 0.0,                          # [m]
             'dy': 0.0,                          # [m]
-            'disabled_thrusters': [0]           # List of 1-indexed disabled thrusters (e.g. [4] for front right, or [0] for none disabled. NOTE: use [0] instead of [] due to ROS 2 launch array typing)
+            'disabled_thrusters': [4]           # List of 1-indexed disabled thrusters (e.g. [4] for front right, or [0] for none disabled. NOTE: use [0] instead of [] due to ROS 2 launch array typing)
         }]
     )
 

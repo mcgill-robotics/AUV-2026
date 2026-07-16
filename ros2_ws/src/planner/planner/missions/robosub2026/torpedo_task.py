@@ -81,7 +81,7 @@ class TorpedoTask(py_trees.composites.Sequence):
         self.refinement_sample_every_n_ticks:int = refinement_sample_every_n_ticks
 
         # distance thresholds from torpedo board
-        self.farther_distance_threshold = 0.46
+        self.farther_distance_threshold = 0.55
         self.far_distance_threshold = 0.3
 
         # trajectory parameters
@@ -155,7 +155,7 @@ class TorpedoTask(py_trees.composites.Sequence):
                 Role.SURVEY_REPAIR: self.role_strategy(self.farther_distance_threshold, Role.SURVEY_REPAIR),
                 Role.SEARCH_RESCUE: self.role_strategy(self.farther_distance_threshold, Role.SEARCH_RESCUE)
             },
-            default_role=Role.SURVEY_REPAIR,
+            default_role=Role.SEARCH_RESCUE,
         )
         
         board_strategy.add_children(

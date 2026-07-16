@@ -421,9 +421,9 @@ object_map:
     lane_boundary:
       enable: true # discard world-frame detections outside the competition lane AABB
       x_min: -2.0 # back boundary (meters, world frame)
-      x_max: 20.0  # front boundary
-      y_min: -6.0 # right boundary
-      y_max: 6.0  # left boundary
+      x_max: 30.0  # front boundary
+      y_min: -7.5 # right boundary
+      y_max: 7.5  # left boundary
 
     # Refinement: make use of other detections to improve tracking of certain objects
     gate_midpoint: true # Uses search_rescue/survey_repair panel detections to refine the gate pose

@@ -186,7 +186,7 @@ class AlignClosestBin(py_trees.composites.Sequence):
         go_down_a_bit = GoDownABit(bins_params=self.bins_params)
         check_num_markers = CheckNumberOfMarkers(bins_params=self.bins_params)
 
-        self.add_children([go_above_closest_bin, follow_downcam_bin, offset_grabber, drop_marker, go_down_a_bit, check_num_markers])
+        self.add_children([go_above_closest_bin, follow_downcam_bin, offset_grabber, go_down_a_bit, drop_marker, check_num_markers])
 
 class AlignBinsAttempt(py_trees.composites.Sequence):
     def __init__(self, bins_params: dict = None, num_bins: int = 2):
