@@ -950,11 +950,12 @@ class FireTorpedo(Action):
         super().__init__("Fire Torpedo")
         self.launch_function = launch_function
         self.firing_buffer_time = firing_buffer_time
-        self.has_fired: bool = False
         self.fire_state: FireState = FireState.PAUSING
+        self.fire_queue: list[TorpedoSide] = []
         # Pause tracking        
         self.pause_start_time: float = 0.0
         self.is_pausing: bool = False
+        self.post_fire_pause: bool = False
         self.pause_time_total: float = self.firing_buffer_time
 
     def setup(self, **kwargs):
@@ -965,9 +966,10 @@ class FireTorpedo(Action):
         
     def initialise(self):
         super().initialise()
-        self.has_fired = False
+        self.fire_queue = []
         self.pause_start_time = 0.0
         self.is_pausing = False
+        self.post_fire_pause = False
         self.pause_time_total = self.firing_buffer_time
         self.fire_state = FireState.PAUSING
 
@@ -977,7 +979,7 @@ class FireTorpedo(Action):
                 # pause before firing to ensure AUV is stable
                 elapsed = (self.node.get_clock().now().nanoseconds / 1e9) - self.pause_start_time
                 self.pause_time_total = self.firing_buffer_time
-                if self.has_fired:
+                if self.post_fire_pause:
                     if not self.blackboard.exists("/torpedo/trajectory_time") or self.blackboard.torpedo.trajectory_time is None:
                         self.node.get_logger().error(f"[{self.name}] No torpedo trajectory time found on blackboard. Assuming no trajectory delay after firing.")
                     else:
@@ -990,31 +992,48 @@ class FireTorpedo(Action):
                 elif elapsed < self.pause_time_total:
                     return py_trees.common.Status.RUNNING
                 else:
-                    if not self.has_fired:
-                        self.node.get_logger().info(f"[{self.name}] Firing torpedo after {elapsed:.2f}s pause.")
-                        self.fire_state = FireState.FIRING
-                        return py_trees.common.Status.RUNNING
-                    else:
-                        self.node.get_logger().info(f"[{self.name}] Finished firing torpedo after {elapsed:.2f}s pause.")
-                        return py_trees.common.Status.SUCCESS                        
+                    if not self.fire_queue:
+                        if self.post_fire_pause:
+                            self.node.get_logger().info(f"[{self.name}] Finished firing torpedo after {elapsed:.2f}s pause.")
+                            return py_trees.common.Status.SUCCESS
+
+                        if not self.blackboard.exists("/torpedo/count") or self.blackboard.torpedo.count is None:
+                            self.node.get_logger().error(f"[{self.name}] No torpedo count available on blackboard. Assuming two torpedos available.")
+                            self.blackboard.torpedo.count = 2
+                            return py_trees.common.Status.RUNNING
+
+                        match self.blackboard.torpedo.count:
+                            case 1:
+                                self.node.get_logger().info(f"[{self.name}] One torpedo left, trying all sweep fires with pauses.")
+                                self.fire_queue = [TorpedoSide.LEFT, TorpedoSide.RIGHT]
+                            case 2:
+                                self.fire_queue = [TorpedoSide.RIGHT]
+                            case _:
+                                self.node.get_logger().error(f"[{self.name}] Invalid torpedo count: {self.blackboard.torpedo.count}. Cannot determine which torpedo to fire.")
+                                return py_trees.common.Status.FAILURE
+
+                    self.node.get_logger().info(f"[{self.name}] Firing torpedo after {elapsed:.2f}s pause.")
+                    self.fire_state = FireState.FIRING
+                    return py_trees.common.Status.RUNNING
             case FireState.FIRING:
+                if not self.fire_queue:
+                    self.node.get_logger().error(f"[{self.name}] No pending torpedo fires in queue.")
+                    return py_trees.common.Status.FAILURE
+
+                side = self.fire_queue.pop(0)
                 if not self.blackboard.exists("/torpedo/count") or self.blackboard.torpedo.count is None:
                     self.node.get_logger().error(f"[{self.name}] No torpedo count available on blackboard.")
                     return py_trees.common.Status.FAILURE
-                if self.blackboard.torpedo.count <= 0:
-                    self.node.get_logger().error(f"[{self.name}] No torpedos left. Cannot fire.")
+                if self.blackboard.torpedo.count <= 0 and side == TorpedoSide.RIGHT and len(self.fire_queue) > 0:
+                    self.node.get_logger().error(f"[{self.name}] No torpedos left. Cannot continue sweep fires.")
                     return py_trees.common.Status.FAILURE
-                match self.blackboard.torpedo.count:
-                    case 1:
-                        side = TorpedoSide.LEFT
-                    case 2:
-                        side = TorpedoSide.RIGHT
-                    case _:
-                        self.node.get_logger().error(f"[{self.name}] Invalid torpedo count: {self.blackboard.torpedo.count}. Cannot determine which torpedo to fire.")
-                        return py_trees.common.Status.FAILURE
+
                 self.launch_function(side)
-                self.blackboard.torpedo.count -= 1
-                self.node.get_logger().info(f"[{self.name}] Fired torpedo. New count: {self.blackboard.torpedo.count}")
-                self.has_fired = True
+                if self.blackboard.torpedo.count > 0:
+                    self.blackboard.torpedo.count -= 1
+                self.node.get_logger().info(f"[{self.name}] Fired torpedo {side.name}. New count: {self.blackboard.torpedo.count}")
+                self.post_fire_pause = True
+                self.pause_start_time = self.node.get_clock().now().nanoseconds / 1e9
+                self.is_pausing = False
                 self.fire_state = FireState.PAUSING
                 return py_trees.common.Status.RUNNING

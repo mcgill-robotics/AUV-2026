@@ -17,6 +17,8 @@ class TorpedoTask(py_trees.composites.Sequence):
             self,
             initial_distance_from_board: float = 3.0,
             z_reference: float = -1.0,
+            farther_distance_threshold: float = 0.46,
+            auv_to_front:float = 0.0,
             scan_pause_time: float = 1.0,
             position_tolerance: float = 0.5,
             yaw_tolerance_rad: float = 0.3,
@@ -81,8 +83,9 @@ class TorpedoTask(py_trees.composites.Sequence):
         self.refinement_sample_every_n_ticks:int = refinement_sample_every_n_ticks
 
         # distance thresholds from torpedo board
-        self.farther_distance_threshold = 0.55
-        self.far_distance_threshold = 0.3
+        self.farther_distance_threshold = farther_distance_threshold
+        
+        self.auv_to_front = auv_to_front
 
         # trajectory parameters
         self.auv_to_torpedos : dict[TorpedoSide, Tuple[float,float,float]] = {
@@ -175,7 +178,7 @@ class TorpedoTask(py_trees.composites.Sequence):
         returns py_trees.composites.Sequence
         """
         board_rough_position:py_trees.composites.Sequence = py_trees.composites.Sequence("Board Rough Positioning", memory=True)
-        initial_dive = BasicActionBehaviour("Initial Dive to -1.0", goal=set_depth(z=self.z_reference, tolerance=self.position_tolerance, hold_time=self.hold_time, timeout=self.timeout))
+        initial_dive = BasicActionBehaviour("Initial Dive to {self.z_reference}", goal=set_depth(z=self.z_reference, tolerance=self.position_tolerance, hold_time=self.hold_time, timeout=self.timeout))
         
         ss_board = SearchSweepBehaviour(
             target_class="board",
@@ -359,7 +362,7 @@ class TorpedoTask(py_trees.composites.Sequence):
                 AlignTorpedoToHole(
                         target_icon=icon,
                         attempts_to_find_icon=3,
-                        auv_to_front = 0,
+                        auv_to_front = self.auv_to_front,
                         distance_from_board = distance_from_board,
                         icon_to_nearest_hole = self.icon_to_nearest_hole,
                         auv_to_torpedos = self.auv_to_torpedos,

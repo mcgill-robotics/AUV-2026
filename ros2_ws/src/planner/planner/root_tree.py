@@ -269,6 +269,8 @@ def main():
     node.declare_parameter("torpedo.launch_topic", Parameter.Type.STRING)
     node.declare_parameter("torpedo.roles.survey_repair", Parameter.Type.STRING_ARRAY)
     node.declare_parameter("torpedo.roles.search_rescue", Parameter.Type.STRING_ARRAY)
+    node.declare_parameter("torpedo.farther_distance_threshold", Parameter.Type.DOUBLE)
+    node.declare_parameter("torpedo.auv_to_front", Parameter.Type.DOUBLE)
 
     torpedo_params = {
         "initial_distance_from_board": node.get_parameter("torpedo.initial_distance_from_board").get_parameter_value().double_value,
@@ -312,7 +314,9 @@ def main():
         "role_to_icons": {
             "survey_repair": node.get_parameter("torpedo.roles.survey_repair").get_parameter_value().string_array_value,
             "search_rescue": node.get_parameter("torpedo.roles.search_rescue").get_parameter_value().string_array_value
-        }
+        },
+        "farther_distance_threshold": node.get_parameter("torpedo.farther_distance_threshold").get_parameter_value().double_value,
+        "auv_to_front": node.get_parameter("torpedo.auv_to_front").get_parameter_value().double_value
     }
 
     # General task information parameters
