@@ -119,6 +119,11 @@ planner_root_tree:
       no_detection_timeout: 10.0          # (s) Timeout if no bins are detected while following downcam bin
       first_bin_grabber_setpoint: 128     # (0-255) How much to open the grabber to drop the first marker
       second_bin_grabber_setpoint: 255    # (0-255) How much to open the grabber to drop the second marker
+      do_yaw_above_bin: False             # (deg) If we want to yaw to 45 deg with the bin
+      yaw_above_bin_tolerance: 10.0       # (deg) How much tolerance for bin degrees yawing
+      yaw_above_bin_hold_time: 3.0        # (s) How much seconds before nav goal is done
+      yaw_above_bin_timeout: 10.0        # (s) How much seconds before nav goal is done
+      detections_count_for_yaw: 15       # Nber of detections before determining a bin's yaw
 
     octagon:
       # Generic task information parameters

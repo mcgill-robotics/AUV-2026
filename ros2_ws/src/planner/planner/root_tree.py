@@ -195,6 +195,11 @@ def main():
     node.declare_parameter("bins.no_detection_timeout", 10.0)
     node.declare_parameter("bins.first_bin_grabber_setpoint", 128)
     node.declare_parameter("bins.second_bin_grabber_setpoint", 255)
+    node.declare_parameter("bins.do_yaw_above_bin", False)
+    node.declare_parameter("bins.yaw_above_bin_tolerance", 10.0)
+    node.declare_parameter("bins.yaw_above_bin_hold_time", 10.0)
+    node.declare_parameter("bins.yaw_above_bin_timeout", 10.0)
+    node.declare_parameter("bins.detections_count_for_yaw", 15)
 
     bins_params = {
         "downcam_fov_horizontal": node.get_parameter("bins.downcam_fov_horizontal").get_parameter_value().double_value,
@@ -233,6 +238,11 @@ def main():
         "no_detection_timeout": node.get_parameter("bins.no_detection_timeout").get_parameter_value().double_value,
         "first_bin_grabber_setpoint": node.get_parameter("bins.first_bin_grabber_setpoint").get_parameter_value().integer_value,
         "second_bin_grabber_setpoint": node.get_parameter("bins.second_bin_grabber_setpoint").get_parameter_value().integer_value,
+        "do_yaw_above_bin": node.get_parameter("bins.do_yaw_above_bin").get_parameter_value().bool_value,
+        "yaw_above_bin_tolerance": node.get_parameter("bins.yaw_above_bin_tolerance").get_parameter_value().double_value,
+        "yaw_above_bin_hold_time": node.get_parameter("bins.yaw_above_bin_hold_time").get_parameter_value().double_value,
+        "yaw_above_bin_timeout": node.get_parameter("bins.yaw_above_bin_timeout").get_parameter_value().double_value,
+        "detections_count_for_yaw": node.get_parameter("bins.detections_count_for_yaw").get_parameter_value().integer_value,
     }
     
     # Torpedo task parameters
