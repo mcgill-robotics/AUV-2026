@@ -228,12 +228,6 @@ class PassBackThroughGate(py_trees.behaviour.Behaviour):
             if gate_obj is not None:
                 cx = gate_obj.pose.position.x
                 cy = gate_obj.pose.position.y
-            elif survey is not None:
-                cx = survey.pose.position.x
-                cy = survey.pose.position.y
-            elif rescue is not None:
-                cx = rescue.pose.position.x
-                cy = rescue.pose.position.y
 
         if cx is None or cy is None:
             try:
@@ -242,6 +236,14 @@ class PassBackThroughGate(py_trees.behaviour.Behaviour):
                     cy = self.blackboard.gate.center_y
             except (AttributeError, KeyError):
                 pass
+
+        if cx is None or cy is None:
+            if survey is not None:
+                cx = survey.pose.position.x
+                cy = survey.pose.position.y
+            elif rescue is not None:
+                cx = rescue.pose.position.x
+                cy = rescue.pose.position.y
         if cx is None or cy is None:
             self.node.get_logger().error(f"[{self.name}] No return point found in map or blackboard!")
             return py_trees.common.Status.FAILURE
@@ -348,13 +350,7 @@ class CalculateSlalomAvoidanceWaypoints(py_trees.behaviour.Behaviour):
                 elif obj.label == "gate":
                     gate_obj = obj
             
-            if survey is not None:
-                cx = survey.pose.position.x
-                cy = survey.pose.position.y
-            elif rescue is not None:
-                cx = rescue.pose.position.x
-                cy = rescue.pose.position.y
-            elif gate_obj is not None:
+            if gate_obj is not None:
                 cx = gate_obj.pose.position.x
                 cy = gate_obj.pose.position.y
 
@@ -365,6 +361,14 @@ class CalculateSlalomAvoidanceWaypoints(py_trees.behaviour.Behaviour):
                     cy = self.blackboard.gate.center_y
             except (AttributeError, KeyError):
                 pass
+
+        if cx is None or cy is None:
+            if survey is not None:
+                cx = survey.pose.position.x
+                cy = survey.pose.position.y
+            elif rescue is not None:
+                cx = rescue.pose.position.x
+                cy = rescue.pose.position.y
         if cx is None or cy is None:
             self.node.get_logger().error(f"[{self.name}] No return point found in map or blackboard!")
             return py_trees.common.Status.FAILURE
@@ -394,11 +398,17 @@ class CalculateSlalomAvoidanceWaypoints(py_trees.behaviour.Behaviour):
                     red_x_vals.append(obj.pose.position.x)
                     red_y_vals.append(obj.pose.position.y)
 
-        for l_num in (1, 2, 3):
+        last_layer_x = None
+        last_layer_y = None
+
+        for l_num in (3, 2, 1):
             try:
                 lx = self.blackboard.get(f"/slalom/layer_{l_num}_x")
                 ly = self.blackboard.get(f"/slalom/layer_{l_num}_y")
                 if lx is not None and ly is not None:
+                    if last_layer_x is None:
+                        last_layer_x = lx
+                        last_layer_y = ly
                     red_x_vals.append(lx)
                     red_y_vals.append(ly)
             except (AttributeError, KeyError):
@@ -412,23 +422,28 @@ class CalculateSlalomAvoidanceWaypoints(py_trees.behaviour.Behaviour):
             return py_trees.common.Status.FAILURE
 
         self.blackboard.set("/slalom/avoid_valid", True)
-        slalom_mid_x = sum(red_x_vals) / len(red_x_vals)
-        avg_red_y = sum(red_y_vals) / len(red_y_vals)
-        self.node.get_logger().info(f"[{self.name}] Average slalom/red pipes pose: ({slalom_mid_x:.2f}, {avg_red_y:.2f})")
-
-        space_right = avg_red_y - self.lane_y_min
-        space_left = self.lane_y_max - avg_red_y
-        if space_left > space_right:
-            slalom_shifted_y = (avg_red_y + self.lane_y_max) / 2.0
+        if last_layer_x is not None and last_layer_y is not None:
+            slalom_step1_x = last_layer_x
+            slalom_ref_y = last_layer_y
+            self.node.get_logger().info(f"[{self.name}] Using last slalom layer position for Step 1: ({slalom_step1_x:.2f}, {slalom_ref_y:.2f})")
         else:
-            slalom_shifted_y = (avg_red_y + self.lane_y_min) / 2.0
+            slalom_step1_x = sum(red_x_vals) / len(red_x_vals)
+            slalom_ref_y = sum(red_y_vals) / len(red_y_vals)
+            self.node.get_logger().info(f"[{self.name}] Average slalom/red pipes pose: ({slalom_step1_x:.2f}, {slalom_ref_y:.2f})")
+
+        space_right = slalom_ref_y - self.lane_y_min
+        space_left = self.lane_y_max - slalom_ref_y
+        if space_left > space_right:
+            slalom_shifted_y = (slalom_ref_y + self.lane_y_max) / 2.0
+        else:
+            slalom_shifted_y = (slalom_ref_y + self.lane_y_min) / 2.0
 
         self.node.get_logger().info(
-            f"[{self.name}] Slalom avoidance Y shifted from red_y={avg_red_y:.2f} to {slalom_shifted_y:.2f} "
+            f"[{self.name}] Slalom avoidance Y shifted from ref_y={slalom_ref_y:.2f} to {slalom_shifted_y:.2f} "
             f"(lane bounds: [{self.lane_y_min}, {self.lane_y_max}])"
         )
 
-        self.blackboard.set("/slalom/avoid_step1_x", slalom_mid_x)
+        self.blackboard.set("/slalom/avoid_step1_x", slalom_step1_x)
         self.blackboard.set("/slalom/avoid_step1_y", slalom_shifted_y)
 
         self.blackboard.set("/slalom/avoid_step2_x", gate_return_x)
@@ -631,7 +646,7 @@ class ReturnHomeTask(py_trees.composites.Sequence):
                     position_tolerance=position_tolerance,
                     hold_time=hold_time,
                     timeout=timeout,
-                    name="Step 1: Shift to Opposite Lane Space beside Slalom Middle",
+                    name="Step 1: Shift to Opposite Lane Space beside Last Slalom Layer",
                 ),
                 MoveToSlalomAvoidanceStep(
                     step=2,
@@ -779,7 +794,7 @@ class ReturnHomeTask(py_trees.composites.Sequence):
                     position_tolerance=position_tolerance,
                     hold_time=hold_time,
                     timeout=timeout,
-                    name="Step 1: Shift beside Slalom Middle (Fallback)",
+                    name="Step 1: Shift beside Last Slalom Layer (Fallback)",
                 ),
                 MoveToSlalomAvoidanceStep(
                     step=2,
