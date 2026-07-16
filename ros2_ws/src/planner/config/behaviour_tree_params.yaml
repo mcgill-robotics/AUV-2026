@@ -87,10 +87,11 @@ planner_root_tree:
       downcam_fov_vertical: 35.24         # (deg) Vertical FOV of down cam while in water
       downcam_image_width: 640            # (px) Width of down cam image
       downcam_image_height: 480           # (px) Height of down cam image
-      grabber_to_downcam_x: 0.04          # (m) Distance from downcam to grabber in the lateral direction
+      grabber_to_downcam_x: 0.15          # (m) Distance from downcam to grabber in the lateral direction
       grabber_to_downcam_y: 0.00          # (m) Distance from downcam to grabber in the forward direction
       bin_wait_before_alignment: 5.0      # (s) Time to wait after moving above the bin before aligning with downcam
       alignment_hold_time: 5.0            # (s) Time to hold the alignment with the bin before dropping the marker
+      go_down_hold_time: 3.0              # (s) Time to hold after going down to drop the marker
       grabber_wait_time: 5.0              # (s) Time to wait for the grabber to complete its action
       height_offset_before_drop: 0.4      # (m) Amount to go down before droppping the marker
       search_sweep_steps: 8               # (steps) Number of steps to take when doing the search sweep for the bin structure and for the bins themselves
@@ -112,10 +113,10 @@ planner_root_tree:
       num_required_markers: 2             # (markers) Number of markers that need to be dropped in the correct bins to complete the task
       num_bins: 4                         # (bins) Total number of bins in the bin structure
       bins_to_bin_structure: 0.3          # (m) Approximate distance from center of bin structure to the bins
-      force_fallback_search: True        # (bool) Force behavior to look for bins instead of bin structure first
+      force_fallback_search: False        # (bool) Force behavior to look for bins instead of bin structure first
       force_fallback_alignment: True      # (bool) Force behavior to use bins for projection instead of bin structure
       always_drop_markers: True          # (bool) Force behavior to always drop markers even if its the wrong bin type
-      skip_other_side: False              # (bool) Skip other side of the bin structure and only look for bins on one side
+      skip_other_side: True              # (bool) Skip other side of the bin structure and only look for bins on one side
       fallback_role: "search_rescue"      # (str) Role to use when falling back to the bins instead of the bin structure
       no_detection_timeout: 10.0          # (s) Timeout if no bins are detected while following downcam bin
       first_bin_grabber_setpoint: 50     # (0-255) How much to open the grabber to drop the first marker

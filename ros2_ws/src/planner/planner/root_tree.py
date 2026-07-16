@@ -168,6 +168,7 @@ def main():
     node.declare_parameter("bins.bin_wait_before_alignment", 2.0)
     node.declare_parameter("bins.height_offset_before_drop", 0.4)
     node.declare_parameter("bins.alignment_hold_time", 5.0)
+    node.declare_parameter("bins.go_down_hold_time", 2.0)
     node.declare_parameter("bins.grabber_wait_time", 5.0)
     node.declare_parameter("bins.search_sweep_steps", 8)
     node.declare_parameter("bins.search_sweep_step_timeout", 0.5)
@@ -205,6 +206,7 @@ def main():
         "grabber_to_downcam_y": node.get_parameter("bins.grabber_to_downcam_y").get_parameter_value().double_value,
         "bin_wait_before_alignment": node.get_parameter("bins.bin_wait_before_alignment").get_parameter_value().double_value,
         "alignment_hold_time": node.get_parameter("bins.alignment_hold_time").get_parameter_value().double_value,
+        "go_down_hold_time": node.get_parameter("bins.go_down_hold_time").get_parameter_value().double_value,
         "grabber_wait_time": node.get_parameter("bins.grabber_wait_time").get_parameter_value().double_value,
         "height_offset_before_drop": node.get_parameter("bins.height_offset_before_drop").get_parameter_value().double_value,
         "search_sweep_steps": node.get_parameter("bins.search_sweep_steps").get_parameter_value().integer_value,

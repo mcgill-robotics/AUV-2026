@@ -182,11 +182,12 @@ class AlignClosestBin(py_trees.composites.Sequence):
         go_above_closest_bin = GoAboveClosestBin(self.bins_params)
         follow_downcam_bin = FollowDowncamBin(self.bins_params)
         offset_grabber = BasicActionBehaviour(name="OffsetGrabber", goal=move_robot_centric(forward=self.bins_params['grabber_to_downcam_x'], sway=self.bins_params['grabber_to_downcam_y'], hold_time=self.bins_params['alignment_hold_time']))
-        drop_marker = DropMarker(self.bins_params)
         go_down_a_bit = GoDownABit(bins_params=self.bins_params)
+        drop_marker = DropMarker(self.bins_params)
+        wait_a_bit = TimerBehaviour(self.bins_params['grabber_wait_time'])
         check_num_markers = CheckNumberOfMarkers(bins_params=self.bins_params)
 
-        self.add_children([go_above_closest_bin, follow_downcam_bin, offset_grabber, drop_marker, go_down_a_bit, check_num_markers])
+        self.add_children([go_above_closest_bin, follow_downcam_bin, offset_grabber, go_down_a_bit, drop_marker, wait_a_bit, check_num_markers])
 
 class AlignBinsAttempt(py_trees.composites.Sequence):
     def __init__(self, bins_params: dict = None, num_bins: int = 2):
@@ -225,9 +226,10 @@ class AlignCorrectBin(py_trees.composites.Selector):
     def __init__(self, bins_params: dict = None):
         super().__init__("Align correct bin", memory=True)
         self.bins_params = bins_params or {}
-        num_bins = self.bins_params['num_bins']
         align_bins_attempts = []
-        if self.bins_params['skip_other_side'] or self.bins_params['num_bins'] <= 2:
+        skip_other_side = self.bins_params['skip_other_side']
+        num_bins = self.bins_params['num_required_markers'] if skip_other_side else self.bins_params['num_bins']
+        if skip_other_side or num_bins <= 2:
             align_bin_first_side = AlignBinsAttempt(bins_params=self.bins_params, num_bins=num_bins)
             align_bins_attempts.append(align_bin_first_side)
         else:
@@ -554,7 +556,7 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
             self.last_detection_time = self.node.get_clock().now()
 
         
-            if self.ignore_wrong_task or (self.bin_lined_up_frames >= self.bin_lined_up_frames_required and ((self.role == "survey_repair" and self.fire_detections > self.blood_detections + self.task_completion_threshold)
+            if self.bin_lined_up_frames >= self.bin_lined_up_frames_required and (self.ignore_wrong_task or ((self.role == "survey_repair" and self.fire_detections > self.blood_detections + self.task_completion_threshold)
                 or (self.role == "search_rescue" and self.blood_detections > self.fire_detections + self.task_completion_threshold))):
                 self.node.get_logger().info("Bin has been lined up for multiple frames, assuming aligned and succeeding.")
                 return py_trees.common.Status.SUCCESS
@@ -763,7 +765,7 @@ class GoDownABit(py_trees.behaviour.Behaviour):
                 self.node.get_logger().error(f"[{self.name}] Blackboard key /sensors/pose not found")
 
             z = self.blackboard.sensors.pose.pose.position.z
-            self.goal = set_depth(z - self.bins_params['height_offset_before_drop'], tolerance=0.2, hold_time=self.bins_params['grabber_wait_time'])
+            self.goal = set_depth(z - self.bins_params['height_offset_before_drop'], tolerance=0.2, hold_time=self.bins_params['go_down_hold_time'])
             self.navigation_client.send_navigation_goal(self.goal, self.name, custom_goal_response=self.on_server_goal_response, custom_goal_result=self.on_server_goal_result)
 
             self.action_status = ActionStatus.PENDING
