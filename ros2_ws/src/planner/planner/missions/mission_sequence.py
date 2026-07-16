@@ -190,7 +190,14 @@ class MissionSpawner(py_trees.behaviour.Behaviour):
                 TaskTransitionBehaviour(name="Gate -> Slalom Transition", **transitions.get('after_gate', {})),
                 py_trees.decorators.FailureIsSuccess(name="Resilient Slalom Task", child=SlalomTask(**slalom)),
                 TaskTransitionBehaviour(name="Slalom -> Bins Transition", **transitions.get('after_slalom', {})),
-                py_trees.decorators.FailureIsSuccess(name="Resilient Bins Task", child=BinsTask(**bins)),
+                py_trees.decorators.FailureIsSuccess(
+                    name="Resilient Bins Task",
+                    child=py_trees.decorators.Timeout(
+                        name="Bins Task Timeout (120s)",
+                        child=BinsTask(**bins),
+                        duration=120.0
+                    )
+                ),
                 TaskTransitionBehaviour(name="Bins -> Torpedo Transition", **transitions.get('after_bins', {})),
                 py_trees.decorators.FailureIsSuccess(name="Resilient Torpedo Task", child=TorpedoTask(**torpedo)),
                 TaskTransitionBehaviour(name="Torpedo -> Octagon Transition", **transitions.get('after_torpedo', {})),
