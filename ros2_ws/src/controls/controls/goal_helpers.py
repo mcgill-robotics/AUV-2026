@@ -22,7 +22,7 @@ import scipy.spatial.transform
 _DEFAULT_POS_TOL = 0.2     # meters
 _DEFAULT_ANGULAR_TOL = 0.262 # radians (~15 degrees)
 _DEFAULT_HOLD = 2.0        # seconds
-_DEFAULT_TIMEOUT = 30.0    # seconds
+_DEFAULT_TIMEOUT = 45.0    # seconds
 POSITION_EPSILON = 1e-5 # small threshold to consider position as "zero" for do_* flags
 ORIENTATION_EPSILON = 1e-5 # small threshold to consider orientation as "zero" for do_* flags
 
