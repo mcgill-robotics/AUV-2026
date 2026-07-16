@@ -23,6 +23,7 @@ class BoardType(Enum):
     BLOOD_TOP_LEFT = 2
     
 class TorpedoSide(Enum):
+    RESET = 0
     RIGHT = 1
     LEFT = 2
 class Role(Enum):
@@ -1005,7 +1006,7 @@ class FireTorpedo(Action):
                         match self.blackboard.torpedo.count:
                             case 1:
                                 self.node.get_logger().info(f"[{self.name}] One torpedo left, trying all sweep fires with pauses.")
-                                self.fire_queue = [TorpedoSide.LEFT, TorpedoSide.RIGHT]
+                                self.fire_queue = [TorpedoSide.LEFT, TorpedoSide.RESET]
                             case 2:
                                 self.fire_queue = [TorpedoSide.RIGHT]
                             case _:
