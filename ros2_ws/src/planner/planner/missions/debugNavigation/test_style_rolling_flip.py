@@ -15,7 +15,7 @@ class TestStyleRollingFlip(py_trees.composites.Sequence):
     def __init__(
         self,
         roll_torque: float = 15.0,
-        target_degrees: float = 720.0,
+        target_degrees: float = 1440.0,
         coast_degrees: float = 180.0,
         timeout_sec: float = 15.0,
     ):
@@ -23,7 +23,7 @@ class TestStyleRollingFlip(py_trees.composites.Sequence):
 
         flip_sequence = create_style_rolling_flip_sequence(
             roll_torque=roll_torque,
-            target_degrees=target_degrees,
+            target_degrees=1440.0,
             coast_degrees=coast_degrees,
             timeout_sec=timeout_sec,
         )

@@ -3,7 +3,7 @@ planner_root_tree:
     tick_rate        : 3.0   # (Hz) Rate at which the behaviour tree ticks
     sim              : false # Whether the simulation is enabled
     use_ground_truth : false # Whether to use the ground truth for position
-    startup_delay    : 15.0   # (s) Delay before actually starting the mission and enabling the controllers
+    startup_delay    : 0.0   # (s) Delay before actually starting the mission and enabling the controllers
     
     # Force tree to broadcast its state and blackboard to the network continuously
     default_snapshot_stream: true
@@ -23,7 +23,7 @@ planner_root_tree:
       position_tolerance: 0.3      # (m) Convergence threshold for navigation commands (e.g. initial dive)
       hold_time: 5.0               # (s) Seconds to hold within tolerance before SUCCESS for navigation commands
       timeout: 60.0                # (s) Seconds before navigation commands fail and timeout
-      desired_role: "survey_repair" # [survey_repair | search_rescue] Target panel to pass through
+      desired_role: "search_rescue" # [survey_repair | search_rescue] Target panel to pass through
       search_attempts: 2            # Number of full 360-degree sweep attempts to find the gate before failing
       scan_angle_deg: 20.0          # (deg) Angle to rotate per sweep step during visual search
       scan_pause_time: 0.5          # (s) Seconds to pause at each sweep angle to allow vision to process frames
@@ -182,7 +182,7 @@ planner_root_tree:
                                                 # param is used to determine if we are properly lined up above the table
       survey_repair_items: {items_labels: ["electric", "electric"], bin_label: "warning"}
       search_rescue_items: {items_labels: ["electric", "electric"], bin_label: "redcross_helmet"}
-      role: "survey_repair" # [survey_repair | search_rescue] Determines what label to face when spinning at the end of task
+      role: "search_rescue" # [survey_repair | search_rescue] Determines what label to face when spinning at the end of task
       grab_only_for_role: True            # (bool) If true, only grab items for the role that is currently selected
       grab_only_no_drop: False            # When cleaning table, if false, dont drop item in bin just grab and attempt surface
       number_of_items_to_grab: 1          #(items) Number of items to grab from the table, starting from the roles for the current role 
@@ -231,7 +231,7 @@ planner_root_tree:
       do_style_yaw_after: false           # Whether to perform style yaw spin after passing through return gate
       style_yaw_degrees: 360.0            # (deg) Total yaw angle to spin (360 or 720)
       do_style_roll_before: false         # Whether to perform style rolling flip before passing through return gate
-      do_style_roll_after: false          # Whether to perform style rolling flip after passing through return gate
+      do_style_roll_after: true          # Whether to perform style rolling flip after passing through return gate
       style_roll_degrees: 720.0           # (deg) Total roll angle to flip (360 or 720)
       style_roll_torque: 15.0             # (Nm) Open-loop roll torque to apply during rolling flip
       style_roll_coast_degrees: 180.0     # (deg) How many degrees before target angle to cut open-loop torque and coast

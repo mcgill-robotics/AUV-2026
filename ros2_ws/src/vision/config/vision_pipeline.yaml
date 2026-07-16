@@ -159,7 +159,7 @@ front_cam_object_detection:
       enable: true
       mode: "horizontal" # "both", "horizontal", "vertical"
       margin_px: 20 # The number of pixels to exclude from the border
-      labels: ["white_pipe", "red_pipe", "bin"] # List of labels to apply border exclusion to
+      labels: ["white_pipe", "red_pipe", "gate", "bin"] # List of labels to apply border exclusion to
 
     publish_camera_info: true # publish CameraInfo for the front camera feed using ZED left-camera intrinsics
     publish_annotated: true # publishes the front camera feed topic at detection_frame_topic + /annotated, toggled raw/annotated at runtime via service
@@ -421,9 +421,9 @@ object_map:
     lane_boundary:
       enable: true # discard world-frame detections outside the competition lane AABB
       x_min: -2.0 # back boundary (meters, world frame)
-      x_max: 25.0  # front boundary
-      y_min: -5.0 # right boundary
-      y_max: 10.0  # left boundary
+      x_max: 20.0  # front boundary
+      y_min: -6.0 # right boundary
+      y_max: 6.0  # left boundary
 
     # Refinement: make use of other detections to improve tracking of certain objects
     gate_midpoint: true # Uses search_rescue/survey_repair panel detections to refine the gate pose

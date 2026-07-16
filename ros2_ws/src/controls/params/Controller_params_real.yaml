@@ -21,7 +21,7 @@ attitude_controller:
         max_slew_rate_yaw_deg: 30.0 # [deg/s]
         buoyancy: 275.4 # [N]
         r_bv_v: [ 0.0, 0.0, 0.0 ] # [m] Tuned in pool tests.    
-        enabled: true
+        enabled: false
 
 depth_controller:
     ros__parameters:
@@ -35,7 +35,7 @@ depth_controller:
         derivative_filter_alpha: 0.2
         max_slew_rate: 0.0 # [m/s] (0.0 = disabled)
         net_buoyancy: 3.5 # Newtons.
-        enabled: true
+        enabled: false
 
 x_controller:
     ros__parameters:
@@ -48,7 +48,7 @@ x_controller:
         integral_activation_threshold: 0.5
         derivative_filter_alpha: 0.8
         max_slew_rate: 0.0 # [m/s] (0.0 = disabled)
-        enabled: true
+        enabled: false
 
 y_controller:
     ros__parameters:
@@ -61,7 +61,7 @@ y_controller:
         integral_activation_threshold: 0.5
         derivative_filter_alpha: 0.8
         max_slew_rate: 0.0 # [m/s] (0.0 = disabled)
-        enabled: true
+        enabled: false
 
 superimposer:
     ros__parameters:
