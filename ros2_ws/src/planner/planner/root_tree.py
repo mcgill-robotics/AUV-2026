@@ -485,8 +485,12 @@ def main():
 
 
     # Return Home task parameters
+    node.declare_parameter("return_home.octagon_exit_depth", -0.8)
     node.declare_parameter("return_home.exit_octagon_distance", 2.0)
     node.declare_parameter("return_home.travel_depth", -0.5)
+    node.declare_parameter("return_home.do_slalom_avoidance", True)
+    node.declare_parameter("return_home.lane_y_min", -6.0)
+    node.declare_parameter("return_home.lane_y_max", 6.0)
     node.declare_parameter("return_home.gate_pass_depth", -1.0)
     node.declare_parameter("return_home.return_distance", 5.0)
     node.declare_parameter("return_home.pass_distance", 2.0)
@@ -506,8 +510,12 @@ def main():
     node.declare_parameter("return_home.style_roll_coast_degrees", 180.0)
 
     return_home_params = {
+        "octagon_exit_depth": node.get_parameter("return_home.octagon_exit_depth").get_parameter_value().double_value,
         "exit_octagon_distance": node.get_parameter("return_home.exit_octagon_distance").get_parameter_value().double_value,
         "travel_depth": node.get_parameter("return_home.travel_depth").get_parameter_value().double_value,
+        "do_slalom_avoidance": node.get_parameter("return_home.do_slalom_avoidance").get_parameter_value().bool_value,
+        "lane_y_min": node.get_parameter("return_home.lane_y_min").get_parameter_value().double_value,
+        "lane_y_max": node.get_parameter("return_home.lane_y_max").get_parameter_value().double_value,
         "gate_pass_depth": node.get_parameter("return_home.gate_pass_depth").get_parameter_value().double_value,
         "return_distance": node.get_parameter("return_home.return_distance").get_parameter_value().double_value,
         "pass_distance": node.get_parameter("return_home.pass_distance").get_parameter_value().double_value,

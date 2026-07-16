@@ -3,7 +3,7 @@ import py_trees
 from controls.goal_helpers import set_depth, translate_field_centric
 from ..mission_behaviour_components import BasicActionBehaviour
 from ..vision_behaviours import ScanBehaviour, SearchSweepBehaviour, GoNearObject
-from .slalom_behaviours import SlalomLayer, ForceBlindDriveBehaviour
+from .slalom_behaviours import SlalomLayer, ForceBlindDriveBehaviour, RecordSlalomLayerPositionBehaviour
 
 
 class SlalomTask(py_trees.composites.Sequence):
@@ -167,6 +167,7 @@ class SlalomTask(py_trees.composites.Sequence):
                 min_pipe_separation=min_pipe_separation,
             )
             nominal_execution.add_child(layer)
+            nominal_execution.add_child(RecordSlalomLayerPositionBehaviour(layer_num=i + 1))
 
         # --- TOTAL FAILSAFE ---
         total_failsafe = ForceBlindDriveBehaviour(
