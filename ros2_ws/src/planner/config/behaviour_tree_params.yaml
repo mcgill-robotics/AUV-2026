@@ -87,7 +87,7 @@ planner_root_tree:
       downcam_fov_vertical: 35.24         # (deg) Vertical FOV of down cam while in water
       downcam_image_width: 640            # (px) Width of down cam image
       downcam_image_height: 480           # (px) Height of down cam image
-      grabber_to_downcam_x: 0.15          # (m) Distance from downcam to grabber in the lateral direction
+      grabber_to_downcam_x: 0.10          # (m) Distance from downcam to grabber in the lateral direction
       grabber_to_downcam_y: 0.00          # (m) Distance from downcam to grabber in the forward direction
       bin_wait_before_alignment: 5.0      # (s) Time to wait after moving above the bin before aligning with downcam
       alignment_hold_time: 5.0            # (s) Time to hold the alignment with the bin before dropping the marker
