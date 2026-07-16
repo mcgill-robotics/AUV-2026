@@ -4,10 +4,9 @@ from enum import Enum
 from typing import Optional, Tuple, List
 import py_trees
 from controls.goal_helpers import set_global_yaw, look_at, move_to_and_look_at, move_global, set_depth, _DEFAULT_POS_TOL, _DEFAULT_HOLD#, _DEFAULT_TIMEOUT,_DEFAULT_YAW_TOL, POSITION_EPSILON
-from controls.utils import yaw_from_quaternion, normalize_angle
+from controls.utils import yaw_from_quaternion, normalize_angle, Vector2D, find_normal_from_quaternion, position_distance
 from .action_status_enum import ActionStatus
 from auv_msgs.msg import VisionObject
-from controls.utils import Vector2D
 class SearchSweepBehaviour(py_trees.behaviour.Behaviour):
     """
     Rotates the AUV in a full 360-degree sweep, divided into `num_steps`. 
@@ -397,13 +396,14 @@ class ScanBehaviour(py_trees.behaviour.Behaviour):
         self.action_status = ActionStatus.SUCCEEDED if goal_success else ActionStatus.FAILED
 
 class GoNearObject(py_trees.behaviour.Behaviour):
-    def __init__(self, target_class: str, target_distance: float, height_offset: float | None = None, tolerance_meters: float=_DEFAULT_POS_TOL, hold_time: float=_DEFAULT_HOLD, name: str | None = None):
+    def __init__(self, target_class: str, target_distance: float, height_offset: float | None = None, tolerance_meters: float=_DEFAULT_POS_TOL, hold_time: float=_DEFAULT_HOLD, require_in_front: bool = False, name: str | None = None):
         super().__init__(name if name else f"GoNear{target_class}")
         self.target_class = target_class
         self.target_planar_distance = target_distance
         self.height_offset = height_offset
         self.tolerance_meters = tolerance_meters
         self.hold_time = hold_time
+        self.require_in_front = require_in_front
         self.blackboard = self.attach_blackboard_client(name=self.name)
         self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
@@ -421,10 +421,21 @@ class GoNearObject(py_trees.behaviour.Behaviour):
            and hasattr(self.blackboard, 'sensors') and self.blackboard.sensors.pose is not None:
             target_obj = None
             auv_pose = self.blackboard.sensors.pose.pose.position
+            auv_forward = None
+            if self.require_in_front:
+                auv_forward = find_normal_from_quaternion(self.blackboard.sensors.pose.pose.orientation)
+
             min_distance = float('inf')
             for obj in self.blackboard.vision.object_map.array:
                 if obj.label == self.target_class:
-                    distance = math.sqrt((obj.pose.position.x - auv_pose.x) ** 2 + (obj.pose.position.y - auv_pose.y) ** 2)
+                    if self.require_in_front and auv_forward is not None:
+                        to_obj = Vector2D.from_point(obj.pose.position) - Vector2D.from_point(auv_pose)
+                        if to_obj.dot(auv_forward) <= 0.0:
+                            self.node.get_logger().info(
+                                f"[{self.name}] Discarding candidate '{self.target_class}' at ({obj.pose.position.x:.2f}, {obj.pose.position.y:.2f}) because it is not in front of AUV (dot={to_obj.dot(auv_forward):.2f} <= 0)."
+                            )
+                            continue
+                    distance = position_distance(obj.pose.position, auv_pose)
                     if distance < min_distance:
                         target_obj = obj
                         min_distance = distance

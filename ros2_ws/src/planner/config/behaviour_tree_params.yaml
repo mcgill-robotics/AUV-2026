@@ -216,8 +216,12 @@ planner_root_tree:
         rpy: [0.0, 1.57079632679, 0.0] # [Roll, Pitch, Yaw] in radians. 1.57079632679 is exactly 90 degrees pitch forward/down (pointing towards the pool floor).
  
     return_home:
+      octagon_exit_depth: -0.8            # (m) Depth to go to before moving horizontally out of the Octagon zone
       exit_octagon_distance: 2.0          # (m) Distance to drive horizontally at current depth out of Octagon zone before ascending
-      travel_depth: -0.65                  # (m) Depth to travel at across the pool to avoid obstacles
+      travel_depth: -0.6                  # (m) Depth to travel at across the pool to avoid obstacles
+      do_slalom_avoidance: true           # (bool) Whether to perform L-shaped slalom avoidance path vs direct navigation to approach point
+      lane_y_min: -10.0                    # (m) Minimum lane Y coordinate for slalom width calculation
+      lane_y_max: 3.0                     # (m) Maximum lane Y coordinate for slalom width calculation
       gate_pass_depth: -1.0               # (m) Depth to descend to before traversing the return gate
       return_distance: 3.0                # (m) Distance to navigate past the gate initially
       pass_distance: 1.0                  # (m) Distance to pass through the gate backwards
