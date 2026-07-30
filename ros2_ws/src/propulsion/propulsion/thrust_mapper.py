@@ -167,7 +167,7 @@ class ThrusterMapper(Node):
         tf_msg.back_right         = float(thrust_forces[0])
         tf_msg.heave_back_right    = float(thrust_forces[1])
         tf_msg.heave_front_right   = float(thrust_forces[2])
-        tf_msg.front_right       = -float(thrust_forces[3])
+        tf_msg.front_right       = float(thrust_forces[3])
         tf_msg.front_left         = float(thrust_forces[4])
         tf_msg.heave_front_left    = float(thrust_forces[5])
         tf_msg.heave_back_left    = float(thrust_forces[6])
