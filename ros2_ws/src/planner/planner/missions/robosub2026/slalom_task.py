@@ -3,7 +3,7 @@ import py_trees
 from controls.goal_helpers import set_depth, translate_field_centric
 from ..mission_behaviour_components import BasicActionBehaviour
 from ..vision_behaviours import ScanBehaviour, SearchSweepBehaviour, GoNearObject
-from .slalom_behaviours import SlalomLayer, ForceBlindDriveBehaviour
+from .slalom_behaviours import SlalomLayer, ForceBlindDriveBehaviour, RecordSlalomLayerPositionBehaviour
 
 
 class SlalomTask(py_trees.composites.Sequence):
@@ -59,6 +59,7 @@ class SlalomTask(py_trees.composites.Sequence):
         enable_skip_scan: bool = True,
         skip_scan_min_dist: float = 1.5,
         skip_scan_max_dist: float = 3.5,
+        initial_search_min_forward_dist: float = 0.5,
     ):
         super().__init__("Slalom Task", memory=True)
 
@@ -101,6 +102,8 @@ class SlalomTask(py_trees.composites.Sequence):
                 angular_tolerance_rad=scan_angular_tolerance_rad,
                 turn_hold_time_s=scan_hold_time,
                 turn_timeout_s=scan_timeout,
+                ignore_behind_x=True,
+                min_forward_x_dist=initial_search_min_forward_dist,
                 name="Search Red Pipe (Primary)",
             ),
             SearchSweepBehaviour(
@@ -113,6 +116,8 @@ class SlalomTask(py_trees.composites.Sequence):
                 angular_tolerance_rad=scan_angular_tolerance_rad,
                 turn_hold_time_s=scan_hold_time,
                 turn_timeout_s=scan_timeout,
+                ignore_behind_x=True,
+                min_forward_x_dist=initial_search_min_forward_dist,
                 name="Search White Pipe (Fallback)",
             ),
         ])
@@ -162,6 +167,7 @@ class SlalomTask(py_trees.composites.Sequence):
                 min_pipe_separation=min_pipe_separation,
             )
             nominal_execution.add_child(layer)
+            nominal_execution.add_child(RecordSlalomLayerPositionBehaviour(layer_num=i + 1))
 
         # --- TOTAL FAILSAFE ---
         total_failsafe = ForceBlindDriveBehaviour(

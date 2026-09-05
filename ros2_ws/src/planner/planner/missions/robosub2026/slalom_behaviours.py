@@ -839,3 +839,36 @@ class SlalomLayer(py_trees.composites.Selector):
         )
 
         self.add_children([nominal, failsafe])
+
+
+class RecordSlalomLayerPositionBehaviour(py_trees.behaviour.Behaviour):
+    """
+    Grabs the AUV's current (x, y) pose right after clearing a slalom layer
+    and writes it to the blackboard as /slalom/layer_{layer_num}_x and /slalom/layer_{layer_num}_y
+    so that ReturnHomeTask can navigate back through these exact points to avoid hitting pipes.
+    """
+    def __init__(self, layer_num: int, name: str = None):
+        if name is None:
+            name = f"Record Slalom Layer {layer_num} Position"
+        super().__init__(name)
+        self.layer_num = layer_num
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key=f"/slalom/layer_{self.layer_num}_x", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key=f"/slalom/layer_{self.layer_num}_y", access=py_trees.common.Access.WRITE)
+
+    def update(self):
+        if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.pose is None:
+            self.node.get_logger().warn(f"[{self.name}] /sensors/pose not available. Cannot record layer position.")
+            return py_trees.common.Status.SUCCESS
+
+        auv_pose = self.blackboard.sensors.pose.pose
+        x = auv_pose.position.x
+        y = auv_pose.position.y
+        self.blackboard.set(f"/slalom/layer_{self.layer_num}_x", x)
+        self.blackboard.set(f"/slalom/layer_{self.layer_num}_y", y)
+        self.node.get_logger().info(f"[{self.name}] Recorded traversal point for Slalom Layer {self.layer_num}: ({x:.2f}, {y:.2f})")
+        return py_trees.common.Status.SUCCESS

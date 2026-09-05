@@ -54,6 +54,8 @@ public:
         float min_large_structure_separation = 2.0,
         bool large_structure_pipe_separation_enabled = true,
         float min_large_structure_pipe_separation = 1.0,
+        bool same_label_pipe_separation_enabled = true,
+        float min_same_label_pipe_separation = 1.5,
         float gating_threshold = 3.5,
         int min_hits = 20,
         int max_age = 8,
@@ -151,6 +153,8 @@ private:
     float min_large_structure_separation;
     bool large_structure_pipe_separation_enabled;
     float min_large_structure_pipe_separation;
+    bool same_label_pipe_separation_enabled;
+    float min_same_label_pipe_separation;
         
     // Tuning Parameters
     float gating_threshold;         // Mahalanobis gate (~3 sigma)

@@ -34,7 +34,7 @@ class PID:
                 self.previous_position = position
                 return self.derivative_error
 
-        def compute_errors(self, setpoint, position, time_step, previous_position=None, allow_integration=True):
+        def compute_errors(self, setpoint, position, time_step, previous_position=None, allow_integration=True, current_velocity=None):
                 # Reset integral on setpoint change
                 if abs(setpoint - self.last_setpoint) > self.SETPOINT_RESET_EPSILON:
                         self.integral_error = 0.0
@@ -47,7 +47,12 @@ class PID:
                         self.integral_error += self.position_error * time_step
                         self.integral_error = np.clip(self.integral_error, -self.I_MAX, self.I_MAX)
 
-                if previous_position is not None:
+                if current_velocity is not None:
+                        raw_derivative = np.clip(current_velocity, -3.0, 3.0)
+                        alpha = self.derivative_filter_alpha
+                        self.derivative_error = alpha * raw_derivative + (1.0 - alpha) * self.derivative_error
+                        self.previous_position = position
+                elif previous_position is not None:
                         raw_derivative = (position - previous_position) / time_step
                         raw_derivative = np.clip(raw_derivative, -3.0, 3.0)  # Clamp to physical velocity limits
                         alpha = self.derivative_filter_alpha

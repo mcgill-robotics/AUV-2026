@@ -139,9 +139,10 @@ class NavigationServer(Node):
         with self._goal_lock:
             if self._goal_handle is not None and self._goal_handle.is_active:
                 self.get_logger().info('Preempting previous goal with new request')
-                # Note: We don't need to wait for it to finish; the old loop 
-                # will detect 'not goal_handle.is_active' and exit.
-                self._goal_handle.abort()
+                try:
+                    self._goal_handle.abort()
+                except Exception as e:
+                    self.get_logger().debug(f'Ignored abort on previous goal handle: {e}')
             self._goal_handle = goal_handle
 
         goal = goal_handle.request
@@ -234,6 +235,9 @@ class NavigationServer(Node):
                     f'ang_tol={math.degrees(goal.angular_tolerance):.1f}deg)'
                 )
                 goal_handle.succeed()
+                with self._goal_lock:
+                    if self._goal_handle == goal_handle:
+                        self._goal_handle = None
                 self.get_logger().info(result.message)
                 return result
 
@@ -247,6 +251,9 @@ class NavigationServer(Node):
                         f'(pos_err={pos_error:.3f}m, ang_err={math.degrees(angular_error):.1f}deg)'
                     )
                     goal_handle.abort()
+                    with self._goal_lock:
+                        if self._goal_handle == goal_handle:
+                            self._goal_handle = None
                     self.get_logger().warn(result.message)
                     return result
 

@@ -165,7 +165,11 @@ def main():
     node.declare_parameter("bins.downcam_image_height", 480)
     node.declare_parameter("bins.grabber_to_downcam_x", 0.17894)
     node.declare_parameter("bins.grabber_to_downcam_y", 0.04062)
+    node.declare_parameter("bins.bin_wait_before_alignment", 2.0)
+    node.declare_parameter("bins.height_offset_before_drop", 0.4)
     node.declare_parameter("bins.alignment_hold_time", 5.0)
+    node.declare_parameter("bins.go_down_hold_time", 2.0)
+    node.declare_parameter("bins.grabber_wait_time", 5.0)
     node.declare_parameter("bins.search_sweep_steps", 8)
     node.declare_parameter("bins.search_sweep_step_timeout", 0.5)
     node.declare_parameter("bins.bin_moving_average_weight", 0.5)    
@@ -184,10 +188,14 @@ def main():
     node.declare_parameter("bins.num_required_markers", 2)
     node.declare_parameter("bins.num_bins", 4)
     node.declare_parameter("bins.bins_to_bin_structure", 0.3)
+    node.declare_parameter("bins.always_drop_markers", False)
     node.declare_parameter("bins.force_fallback_search", False)
     node.declare_parameter("bins.force_fallback_alignment", False)
+    node.declare_parameter("bins.skip_other_side", False)
     node.declare_parameter("bins.fallback_role", "search_rescue")
     node.declare_parameter("bins.no_detection_timeout", 10.0)
+    node.declare_parameter("bins.first_bin_grabber_setpoint", 128)
+    node.declare_parameter("bins.second_bin_grabber_setpoint", 255)
 
     bins_params = {
         "downcam_fov_horizontal": node.get_parameter("bins.downcam_fov_horizontal").get_parameter_value().double_value,
@@ -196,7 +204,11 @@ def main():
         "downcam_image_height": node.get_parameter("bins.downcam_image_height").get_parameter_value().integer_value,
         "grabber_to_downcam_x": node.get_parameter("bins.grabber_to_downcam_x").get_parameter_value().double_value,
         "grabber_to_downcam_y": node.get_parameter("bins.grabber_to_downcam_y").get_parameter_value().double_value,
+        "bin_wait_before_alignment": node.get_parameter("bins.bin_wait_before_alignment").get_parameter_value().double_value,
         "alignment_hold_time": node.get_parameter("bins.alignment_hold_time").get_parameter_value().double_value,
+        "go_down_hold_time": node.get_parameter("bins.go_down_hold_time").get_parameter_value().double_value,
+        "grabber_wait_time": node.get_parameter("bins.grabber_wait_time").get_parameter_value().double_value,
+        "height_offset_before_drop": node.get_parameter("bins.height_offset_before_drop").get_parameter_value().double_value,
         "search_sweep_steps": node.get_parameter("bins.search_sweep_steps").get_parameter_value().integer_value,
         "search_sweep_step_timeout": node.get_parameter("bins.search_sweep_step_timeout").get_parameter_value().double_value,
         "bin_moving_average_weight": node.get_parameter("bins.bin_moving_average_weight").get_parameter_value().double_value,
@@ -215,10 +227,14 @@ def main():
         "num_required_markers": node.get_parameter("bins.num_required_markers").get_parameter_value().integer_value,
         "num_bins": node.get_parameter("bins.num_bins").get_parameter_value().integer_value,
         "bins_to_bin_structure": node.get_parameter("bins.bins_to_bin_structure").get_parameter_value().double_value,
+        "always_drop_markers": node.get_parameter("bins.always_drop_markers").get_parameter_value().bool_value,
         "force_fallback_search": node.get_parameter("bins.force_fallback_search").get_parameter_value().bool_value,
         "force_fallback_alignment": node.get_parameter("bins.force_fallback_alignment").get_parameter_value().bool_value,
+        "skip_other_side": node.get_parameter("bins.skip_other_side").get_parameter_value().bool_value,
         "fallback_role": node.get_parameter("bins.fallback_role").get_parameter_value().string_value,
         "no_detection_timeout": node.get_parameter("bins.no_detection_timeout").get_parameter_value().double_value,
+        "first_bin_grabber_setpoint": node.get_parameter("bins.first_bin_grabber_setpoint").get_parameter_value().integer_value,
+        "second_bin_grabber_setpoint": node.get_parameter("bins.second_bin_grabber_setpoint").get_parameter_value().integer_value,
     }
     
     # Torpedo task parameters
@@ -229,10 +245,12 @@ def main():
     node.declare_parameter("torpedo.yaw_tolerance_deg", Parameter.Type.DOUBLE)
     node.declare_parameter("torpedo.hold_time", Parameter.Type.DOUBLE)
     node.declare_parameter("torpedo.timeout", Parameter.Type.DOUBLE)
-    node.declare_parameter("torpedo.refinement.rejection_threshold_deg", Parameter.Type.DOUBLE)
+    node.declare_parameter("torpedo.refinement.orientation_rejection_threshold_deg", Parameter.Type.DOUBLE)
+    node.declare_parameter("torpedo.refinement.position_rejection_threshold", Parameter.Type.DOUBLE)
     node.declare_parameter("torpedo.refinement.attempts", Parameter.Type.INTEGER)
     node.declare_parameter("torpedo.refinement.alignments_per_attempt", Parameter.Type.INTEGER)
-    node.declare_parameter("torpedo.refinement.samples_per_alignment", Parameter.Type.INTEGER)
+    node.declare_parameter("torpedo.refinement.orientation_samples_per_alignment", Parameter.Type.INTEGER)
+    node.declare_parameter("torpedo.refinement.position_samples_per_alignment", Parameter.Type.INTEGER)
     node.declare_parameter("torpedo.refinement.sample_every_n_ticks", Parameter.Type.INTEGER)
     node.declare_parameter("torpedo.auv_to_torpedos.left", Parameter.Type.DOUBLE_ARRAY)
     node.declare_parameter("torpedo.auv_to_torpedos.right", Parameter.Type.DOUBLE_ARRAY)
@@ -249,6 +267,10 @@ def main():
     node.declare_parameter("torpedo.icon_to_nearest_hole.board_2.firetruck", Parameter.Type.DOUBLE_ARRAY)
     node.declare_parameter("torpedo.firing_pause_time", Parameter.Type.DOUBLE)
     node.declare_parameter("torpedo.launch_topic", Parameter.Type.STRING)
+    node.declare_parameter("torpedo.roles.survey_repair", Parameter.Type.STRING_ARRAY)
+    node.declare_parameter("torpedo.roles.search_rescue", Parameter.Type.STRING_ARRAY)
+    node.declare_parameter("torpedo.farther_distance_threshold", Parameter.Type.DOUBLE)
+    node.declare_parameter("torpedo.auv_to_front", Parameter.Type.DOUBLE)
 
     torpedo_params = {
         "initial_distance_from_board": node.get_parameter("torpedo.initial_distance_from_board").get_parameter_value().double_value,
@@ -258,10 +280,12 @@ def main():
         "yaw_tolerance_rad": math.radians(node.get_parameter("torpedo.yaw_tolerance_deg").get_parameter_value().double_value),  # deg -> rad
         "hold_time": node.get_parameter("torpedo.hold_time").get_parameter_value().double_value,
         "timeout": node.get_parameter("torpedo.timeout").get_parameter_value().double_value,
-        "refinement_rejection_threshold_rad": math.radians(node.get_parameter("torpedo.refinement.rejection_threshold_deg").get_parameter_value().double_value),  # deg -> rad
+        "orientation_refinement_rejection_threshold_rad": math.radians(node.get_parameter("torpedo.refinement.orientation_rejection_threshold_deg").get_parameter_value().double_value),  # deg -> rad
+        "position_refinement_rejection_threshold": node.get_parameter("torpedo.refinement.position_rejection_threshold").get_parameter_value().double_value,
         "refinement_attempts" : node.get_parameter("torpedo.refinement.attempts").get_parameter_value().integer_value,
         "alignments_per_attempt": node.get_parameter("torpedo.refinement.alignments_per_attempt").get_parameter_value().integer_value,
-        "samples_per_alignment": node.get_parameter("torpedo.refinement.samples_per_alignment").get_parameter_value().integer_value,
+        "orientation_samples_per_alignment": node.get_parameter("torpedo.refinement.orientation_samples_per_alignment").get_parameter_value().integer_value,
+        "position_samples_per_alignment": node.get_parameter("torpedo.refinement.position_samples_per_alignment").get_parameter_value().integer_value,
         "refinement_sample_every_n_ticks": node.get_parameter("torpedo.refinement.sample_every_n_ticks").get_parameter_value().integer_value,
         "auv_to_torpedos": {
             "left": node.get_parameter("torpedo.auv_to_torpedos.left").get_parameter_value().double_array_value,
@@ -286,20 +310,30 @@ def main():
                 "firetruck": node.get_parameter("torpedo.icon_to_nearest_hole.board_2.firetruck").get_parameter_value().double_array_value
             }
         },
-        "torpedo_firing_buffer_time": node.get_parameter("torpedo.firing_pause_time").get_parameter_value().double_value
+        "torpedo_firing_buffer_time": node.get_parameter("torpedo.firing_pause_time").get_parameter_value().double_value,
+        "role_to_icons": {
+            "survey_repair": node.get_parameter("torpedo.roles.survey_repair").get_parameter_value().string_array_value,
+            "search_rescue": node.get_parameter("torpedo.roles.search_rescue").get_parameter_value().string_array_value
+        },
+        "farther_distance_threshold": node.get_parameter("torpedo.farther_distance_threshold").get_parameter_value().double_value,
+        "auv_to_front": node.get_parameter("torpedo.auv_to_front").get_parameter_value().double_value
     }
 
+    # General task information parameters
     node.declare_parameter("octagon.downcam_fov_horizontal", 59.7)
     node.declare_parameter("octagon.downcam_fov_vertical", 47.6)
     node.declare_parameter("octagon.downcam_image_width", 640)
     node.declare_parameter("octagon.downcam_image_height", 480)
     node.declare_parameter("octagon.table_avg_height", 0.75)
     node.declare_parameter("octagon.table_max_height", 0.9)
+    node.declare_parameter("octagon.table_min_height", 0.6)
     node.declare_parameter("octagon.height_above_to_measure_table", 0.3)
     node.declare_parameter("octagon.pool_depth", 2.1)
     node.declare_parameter("octagon.COM_to_dvl_height", 0.1)
     node.declare_parameter("octagon.known_height_to_pill", 0.745625)
     node.declare_parameter("octagon.known_pill_area", 16900)
+
+    # Navigate to table
     node.declare_parameter("octagon.shallow_approach_depth", -0.4)
     node.declare_parameter("octagon.shallow_approach_tolerance", 0.2)
     node.declare_parameter("octagon.shallow_approach_hold_time", 1.0)
@@ -307,15 +341,51 @@ def main():
     node.declare_parameter("octagon.surface_tolerance", 0.1)
     node.declare_parameter("octagon.surface_hold_time", 3.0)
     node.declare_parameter("octagon.ending_dive_depth", -0.7)
+
+    # Shortcuts to have shorter form of the mission.
     node.declare_parameter("octagon.navigation_only", True)
     node.declare_parameter("octagon.item_drop_only", False)
+    node.declare_parameter("octagon.grab_only_no_drop", False)
+
+    # Navigate to table
     node.declare_parameter("octagon.position_tolerance", 0.3)
     node.declare_parameter("octagon.hold_time", 1.0)
     node.declare_parameter("octagon.timeout", 30.0)
     node.declare_parameter("octagon.grab_only_for_role", True)
+    node.declare_parameter("octagon.role", "survey_repair")
     node.declare_parameter("octagon.number_of_items_to_grab", 3)
-    node.declare_parameter("octagon.tf_auv_to_grabber.xyz", [-0.1125559, -0.1739998, -0.01242304])
-    node.declare_parameter("octagon.tf_auv_to_grabber.rpy", [0.0, 0.0, 0.0])
+
+    # Octagon scan, look at image, and rolls at end of octagon/table
+    node.declare_parameter("octagon.scan_octagon_yaw_tolerance", 10.0)
+    node.declare_parameter("octagon.scan_octagon_yaw_hold_time", 2.0)
+    node.declare_parameter("octagon.scan_octagon_num_steps_per_side", 5)
+    node.declare_parameter("octagon.octagon_images.survey_repair", ["compass", "tools"])
+    node.declare_parameter("octagon.octagon_images.search_rescue", ["lifebuoy", "sos"])
+    node.declare_parameter("octagon.look_at_image_hold_time_per_step", 0.5)
+    node.declare_parameter("octagon.look_at_image_yaw_tolerance", 10.0)     
+    node.declare_parameter("octagon.look_at_image_yaw_hold_time", 2.0)
+    node.declare_parameter("octagon.look_at_image_yaw_timeout", 30.0)
+
+    # Down cam alignment navigation 
+    node.declare_parameter("octagon.down_cam_position_tolerance", 0.3)
+    node.declare_parameter("octagon.down_cam_yaw_tolerance", 10.0)
+    node.declare_parameter("octagon.down_cam_hold_time", 1.0)
+    node.declare_parameter("octagon.down_cam_timeout", 30.0)
+    
+    # Go Near Object for table item params
+    node.declare_parameter("octagon.table_item_target_distance", 0.3)
+    node.declare_parameter("octagon.table_item_tolerance_meters", 10.0)
+    node.declare_parameter("octagon.table_item_height_offset", 1.0)
+    node.declare_parameter("octagon.table_item_hold_time", 30.0)
+
+    # Go Near Object for bin params
+    node.declare_parameter("octagon.bin_target_distance", 0.3)
+    node.declare_parameter("octagon.bin_tolerance_meters", 10.0)
+    node.declare_parameter("octagon.bin_item_drop_height_relative_bin", 1.0)
+    node.declare_parameter("octagon.bin_hold_time", 30.0)
+
+    # Clean up task
+    node.declare_parameter("octagon.time_before_abort", 200.0)
     node.declare_parameter("octagon.expected_table_items",
     ["table", "pill", "nutbolt", "electric", "bandaid", "warning", "redcross_helmet"])
     # Survey repair items (flattened dict)
@@ -326,6 +396,21 @@ def main():
     node.declare_parameter("octagon.search_rescue_items.bin_label", "redcross_helmet")
     node.declare_parameter("octagon.item_drop_height_relative_bin", 0.1)
     node.declare_parameter("octagon.relative_height_to_measure_table", -0.4)
+    # Grabber alignment navigation parameters
+    node.declare_parameter("octagon.grabber_position_tolerance", 0.3)
+    node.declare_parameter("octagon.grabber_yaw_tolerance", -0.4)
+    node.declare_parameter("octagon.grabber_hold_time", -0.4)
+    node.declare_parameter("octagon.grabber_timeout", -0.4)
+    node.declare_parameter("octagon.grabber_clearance_margin", 0.024)
+    # Grabber depth alignment
+    node.declare_parameter("octagon.grabber_desired_depth_tolerance", 0.3)
+    node.declare_parameter("octagon.grabber_desired_depth_hold_time", -0.4)
+    node.declare_parameter("octagon.grabber_desired_depth_timeout", -0.4)
+    # Transforms relevant for task
+    node.declare_parameter("octagon.tf_auv_to_grabber.xyz", [-0.1125559, -0.1739998, -0.01242304])
+    node.declare_parameter("octagon.tf_auv_to_grabber.rpy", [0.0, 0.0, 0.0])
+    node.declare_parameter("octagon.tf_auv_to_down_cam.xyz", [-0.067, 0.07, -0.014])
+    node.declare_parameter("octagon.tf_auv_to_down_cam.rpy", [0.0, 0.0, 0.0])
 
     octagon_params = {
         "downcam_fov_horizontal": node.get_parameter("octagon.downcam_fov_horizontal").get_parameter_value().double_value,
@@ -333,6 +418,7 @@ def main():
         "downcam_image_width": node.get_parameter("octagon.downcam_image_width").get_parameter_value().integer_value,
         "downcam_image_height": node.get_parameter("octagon.downcam_image_height").get_parameter_value().integer_value,
         "table_max_height": node.get_parameter("octagon.table_max_height").get_parameter_value().double_value,
+        "table_min_height": node.get_parameter("octagon.table_min_height").get_parameter_value().double_value,
         "table_avg_height": node.get_parameter("octagon.table_avg_height").get_parameter_value().double_value,
         "height_above_to_measure_table": node.get_parameter("octagon.height_above_to_measure_table").get_parameter_value().double_value,
         "COM_to_dvl_height": node.get_parameter("octagon.COM_to_dvl_height").get_parameter_value().double_value,
@@ -351,22 +437,60 @@ def main():
         "hold_time": node.get_parameter("octagon.hold_time").get_parameter_value().double_value,
         "timeout": node.get_parameter("octagon.timeout").get_parameter_value().double_value,
         "grab_only_for_role": node.get_parameter("octagon.grab_only_for_role").get_parameter_value().bool_value,
+        "role": node.get_parameter("octagon.role").get_parameter_value().string_value,
         "number_of_items_to_grab": node.get_parameter("octagon.number_of_items_to_grab").get_parameter_value().integer_value,
         "tf_auv_to_grabber.xyz": node.get_parameter("octagon.tf_auv_to_grabber.xyz").get_parameter_value().double_array_value,
         "tf_auv_to_grabber.rpy": node.get_parameter("octagon.tf_auv_to_grabber.rpy").get_parameter_value().double_array_value,
+        "tf_auv_to_down_cam.xyz": node.get_parameter("octagon.tf_auv_to_down_cam.xyz").get_parameter_value().double_array_value,
+        "tf_auv_to_down_cam.rpy": node.get_parameter("octagon.tf_auv_to_down_cam.rpy").get_parameter_value().double_array_value,
+        "scan_octagon_yaw_tolerance": node.get_parameter("octagon.scan_octagon_yaw_tolerance").get_parameter_value().double_value,
+        "scan_octagon_yaw_hold_time": node.get_parameter("octagon.scan_octagon_yaw_hold_time").get_parameter_value().double_value,
+        "scan_octagon_num_steps_per_side": node.get_parameter("octagon.scan_octagon_num_steps_per_side").get_parameter_value().integer_value,
+        "octagon_images.survey_repair": node.get_parameter("octagon.octagon_images.survey_repair").get_parameter_value().string_array_value,
+        "octagon_images.search_rescue": node.get_parameter("octagon.octagon_images.search_rescue").get_parameter_value().string_array_value,
+        "look_at_image_hold_time_per_step": node.get_parameter("octagon.look_at_image_hold_time_per_step").get_parameter_value().double_value,
+        "look_at_image_yaw_tolerance": node.get_parameter("octagon.look_at_image_yaw_tolerance").get_parameter_value().double_value,
+        "look_at_image_yaw_hold_time": node.get_parameter("octagon.look_at_image_yaw_hold_time").get_parameter_value().double_value,
+        "look_at_image_yaw_timeout": node.get_parameter("octagon.look_at_image_yaw_timeout").get_parameter_value().double_value,
+        "down_cam_position_tolerance": node.get_parameter("octagon.down_cam_position_tolerance").get_parameter_value().double_value,
+        "down_cam_yaw_tolerance": node.get_parameter("octagon.down_cam_yaw_tolerance").get_parameter_value().double_value,
+        "down_cam_hold_time": node.get_parameter("octagon.down_cam_hold_time").get_parameter_value().double_value,
+        "down_cam_timeout": node.get_parameter("octagon.down_cam_timeout").get_parameter_value().double_value,
+        "grabber_position_tolerance": node.get_parameter("octagon.grabber_position_tolerance").get_parameter_value().double_value,
+        "grabber_yaw_tolerance": node.get_parameter("octagon.grabber_yaw_tolerance").get_parameter_value().double_value,
+        "grabber_hold_time": node.get_parameter("octagon.grabber_hold_time").get_parameter_value().double_value,
+        "grabber_timeout": node.get_parameter("octagon.grabber_timeout").get_parameter_value().double_value,
+        "grabber_clearance_margin": node.get_parameter("octagon.grabber_clearance_margin").get_parameter_value().double_value,
+        "grabber_desired_depth_tolerance": node.get_parameter("octagon.grabber_desired_depth_tolerance").get_parameter_value().double_value,
+        "grabber_desired_depth_hold_time": node.get_parameter("octagon.grabber_desired_depth_hold_time").get_parameter_value().double_value,
+        "grabber_desired_depth_timeout": node.get_parameter("octagon.grabber_desired_depth_timeout").get_parameter_value().double_value,   
+        "table_item_target_distance": node.get_parameter("octagon.table_item_target_distance").get_parameter_value().double_value,
+        "table_item_tolerance_meters": node.get_parameter("octagon.table_item_tolerance_meters").get_parameter_value().double_value,
+        "table_item_height_offset": node.get_parameter("octagon.table_item_height_offset").get_parameter_value().double_value,
+        "table_item_hold_time": node.get_parameter("octagon.table_item_hold_time").get_parameter_value().double_value,
+        "bin_target_distance": node.get_parameter("octagon.bin_target_distance").get_parameter_value().double_value,
+        "bin_tolerance_meters": node.get_parameter("octagon.bin_tolerance_meters").get_parameter_value().double_value,
+        "bin_item_drop_height_relative_bin": node.get_parameter("octagon.bin_item_drop_height_relative_bin").get_parameter_value().double_value,
+        "bin_hold_time": node.get_parameter("octagon.bin_hold_time").get_parameter_value().double_value,
+        "time_before_abort": node.get_parameter("octagon.time_before_abort").get_parameter_value().double_value,
         "expected_table_items": node.get_parameter("octagon.expected_table_items").get_parameter_value().string_array_value,
         "survey_repair_items": {"items_labels": node.get_parameter("octagon.survey_repair_items.items_labels").get_parameter_value().string_array_value,
             "bin_label": node.get_parameter("octagon.survey_repair_items.bin_label").get_parameter_value().string_value,},
         "search_rescue_items": {"items_labels": node.get_parameter("octagon.search_rescue_items.items_labels").get_parameter_value().string_array_value,
             "bin_label": node.get_parameter("octagon.search_rescue_items.bin_label").get_parameter_value().string_value,},
         "item_drop_only": node.get_parameter("octagon.item_drop_only").get_parameter_value().bool_value,
+        "grab_only_no_drop": node.get_parameter("octagon.grab_only_no_drop").get_parameter_value().bool_value,
         "relative_height_to_measure_table": node.get_parameter("octagon.relative_height_to_measure_table").get_parameter_value().double_value,
         }
 
 
     # Return Home task parameters
+    node.declare_parameter("return_home.octagon_exit_depth", -0.8)
     node.declare_parameter("return_home.exit_octagon_distance", 2.0)
     node.declare_parameter("return_home.travel_depth", -0.5)
+    node.declare_parameter("return_home.do_slalom_avoidance", True)
+    node.declare_parameter("return_home.lane_y_min", -6.0)
+    node.declare_parameter("return_home.lane_y_max", 6.0)
     node.declare_parameter("return_home.gate_pass_depth", -1.0)
     node.declare_parameter("return_home.return_distance", 5.0)
     node.declare_parameter("return_home.pass_distance", 2.0)
@@ -386,8 +510,12 @@ def main():
     node.declare_parameter("return_home.style_roll_coast_degrees", 180.0)
 
     return_home_params = {
+        "octagon_exit_depth": node.get_parameter("return_home.octagon_exit_depth").get_parameter_value().double_value,
         "exit_octagon_distance": node.get_parameter("return_home.exit_octagon_distance").get_parameter_value().double_value,
         "travel_depth": node.get_parameter("return_home.travel_depth").get_parameter_value().double_value,
+        "do_slalom_avoidance": node.get_parameter("return_home.do_slalom_avoidance").get_parameter_value().bool_value,
+        "lane_y_min": node.get_parameter("return_home.lane_y_min").get_parameter_value().double_value,
+        "lane_y_max": node.get_parameter("return_home.lane_y_max").get_parameter_value().double_value,
         "gate_pass_depth": node.get_parameter("return_home.gate_pass_depth").get_parameter_value().double_value,
         "return_distance": node.get_parameter("return_home.return_distance").get_parameter_value().double_value,
         "pass_distance": node.get_parameter("return_home.pass_distance").get_parameter_value().double_value,

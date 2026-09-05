@@ -81,7 +81,7 @@ front_cam_object_detection:
     # Positional tracking and pose publication parameters
     pose_source: auv_pose # auv_pose uses state/pose for synchronized detection frames; zed_vio uses the front ZED VIO estimate
     auv_pose_topic: state/pose # official aggregated AUV pose used for synchronized detection frames when pose_source=auv_pose
-    enable_vio_pose: true # if false, skip ZED positional tracking and do not publish vision VIO pose/TF
+    enable_vio_pose: false # if false, skip ZED positional tracking and do not publish vision VIO pose/TF
     vio_pose_topic: /vision/vio_pose # optional topic for publishing the ZED VIO pose estimate; only used if pose.vio.enable is true
     broadcast_vio_tf: true # if true and pose.vio.enable is true, publish pool_link -> auv_vio_link TF for visualization/debugging
 
@@ -159,7 +159,7 @@ front_cam_object_detection:
       enable: true
       mode: "horizontal" # "both", "horizontal", "vertical"
       margin_px: 20 # The number of pixels to exclude from the border
-      labels: ["white_pipe", "red_pipe", "gate"] # List of labels to apply border exclusion to
+      labels: ["white_pipe", "red_pipe", "gate", "bin"] # List of labels to apply border exclusion to
 
     publish_camera_info: true # publish CameraInfo for the front camera feed using ZED left-camera intrinsics
     publish_annotated: true # publishes the front camera feed topic at detection_frame_topic + /annotated, toggled raw/annotated at runtime via service
@@ -411,16 +411,19 @@ object_map:
       min_distance_m: 2.0  # minimum XY spacing required
     large_structure_pipe_separation:
       enable: true
-      min_distance_m: 0.5 # distance in meters between a new detection and existing tracks to be considered a new object and start a new track
+      min_distance_m: 1.5 # distance in meters between a new detection and existing tracks to be considered a new object and start a new track
+    same_label_pipe_separation:
+      enable: true
+      min_distance_m: 0.7 # minimum XY distance required between two pipes of the same label (e.g. red_pipe and red_pipe)
     pipe_distance_truncation:
       enable: true # Truncates tracking of red/white pipes beyond some distance to reduce noise in map     
       max_distance_m: 7.0 #  distance used for distance_truncation
     lane_boundary:
-      enable: false # discard world-frame detections outside the competition lane AABB
-      x_min: -3.0 # back boundary (meters, world frame)
-      x_max: 25.0  # front boundary
-      y_min: -11.0 # right boundary
-      y_max: 4.0  # left boundary
+      enable: true # discard world-frame detections outside the competition lane AABB
+      x_min: -2.0 # back boundary (meters, world frame)
+      x_max: 30.0  # front boundary
+      y_min: -5.0 # right boundary
+      y_max: 25.0  # left boundary
 
     # Refinement: make use of other detections to improve tracking of certain objects
     gate_midpoint: true # Uses search_rescue/survey_repair panel detections to refine the gate pose

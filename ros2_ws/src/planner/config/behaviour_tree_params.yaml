@@ -3,7 +3,7 @@ planner_root_tree:
     tick_rate        : 3.0   # (Hz) Rate at which the behaviour tree ticks
     sim              : false # Whether the simulation is enabled
     use_ground_truth : false # Whether to use the ground truth for position
-    startup_delay    : 0.0   # (s) Delay before actually starting the mission and enabling the controllers
+    startup_delay    : 30.0   # (s) Delay before actually starting the mission and enabling the controllers
     
     # Force tree to broadcast its state and blackboard to the network continuously
     default_snapshot_stream: true
@@ -12,7 +12,7 @@ planner_root_tree:
 
     # Auto-recording configuration
     auto_record:
-      enabled: false
+      enabled: true
       # Profiles are defined in: src/telemetry/config/rosbag_profiles.yaml
       profile: "all"
       bag_prefix: "mission_"
@@ -23,7 +23,7 @@ planner_root_tree:
       position_tolerance: 0.3      # (m) Convergence threshold for navigation commands (e.g. initial dive)
       hold_time: 5.0               # (s) Seconds to hold within tolerance before SUCCESS for navigation commands
       timeout: 60.0                # (s) Seconds before navigation commands fail and timeout
-      desired_role: "survey_repair" # [survey_repair | search_rescue] Target panel to pass through
+      desired_role: "search_rescue" # [survey_repair | search_rescue] Target panel to pass through
       search_attempts: 2            # Number of full 360-degree sweep attempts to find the gate before failing
       scan_angle_deg: 20.0          # (deg) Angle to rotate per sweep step during visual search
       scan_pause_time: 0.5          # (s) Seconds to pause at each sweep angle to allow vision to process frames
@@ -60,11 +60,12 @@ planner_root_tree:
     slalom:
       num_layers: 3               # Number of pipe layers to navigate
       gate_side: "right"           # Default fallback side if /gate/selected_side is not on the blackboard (set by GateTask at runtime)
-      yaw_inward_offset_deg: 25.0  # (deg) Inward angle to hug the centerline and most probably see the red pipe
+      yaw_inward_offset_deg: 15.0  # (deg) Inward angle to hug the centerline and most probably see the red pipe
       scan_angle_deg: 40.0         # (deg) Angle to sweep left/right during pipe scan
       scan_pause_time: 1.0         # (s) Seconds to pause after each scan rotation
       collinearity_threshold: 0.5  # (m) Max perpendicular distance for pipe triplet matching
       min_forward_dist: 1.0        # (m) Min forward distance to consider pipe as "in front"
+      initial_search_min_forward_dist: 0.5 # (m) Min forward X distance from AUV to consider pipe during initial search & sweep
       layer_distance: 2.0          # (m) Distance between pipe layers
       initial_depth: -1.0          # (m) Depth for the initial dive before slalom
       position_tolerance: 0.3      # (m) Position convergence threshold for gap navigation
@@ -82,44 +83,54 @@ planner_root_tree:
       skip_scan_max_dist: 3.0      # (m) Max forward distance for skip scan red pipe detection
 
     bins:
-      downcam_fov_horizontal: 59.7        # (deg) Horizontal FOV of down cam while in water
-      downcam_fov_vertical: 47.6          # (deg) Vertical FOV of down cam while in water
+      downcam_fov_horizontal: 43.85       # (deg) Horizontal FOV of down cam while in water
+      downcam_fov_vertical: 35.24         # (deg) Vertical FOV of down cam while in water
       downcam_image_width: 640            # (px) Width of down cam image
       downcam_image_height: 480           # (px) Height of down cam image
-      grabber_to_downcam_x: 0.04       # (m) Distance from downcam to grabber in the lateral direction
-      grabber_to_downcam_y: 0.00       # (m) Distance from downcam to grabber in the forward direction
+      grabber_to_downcam_x: 0.10          # (m) Distance from downcam to grabber in the lateral direction
+      grabber_to_downcam_y: 0.00          # (m) Distance from downcam to grabber in the forward direction
+      bin_wait_before_alignment: 5.0      # (s) Time to wait after moving above the bin before aligning with downcam
       alignment_hold_time: 5.0            # (s) Time to hold the alignment with the bin before dropping the marker
+      go_down_hold_time: 3.0              # (s) Time to hold after going down to drop the marker
+      grabber_wait_time: 5.0              # (s) Time to wait for the grabber to complete its action
+      height_offset_before_drop: 0.3      # (m) Amount to go down before droppping the marker
       search_sweep_steps: 8               # (steps) Number of steps to take when doing the search sweep for the bin structure and for the bins themselves
       search_sweep_step_timeout: 1.5      # (s) Seconds to wait at each step of the search sweep for the bin structure and for the bins
       bin_moving_average_weight: 1.0      # (0-1) Weight of current measurement against previous position for moving average
                                           # (0=useless never moves, 1=only current measurement)
-      initial_depth: -0.5                 # (m) Depth to dive to before starting the bin structure search
+      initial_depth: -1.0                 # (m) Depth to dive to before starting the bin structure search
       initial_depth_tolerance: 0.2        # (m) Tolerance for reaching
-      bin_structure_distance: 1.5         # (m) How far away to go from the bin structure to look at it with frontcam to see the bins
-      go_above_bin_structure_height: 0.5  # (m) Height above bin structure when looking at it with frontcam to see the bins
+      bin_structure_distance: 2.0         # (m) How far away to go from the bin structure to look at it with frontcam to see the bins
+      go_above_bin_structure_height: 0.2  # (m) Height above bin structure when looking at it with frontcam to see the bins
       go_above_bin_height: 0.7            # (m) Height above bin to move to before aligning with downcam
-      switch_sides_height: 1.2            # (m) Height above bin structure when switching sides to look at the other bins
+      switch_sides_height: 0.7            # (m) Height above bin structure when switching sides to look at the other bins
       wait_for_bins_time: 2.0             # (s) Time to wait for the bins to be detected after moving above the bin structure
-      send_setpoint_interval: 6           # (frames) Number of frames to wait before sending another setpoint to the controller
+      send_setpoint_interval: 15          # (frames) Number of frames to wait before sending another setpoint to the controller
       wrong_task_type_threshold: 5        # (frames) Difference in number of frames where wrong icon and right icon were detected before deciding its the wrong task
       task_completion_threshold: 5        # (frames) Number of frames where the correct icon was detected before dropping the marker
-      bin_lined_up_frames: 5              # (frames) Number of frames where the bin is lined up before dropping the marker
-      bin_lined_up_threshold: 100          # (pixels) How close the center of the bin needs to be to the center of the image to be considered "lined up" for dropping the marker
-      num_required_markers: 1             # (markers) Number of markers that need to be dropped in the correct bins to complete the task
-      num_bins: 2                         # (bins) Total number of bins in the bin structure
+      bin_lined_up_frames: 9              # (frames) Number of frames where the bin is lined up before dropping the marker
+      bin_lined_up_threshold: 50          # (pixels) How close the center of the bin needs to be to the center of the image to be considered "lined up" for dropping the marker
+      num_required_markers: 2             # (markers) Number of markers that need to be dropped in the correct bins to complete the task
+      num_bins: 4                         # (bins) Total number of bins in the bin structure
       bins_to_bin_structure: 0.3          # (m) Approximate distance from center of bin structure to the bins
-      force_fallback_search: True        # (bool) Force behavior to look for bins instead of bin structure first
+      force_fallback_search: True         # (bool) Force behavior to look for bins instead of bin structure first
       force_fallback_alignment: True      # (bool) Force behavior to use bins for projection instead of bin structure
+      always_drop_markers: True           # (bool) Force behavior to always drop markers even if its the wrong bin type
+      skip_other_side: True              # (bool) Skip other side of the bin structure and only look for bins on one side
       fallback_role: "search_rescue"      # (str) Role to use when falling back to the bins instead of the bin structure
       no_detection_timeout: 10.0          # (s) Timeout if no bins are detected while following downcam bin
+      first_bin_grabber_setpoint: 55      # (0-255) How much to open the grabber to drop the first marker
+      second_bin_grabber_setpoint: 255    # (0-255) How much to open the grabber to drop the second marker
 
     octagon:
+      # Generic task information parameters
       downcam_fov_horizontal: 59.7        # (deg) Horizontal FOV of down cam while in water
       downcam_fov_vertical: 47.6          # (deg) Vertical FOV of down cam while in water
       downcam_image_width: 640            # (px) Width of down cam image
       downcam_image_height: 480           # (px) Height of down cam image
       table_avg_height: 0.75              # (m) Estimated height of the table from the pool floor
       table_max_height: 0.9               # (m) Maximum height of the table from the pool floor
+      table_min_height: 0.6               # (m) Minimum height of the table from the pool floor
       height_above_to_measure_table: 0.3  # (m) Depth to measure the table from the maximum table height
       pool_depth: 2.1                     # (m) Estimated depth of the pool
       known_height_to_pill: 0.745625      # (m) Experimental distance from camera to pill for area calibration
@@ -129,39 +140,90 @@ planner_root_tree:
       # Shortcuts to have shorter form of the mission. These params are either or (xor).
       navigation_only: True               # (bool) If true, only perform navigation steps (align, surface, dive) and skip item drop
       item_drop_only: False               # (bool) If true, only perform item drop and skip navigation steps (align, surface, dive)
-      
+
       # Navigate to table
-      shallow_approach_depth: -0.5        # (m) Shallow depth to approach the table from above
-      shallow_approach_tolerance: 0.2     # (m) Tolerance for reaching the shallow approach depth
+      shallow_approach_depth: -0.9        # (m) Shallow depth to approach the table from above
+      shallow_approach_tolerance: 0.3     # (m) Tolerance for reaching the shallow approach depth
       shallow_approach_hold_time: 1.0     # (s) Hold time for the shallow approach depth
       surface_depth: -0.2                 # (m) Depth to surface within the octagon
-      surface_tolerance: 0.1              # (m) Tolerance for reaching the surface depth
+      surface_tolerance: 0.3              # (m) Tolerance for reaching the surface depth
       surface_hold_time: 3.0              # (s) Hold time for the surface depth
       ending_dive_depth: -0.7             # (m) Depth to dive back down to at the end of the navigation subtask
       position_tolerance: 0.3             # (m)
       hold_time: 1.0                      # (s)
       timeout: 30.0                       # (s)
 
-      # Table cleanup
+      # Down cam alignment params
+      down_cam_position_tolerance: 0.07 # (m) Position tolerance for movements involving down cam alignment
+      down_cam_yaw_tolerance: 10.0         # (deg) Yaw convergence threshold for down cam alignment
+      down_cam_hold_time: 1.5              # (s) Hold time
+      down_cam_timeout: 30.0               # (s) Timeout
+
+      # Scan for octagon items
+      scan_octagon_yaw_tolerance: 10.0    # (deg) Tolerance in yaw per 
+      scan_octagon_yaw_hold_time: 2.0     # (s) Time left before starting next steps
+      scan_octagon_num_steps_per_side: 5  # (int) Number of steps per side of scan
+      octagon_images: 
+        survey_repair: ["compass", "tools"]
+        search_rescue: ["lifebuoy", "sos"] # The array index order is important as they
+                                            # represent the item to face depending on correct items
+                                            # in bin. 1 item in bin is the 0th index
+      look_at_image_hold_time_per_step: 0.5 # (s) Time left before starting next steps when looking at item at end of octagon/table
+      look_at_image_yaw_tolerance: 10.0 # (deg) Tolerance yaw for looking at image
+      look_at_image_yaw_hold_time: 2.0  # (s) Time to hold
+      look_at_image_yaw_timeout: 30.0   # (s) Time to timeout
+
+
+      # -- Params for behaviour when at table (includes cleanup) --
+      time_before_abort: 150.0 # (s) Time in seconds before moving on from the table cleanup
       relative_height_to_measure_table: -0.4 # (m) Depth to measure the table height with the DVL's altitude reading
-      expected_table_items: ["table", "bandaid", "warning",
+      expected_table_items: ["table", "electric", "warning", 
                              "redcross_helmet"] # (list) List of expected items to see when properly above table
                                                 # param is used to determine if we are properly lined up above the table
-      survey_repair_items: {items_labels: ["electric", "nutbolt"], bin_label: "warning"}
-      search_rescue_items: {items_labels: ["bandaid", "pill"], bin_label: "redcross_helmet"}
+      survey_repair_items: {items_labels: ["electric", "electric"], bin_label: "warning"}
+      search_rescue_items: {items_labels: ["electric", "electric"], bin_label: "redcross_helmet"}
+      role: "survey_repair" # [survey_repair | search_rescue] Determines what label to face when spinning at the end of task
       grab_only_for_role: True            # (bool) If true, only grab items for the role that is currently selected
+      grab_only_no_drop: False            # When cleaning table, if false, dont drop item in bin just grab and attempt surface
       number_of_items_to_grab: 1          #(items) Number of items to grab from the table, starting from the roles for the current role 
-      item_drop_height_relative_bin: 0.1  # (m) Height above the bin to drop the item relative to the bin's height
-      tf_auv_to_grabber:                  # (m) and (deg) Transform from the AUV's center of mass to the grabber's open bracket in the AUV body frame
-        xyz: [-0.24594, 0.02938, -0.4877]
-        rpy: [0.0, 0.0, 0.0] 
-        
+      item_scan_relative_table_height: 0.1 # (m) Height above the table to do the item alignment with downcam
+     
+      table_item_target_distance: 0.07     # (m) Target distance for vision behaviour go near object of table items
+      table_item_tolerance_meters: 0.07    # (m) Position tolerance for vision behaviour go near object of table items
+      table_item_height_offset: 0.65       # (m) Table item height offset for vision behaviour go near object of table items
+      table_item_hold_time: 3.0           # (s) Hold time
+      bin_target_distance: 0.3            # (m) Target distance for vision behaviour go near object of table items
+      bin_tolerance_meters: 0.1           # (m) Position tolerance for vision behaviour go near object of table items
+      bin_item_drop_height_relative_bin: 0.1 # (m) Table item height offset for vision behaviour go near object of table items
+      bin_hold_time: 3.0                  # (s) Hold time
 
+      grabber_position_tolerance: 0.07    # (m) Position tolerance for grabber alignment navigation goals
+      grabber_yaw_tolerance: 10.0         # (deg) Yaw convergence threshold for grabber alignment
+      grabber_hold_time: 1.5              # (s) Hold time
+      grabber_timeout: 30.0               # (s) Timeout
+      
+      grabber_clearance_margin: 0.024     # (m) Height above table for grabber to align itself on since the altitude calculated depth might just be the 
+                                          # table not counting the object height
+      grabber_desired_depth_tolerance: 0.1 # (m) Position tolerance for grabber alignment navigation goals
+      grabber_desired_depth_hold_time: 1.5 # (s) Hold time
+      grabber_desired_depth_timeout: 30.0  # (s) Timeout
+
+      tf_auv_to_grabber:                  # (m) and (deg) Transform from the AUV's center of mass to the grabber's open bracket in the AUV body frame
+        xyz: [-0.039634, -0.019298, -0.1661]
+        rpy: [0.0, 0.0, 0.0]
+      tf_auv_to_down_cam:
+        xyz: [-0.062173, 0.013, -0.056967]
+        rpy: [0.0, 1.57079632679, 0.0] # [Roll, Pitch, Yaw] in radians. 1.57079632679 is exactly 90 degrees pitch forward/down (pointing towards the pool floor).
+ 
     return_home:
+      octagon_exit_depth: -0.8            # (m) Depth to go to before moving horizontally out of the Octagon zone
       exit_octagon_distance: 2.0          # (m) Distance to drive horizontally at current depth out of Octagon zone before ascending
-      travel_depth: -0.5                  # (m) Depth to travel at across the pool to avoid obstacles
+      travel_depth: -0.6                  # (m) Depth to travel at across the pool to avoid obstacles
+      do_slalom_avoidance: true           # (bool) Whether to perform L-shaped slalom avoidance path vs direct navigation to approach point
+      lane_y_min: -5.0                    # (m) Minimum lane Y coordinate for slalom width calculation
+      lane_y_max: 25.0                     # (m) Maximum lane Y coordinate for slalom width calculation
       gate_pass_depth: -1.0               # (m) Depth to descend to before traversing the return gate
-      return_distance: 3.0                # (m) Distance to navigate past the gate initially
+      return_distance: 2.5                # (m) Distance to navigate past the gate initially
       pass_distance: 1.0                  # (m) Distance to pass through the gate backwards
       approach_distance: 2.0              # (m) Distance to stop in front of the gate visually
       surface_depth: -0.2                 # (m) Depth to surface at the end
@@ -181,29 +243,37 @@ planner_root_tree:
     torpedo:
       launch_topic: /actuators/torpedo
       initial_distance_from_board: 2.0      # (m) Initial "safe" distance from the board during rough positioning
-      z_reference: -0.6                    # (m) Depth to maintain during torpedo task
+      farther_distance_threshold: 0.5          # (m) distance to fire torpedo from board in "farther" criteria
+      auv_to_front: 0.17                            # (m) Distance from AUV center of mass to front of AUV in the forward direction
+      z_reference: -1.25                    # (m) Depth to maintain during torpedo task
       scan_pause_time: 1.0                  # (s) Seconds to pause after each scan rotation
-      position_tolerance: 0.3               # (m) Position convergence threshold for board alignment
+      position_tolerance: 0.15               # (m) Position convergence threshold for board alignment
       yaw_tolerance_deg: 10.0                # (deg) Yaw convergence threshold for board alignment
-      hold_time: 0.5                        # (s) Seconds to hold navigation within tolerance before SUCCESS
+      hold_time: 2.0                        # (s) Seconds to hold navigation within tolerance before SUCCESS
       timeout: 30.0                         # (s) Seconds before navigation steps fail with FAILURE
-      firing_pause_time: 5.0                # (s) Seconds to pause before and after firing torpedo
+      firing_pause_time: 7.0                # (s) Seconds to pause before and after firing torpedo
 
       refinement:
-        rejection_threshold_deg: 10.0     # (deg) Threshold for rejecting outlier orientation samples based on distance from current mean
+        orientation_rejection_threshold_deg: 5.0     # (deg) Threshold for rejecting outlier orientation samples based on distance from current mean
+        position_rejection_threshold: 0.3 # (m) Threshold for rejecting outlier position samples based on distance from current mean
         attempts: 3                       # Number of attempts to refine orientation before giving up
         alignments_per_attempt: 2         # Number of alignment attempts to perform before validating orientation
-        samples_per_alignment: 3          # Number of orientation samples to collect for mean orientation estimation
+        orientation_samples_per_alignment: 3          # Number of orientation samples to collect for mean orientation estimation
+        position_samples_per_alignment: 3          # Number of position samples to collect for mean position estimation
         sample_every_n_ticks: 2           # Sample orientation every N ticks (to allow for some movement between samples)
 
       auv_to_torpedos:
-        left:  [0.10280471,0.03299377,  0.174146]   # (m) AUV to left torpedo center offset in AUV body frame
+        left:  [-0.19719529,0.10280471,0.03299377,  0.174146]   # (m) AUV to left torpedo center offset in AUV body frame
         right: [0.102385, -0.03200623, 0.174146]   # (m) AUV to right torpedo center offset in AUV body frame
 
       torpedo_trajectory_coefficients:
-        x: [0.0, 1.35, -1.44, 0.701, -0.117]       # Coefficients for polynomial trajectory to torpedo target in forward direction (relative to AUV)
-        y: [0.0, 0.0, 0.0, 0.0, 0.0]               # Coefficients for polynomial trajectory to torpedo target in lateral direction (relative to AUV)
-        z: [0.0, -0.0181, 0.241, -0.172, 0.0332]   # Coefficients for polynomial trajectory to torpedo target in vertical direction (relative to AUV)
+        x: [0.0, 1.0, 0.0, 0.0, 0.0]                    # Coefficients for polynomial trajectory to torpedo target in forward direction (relative to AUV)
+        y: [0.0, 0.0, 0.0, 0.0, 0.0]   # Coefficients for polynomial trajectory to torpedo target in lateral direction (relative to AUV)
+        z: [0.0, 0.0, 0.0, 0.0, 0.0]   # Coefficients for polynomial trajectory to torpedo target in vertical direction (relative to AUV)
+
+      roles:
+        survey_repair: ["fire", "firetruck"]
+        search_rescue: ["blood", "ambulance"]
 
       icon_to_nearest_hole:
         board_1:
@@ -213,9 +283,9 @@ planner_root_tree:
           firetruck: [0.0, 0.1888, 0.0]
         board_2:
           blood: [0.0, 0.0, -0.168]
-          fire: [0.0, 0.0, -0.168]
+          fire: [0.0, 0.0, -0.218]
           ambulance: [0.0, 0.193, 0.0]
-          firetruck: [0.0, -0.1855, 0.0]
+          firetruck: [0.0, -0.1555, -0.15]
 
     transitions:
       position_tolerance: 0.3             # (m) Shared position convergence threshold
@@ -224,32 +294,32 @@ planner_root_tree:
       timeout: 30.0                       # (s) Transition timeout
 
       after_gate:
-        enabled: false
-        do_yaw: false
-        target_yaw_deg: 0.0               # Absolute global heading in degrees
+        enabled: true
+        do_yaw: true
+        target_yaw_deg: 45.0               # Absolute global heading in degrees
         dx: 0.0
-        dy: 0.0
+        dy: 1.0
         frame: "field"                    # "field" or "robot"
       after_slalom:
-        enabled: false
-        do_yaw: false
-        target_yaw_deg: 0.0
-        dx: 0.0
-        dy: 0.0
+        enabled: true
+        do_yaw: true
+        target_yaw_deg: 80.0
+        dx: 1.0
+        dy: 5.0
         frame: "field"
       after_bins:
-        enabled: false
-        do_yaw: false
-        target_yaw_deg: 0.0
+        enabled: true
+        do_yaw: true
+        target_yaw_deg: -30.0
         dx: 0.0
-        dy: 0.0
+        dy: -7.0
         frame: "field"
       after_torpedo:
-        enabled: false
-        do_yaw: false
-        target_yaw_deg: 0.0
-        dx: 0.0
-        dy: 0.0
+        enabled: true
+        do_yaw: true
+        target_yaw_deg: 70.0
+        dx: -1.0
+        dy: 1.5
         frame: "field"
       after_octagon:
         enabled: false

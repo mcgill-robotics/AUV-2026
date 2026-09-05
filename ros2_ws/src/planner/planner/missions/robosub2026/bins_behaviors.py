@@ -3,15 +3,57 @@ from planner.missions.mission_behaviour_components import BasicActionBehaviour, 
 import py_trees
 import math
 import planner.missions.vision_behaviours as vision_behaviours
-from controls.goal_helpers import move_global, move_robot_centric
+from controls.goal_helpers import move_global, move_robot_centric, look_at, set_depth
 from planner.missions.action_status_enum import ActionStatus
 import geometry_msgs.msg._pose
 import transforms3d
 import std_msgs.msg
 
+class LookAtOrFail(py_trees.behaviour.Behaviour):
+    def __init__(self, target_class: str):
+        super().__init__("Look at " + target_class)
+        self.target_class = target_class
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+        self.success = False
+
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.navigation_client = kwargs['shared_nav_client']
+        self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
+
+    def initialise(self):
+        if not hasattr(self.blackboard, 'vision') or self.blackboard.vision.object_map is None:
+            return py_trees.common.Status.FAILURE
+        
+        current_position = self.blackboard.sensors.pose.pose.position
+        
+        for object in self.blackboard.vision.object_map.array:
+            if object.label == self.target_class:
+                self.success = True
+                self.goal = look_at(object.pose.position.x, object.pose.position.y, current_position.x, current_position.y, hold_time=0.0)
+                self.node.get_logger().info(f"[{self.name}] Found {self.target_class} at ({object.pose.position.x}, {object.pose.position.y}), sending look_at goal.")
+                return py_trees.common.Status.SUCCESS
+        
+        self.node.get_logger().warn(f"[{self.name}] Could not find {self.target_class} in object map.")
+        return py_trees.common.Status.FAILURE
+
+    def update(self) -> py_trees.common.Status:
+        if not self.success:
+            return py_trees.common.Status.FAILURE
+        else:
+            self.navigation_client.send_navigation_goal(self.goal, self.name)
+            return py_trees.common.Status.SUCCESS
+
 class ApproachObject(py_trees.composites.Sequence): 
-    def __init__(self, target_class: str, bins_params: dict):
-        super().__init__("Approach" + target_class.capitalize(), memory=True)
+    def __init__(self, target_class: str, search_sweep: bool, bins_params: dict):
+        super().__init__("Approach " + target_class, memory=True)
+
+        if search_sweep:
+            search_sweep_node = vision_behaviours.SearchSweepBehaviour(target_class=target_class, num_steps=bins_params['search_sweep_steps'], step_timeout=bins_params['search_sweep_step_timeout'])
+        else:
+            # just look at object, not actual search sweep. fails if the object isn't in object map
+            search_sweep_node = LookAtOrFail(target_class=target_class)
 
         go_4m_away_node = vision_behaviours.GoNearObject(
             target_class=target_class,
@@ -30,6 +72,7 @@ class ApproachObject(py_trees.composites.Sequence):
         )
 
         self.add_children([
+            search_sweep_node,
             go_4m_away_node,
             look_at_bin_structure,
             go_2m_away_node,
@@ -37,15 +80,19 @@ class ApproachObject(py_trees.composites.Sequence):
 
 class FindBinStructure(py_trees.composites.Selector):
     def __init__(self, bins_params: dict):
-        super().__init__("FindBinStructure", memory=True)
+        super().__init__("Find bin structure", memory=True)
+        self.blackboard = self.attach_blackboard_client(name=self.name)
 
-        try_bin_structure = ApproachObject(target_class="bin_structure", bins_params=bins_params)
-        try_bins = ApproachObject(target_class="bin", bins_params=bins_params)
+        try_bin_structure = ApproachObject('bin_structure', False, bins_params)
+        try_bins = ApproachObject('bin', False, bins_params)
+        find_bin_structure = ApproachObject('bin_structure', True, bins_params)
+        find_bins = ApproachObject('bin', True, bins_params)
 
-        self.add_children([
-            try_bin_structure,
-            try_bins,
-        ])
+        self.add_children([try_bin_structure, try_bins, find_bin_structure, find_bins])
+
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.node.get_logger().info(f"[{self.name}] find bins task attempts: {len(self.children)}")
 
 @dataclass
 class BinInfo:
@@ -55,12 +102,13 @@ class BinInfo:
 # TODO: don't fail if it only finds one bin
 class GetClosestBins(py_trees.behaviour.Behaviour):
     def __init__(self, num_bins: int = 2):
-        super().__init__("GetClosestBins")
+        super().__init__("Get closest bins")
         self.num_bins = num_bins
         self.blackboard = self.attach_blackboard_client(name=self.name)
         self.success = False
 
     def setup(self, **kwargs):
+        self.node = kwargs['node']
         self.blackboard.register_key(key="/vision/object_map", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="/bins_task/closest_bins", access=py_trees.common.Access.WRITE)
@@ -70,10 +118,8 @@ class GetClosestBins(py_trees.behaviour.Behaviour):
             self.success = False
             return py_trees.common.Status.FAILURE
         
-        bin_1_distance = float('inf')
-        bin_1 = None
-        bin_2_distance = float('inf')
-        bin_2 = None
+        bins_distances = []
+        bins = []
 
         auv_pos = self.blackboard.sensors.pose.pose.position
 
@@ -81,30 +127,47 @@ class GetClosestBins(py_trees.behaviour.Behaviour):
             if object.label == "bin":
                 bin_pos = object.pose.position
                 distance: float = (bin_pos.x - auv_pos.x) ** 2 + (bin_pos.y - auv_pos.y) ** 2
-                if distance < bin_1_distance:
-                    bin_2 = bin_1
-                    bin_2_distance = bin_1_distance
-                    bin_1 = object
-                    bin_1_distance = distance
+                # if distance < bin_1_distance:
+                #     bin_2 = bin_1
+                #     bin_2_distance = bin_1_distance
+                #     bin_1 = object
+                #     bin_1_distance = distance
                 
-                elif distance < bin_2_distance:
-                    bin_2 = object
-                    bin_2_distance = distance
-        if self.num_bins >= 2:
-            if bin_1 is not None and bin_2 is not None:
-                self.blackboard.bins_task.closest_bins = [BinInfo(pose=bin_1.pose.position), BinInfo(pose=bin_2.pose.position)]
-                self.success = True
-        elif self.num_bins == 1:
-            if bin_1 is not None:
-                self.blackboard.bins_task.closest_bins = [BinInfo(pose=bin_1.pose.position)]
-                self.success = True
+                # elif distance < bin_2_distance:
+                #     bin_2 = object
+                #     bin_2_distance = distance
+                bins.append(object)
+                bins_distances.append(distance)
+
+
+        # if self.num_bins >= 2:
+        #     if bin_1 is not None and bin_2 is not None:
+        #         self.blackboard.bins_task.closest_bins = [BinInfo(pose=bin_1.pose.position), BinInfo(pose=bin_2.pose.position)]
+        #         self.success = True
+        # elif self.num_bins == 1:
+        #     if bin_1 is not None:
+        #         self.blackboard.bins_task.closest_bins = [BinInfo(pose=bin_1.pose.position)]
+        #         self.success = True
+
+        
+        bins, bins_distances = zip(*sorted(zip(bins, bins_distances), key=lambda x: x[1]))                    
+        bins = bins[:self.num_bins]
+        bins_distances = bins_distances[:self.num_bins]
+
+        
+        self.blackboard.bins_task.closest_bins = [BinInfo(pose=bin.pose.position) for bin in bins]
+        # succeed even if we didn't get all the bins
+        if len(bins) > 0:
+            self.success = True
+        self.node.get_logger().info(f"got {len(bins)} nearest bins")
+        self.node.get_logger().info(f"bins: {bins}")
 
     def update(self) -> py_trees.common.Status:
         return py_trees.common.Status.SUCCESS if self.success else py_trees.common.Status.FAILURE
     
 class AlignClosestBin(py_trees.composites.Sequence):
     def __init__(self, bins_params: dict = None):
-        super().__init__("AlignClosestBin", memory=True)
+        super().__init__("Align closest bin", memory=True)
         self.blackboard = self.attach_blackboard_client(name=self.name)
         self.bins_params = bins_params or {}
         # initialize config-backed fields from yaml (fail if missing)
@@ -119,57 +182,65 @@ class AlignClosestBin(py_trees.composites.Sequence):
         go_above_closest_bin = GoAboveClosestBin(self.bins_params)
         follow_downcam_bin = FollowDowncamBin(self.bins_params)
         offset_grabber = BasicActionBehaviour(name="OffsetGrabber", goal=move_robot_centric(forward=self.bins_params['grabber_to_downcam_x'], sway=self.bins_params['grabber_to_downcam_y'], hold_time=self.bins_params['alignment_hold_time']))
+        go_down_a_bit = GoDownABit(bins_params=self.bins_params)
         drop_marker = DropMarker(self.bins_params)
-        wait_after_marker = TimerBehaviour(timer_duration=1.0, name="WaitAfterMarkerDrop")
+        wait_a_bit = TimerBehaviour(self.bins_params['grabber_wait_time'])
+        check_num_markers = CheckNumberOfMarkers(bins_params=self.bins_params)
 
-        self.add_children([go_above_closest_bin, follow_downcam_bin, offset_grabber, drop_marker, wait_after_marker])
+        self.add_children([go_above_closest_bin, follow_downcam_bin, offset_grabber, go_down_a_bit, drop_marker, wait_a_bit, check_num_markers])
 
 class AlignBinsAttempt(py_trees.composites.Sequence):
-    def __init__(self, bins_params: dict = None):
-        super().__init__("AlignBinsAttempt", memory=True)
+    def __init__(self, bins_params: dict = None, num_bins: int = 2):
+        super().__init__("Align bins attempt", memory=True)
         self.bins_params = bins_params or {}
         # just run it twice, works with visited logic
-        get_bins = GetClosestBins(self.bins_params['num_bins'])
+        get_bins = GetClosestBins(num_bins)
         if self.bins_params['num_bins'] >= 2:
-            align_bins = TryAlignBothBins(self.bins_params)
+            align_bins = TryAlignBins(self.bins_params, num_bins=num_bins)
         else:
             align_bins = AlignClosestBin(self.bins_params)
 
         self.add_children([get_bins, align_bins])
 
-class TryAlignBothBins(py_trees.composites.Selector):
-    def __init__(self, bins_params: dict = None):
-        super().__init__("TryAlignBothBins", memory=True)
+class TryAlignBins(py_trees.composites.Selector):
+    def __init__(self, bins_params: dict = None, num_bins: int = 2):
+        super().__init__("Try align bins", memory=True)
         self.bins_params = bins_params or {}
-        try_align_first_bin = AlignClosestBin(self.bins_params)
-        try_align_second_bin = AlignClosestBin(self.bins_params)
 
-        self.add_children([try_align_first_bin, try_align_second_bin])
+        for i in range(num_bins):
+            align_bins_attempt = AlignClosestBin(self.bins_params)
+            self.add_children([align_bins_attempt])
 
 class AlignOtherSideBin(py_trees.composites.Sequence):
     def __init__(self, bins_params: dict = None):
-        super().__init__("AlignOtherSideBin", memory=True)
+        super().__init__("Align other side bin", memory=True)
         self.bins_params = bins_params or {}
         go_to_other_side = GoToOtherSide(self.bins_params)
         bins_params_other_side = bins_params.copy()
         bins_params_other_side['num_bins'] -= 2
-        align_bins_attempt = AlignBinsAttempt(bins_params_other_side)
+        align_bins_attempt = AlignBinsAttempt(bins_params_other_side, bins_params_other_side['num_bins'])
 
         self.add_children([go_to_other_side, align_bins_attempt])
     
 class AlignCorrectBin(py_trees.composites.Selector):
     def __init__(self, bins_params: dict = None):
-        super().__init__("AlignCorrectBin", memory=True)
+        super().__init__("Align correct bin", memory=True)
         self.bins_params = bins_params or {}
-        align_bin_first_side = AlignBinsAttempt(self.bins_params)
-        if self.bins_params['num_bins'] > 2:
-            align_other_bin = AlignOtherSideBin(self.bins_params)
+        align_bins_attempts = []
+        skip_other_side = self.bins_params['skip_other_side']
+        num_bins = self.bins_params['num_required_markers'] if skip_other_side else self.bins_params['num_bins']
+        if skip_other_side or num_bins <= 2:
+            align_bin_first_side = AlignBinsAttempt(bins_params=self.bins_params, num_bins=num_bins)
+            align_bins_attempts.append(align_bin_first_side)
         else:
-            align_other_bin = py_trees.behaviours.Failure(name="SkipOtherBinAlignment")
+            align_bin_first_side = AlignBinsAttempt(bins_params=bins_params, num_bins=num_bins - 2)
+            align_bins_attempts.append(align_bin_first_side)
+            align_other_bin = AlignOtherSideBin(self.bins_params)
+            align_bins_attempts.append(align_other_bin)
 
         self.blackboard = self.attach_blackboard_client(name=self.name)
 
-        self.add_children([align_bin_first_side, align_other_bin])
+        self.add_children(align_bins_attempts)
 
     def setup(self, **kwargs):
         self.blackboard.register_key('/bins_task/number_markers', access=py_trees.common.Access.WRITE)
@@ -179,7 +250,7 @@ class AlignCorrectBin(py_trees.composites.Selector):
 
 class SwitchSides(py_trees.behaviour.Behaviour):
     def __init__(self, bins_params: dict = None):
-        super().__init__("SwitchSides")
+        super().__init__("Switch sides")
         self.blackboard = self.attach_blackboard_client(name=self.name)
         self.action_status = ActionStatus.NOT_SENT
         self.bins_params = bins_params or {}
@@ -219,7 +290,8 @@ class SwitchSides(py_trees.behaviour.Behaviour):
         
         yaw_goal = math.atan2(structure_pos.y - goal_position[1], structure_pos.x - goal_position[0])
         
-        goal = move_global(goal_position[0], goal_position[1], structure_pos.z + self.go_above_bin_structure_height, yaw=yaw_goal, hold_time=0.0)
+        # TODO add hold time as a parameter
+        goal = move_global(goal_position[0], goal_position[1], structure_pos.z + self.go_above_bin_structure_height, yaw=yaw_goal, hold_time=5.0)
 
         self.navigation_client.send_navigation_goal(goal, self.name, custom_goal_response=self.on_server_goal_response, custom_goal_result=self.on_server_goal_result)
         self.action_status = ActionStatus.PENDING
@@ -247,7 +319,7 @@ class SwitchSides(py_trees.behaviour.Behaviour):
     
 class GetBinStructurePos(py_trees.behaviour.Behaviour):
     def __init__(self, bins_params: dict = None):
-        super().__init__("GetBinStructurePos")
+        super().__init__("Get bin structure pos")
         self.bins_params = bins_params
         self.bins_to_bin_structure_distance = bins_params['bins_to_bin_structure']
         self.blackboard = self.attach_blackboard_client(name=self.name)
@@ -313,7 +385,7 @@ class GetBinStructurePos(py_trees.behaviour.Behaviour):
 
 class GoToBlackboardBinStructure(py_trees.behaviour.Behaviour):
     def __init__(self, height_offset: float, bins_params: dict = None):
-        super().__init__("GoToBlackboardBinStructure")
+        super().__init__("Go to blackboard bin structure")
         self.bins_params = bins_params
         self.height_offset = height_offset
         self.blackboard = self.attach_blackboard_client(self.name)
@@ -365,7 +437,7 @@ class GoToBlackboardBinStructure(py_trees.behaviour.Behaviour):
 
 class GoToOtherSide(py_trees.composites.Sequence):
     def __init__(self, bins_params: dict = None):
-        super().__init__("GoToOtherSide", memory=True)
+        super().__init__("Go to other side", memory=True)
         self.bins_params = bins_params or {}
         switch_height = self.bins_params['switch_sides_height']
         get_bin_structure_pos = GetBinStructurePos(bins_params)
@@ -377,7 +449,7 @@ class GoToOtherSide(py_trees.composites.Sequence):
 
 class FollowDowncamBin(py_trees.behaviour.Behaviour):
     def __init__(self, bins_params: dict = None):
-        super().__init__("FollowDowncamBin")
+        super().__init__("Follow downcam bin")
         self.blackboard = self.attach_blackboard_client(name=self.name)
         self.action_status = ActionStatus.PENDING
         self.bins_params = bins_params or {}
@@ -392,9 +464,11 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
         self.go_above_bin_height = self.bins_params['go_above_bin_height']
         self.send_setpoint_interval = self.bins_params['send_setpoint_interval']
         self.wrong_task_type_threshold = self.bins_params['wrong_task_type_threshold']
+        self.task_completion_threshold = self.bins_params['task_completion_threshold']
         self.bin_lined_up_threshold = self.bins_params['bin_lined_up_threshold']
         self.bin_lined_up_frames_required = self.bins_params['bin_lined_up_frames']
-        self.no_detection_timeout = self.bins_params.get('no_detection_timeout', 10.0)
+        self.no_detection_timeout = self.bins_params['no_detection_timeout']
+        self.ignore_wrong_task = self.bins_params['always_drop_markers']
 
         self.down_cam_bin_position = None
         self.down_cam_new_goal_timer = 0
@@ -454,10 +528,9 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
             return py_trees.common.Status.FAILURE
             
         # Completion check
-        if self.action_status is ActionStatus.SUCCEEDED:
+        # if self.action_status is ActionStatus.SUCCEEDED:
             # If succeeded, it means we got to the downcam goal before it was updated, meaning we're very close so this behavior is complete
             # return py_trees.common.Status.SUCCESS
-            pass
         
         if hasattr(self.blackboard, 'vision') and self.blackboard.vision.down_cam.detections is not None:
             downcam_bins = []
@@ -476,21 +549,26 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
                 time_since_last_detection = (self.node.get_clock().now() - self.last_detection_time).nanoseconds / 1e9
                 if time_since_last_detection > self.no_detection_timeout:
                     self.node.get_logger().error(f"[{self.name}] No valid bin detected for {self.no_detection_timeout}s. Timing out.")
-                    return py_trees.common.Status.FAILURE
+                    if self.ignore_wrong_task:
+                        return py_trees.common.Status.SUCCESS
+                    else:
+                        return py_trees.common.Status.FAILURE
                 self.node.get_logger().info(f"[{self.name}] No 'blood' or 'fire' detected. Waiting...", throttle_duration_sec=2.0)
                 return py_trees.common.Status.RUNNING
             
             self.last_detection_time = self.node.get_clock().now()
-            
-            # check if its the wrong label
-            if (self.role == "survey_repair" and self.blood_detections > self.fire_detections + self.wrong_task_type_threshold
-                or self.role == "search_rescue" and self.fire_detections > self.blood_detections + self.wrong_task_type_threshold):
-                self.node.get_logger().info("Detected wrong task type, going to other bin.")
-                return py_trees.common.Status.FAILURE
+
         
-            elif self.bin_lined_up_frames >= self.bin_lined_up_frames_required:
+            if self.bin_lined_up_frames >= self.bin_lined_up_frames_required and (self.ignore_wrong_task or ((self.role == "survey_repair" and self.fire_detections > self.blood_detections + self.task_completion_threshold)
+                or (self.role == "search_rescue" and self.blood_detections > self.fire_detections + self.task_completion_threshold))):
                 self.node.get_logger().info("Bin has been lined up for multiple frames, assuming aligned and succeeding.")
                 return py_trees.common.Status.SUCCESS
+            
+            # check if its the wrong label
+            elif not self.ignore_wrong_task and ((self.role == "survey_repair" and self.blood_detections > self.fire_detections + self.wrong_task_type_threshold)
+                or (self.role == "search_rescue" and self.fire_detections > self.blood_detections + self.wrong_task_type_threshold)):
+                self.node.get_logger().info("Detected wrong task type, going to other bin.")
+                return py_trees.common.Status.FAILURE
 
             # find bin closest to camera center
             closest_downcam_bin = None
@@ -515,7 +593,7 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
             else:
                 self.bin_lined_up_frames = 0
                 
-            self.node.get_logger().info(f"[{self.name}] Pixel Dist^2: {closest_bin_distance:.1f} (Threshold: {self.bin_lined_up_threshold**2}). Lined up frames: {self.bin_lined_up_frames}/{self.bin_lined_up_threshold}")
+            self.node.get_logger().info(f"[{self.name}] Pixel Dist^2: {closest_bin_distance:.1f} (Threshold: {self.bin_lined_up_threshold**2}). Lined up frames: {self.bin_lined_up_frames}/{self.bin_lined_up_frames_required}. Fire detections: {self.fire_detections}, Blood detections: {self.blood_detections}.")
 
 
             
@@ -546,7 +624,7 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
             self.action_status = ActionStatus.NOT_SENT  # Next tick, new goal will be sent automatically
 
         # After potentially updating the goal, if the goal should be sent, send it
-        if self.action_status is ActionStatus.NOT_SENT:
+        if self.action_status is ActionStatus.NOT_SENT and self.goal is not None:
             self.node.get_logger().info(f"[{self.name}] Sending new navigation goal based on downcam detection.")
             self.navigation_client.send_navigation_goal(self.goal, self.name, self.on_server_goal_response, self.on_server_goal_result)
             self.action_status = ActionStatus.PENDING
@@ -555,7 +633,7 @@ class FollowDowncamBin(py_trees.behaviour.Behaviour):
 
 class GoAboveClosestBin(py_trees.behaviour.Behaviour):
     def __init__(self, bins_params: dict = None):
-        super().__init__("GoAboveClosestBin")
+        super().__init__("Go above closest bin")
         self.blackboard = self.attach_blackboard_client(name=self.name)
         self.action_status = ActionStatus.NOT_SENT
         self.bins_params = bins_params or {}
@@ -577,7 +655,7 @@ class GoAboveClosestBin(py_trees.behaviour.Behaviour):
             self.action_status = ActionStatus.SUCCEEDED
         else:
             self.node.get_logger().error(f"[{self.name}] Failed to go above closest bin. {message}")
-            self.action_status = ActionStatus.FAILED
+            self.action_status = ActionStatus.NOT_SENT
 
     def update(self) -> py_trees.common.Status:
         if self.action_status == ActionStatus.FAILED:
@@ -589,17 +667,20 @@ class GoAboveClosestBin(py_trees.behaviour.Behaviour):
                 return py_trees.common.Status.FAILURE
             
             bins = self.blackboard.bins_task.closest_bins
-            if bins[0] == None or (bins[0].visited and bins[1] == None):
-                return py_trees.common.Status.FAILURE
-            
-            if bins[0].visited:
-                bin_position = bins[1].pose
-                bins[1].visited = True
-            else:
-                bin_position = bins[0].pose
-                bins[0].visited = True
+            first_unvisited_bin = None
+            for bin in bins:
+                if not bin.visited:
+                    bin.visited = True
+                    first_unvisited_bin = bin
+                    break
 
-            goal = move_global(bin_position.x, bin_position.y, bin_position.z + self.go_height, hold_time=0.0)
+            if first_unvisited_bin is None:
+                self.node.get_logger().error(f"[{self.name}] All located bins have been visited")
+                return py_trees.common.Status.FAILURE
+            else:
+                bin_position = first_unvisited_bin.pose
+
+            goal = move_global(bin_position.x, bin_position.y, bin_position.z + self.go_height, hold_time=self.bins_params['bin_wait_before_alignment'], tolerance=0.2)
             self.navigation_client.send_navigation_goal(goal, self.name, custom_goal_response=self.on_server_goal_response, custom_goal_result=self.on_server_goal_result)
 
             self.action_status = ActionStatus.PENDING
@@ -610,7 +691,7 @@ class GoAboveClosestBin(py_trees.behaviour.Behaviour):
 
 class DropMarker(py_trees.behaviour.Behaviour):
     def __init__(self, bins_params: dict = None):
-        super().__init__("DropMarker")
+        super().__init__("Drop marker")
         self.blackboard = self.attach_blackboard_client(name=self.name)
         self.bins_params = bins_params or {}
         self.required_markers = self.bins_params['num_required_markers']
@@ -618,17 +699,84 @@ class DropMarker(py_trees.behaviour.Behaviour):
     def setup(self, **kwargs):
         self.node = kwargs['node']
 
-        self.actuator_publisher_1 = self.node.create_publisher(std_msgs.msg.UInt8, "/actuators/grabber", 10)
+        self.actuator_publisher = self.node.create_publisher(std_msgs.msg.UInt8, "/actuators/grabber", 10)
         self.blackboard.register_key(key="/bins_task/number_markers", access=py_trees.common.Access.WRITE)
     
     def update(self) -> py_trees.common.Status:
         if not hasattr(self.blackboard.bins_task, 'number_markers'):
             self.node.get_logger().error("Blackboard key /bins_task/number_markers not found. Dropping marker anyways.")
 
-        self.actuator_publisher_1.publish(std_msgs.msg.UInt8(data=0))  # Assuming '1' is the command to drop the marker
+        grabber_setpoint = self.bins_params['first_bin_grabber_setpoint'] if self.blackboard.bins_task.number_markers == 0 else self.bins_params['second_bin_grabber_setpoint']
+        self.node.get_logger().info(f"Dropping marker with setpoint: {grabber_setpoint}")
+
+        self.actuator_publisher.publish(std_msgs.msg.UInt8(data=grabber_setpoint))
 
         self.blackboard.bins_task.number_markers += 1
-        if self.blackboard.bins_task.number_markers >= self.required_markers:
+        return py_trees.common.Status.SUCCESS
+        
+class CheckNumberOfMarkers(py_trees.behaviour.Behaviour):
+    def __init__(self, bins_params: dict = None):
+        super().__init__("Check number of markers")
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+        self.bins_params = bins_params or {}
+        self.required_markers = self.bins_params['num_required_markers']
+        
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.blackboard.register_key(key="/bins_task/number_markers", access=py_trees.common.Access.READ)
+    
+    def update(self) -> py_trees.common.Status:
+        if not hasattr(self.blackboard.bins_task, 'number_markers'):
+            self.node.get_logger().error("Blackboard key /bins_task/number_markers not found. Assuming 0 markers.")
+            current_markers = 0
+        else:
+            current_markers = self.blackboard.bins_task.number_markers
+
+        if current_markers >= self.required_markers:
             return py_trees.common.Status.SUCCESS
         else:
             return py_trees.common.Status.FAILURE
+        
+class GoDownABit(py_trees.behaviour.Behaviour):
+    def __init__(self, bins_params: dict = None):
+        super().__init__("Go down a bit")
+        self.blackboard = self.attach_blackboard_client(name=self.name)
+        self.bins_params = bins_params or {}
+        self.action_status = ActionStatus.NOT_SENT
+        self.goal = None
+        
+    def setup(self, **kwargs):
+        self.node = kwargs['node']
+        self.navigation_client = kwargs['shared_nav_client']
+        self.blackboard.register_key(key="/sensors/pose", access=py_trees.common.Access.READ)
+    
+    def on_server_goal_response(self, goal_response: bool):
+        if not goal_response:
+            self.node.get_logger().error(f"[{self.name}] Goal rejected by server.")
+            self.action_status = ActionStatus.FAILED
+    
+    def on_server_goal_result(self, goal_success: bool, message: str) -> None:
+        if goal_success:
+            self.action_status = ActionStatus.SUCCEEDED
+        else:
+            self.node.get_logger().error(f"[{self.name}] Goal failed. {message}")
+            self.action_status = ActionStatus.FAILED
+    
+    def update(self) -> py_trees.common.Status:
+        if self.action_status == ActionStatus.NOT_SENT:
+            if not hasattr(self.blackboard, "sensors") or self.blackboard.sensors.pose is None:
+                self.node.get_logger().error(f"[{self.name}] Blackboard key /sensors/pose not found")
+
+            z = self.blackboard.sensors.pose.pose.position.z
+            self.goal = set_depth(z - self.bins_params['height_offset_before_drop'], tolerance=0.2, hold_time=self.bins_params['go_down_hold_time'])
+            self.navigation_client.send_navigation_goal(self.goal, self.name, custom_goal_response=self.on_server_goal_response, custom_goal_result=self.on_server_goal_result)
+
+            self.action_status = ActionStatus.PENDING
+
+        if self.action_status == ActionStatus.SUCCEEDED:
+            return py_trees.common.Status.SUCCESS
+        
+        if self.action_status == ActionStatus.FAILED:
+            return py_trees.common.Status.FAILURE
+        
+        return py_trees.common.Status.RUNNING

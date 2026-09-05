@@ -185,7 +185,7 @@ class ExecuteRollingFlipBehaviour(py_trees.behaviour.Behaviour):
         self.pub_effort = None
         self.sub_imu = None
         self.accumulated_roll_deg = 0.0
-        self.last_imu_time_sec = None
+        self.last_roll_rad = None
         self.start_time_sec = None
         self._finished = False
 
@@ -204,19 +204,16 @@ class ExecuteRollingFlipBehaviour(py_trees.behaviour.Behaviour):
         if self._finished or self.start_time_sec is None:
             return
 
-        now = self.node.get_clock().now().nanoseconds / 1e9
-        if self.last_imu_time_sec is not None:
-            dt = now - self.last_imu_time_sec
-            if 0.0 < dt < 0.5:
-                # Summing Riemann integration of angular velocity between IMU callbacks
-                self.accumulated_roll_deg += math.degrees(abs(msg.angular_velocity.x)) * dt
-        self.last_imu_time_sec = now
+        roll_current, _, _ = quaternion_to_euler(msg.orientation)
+        if self.last_roll_rad is not None:
+            delta_roll = normalize_angle(roll_current - self.last_roll_rad)
+            self.accumulated_roll_deg += math.degrees(abs(delta_roll))
+        self.last_roll_rad = roll_current
 
     def initialise(self):
         self.accumulated_roll_deg = 0.0
-        now = self.node.get_clock().now().nanoseconds / 1e9
-        self.last_imu_time_sec = now
-        self.start_time_sec = now
+        self.last_roll_rad = None
+        self.start_time_sec = self.node.get_clock().now().nanoseconds / 1e9
         self._finished = False
         self.node.get_logger().info(
             f"[{self.name}] Starting open-loop rolling flip! Torque = {self.roll_torque} Nm, Target = {self.target_degrees}°, Coasting early by {self.coast_degrees}°"

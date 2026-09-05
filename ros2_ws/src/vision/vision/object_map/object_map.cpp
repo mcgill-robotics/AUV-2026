@@ -20,6 +20,9 @@ ObjectMapNode::ObjectMapNode() : Node("object_map_node")
     bool large_structure_pipe_separation_enabled = this->declare_parameter<bool>("large_structure_pipe_separation.enable");
     float min_large_structure_pipe_separation =
         this->declare_parameter<float>("large_structure_pipe_separation.min_distance_m");
+    bool same_label_pipe_separation_enabled = this->declare_parameter<bool>("same_label_pipe_separation.enable");
+    float min_same_label_pipe_separation =
+        this->declare_parameter<float>("same_label_pipe_separation.min_distance_m");
     double front_gating_threshold = this->declare_parameter<double>("front_tracker.gating_threshold");
     int front_min_hits = this->declare_parameter<int>("front_tracker.min_hits");
     int front_max_age = this->declare_parameter<int>("front_tracker.max_age");
@@ -77,6 +80,8 @@ ObjectMapNode::ObjectMapNode() : Node("object_map_node")
         min_large_structure_separation,
         large_structure_pipe_separation_enabled,
         min_large_structure_pipe_separation,
+        same_label_pipe_separation_enabled,
+        min_same_label_pipe_separation,
         front_gating_threshold,
         front_min_hits,
         front_max_age,
@@ -99,6 +104,8 @@ ObjectMapNode::ObjectMapNode() : Node("object_map_node")
         min_large_structure_separation,
         large_structure_pipe_separation_enabled,
         min_large_structure_pipe_separation,
+        same_label_pipe_separation_enabled,
+        min_same_label_pipe_separation,
         down_gating_threshold,
         down_min_hits,
         down_max_age,

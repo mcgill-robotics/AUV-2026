@@ -94,7 +94,7 @@ class BasicActionBehaviour(py_trees.behaviour.Behaviour):
             """
             Description: This function is called every tick. It should contain the logic of the behaviour, and return a Status based on the result of that logic.
 
-            Ibputs: None
+            Inputs: None
 
             Outputs: py_trees.common.Status.SUCCESS if the behaviour succeeded, 
                         py_trees.common.Status.FAILURE if it failed, or 
@@ -106,26 +106,29 @@ class BasicActionBehaviour(py_trees.behaviour.Behaviour):
             if not hasattr(self.blackboard, 'sensors') or self.blackboard.sensors.pose is None:
                 self.node.get_logger().info(f"[{self.name}] Waiting for sensor pose data...", throttle_duration_sec=2.0)
                 return py_trees.common.Status.RUNNING
+        
+            match self.action_status:
+                # Check for failure condition from the async callbacks (goal response and goal result)
+                case ActionStatus.FAILED:
+                    self.node.get_logger().info(f"[{self.name}] Sending goal.")
+                    self.node.get_logger().error(f"[{self.name}] Action failed: {self.result_message}")
+                    return py_trees.common.Status.FAILURE
                 
-            # Check for failure condition from the async callbacks (goal response and goal result)
-            if self.action_status is ActionStatus.FAILED:
-                self.node.get_logger().error(f"[{self.name}] Action failed: {self.result_message}")
-                return py_trees.common.Status.FAILURE
-                
-            # Completion check
-            if self.action_status is ActionStatus.SUCCEEDED:
-                self.node.get_logger().info(f"[{self.name}] Completed goal. {self.result_message}")
-                return py_trees.common.Status.SUCCESS
+                # Completion check
+                case ActionStatus.SUCCEEDED:
+                    self.node.get_logger().info(f"[{self.name}] Completed goal. {self.result_message}")
+                    return py_trees.common.Status.SUCCESS
 
-            # Block loop if currently navigating to a waypoint
-            if self.action_status is ActionStatus.PENDING:
-                return py_trees.common.Status.RUNNING
+                # Block loop if currently navigating to a waypoint
+                case ActionStatus.PENDING:
+                    return py_trees.common.Status.RUNNING
                 
-            # Send the goal if no goals are ongoing and set the mission status to pending
-            self.node.get_logger().info(f"[{self.name}] Sent goal.")
-            self.navigation_client.send_navigation_goal(self.goal, self.name, self.on_server_goal_response, self.on_server_goal_result)
-            self.action_status = ActionStatus.PENDING
-            return py_trees.common.Status.RUNNING
+                # Send the goal if no goals are ongoing and set the mission status to pending
+                case _:                
+                    self.node.get_logger().info(f"[{self.name}] Sent goal.")
+                    self.navigation_client.send_navigation_goal(self.goal, self.name, self.on_server_goal_response, self.on_server_goal_result)
+                    self.action_status = ActionStatus.PENDING
+                    return py_trees.common.Status.RUNNING
         
         def on_server_goal_response(self, goal_response: bool) -> None:
             """
@@ -141,7 +144,7 @@ class BasicActionBehaviour(py_trees.behaviour.Behaviour):
             if not goal_response:
                 self.action_status = ActionStatus.FAILED
 
-        def on_server_goal_result(self, goal_success: bool, message: str) -> None:
+        def on_server_goal_result(self, goal_success: bool, message: str = "Server result callback received with no message.") -> None:
             """
             Description: This function provides customized logic to be executed when
             the goal is finished. In this case, the custom implementation updates the status of the mission
