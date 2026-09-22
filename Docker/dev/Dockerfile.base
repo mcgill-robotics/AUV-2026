@@ -1,0 +1,85 @@
+## Credit to tuttelikz/opencv-cuda for the template of this Dockerfile
+
+# Define the build arguments for base image
+ARG CUDA_MAJOR=13
+ARG CUDA_MINOR=0
+ARG CUDA_PATCH=0
+
+ARG UBUNTU_VERSION=24.04
+ARG CUDNN=
+
+# Use NVIDIAs base image for CUDA before install openCV
+FROM nvidia/cuda:${CUDA_MAJOR}.${CUDA_MINOR}.${CUDA_PATCH}-cudnn-runtime-ubuntu${UBUNTU_VERSION}
+
+# Set env var to download openCV
+ARG OPENCV_VERSION=4.10.0
+ARG CUDA_ARCH=8.9
+ENV OPENCV_VERSION=${OPENCV_VERSION}
+ENV CUDA_ARCH=${CUDA_ARCH}
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+# Get all dependencies for openCV
+RUN apt-get update && apt-get install -y && \
+    python3-pip \
+    build-essential \ 
+    cmake \ 
+    git \
+    wget \ 
+    unzip \ 
+    yasm \
+    pkg-config \
+    libswscale-dev \
+    libtbb2 \
+    libtbb-dev \
+    libjpeg-dev \
+    libpng-dev \
+    libtiff-dev \
+    libavformat-dev \
+    libpq-dev \
+    libxine2-dev \
+    libglew-dev \
+    libtiff5-dev \
+    zlib1g-dev \
+    libjpeg-dev \
+    libavcodec-dev \
+    libavformat-dev \
+    libavutil-dev \
+    libpostproc-dev \
+    libswscale-dev \
+    libeigen3-dev \
+    libtbb-dev \
+    libgtk2.0-dev \
+    pkg-config \
+    python3-dev \
+    python3-numpy \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install opencv and opencv-contrib zip tags
+RUN cd /opt && \
+    wget https://github.com/opencv/opencv/archive/${OPENCV_VERSION}.zip && \
+    unzip ${OPEN_CV_VERSION}.zip && \
+    rm ${OPEN_CV_VERSION}.zip && \
+    wget https://github.com/opencv/opencv_contrib/archive/${OPENCV_VERSION}.zip && \
+    unzip ${OPEN_CV_VERSION}.zip && \
+    rm ${OPEN_CV_VERSION}.zip
+
+# Create a build folder
+RUN mkdir /opt/opencv-${OPENCV_VERSION}/build && \ 
+    cd /opt/opencv-${OPENCV_VERSION}/build && \
+    cmake \
+        -DOPENCV_EXTRA_MODULES_PATH=/opt/opencv_contrib-${OPENCV_VERSION}/modules \
+        -DWITH_CUDA=ON \
+        -DCUDA_ARCH_BIN=${CUDA_ARCH} \
+        -DCMAKE_BUILD_TYPE=RELEASE \
+        # Install path will be /usr/local/lib (lib is implicit)
+        -DCMAKE_INSTALL_PREFIX=/usr/local \
+        .. &&\
+    # Make
+    make -j $(nproc --all) && \
+    make install && \
+    ldconfig &&\
+    rm -rf /opt/opencv-${OPENCV_VERSION} && rm -rf /opt/opencv_contrib-${OPENCV_VERSION}
+
+RUN pip install --upgrade pip
+ 
