@@ -2,7 +2,7 @@
 # Base Image: ROS 2 Humble Dev (Ubuntu 22.04)
 # CPU-only development environment without NVIDIA/ZED support
 # ---------------------------------------------------------
-FROM althack/ros2:humble-dev
+FROM althack/ros2:jazzy-dev
 
 # Get uv
 COPY --from=ghcr.io/astral-sh/uv:0.11.9 /uv /uvx /bin/
@@ -21,7 +21,7 @@ ENV CI=${CI}
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     DEBIAN_FRONTEND=noninteractive \
-    ROS_DISTRO=humble \
+    ROS_DISTRO=jazzy \
     IS_JETSON=false
 
 # ---------------------------------------------------------
@@ -67,8 +67,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # GUI Support (RQT/Rviz)
     mesa-utils \
     x11-apps \
-    libgl1-mesa-glx \
-    libgl1-mesa-dri \
+    libgl1 \
+    libglx-mesa0 \
     libeigen3-dev \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
@@ -111,6 +111,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-py-trees-ros-tutorials \
     ros-${ROS_DISTRO}-py-trees-ros-viewer \
     ros-${ROS_DISTRO}-rosbag2-storage-mcap \
+    # Foxglove
+    ros-${ROS_DISTRO}-foxglove-bridge \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -141,22 +143,21 @@ RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \
     "--no-warn-unused-cli" && \
     rm -rf build src log
 
-
 # ---------------------------------------------------------
-# 3. Install Python ML & Vision Dependencies (CPU)
+# 2. Install Python ML & Vision Dependencies (CPU)
 # ---------------------------------------------------------
 COPY Docker/dev/requirements.txt Docker/dev/constraints.txt /tmp/
 
-RUN uv pip install --no-cache -c /tmp/constraints.txt torch torchvision --index-url https://download.pytorch.org/whl/cpu
+RUN uv pip install --no-cache --break-system-packages --system -c /tmp/constraints.txt torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
-RUN uv pip install --no-cache -c /tmp/constraints.txt "opencv-python==4.10.0.84"
+RUN uv pip install --no-cache --break-system-packages --system -c /tmp/constraints.txt "opencv-python==4.10.0.84"
 
 # Install other requirements (Pip will skip torch since it's already done)
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install -c /tmp/constraints.txt -r /tmp/requirements.txt
+    uv pip install --break-system-packages --system -c /tmp/constraints.txt -r /tmp/requirements.txt
 
 # ---------------------------------------------------------
-# 4. Environment Setup
+# 3. Environment Setup
 # ---------------------------------------------------------
 # The base image already has a 'ros' user with sudo. 
 ARG USERNAME=douglas
@@ -199,7 +200,6 @@ WORKDIR /home/$USERNAME/AUV
 # Add source commands to bashrc
 RUN echo "source /opt/ros/${ROS_DISTRO}/local_setup.bash && source /opt/ros/micro_ros_ws/install/local_setup.bash" >> ~/.bashrc && \
     echo "if [ -f ~/AUV/ros2_ws/install/setup.bash ]; then source ~/AUV/ros2_ws/install/setup.bash; fi" >> ~/.bashrc
-
 # Entrypoint uses fixuid to remap UID/GID if running with --user
 ENTRYPOINT ["entrypoint.sh"]
 
