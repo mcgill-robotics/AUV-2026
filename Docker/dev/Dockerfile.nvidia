@@ -93,8 +93,8 @@ ARG CI
 RUN if [ "$CI" = "true" ]; then \
         echo "Installing ZED stubs for CI"; \
         # Install CUDA keyring to access NVIDIA packages (needed for stubs), sed to remove '.' 22.04 -> 2204
-        curl -fsSL https://developer.download.nvidia.com/compute/cuda/repos/ubuntu${UBUNTU_RELEASE}${UBUNTU_MINOR_RELEASE}/x86_64/cuda-keyring_1.1-1_all.deb -o /tmp/cuda-keyring.deb && \
-        sudo dpkg -i /tmp/cuda-keyring.deb && \
+        #curl -fsSL https://developer.download.nvidia.com/compute/cuda/repos/ubuntu${UBUNTU_RELEASE}${UBUNTU_MINOR_RELEASE}/x86_64/cuda-keyring_1.1-1_all.deb -o /tmp/cuda-keyring.deb && \
+        #sudo dpkg -i /tmp/cuda-keyring.deb && \
         # Install NVIDIA driver stubs (allows linker to find CUDA symbols when building ZED dependent packages, even though we won't actually be able to run them in CI). There is a third package 'libcuda.so' but it these two depend on libcuda and so apt installs it for us
         apt-get update && apt-get install -y \
         libnvidia-decode-550 \
