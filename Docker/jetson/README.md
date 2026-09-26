@@ -13,7 +13,7 @@ The container stack uses three layers:
 | **Application** | `mcgillrobotics/auv_2026:latest-jetson` | Workspace changes |
 
 **The AUV base (`Dockerfile.base`)** extends the locally built official Isaac ROS image and caches AUV dependencies:
-- OpenCV 4.10 compiled from source with CUDA (Compute Capability 8.7)
+- OpenCV 4.14 compiled from source with CUDA (Compute Capability 8.7)
 - PyTorch, torchvision, torchaudio from Jetson AI Lab
 - ZED SDK 5.4.1 + Python API
 - Custom `cv_bridge` / `vision_opencv` compiled from source
@@ -113,9 +113,9 @@ We standardize **`ROS_DOMAIN_ID=0`** across all our Docker containers. This is p
 
 ## ⚠️ Important Notes
 
-- **OpenCV:** CUDA-accelerated OpenCV 4.10 is source-compiled in the base image. The Python bindings are registered via a pip wheel built from the same source tree (`python_loader`). Do NOT install `opencv-python` via pip - it will overwrite the CUDA version.
+- **OpenCV:** CUDA-accelerated OpenCV 4.14 is source-compiled in the base image. The Python bindings are registered via a pip wheel built from the same source tree (`python_loader`). Do NOT install `opencv-python` via pip - it will overwrite the CUDA version.
 
-- **`cv_bridge` (vision_opencv):** Do NOT install `cv_bridge` or `vision_opencv` via `apt-get` or standard pip. Doing so installs a CPU-only OpenCV library (4.5.4) that conflicts with our custom CUDA OpenCV (4.10.0), resulting in immediate segmentation faults at runtime. The custom-compiled, CUDA-linked `cv_bridge` workspace is pre-baked into the base image at `/opt/ros/vision_opencv_ws` and is automatically sourced by `entrypoint.sh` and `~/.bashrc`.
+- **`cv_bridge` (vision_opencv):** Do NOT install `cv_bridge` or `vision_opencv` via `apt-get` or standard pip. Doing so installs a CPU-only OpenCV library (4.5.4) that conflicts with our custom CUDA OpenCV (4.14.0), resulting in immediate segmentation faults at runtime. The custom-compiled, CUDA-linked `cv_bridge` workspace is pre-baked into the base image at `/opt/ros/vision_opencv_ws` and is automatically sourced by `entrypoint.sh` and `~/.bashrc`.
 
 - **PyTorch:** Installed from the Jetson AI Lab index (`pypi.jetson-ai-lab.io/jp6/cu126`). The index prunes old versions, so the base image should be treated as an **immutable artifact** - never casually rebuild it.
 
