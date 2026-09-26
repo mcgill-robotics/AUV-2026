@@ -99,7 +99,7 @@ RUN if [ "$CI" = "true" ]; then \
         apt-get update && apt-get install -y \
         libnvidia-decode-550 \
         libnvidia-encode-550 && \
-        rm /tmp/cuda-keyring.deb && \
+        #rm /tmp/cuda-keyring.deb && \
         rm -rf /var/lib/apt/lists/* && \
         apt-get clean; \
         else \
