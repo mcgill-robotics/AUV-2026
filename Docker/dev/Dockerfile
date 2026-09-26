@@ -1,5 +1,5 @@
 # ---------------------------------------------------------
-# Base Image: ROS 2 Humble Dev (Ubuntu 22.04)
+# Base Image: ROS 2 Jazzy Dev (Ubuntu 24.04)
 # CPU-only development environment without NVIDIA/ZED support
 # ---------------------------------------------------------
 FROM althack/ros2:jazzy-dev
