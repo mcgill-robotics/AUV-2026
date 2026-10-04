@@ -88,6 +88,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Navigation & Localization
     ros-${ROS_DISTRO}-mavros \
     ros-${ROS_DISTRO}-mavros-msgs \
+    ros-${ROS_DISTRO}-nav2-bringup \
     ros-${ROS_DISTRO}-robot-localization \
     ros-${ROS_DISTRO}-nmea-msgs \
     ros-${ROS_DISTRO}-marine-sensor-msgs \

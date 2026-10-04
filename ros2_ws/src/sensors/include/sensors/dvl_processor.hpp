@@ -6,6 +6,8 @@
 #include <dvl_msgs/msg/dvldr.hpp>
 #include <geometry_msgs/msg/point_stamped.hpp>
 #include <geometry_msgs/msg/twist_stamped.hpp>
+#include <geometry_msgs/msg/twist_with_covariance_stamped.hpp>
+#include <nav_msgs/msg/odometry.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
@@ -46,13 +48,16 @@ namespace sensors
         Vec3 process_dvl_position(const Vec3& r_di2_i2) const;
                 
         // Takes in raw dvl velocity data in dvl frame, transforms it to inertial frame, and returns transformed data
-        Vec3 process_dvl_velocity(const Vec3& v_di2_d) const;
+        std::pair<Vec3, Eigen::Matrix3d> process_dvl_velocity(const Vec3& v_di2_d, const Eigen::Matrix3d& covariance) const;
 
         // Publishes transformed position values as a PointStamped message
         void publish_position_msg(const Vec3& r_vp_p) const;
         
-        // Publishes transformed velocity values as a TwistStamped message
+        // Publishes transformed velocity values as a TwistWithCovarianceStamped message
         void publish_velocity_msg(const Vec3& v_vp_p) const;
+
+        //Publishes nav2 Odometry message
+        void publish_odometry_msg(const Vec3& r_vp_p, const Vec3& v_vp_p) const;
 
 
         
@@ -62,9 +67,21 @@ namespace sensors
         
         rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr position_pub_;
         rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr velocity_pub_;
+        rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odometry_pub_;
+
+        Eigen::Matrix3d orientation_covariance_;
+        Eigen::Matrix3d angular_velocity_covariance_;
+        Eigen::Matrix3d velocity_covariance_;
+        Eigen::Matrix3d position_covariance_;
+
+        Vec3 current_position_p_;
+        Vec3 current_velocity_p_;
+        bool position_received_{false};
+        bool velocity_received_{false};
 
         Vec3 r_dv_v_; 
         std::string frame_id_global_;
+        std::string frame_id_auv_;
         Quatd q_iv_; 
         Vec3 w_v_;
         Quatd q_pi2_;

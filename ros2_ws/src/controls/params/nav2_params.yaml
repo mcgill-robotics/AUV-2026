@@ -1,0 +1,131 @@
+planner_server:
+  ros__parameters:
+    expected_planner_frequency: 5.0
+    planner_plugins: ["GridBased"]
+    costmap_update_timeout: 1.0
+    GridBased:
+      plugin: "nav2_theta_star_planner::ThetaStarPlanner"
+      how_many_corners: 8
+      w_euc_cost: 1.0
+      w_traversal_cost: 3.0
+
+controller_server:
+  ros__parameters:
+    controller_frequency: 20.0
+    costmap_update_timeout: 0.30
+    failure_tolerance: 0.3
+    progress_checker_plugins: ["progress_checker"]
+    goal_checker_plugins: ["general_goal_checker"]
+    controller_plugins: ["FollowPath"]
+
+    progress_checker:
+      plugin: "nav2_controller::SimpleProgressChecker"
+      required_movement_radius: 0.15
+      movement_time_allowance: 10.0
+
+    general_goal_checker:
+      stateful: true
+      plugin: "nav2_controller::SimpleGoalChecker"
+      xy_goal_tolerance: 0.20
+      yaw_goal_tolerance: 0.20
+
+    FollowPath:
+      plugin: "dwb_core::DWBLocalPlanner"
+      debug_trajectory_details: false
+      
+      # ── Omnidirectional Velocity Limits ──
+      min_vel_x: -0.6
+      max_vel_x: 0.6
+      min_vel_y: -0.5             # Negative allowed for left strafe
+      max_vel_y: 0.5              # Positive allowed for right strafe
+      max_vel_theta: 1.0
+      min_speed_xy: 0.05
+      max_speed_xy: 0.7
+      min_speed_theta: 0.0
+      
+      # ── Accelerations (Conservative for underwater added-mass) ──
+      acc_lim_x: 0.8
+      acc_lim_y: 0.8
+      acc_lim_theta: 1.2
+      decel_lim_x: -0.8
+      decel_lim_y: -0.8
+      decel_lim_theta: -1.2
+
+      # ── Deterministic Omni Trajectory Sampling ──
+      vx_samples: 7
+      vy_samples: 7               # MUST BE > 1 to sample strafing
+      vtheta_samples: 7           # 7x7x7 = 343 trajectories (< 2ms compute)
+      sim_time: 1.2
+      linear_granularity: 0.05
+      angular_granularity: 0.05
+      transform_tolerance: 0.2
+      short_circuit_trajectory_evaluation: true
+
+      # ── Critics ──
+      critics: [
+        "RotateToGoal",
+        "Oscillation",
+        "BaseObstacle",
+        "PathAlign",
+        "GoalAlign",
+        "PathDist",
+        "GoalDist",
+        "Twirling"
+      ]
+      
+      BaseObstacle.scale: 0.04
+      PathDist.scale: 32.0
+      GoalDist.scale: 24.0
+      PathAlign.scale: 12.0
+      GoalAlign.scale: 12.0
+      RotateToGoal.scale: 32.0
+      Twirling.scale: 8.0         # Critical for Omni: suppresses spinning while strafing
+
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      update_frequency: 2.0
+      publish_frequency: 1.0
+      global_frame: pool_link
+      robot_base_frame: auv_link
+      robot_radius: 0.35
+      resolution: 0.05
+      rolling_window: false
+      track_unknown_space: false  # Unmapped water is treated as free space
+      always_send_full_costmap: true
+      plugins: ["static_layer", "inflation_layer"]
+
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_topic: "/world_model/costmap"
+        map_subscribe_transient_local: false
+
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 2.5
+        inflation_radius: 0.8
+
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      update_frequency: 5.0
+      publish_frequency: 2.0
+      global_frame: pool_link
+      robot_base_frame: auv_link
+      rolling_window: true
+      width: 4
+      height: 4
+      resolution: 0.05
+      robot_radius: 0.35
+      always_send_full_costmap: true
+      plugins: ["static_layer", "inflation_layer"]
+
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_topic: "/world_model/costmap"
+        map_subscribe_transient_local: false
+
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 3.0
+        inflation_radius: 0.6

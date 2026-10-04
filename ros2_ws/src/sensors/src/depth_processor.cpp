@@ -5,6 +5,8 @@
 
 namespace sensors
 {
+/// Creates the depth-processing node, loads the sensor mounting offset, and
+/// connects the depth and IMU topics plus the calibration service.
 DepthProcessor::DepthProcessor()
     : rclcpp::Node("depth_processor")
 {
@@ -39,6 +41,10 @@ DepthProcessor::DepthProcessor()
 
 };
 
+/// Stores the latest vehicle orientation used to rotate the depth-sensor offset.
+///
+/// Args:
+///   imu_in: IMU message whose orientation maps vehicle axes into pool axes.
 void DepthProcessor::imu_callback(const sensor_msgs::msg::Imu::SharedPtr imu_in)
 { 
     quatd q_iv(imu_in->orientation.w, imu_in->orientation.x, imu_in->orientation.y, imu_in->orientation.z);
@@ -48,6 +54,12 @@ void DepthProcessor::imu_callback(const sensor_msgs::msg::Imu::SharedPtr imu_in)
 
 
 
+/// Converts sensor depth to depth at the vehicle origin and publishes it.
+/// Applies the sensor mounting offset and subtracts the active calibration
+/// zero after collecting the configured number of samples.
+///
+/// Args:
+///   depth_in: Sensor depth in meters, positive downward.
 void DepthProcessor::depth_callback(const std_msgs::msg::Float64::SharedPtr depth_in)
 {
     const Vec3 r_vs_i = q_iv_ * r_vs_v_;
@@ -71,6 +83,11 @@ void DepthProcessor::depth_callback(const std_msgs::msg::Float64::SharedPtr dept
     depth_pub_->publish(depth_out);
 }; 
 
+/// Starts a new depth-zero calibration unless one is already running.
+///
+/// Args:
+///   request: Trigger request; the request carries no fields used here.
+///   response: Receives success status and a description of the result.
 void DepthProcessor::calibrate_callback(
     const std::shared_ptr<std_srvs::srv::Trigger::Request> /*request*/,
     std::shared_ptr<std_srvs::srv::Trigger::Response> response)
@@ -92,6 +109,10 @@ void DepthProcessor::calibrate_callback(
 
 }
 
+/// Initializes ROS, runs the depth processor, and shuts ROS down on exit.
+///
+/// Returns:
+///   Zero after the node exits normally.
 int main(int argc, char *argv[])
 {
 	rclcpp::init(argc, argv);

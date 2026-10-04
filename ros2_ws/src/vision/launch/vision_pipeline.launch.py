@@ -278,6 +278,7 @@ def generate_launch_description():
     size_x = [float(v[0]) for v in sizes_config.values()]
     size_y = [float(v[1]) for v in sizes_config.values()]
     size_z = [float(v[2]) for v in sizes_config.values()]
+    lane_bounds = default_config["object_map"]["ros__parameters"].get("lane_boundary", {})
     
     object_map_node = Node (
         package="vision",
@@ -302,6 +303,26 @@ def generate_launch_description():
         ],
         ros_arguments=["--ros-args", "--log-level", "object_map:=" + default_config["object_map"]["ros__parameters"]["log_level"]]
     )
+
+    object_map_to_grid_node = Node(
+        package="vision",
+        executable="object_map_to_grid.py",
+        name="object_map_to_grid",
+        output="screen",
+        parameters=[{
+            "object_map_topic": default_config["object_map"]["ros__parameters"]["object_map_topic"],
+            "map_topic": "/map",
+            "resolution": 0.1,
+            "x_min": float(lane_bounds.get("x_min", -2.0)),
+            "x_max": float(lane_bounds.get("x_max", 30.0)),
+            "y_min": float(lane_bounds.get("y_min", -5.0)),
+            "y_max": float(lane_bounds.get("y_max", 25.0)),
+            "object_size_labels": size_labels,
+            "object_size_x": size_x,
+            "object_size_y": size_y,
+            "use_sim_time": LaunchConfiguration("sim"),
+        }],
+    )
     
     launch_description = LaunchDescription()
     launch_description.add_action(sim_arg)
@@ -324,5 +345,6 @@ def generate_launch_description():
     launch_description.add_action(front_detection_node)
     launch_description.add_action(down_detection_node)
     launch_description.add_action(object_map_node)
+    launch_description.add_action(object_map_to_grid_node)
 
     return launch_description

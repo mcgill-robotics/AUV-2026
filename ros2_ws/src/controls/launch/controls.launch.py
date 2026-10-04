@@ -32,6 +32,10 @@ def generate_launch_description():
         FindPackageShare("controls"), "launch", "navigation_server.launch.py"
     ])
 
+    default_nav2_planning = PathJoinSubstitution([
+        FindPackageShare("controls"), "launch", "path_planner.launch.py"
+    ])
+
     declare_attitude = DeclareLaunchArgument(
         "attitude_controller_launch_file",
         default_value=default_attitude,
@@ -56,6 +60,12 @@ def generate_launch_description():
         "navigation_server_launch_file",
         default_value=default_navigation,
         description="Path to the navigation server launch file",
+    )
+
+    declare_nav2_planning = DeclareLaunchArgument(
+        "path_planner_launch_file",
+        default_value=default_nav2_planning,
+        description="Path to the path planner launch file",
     )
 
     attitude_controller_launch = IncludeLaunchDescription(
@@ -92,6 +102,12 @@ def generate_launch_description():
         )
     )
 
+    nav2_planning_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            LaunchConfiguration("path_planner_launch_file")
+        )
+    )
+
     debug_setpoint_service_node = Node(
         package="controls",
         executable="debug_setpoint_service.py",
@@ -106,10 +122,12 @@ def generate_launch_description():
         declare_superimposer,
         declare_planar_controller,
         declare_navigation,
+        declare_nav2_planning,
         attitude_controller_launch,
         depth_controller_launch,
         superimposer_launch,
         planar_controller_launch,
         debug_setpoint_service_node,
         navigation_server_launch,
+        nav2_planning_launch,
     ])

@@ -86,3 +86,4 @@ core.*
 rosbags/**/*.yaml
 *.zip
 .isaac-ros-cli/
+.vscode

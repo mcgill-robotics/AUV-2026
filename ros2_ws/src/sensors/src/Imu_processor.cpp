@@ -7,6 +7,8 @@
 
 namespace sensors
 {
+/// Creates the IMU processor, reads mounting and yaw-correction parameters,
+/// and subscribes to IMU data and optionally DVL dead-reckoning yaw.
 ImuProcessor::ImuProcessor()
     : Node("imu_processor"), q_iv_(quatd::Identity())
 {
@@ -58,6 +60,16 @@ ImuProcessor::ImuProcessor()
     q_sv_ = q_vs_.inverse();
 }
 
+/// Removes gravity from accelerometer specific force and returns free
+/// acceleration expressed in vehicle axes.
+///
+/// Args:
+///   specific_force: Accelerometer specific-force measurement in sensor axes.
+///   q_si: Rotation from pool axes into sensor axes, used to express gravity
+///     in the same axes as the accelerometer measurement.
+///
+/// Returns:
+///   Free linear acceleration expressed in vehicle axes, in meters per second squared.
 Vec3 ImuProcessor::compute_free_acc(const Vec3& specific_force, const quatd& q_si) const
 {
     // Rotate gravity into sensor frame
@@ -68,6 +80,13 @@ Vec3 ImuProcessor::compute_free_acc(const Vec3& specific_force, const quatd& q_s
     return a_free;
 }
 
+/// Rotates angular velocity from IMU sensor axes into vehicle axes.
+///
+/// Args:
+///   w_s: Measured angular velocity expressed in sensor axes, in radians per second.
+///
+/// Returns:
+///   Angular velocity expressed in vehicle axes, in radians per second.
 Vec3 ImuProcessor::rotate_gyro(const Vec3& w_s) const
 {
     // Rotate gyro measurements into vehicle frame
@@ -75,6 +94,14 @@ Vec3 ImuProcessor::rotate_gyro(const Vec3& w_s) const
     return w_v;
 }
 
+/// Copies raw IMU acceleration, angular velocity, and orientation into Eigen values.
+///
+/// Args:
+///   imu_in_msg: Incoming ROS IMU message.
+///
+/// Returns:
+///   Raw measurements expressed in the IMU sensor frame, with sensor orientation
+///   relative to the pool frame.
 ImuDataRawFrame ImuProcessor::parse_imu(const imu_msg& imu_in_msg) const
 {
     ImuDataRawFrame imu_raw;
@@ -84,6 +111,16 @@ ImuDataRawFrame ImuProcessor::parse_imu(const imu_msg& imu_in_msg) const
     return imu_raw;
 }
 
+/// Converts raw IMU measurements into vehicle-frame acceleration and angular
+/// velocity, and computes the vehicle orientation relative to the pool frame.
+///
+/// Args:
+///   imu_raw: Parsed IMU measurements in sensor axes and sensor orientation
+///     relative to the pool frame.
+///
+/// Returns:
+///   Processed acceleration and angular velocity in vehicle axes, plus the
+///   vehicle-to-pool orientation quaternion.
 ImuDataAUVFrame ImuProcessor::process_imu(const ImuDataRawFrame& imu_raw) const
 {
     ImuDataAUVFrame imu_auv;
@@ -94,6 +131,14 @@ ImuDataAUVFrame ImuProcessor::process_imu(const ImuDataRawFrame& imu_raw) const
     return imu_auv;
 }
 
+/// Constructs the output ROS IMU message from vehicle-frame measurements.
+///
+/// Args:
+///   imu_auv: Processed IMU measurements and vehicle orientation.
+///
+/// Returns:
+///   ROS IMU message containing vehicle-frame acceleration and angular velocity,
+///   and vehicle orientation relative to the pool frame.
 imu_msg ImuProcessor::compose_imu_msg(const ImuDataAUVFrame& imu_auv) const
 {
     imu_msg imu_out_msg;
@@ -117,6 +162,11 @@ imu_msg ImuProcessor::compose_imu_msg(const ImuDataAUVFrame& imu_auv) const
     return imu_out_msg;
 }
 
+/// Processes each incoming IMU message, applies the current DVL yaw correction
+/// when enabled, caches the resulting orientation, and publishes the result.
+///
+/// Args:
+///   imu_in: Raw IMU message from the configured input topic.
 void ImuProcessor::imu_callback(const imu_msg::SharedPtr imu_in) 
 {
     imu_msg imu_in_msg = *imu_in;
@@ -144,6 +194,12 @@ void ImuProcessor::imu_callback(const imu_msg::SharedPtr imu_in)
     imu_pub_->publish(imu_msg_out);
 }
 
+/// Updates the target yaw correction using the DVL's absolute dead-reckoning yaw.
+/// The correction is applied gradually by imu_callback rather than immediately.
+///
+/// Args:
+///   msg: DVL dead-reckoning data; yaw is supplied in degrees in the DVL's
+///     FRD convention.
 void ImuProcessor::dvl_odom_callback(const dvl_msgs::msg::DVLDR::SharedPtr msg)
 {
     // Extract absolute true yaw from DVL dead reckoning (provided in degrees)
@@ -163,6 +219,10 @@ void ImuProcessor::dvl_odom_callback(const dvl_msgs::msg::DVLDR::SharedPtr msg)
 
 }
 
+/// Initializes ROS, runs the IMU processor, and shuts ROS down on exit.
+///
+/// Returns:
+///   Zero after the node exits normally.
 int main(int argc, char *argv[])
 {
 	rclcpp::init(argc, argv);

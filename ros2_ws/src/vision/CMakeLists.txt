@@ -76,6 +76,7 @@ set (PYTHON_NODE_SOURCES
     ${PROJECT_NAME}/down_cam_object_detection.py
     ${PROJECT_NAME}/front_image_enhancement.py
     ${PROJECT_NAME}/front_cam_object_detection.py
+    ${PROJECT_NAME}/object_map_to_grid.py
 )
 
 # --- Installation ---
