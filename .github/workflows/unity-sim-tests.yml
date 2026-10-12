@@ -204,17 +204,18 @@ jobs:
 
           echo "Checking for /imu/data topic..."
           docker exec -i ros2-sim bash -c \
-          "source /opt/ros/jazzy/setup.bash && \
+          source /opt/ros/jazzy/setup.bash && \
           source /home/douglas/AUV/ros2_ws/install/setup.bash && \
-          for i in {1..45}; do
-            if(ros2 topic echo /imu/data --once); then
+          for i in {1..10}; do
+            if timeout 3s ros2 topic echo /imu/data --once > /dev/null 2>&1; then
+              echo "IMU topic detected and publishing!"
               ros2 topic echo /imu/data --once
               exit 0
             fi
-
+            echo "Retrying... ($i/10)"
             sleep 1
-          done && \
-          exit 1"
+          done
+          exit 1'
 
       # -------------------------------------------------------------
       # 8. Cleanup: Stop the simulation and ROS2 containers
