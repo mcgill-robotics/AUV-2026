@@ -44,7 +44,7 @@ jobs:
         # 1. Prep the environment by setting data collection and clear space
         # -------------------------------------------------------------
       - name: Collect Workflow Telemetry
-          uses: ycfreeman/workflow-telemetry-action@v3.0.2
+        uses: ycfreeman/workflow-telemetry-action@v3.0.2
         with:
             job_summary: true
             comment_on_pr: false
