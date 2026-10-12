@@ -166,17 +166,17 @@ jobs:
         run: |
           echo "Launching ROS2 TCP endpoint..."
           docker exec -i ros2-sim bash -c \
-          source /opt/ros/jazzy/setup.bash && \
+          "source /opt/ros/jazzy/setup.bash && \
           source /home/douglas/AUV/ros2_ws/install/setup.bash &&
-          "ros2 launch bringup bringup.launch.py sim:=true"
+          ros2 launch bringup bringup.launch.py sim:=true"
       
       - name: Wait for ROS2 topics to be available
         run: |
           echo "Waiting for ROS2 topics to be available..."
           docker exec -i ros2-sim bash -c \
-          source /opt/ros/jazzy/setup.bash && \
+          "source /opt/ros/jazzy/setup.bash && \
           source /home/douglas/AUV/ros2_ws/install/setup.bash &&
-          "timeout 30s ros2 topic echo /imu/data --once || 
+          timeout 30s ros2 topic echo /imu/data --once || 
           { echo 'Timed out waiting for IMU'; exit 1; }"
 
       # -------------------------------------------------------------
