@@ -127,6 +127,7 @@ jobs:
             --ipc host \
             --privileged \
             -e ROS_DOMAIN_ID=0 \
+            -e CI=true \
             -e RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
             -v ${{ github.workspace }}:/home/douglas/AUV \
             -w /home/douglas/AUV \
@@ -139,8 +140,11 @@ jobs:
       - name: Build all packages 
         run: |
           echo "Building all packages in the ROS2 workspace..."
-          docker exec -i ros2-sim bash -c \
-          "./build.sh -c"
+          docker run --rm \
+            --user $(id -u):$(id -g) \
+            -v ${{ github.workspace }}:/home/douglas/AUV \
+            ${{ env.PRIMARY_TAG }} \
+            /bin/bash -c "./build.sh -d"
       
       # -------------------------------------------------------------
       # 6. Start the simulation
@@ -161,16 +165,21 @@ jobs:
       - name: Launch ROS2 TCP endpoint
         run: |
           echo "Launching ROS2 TCP endpoint..."
-          docker exec -i ros2-sim bash -c \
-          "ros2 launch bringup bringup.launch.py sim:=true"
+          docker run --rm \
+            --user $(id -u):$(id -g) \
+            -v ${{ github.workspace }}:/home/douglas/AUV \
+            ${{ env.PRIMARY_TAG }} \
+            "ros2 launch bringup bringup.launch.py sim:=true"
       
       - name: Wait for ROS2 topics to be available
         run: |
           echo "Waiting for ROS2 topics to be available..."
-          docker exec -i ros2-sim bash -c \
-          "timeout 30s ros2 topic echo /imu/data --once || 
-          { echo 'Timed out waiting for IMU'; exit 1; }
-      
+          docker run --rm \
+            --user $(id -u):$(id -g) \
+            -v ${{ github.workspace }}:/home/douglas/AUV \
+            ${{ env.PRIMARY_TAG }} \
+            /bin/bash -c "timeout 30s ros2 topic echo /imu/data --once || { echo 'Timed out waiting for IMU'; exit 1; }"
+
       # -------------------------------------------------------------
       # 8. Cleanup: Stop the simulation and ROS2 containers
       # ------------------------------------------------------------- 
