@@ -76,7 +76,7 @@ jobs:
           # Get the latest release tag from the auv-sim-unity repository
           mkdir -p sim_binary
           echo "Fetching latest release tag from auv-sim-unity repository matching platform..."
-          gh release download latest \
+          gh release download v1.0.0 \
             --repo mcgill-robotics/auv-sim-unity \
             --pattern "auv-sim-${{ matrix.sim_binary }}.zip" \
             --dir sim_binary
