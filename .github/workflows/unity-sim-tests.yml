@@ -116,7 +116,6 @@ jobs:
       # ------------------------------------------------------------- 
       - name: Launch Docker containers and ROS TCP
         run: |
-          cat ${{ github.workspace }}/sim.log
           echo "Pulling and launching Docker containers..."
           if [[ "${{ matrix.runner }}" == "ubuntu-24.04" || "${{ matrix.runner }}" == "windows-2026" ]]; then
             image=mcgillrobotics/auv_2026:latest-nvidia-amd64
