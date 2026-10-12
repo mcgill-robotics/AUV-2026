@@ -203,6 +203,7 @@ jobs:
           sleep 15
 
           echo "Checking for /imu/data topic..."
+          cat ./sim.log
           docker exec -i ros2-sim bash -c \
           'source /opt/ros/jazzy/setup.bash && \
           source /home/douglas/AUV/ros2_ws/install/setup.bash && \
@@ -229,3 +230,11 @@ jobs:
           if [[ -n "${SIM_PID}" ]]; then
             kill $SIM_PID || true
           fi
+      
+      - name: Upload Simulator Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: simulator-log
+          path: ./sim.log
+          if-no-files-found: warn
