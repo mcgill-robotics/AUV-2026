@@ -106,7 +106,9 @@ jobs:
               libglx-mesa0 \
               libgl1-mesa-dri \
               libglu1-mesa \
-              netcat-openbsd
+              netcat-openbsd \
+              mesa-vulkan-drivers \
+              vulkan-tools
           fi
       
       # -------------------------------------------------------------
