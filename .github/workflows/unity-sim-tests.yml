@@ -63,7 +63,7 @@ jobs:
         uses: ./.github/actions/swapfile
 
       - name: Clean up disk space
-        uses: ./.github/actions/cleanup-disk-space
+        uses: ./.github/actions/cleanup_disk
 
         # -------------------------------------------------------------
         # 2. Get the pre-built binary from auv-sim-unity repository
