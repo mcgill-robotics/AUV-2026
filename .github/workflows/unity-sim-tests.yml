@@ -168,7 +168,10 @@ jobs:
           docker exec -d ros2-sim bash -c \
           "source /opt/ros/jazzy/setup.bash && \
           source /home/douglas/AUV/ros2_ws/install/setup.bash &&
-          ros2 launch bringup bringup.launch.py sim:=true > /home/douglas/AUV/ros2_launch.log 2>&1"
+          ros2 launch bringup bringup.launch.py sim:=true"
+
+          echo "Waiting a few seconds for the nodes to initialize and bind the TCP socket"
+          sleep 7
       
       - name: Diagnose ROS TCP Endpoint
         shell: bash
