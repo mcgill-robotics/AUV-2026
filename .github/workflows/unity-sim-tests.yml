@@ -154,7 +154,7 @@ jobs:
           # 1920x1080 24-bit screen
           xvfb-run --auto-servernum --server-args "-screen 0 1920x1080x24" \
             ./sim_binary/${{ matrix.sim_binary }}/auv-sim.x86_64 \
-            -batchmode -logfile ./sim.log &
+            -batchmode -logfile $GITHUB_WORKSPACE/sim.log &
           
           echo "Running sim"
           echo "SIM_PID=$!" >> $GITHUB_ENV
@@ -203,7 +203,7 @@ jobs:
           sleep 15
 
           echo "Checking for /imu/data topic..."
-          cat ./sim.log
+          cat ${{ github.workspace }}/sim.log
           docker exec -i ros2-sim bash -c \
           'source /opt/ros/jazzy/setup.bash && \
           source /home/douglas/AUV/ros2_ws/install/setup.bash && \
@@ -236,5 +236,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: simulator-log
-          path: ./sim.log
+          path: ${{ github.workspace }}/sim.log
           if-no-files-found: warn
