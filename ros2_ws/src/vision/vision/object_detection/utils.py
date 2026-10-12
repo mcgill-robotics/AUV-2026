@@ -8,6 +8,8 @@ import glob
 import math
 import supervision as sv
 from inference_models import AutoModel, BackendType
+import inference_models.models.rfdetr.optimization.postprocessors.base as post_base
+import inference_models.models.rfdetr.common as rf_common
 from geometry_msgs.msg import PoseStamped, Quaternion
 from tf_transformations import euler_matrix, quaternion_from_matrix
 import torch
@@ -24,8 +26,6 @@ def _patch_inference_models_trt_postprocess():
     allowing the heavy model forward pass to run at full speed on the TensorRT GPU engine.
     """
     try:
-        import inference_models.models.rfdetr.common as rf_common
-        import inference_models.models.rfdetr.optimization.postprocessors.base as post_base
 
         if getattr(rf_common, "_auv_cpu_patched", False):
             return
@@ -121,6 +121,9 @@ def load_model(model_path: str, logger):
             with open(trt_cfg_path, "w") as f:
                 f.write('{"static_batch_size": 1}\n')
         ret = os.system(f"trtexec --onnx={onnx_path} --saveEngine={engine_plan_path} --fp16")
+        if ret != 0:
+            # On TensorRT 10+, precision is strongly typed by default and --fp16 flag was removed
+            ret = os.system(f"trtexec --onnx={onnx_path} --saveEngine={engine_plan_path}")
         if ret != 0 or not os.path.exists(engine_plan_path):
             logger.error(f"Failed to build TensorRT engine with trtexec (return code {ret}).")
 

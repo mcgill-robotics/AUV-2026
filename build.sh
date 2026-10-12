@@ -65,8 +65,10 @@ elif [ -n "${CI:-}" ]; then
     echo "Running in CI, skipping git submodule update (already handled by checkout action)."
 else
     git config --global --add safe.directory "$(pwd)" || $SUDO git config --system --add safe.directory "$(pwd)"
-    git config --global --add safe.directory $(pwd)/ros2_ws/src/Xsens_MTi_Driver || $SUDO git config --system --add safe.directory $(pwd)/ros2_ws/src/Xsens_MTi_Driver
-    git config --global --add safe.directory $(pwd)/ros2_ws/src/ros-tcp-endpoint || $SUDO git config --system --add safe.directory $(pwd)/ros2_ws/src/ros-tcp-endpoint
+    # Iterate over all submodules and add them as safe directories (needed to use their packages)
+    cat .gitmodules | grep -oP "path\s*=\s*\K.*"  | while IFS= read -r line; do
+        git config --global --add sasfe.directory $line || $SUDO git config --system --add safe.directory $line
+    done
     # do not exit on error
     set +e
     git submodule update --init --recursive

@@ -39,6 +39,16 @@ sudo groupmod -g $HOST_VIDEO_GID video 2>/dev/null || sudo groupadd -g $HOST_VID
 
 # 4. Add douglas to the freshly aligned groups
 sudo usermod -aG render,video douglas
+sudo usermod -aG zed douglas 2>/dev/null || true
+
+# 4.1 Ensure ZED SDK directories are writable by douglas
+if [ -d /usr/local/zed ]; then
+    sudo mkdir -p /usr/local/zed/settings /usr/local/zed/resources 2>/dev/null || true
+    sudo chown -R douglas:douglas /usr/local/zed/settings /usr/local/zed/resources 2>/dev/null || true
+    sudo chmod -R 777 /usr/local/zed/settings /usr/local/zed/resources 2>/dev/null || true
+fi
+
+
 
 # 5. Source ROS and Workspaces for automated commands (e.g. docker run) that bypass .bashrc
 source /opt/ros/jazzy/setup.bash

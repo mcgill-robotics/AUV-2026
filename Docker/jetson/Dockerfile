@@ -152,7 +152,6 @@ COPY Docker/jetson/requirements.txt Docker/jetson/constraints.txt /tmp/
 # Install Python packages. torch/torchvision/torchaudio and opencv are already
 # in the base image - uv will see them as satisfied and skip them.
 RUN uv pip install \
-    -v \
     --break-system-packages \
     --index-strategy unsafe-best-match \
     --no-cache \
@@ -162,7 +161,6 @@ RUN uv pip install \
     -r /tmp/requirements.txt \
     -c /tmp/constraints.txt && \
     uv pip install \
-    -v \
     --break-system-packages \
     --extra-index-url ${JETSON_PIP_INDEX} \
     --index-strategy unsafe-best-match \

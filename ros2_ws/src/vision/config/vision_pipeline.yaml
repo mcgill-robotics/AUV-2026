@@ -35,7 +35,7 @@ front_cam_object_detection:
     queue_size: 10
     # ZED SDK parameters
     zed_resolution:
-      sim: SVGA # resolution for Unity/stream input
+      sim: VGA # resolution for Unity/stream input
       real: HD720 # open at HD720 for higher-quality depth, images are retrieved at zed_retrieval_* resolution
     zed_fps:
       sim: 30 # FPS for Unity/stream input
@@ -88,7 +88,7 @@ front_cam_object_detection:
     # Frame names
     global_frame_id: pool_link # world frame for synchronized AUV poses and mapped objects
     auv_frame_id: auv_link # official body frame; sensors/state estimation should own pool_link -> auv_link
-    vio_frame_id: auv_link #auv_vio_link # debug-only VIO child frame published by vision when enabled
+    vio_frame_id: auv_vio_link #auv_vio_link # debug-only VIO child frame published by vision when enabled
     camera_center_frame_id: zed_camera_center # static camera mount frame under auv_link
     detection_frame_id: zed_left_camera_frame # 3D detection frame used inside VisionDetectionFrame
     image_frame_id: zed_left_camera_frame_optical # optical frame for image-like topics such as CameraInfo and debug feeds
@@ -103,10 +103,10 @@ front_cam_object_detection:
 
     # Distance correction parameters
     depth_scale:
-      sim: 1.0
+      sim: 1.4
       real: 1.4
     lateral_scale:
-      sim: 1.0
+      sim: 1.333
       real: 1.333
     depth_offset: 0.0
 
@@ -273,7 +273,7 @@ down_cam_object_detection:
       sim: 1.0
       real: 1.0
     lateral_scale:
-      sim: 1.0
+      sim: 1.333
       real: 1.333
     pool_floor_z: -2.1
     # Down Camera Projection Z-Heights (relative to pool floor)
@@ -290,7 +290,7 @@ object_map:
     table_height: 0.67
     
     # Scale applied to down camera focal length to compensate for water refraction through a flat port (usually ~1.33 underwater, 1.0 in air)
-    water_refraction_scale: 1.0 #1.33
+    water_refraction_scale: 1.333
 
 
     large_structures:

@@ -2,7 +2,7 @@
 # Base Image: ROS 2 Jazzy Dev (Ubuntu 24.04)
 # CPU-only development environment without NVIDIA/ZED support
 # ---------------------------------------------------------
-FROM althack/ros2:jazzy-dev
+FROM ros:jazzy
 
 # Get uv
 COPY --from=ghcr.io/astral-sh/uv:0.11.9 /uv /uvx /bin/
@@ -30,8 +30,12 @@ ENV LANG=C.UTF-8 \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Build Tools
     apt-utils \
+    software-properties-common \
     build-essential \
     cmake \
+    # Autocomplete tools
+    git-core \ 
+    bash-completion \
     # Version Control
     git \
     git-lfs \
@@ -43,6 +47,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     sudo \
     iputils-ping \
     net-tools \
+    openssh-client \
     # Editors & Terminal
     nano \
     vim \
@@ -55,6 +60,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-setuptools \
     python3-wheel \
     python3-opencv \
+    python3-argcomplete \
     # ROS Build Tools
     python3-colcon-common-extensions \
     python3-rosdep \
@@ -159,15 +165,14 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # ---------------------------------------------------------
 # 3. Environment Setup
 # ---------------------------------------------------------
-# The base image already has a 'ros' user with sudo. 
 ARG USERNAME=douglas
 ARG USER_UID=1000
 ARG USER_GID=$USER_UID
 
-# Rename the default 'ros' user to our desired username/uid
+# Add the douglas user and group
 # We keep UID 1000 to match host permissions
-RUN groupmod --gid $USER_GID --new-name $USERNAME ros \
-    && usermod --uid $USER_UID --gid $USER_GID --login $USERNAME --move-home --home /home/$USERNAME ros \
+RUN groupmod --gid $USER_GID --new-name $USERNAME ubuntu \
+    && usermod --uid $USER_UID --gid $USER_GID --login $USERNAME --move-home --home /home/$USERNAME ubuntu \
     && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
     && chmod 0440 /etc/sudoers.d/$USERNAME \
     && groupadd -f -r render \
@@ -182,6 +187,9 @@ RUN ARCH="$(dpkg --print-architecture)" && \
     chmod 4755 /usr/local/bin/fixuid && \
     mkdir -p /etc/fixuid && \
     printf "user: $USERNAME\ngroup: $USERNAME\n" > /etc/fixuid/config.yml
+
+# Add autocomplete for the user 
+RUN echo "if [ -f /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash ]; then source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash; fi" >> /home/$USERNAME/.bashrc
 
 # Copy entrypoint
 COPY Docker/entrypoint.sh /usr/local/bin/entrypoint.sh
