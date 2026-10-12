@@ -179,6 +179,30 @@ jobs:
           timeout 30s ros2 topic echo /imu/data --once || 
           { echo 'Timed out waiting for IMU'; exit 1; }"
 
+      - name: Diagnose ROS TCP Endpoint
+        shell: bash
+        run: |
+          echo "Checking TCP port 10000..."
+          sudo ss -ltnp | grep ':10000 ' || echo "Nothing listening on port 10000"
+
+          echo "Checking ROS 2 launch logs..."
+          docker exec ros2-sim \
+            cat /home/douglas/AUV/ros2_launch.log || true
+            
+      - name: Wait for ROS TCP Endpoint (Port 10000)
+        shell: bash
+        run: |
+          echo "Waiting for port 10000 to open..."
+
+          for i in {1..45}; do
+            if nc -z 127.0.0.1 10000 2>/dev/null; then
+              echo "ROS TCP Endpoint is listening on port 10000!"
+              exit 0
+            fi
+
+            sleep 1
+          done
+
       # -------------------------------------------------------------
       # 8. Cleanup: Stop the simulation and ROS2 containers
       # ------------------------------------------------------------- 
