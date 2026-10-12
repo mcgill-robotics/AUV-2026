@@ -144,7 +144,7 @@ jobs:
         run: |
           echo "Building all packages in the ROS2 workspace..."
           docker exec -i ros2-sim bash -c \
-            "/bin/bash -c"
+            "./build.sh -c"
       
       # -------------------------------------------------------------
       # 6. Start the simulation
