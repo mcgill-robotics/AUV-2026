@@ -153,7 +153,7 @@ jobs:
         run: |
           # 1920x1080 24-bit screen
           xvfb-run --auto-servernum --server-args "-screen 0 1920x1080x24" \
-            ./sim_binary/auv-sim-${{ matrix.sim_binary }}/auv-sim.x86_64 \
+            ./sim_binary/${{ matrix.sim_binary }}/auv-sim.x86_64 \
             -batchmode -logfile /home/douglas/AUV/sim.log &
           
           echo "Running sim"
