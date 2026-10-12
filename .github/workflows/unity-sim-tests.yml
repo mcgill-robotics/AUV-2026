@@ -199,7 +199,10 @@ jobs:
           
       - name: Wait for ROS2 topics to be available
         run: |
-          echo "Waiting for ROS2 topics to be available..."
+          echo "Waiting for unity to build the ros2 topics graph"
+          sleep 15
+
+          echo "Checking for /imu/data topic..."
           docker exec -i ros2-sim bash -c \
           "source /opt/ros/jazzy/setup.bash && \
           source /home/douglas/AUV/ros2_ws/install/setup.bash &&
