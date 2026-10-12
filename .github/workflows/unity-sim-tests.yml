@@ -110,6 +110,20 @@ jobs:
               mesa-vulkan-drivers \
               vulkan-tools
           fi
+
+      # -------------------------------------------------------------
+      # 6. Start the simulation
+      # ------------------------------------------------------------- 
+      - name: Start the sim
+        run: |
+          # 1920x1080 24-bit screen
+          xvfb-run --auto-servernum --server-args "-screen 0 1920x1080x24" \
+            ./sim_binary/${{ matrix.sim_binary }}/auv-sim.x86_64 \
+            -batchmode -force-glcore -logfile $GITHUB_WORKSPACE/sim.log &
+          
+          echo "Running sim"
+           cat ${{ github.workspace }}/sim.log
+          echo "SIM_PID=$!" >> $GITHUB_ENV
       
       # -------------------------------------------------------------
       # 4. Pull and launch Docker containers for ROS2 and the simulation environment
@@ -156,7 +170,7 @@ jobs:
           # 1920x1080 24-bit screen
           xvfb-run --auto-servernum --server-args "-screen 0 1920x1080x24" \
             ./sim_binary/${{ matrix.sim_binary }}/auv-sim.x86_64 \
-            -batchmode -logfile $GITHUB_WORKSPACE/sim.log &
+            -batchmode -force-glcore -logfile $GITHUB_WORKSPACE/sim.log &
           
           echo "Running sim"
           echo "SIM_PID=$!" >> $GITHUB_ENV
