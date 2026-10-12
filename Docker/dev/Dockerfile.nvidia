@@ -15,7 +15,7 @@ FROM mcgillrobotics/auv_2026:dev-opencv-base
 COPY --from=ghcr.io/astral-sh/uv:0.11.9 /uv /uvx /bin/
 ENV UV_SYSTEM_PYTHON=1
 
-# Standard CUDA paths
+# Standard CUDA paths used at runtime
 ENV CUDA_ROOT=/usr/local/cuda
 ENV PATH=${CUDA_ROOT}/bin:${PATH}
 ENV CUDA_INC_DIR=${CUDA_ROOT}/include
@@ -29,8 +29,6 @@ ARG CUDA_MAJOR=13
 ARG CUDA_MINOR=0
 ARG UBUNTU_RELEASE=24
 ARG UBUNTU_MINOR_RELEASE=04
-ARG TENSORRT_MAJOR=10
-ARG TENSORRT_MINOR=13
 
 # Set environment variables
 ENV LANG=C.UTF-8 \
@@ -39,7 +37,7 @@ ENV LANG=C.UTF-8 \
         ROS_DISTRO=jazzy \
         # Critical for ZED SDK to access hardware
         NVIDIA_DRIVER_CAPABILITIES=all \
-        TZ=Europe/Paris \
+        TZ=Americas/Montreal \
         IS_JETSON=false
 
 # ---------------------------------------------------------
@@ -57,17 +55,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \
         sudo \
         vim \
-        # ZED SDK Dependencies
-        zstd \
-        libusb-1.0-0-dev \
-        libhidapi-libusb0 \
-        libqt5core5a \
-        # FFMPEG Dependencies (Needed for ZED streaming)
-        libavcodec-dev \
-        libavdevice-dev \
-        libavformat-dev \
-        libavutil-dev \
-        libswscale-dev \
         # Python
         python3-pip \
         python3-dev \
@@ -80,9 +67,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         usbutils \
         v4l-utils \
         # GUI Support (RQT/Rviz)
-		libgl1 \
+        libgl1 \
         libglx-mesa0 \
-		libgl1-mesa-dri \
+        libgl1-mesa-dri \
         && rm -rf /var/lib/apt/lists/*
 
 # Add ROS 2 Jazzy Repository
@@ -147,11 +134,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3-colcon-common-extensions \
         python3-rosdep \
         python3-vcstool \
-        libnvinfer-bin \
         && rm -rf /var/lib/apt/lists/*
 
 # ----------------------------------------------------------
-# Install micro-ROS Agent (for microcontroller communication)
+# 2. Install micro-ROS Agent (for microcontroller communication)
 # ------------------------------------------
 WORKDIR /opt/ros/micro_ros_ws
 RUN git clone -b ${ROS_DISTRO} https://github.com/micro-ROS/micro_ros_setup.git src/micro_ros_setup
@@ -177,68 +163,9 @@ RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \
                         "--no-warn-unused-cli" && \
         rm -rf build log
 
-
-# ---------------------------------------------------------
-# 2. Install ZED SDK (Parameterized)
-# ---------------------------------------------------------
-ARG ZED_SDK_URL="https://stereolabs.sfo2.cdn.digitaloceanspaces.com/zedsdk/${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}/ZED_SDK_Ubuntu${UBUNTU_RELEASE}_cuda${CUDA_MAJOR}.${CUDA_MINOR}_tensorrt${TENSORRT_MAJOR}.${TENSORRT_MINOR}_v${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}.${ZED_SDK_PATCH}.zstd.run"
-ARG ZED_SDK_RUN="ZED_SDK_installer.run"
-
-RUN cd /tmp && \
-        echo "Downloading ZED SDK from: ${ZED_SDK_URL}" && \
-        wget --verbose --tries=5 --timeout=60 --no-check-certificate -O ${ZED_SDK_RUN} ${ZED_SDK_URL} && \
-        echo "Download complete. File size: $(du -h ${ZED_SDK_RUN} | cut -f1)" && \
-        chmod +x ${ZED_SDK_RUN}
-# silent: No user interaction
-# skip_cuda: Don't try to install CUDA Toolkit (Base image already has it)
-# skip_python: Don't install pyzed (Wrapper uses C++, prevents pip conflicts)
-RUN cd /tmp && ./${ZED_SDK_RUN} silent skip_cuda skip_python && \
-        # since the installer installs to /usr/local/zed we need to set permissions for lib access
-        # a for all user r for read and X for conditional execute (only allow executing if it is an actual executable)
-        chmod -R a+rX /usr/local/zed && \
-        # Update library cache
-        ldconfig && \
-        rm ${ZED_SDK_RUN} && \
-        rm -rf /var/lib/apt/lists/*
-
-# ---------------------------------------------------------
-# 3. Install Python ML Libraries (Ultralytics/YOLO)
-# ---------------------------------------------------------
-# Base image already has opencv-python with CUDA support but pip doesn't recognize it since it 
-# wasn't installed via pip, so we fake-install empty packages to satisfy dependencies
-
-# Fake opencv-python
-RUN mkdir -p /tmp/fake_cv && \
-        echo 'from setuptools import setup; setup(name="opencv-python", version="4.10.0", packages=[])' > /tmp/fake_cv/setup.py && \
-        uv pip install --break-system-packages /tmp/fake_cv && \
-        rm -rf /tmp/fake_cv
-
-# Fake opencv-contrib-python
-RUN mkdir -p /tmp/fake_cv_contrib && \
-        echo 'from setuptools import setup; setup(name="opencv-contrib-python", version="4.10.0", packages=[])' > /tmp/fake_cv_contrib/setup.py && \
-        uv pip install --break-system-packages /tmp/fake_cv_contrib && \
-        rm -rf /tmp/fake_cv_contrib
-
-# Fake opencv-python-headless
-RUN mkdir -p /tmp/fake_cv_headless && \
-        echo 'from setuptools import setup; setup(name="opencv-python-headless", version="4.10.0", packages=[])' > /tmp/fake_cv_headless/setup.py && \
-        uv pip install --break-system-packages /tmp/fake_cv_headless && \
-        rm -rf /tmp/fake_cv_headless
-
-# Install actual requirements
-# Ensure Docker/dev/constraints.txt DOES NOT contain opencv lines
-COPY Docker/dev/requirements.txt Docker/dev/constraints.txt /tmp/
-RUN --mount=type=cache,target=/root/.cache/uv \
-        uv pip install --break-system-packages -c /tmp/constraints.txt -r /tmp/requirements.txt
-
-# Install inference-models with TRT10/11 extra for GPU-accelerated inference
-RUN uv pip install --break-system-packages onnxruntime-gpu tensorrt "inference-models[torch-cu130,onnx-cu130]" -c /tmp/constraints.txt
-
-# Install ZED Python API from source
-RUN git clone -b v${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}.${ZED_SDK_PATCH} https://github.com/stereolabs/zed-python-api.git /tmp/zed-python-api && \
-        uv pip install --break-system-packages -v --no-deps --no-build-isolation /tmp/zed-python-api/src && \
-        rm -rf /tmp/zed-python-api
-
+# ----------------------------------------------------------
+# 3. Set user and groups to match the host with fixuid
+# ----------------------------------------------------------
 ARG USERNAME=douglas
 ARG USER_UID=1000
 ARG USER_GID=$USER_UID
@@ -257,7 +184,7 @@ RUN if getent group $USER_GID; then \
         # 2. Create the user
         echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
         && chmod 0440 /etc/sudoers.d/$USERNAME \
-        && usermod -aG video,render,dialout,zed -s /bin/bash $USERNAME
+        && usermod -aG video,render,dialout -s /bin/bash $USERNAME
 
 # Install fixuid for dynamic UID/GID remapping at runtime
 ARG FIXUID_VERSION=0.6.0
@@ -268,6 +195,10 @@ RUN ARCH="$(dpkg --print-architecture)" && \
         mkdir -p /etc/fixuid && \
         printf "user: $USERNAME\ngroup: $USERNAME\n" > /etc/fixuid/config.yml
 
+
+# ----------------------------------------------------------
+# 4. Entrypoint and Environment Setup
+# ----------------------------------------------------------
 # Copy entrypoint
 COPY Docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh

@@ -89,3 +89,188 @@ RUN mkdir /opt/opencv-${OPENCV_VERSION}/build && \
     rm -rf /opt/opencv-${OPENCV_VERSION} && rm -rf /opt/opencv_contrib-${OPENCV_VERSION}
 
  
+## Credit to tuttelikz/opencv-cuda for the template of this Dockerfile
+# Use NVIDIAs base image for CUDA before install openCV
+ARG CUDA_MAJOR=13
+ARG CUDA_MINOR=0
+ARG CUDA_PATCH=0
+ARG UBUNTU_VERSION=24.04
+
+FROM nvidia/cuda:${CUDA_MAJOR}.${CUDA_MINOR}.${CUDA_PATCH}-cudnn-devel-ubuntu${UBUNTU_VERSION}
+
+# Redecoare all arguments after pulling from base image are flushed, so we re-declare them
+ARG CUDA_MAJOR=13
+ARG CUDA_MINOR=0
+ARG CUDA_PATCH=0
+ARG UBUNTU_VERSION=24
+
+# Build arguments for openCV and ZED SDK
+ARG ZED_SDK_MAJOR=5
+ARG ZED_SDK_MINOR=4
+ARG ZED_SDK_PATCH=0 
+ARG CUDNN=
+ARG OPENCV_VERSION=4.14.0
+ARG CUDA_ARCH=8.6 # Represents backward compatibility for all NVIDIA GPUs with compute capability 8.6 (e.g., RTX 30 series, RTX 40 series, etc.). This ensures that the compiled OpenCV binaries will work on any GPU with compute capability 8.6 or higher.
+ARG TENSORRT_MAJOR=10
+ARG TENSORRT_MINOR=13
+
+
+# Set environment variables
+ENV LANG=C.UTF-8 \
+        LC_ALL=C.UTF-8 \
+        DEBIAN_FRONTEND=noninteractive \
+        # Critical for ZED SDK to access hardware
+        NVIDIA_DRIVER_CAPABILITIES=all \
+        TZ=Americas/Montreal \
+        IS_JETSON=false
+ENV OPENCV_VERSION=${OPENCV_VERSION}
+ENV CUDA_ARCH=${CUDA_ARCH}
+
+# ---------------------------------------------------------
+# 1. Install system dependecies
+# ---------------------------------------------------------
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+    # Build System
+    build-essential \
+    gcc \
+    g++ \
+    cmake \
+    pkg-config \
+    yasm \
+    unzip \
+    zlib1g-dev \
+    libeigen3-dev \
+    libtbb-dev \
+    libtbb12 \
+    libtbbmalloc2 \
+    # Networking
+    git \
+    wget \
+    libpq-dev \
+    # ZED SDK Dependencies & Streaming
+    zstd \
+    libusb-1.0-0-dev \
+    libhidapi-libusb0 \
+    libavcodec-dev \
+    libavdevice-dev \
+    libavformat-dev \
+    libavutil-dev \
+    libswscale-dev \
+    libpostproc-dev \
+    # Graphics Libraries
+    libjpeg-dev \
+    libpng-dev \
+    libtiff-dev \
+    libglew-dev \
+    libxine2-dev \
+    # GUI
+    libgtk2.0-dev \
+    libqt5core5a \
+    # Python
+    python3-dev \
+    python3-pip \
+    python3-numpy \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------
+# 1. Install OpenCV and OpenCV-Contrib from source with CUDA support
+# ---------------------------------------------------------
+# Install opencv and opencv-contrib zip tags
+RUN cd /opt && \
+    wget https://github.com/opencv/opencv/archive/${OPENCV_VERSION}.zip && \
+    unzip ${OPENCV_VERSION}.zip && \
+    rm ${OPENCV_VERSION}.zip && \
+    wget https://github.com/opencv/opencv_contrib/archive/${OPENCV_VERSION}.zip && \
+    unzip ${OPENCV_VERSION}.zip && \
+    rm ${OPENCV_VERSION}.zip
+
+# Create a build folder
+RUN mkdir /opt/opencv-${OPENCV_VERSION}/build && \ 
+    cd /opt/opencv-${OPENCV_VERSION}/build && \
+    cmake \
+        -DOPENCV_EXTRA_MODULES_PATH=/opt/opencv_contrib-${OPENCV_VERSION}/modules \
+        -DWITH_CUDA=ON \
+        -DCUDA_ARCH_BIN=${CUDA_ARCH} \
+        -DCMAKE_BUILD_TYPE=RELEASE \
+        -D CUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda \
+        -D CMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc \
+        -D CUDA_HOST_COMPILER=/usr/bin/g++ \
+        -DCMAKE_INSTALL_PREFIX=/usr/local \
+        -D CUDA_NVCC_FLAGS="-std=c++17" \
+        -D CMAKE_CXX_STANDARD=17 \ 
+        -DCMAKE_LIBRARY_PATH=/usr/local/cuda/lib64/stubs \
+        .. &&\
+    # Make
+    make -j 3 && \
+    make install && \
+    ldconfig &&\
+    rm -rf /opt/opencv-${OPENCV_VERSION} && rm -rf /opt/opencv_contrib-${OPENCV_VERSION}
+
+
+# ---------------------------------------------------------
+# 2. Install ZED SDK (Parameterized)
+# ---------------------------------------------------------
+ARG ZED_SDK_URL="https://stereolabs.sfo2.cdn.digitaloceanspaces.com/zedsdk/${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}/ZED_SDK_Ubuntu${UBUNTU_VERSION}_cuda${CUDA_MAJOR}.${CUDA_MINOR}_tensorrt${TENSORRT_MAJOR}.${TENSORRT_MINOR}_v${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}.${ZED_SDK_PATCH}.zstd.run"
+ARG ZED_SDK_RUN="ZED_SDK_installer.run"
+
+RUN cd /tmp && \
+        echo "Downloading ZED SDK from: ${ZED_SDK_URL}" && \
+        wget --verbose --tries=5 --timeout=60 --no-check-certificate -O ${ZED_SDK_RUN} ${ZED_SDK_URL} && \
+        echo "Download complete. File size: $(du -h ${ZED_SDK_RUN} | cut -f1)" && \
+        chmod +x ${ZED_SDK_RUN}
+# silent: No user interaction
+# skip_cuda: Don't try to install CUDA Toolkit (Base image already has it)
+# skip_python: Don't install pyzed (Wrapper uses C++, prevents pip conflicts)
+RUN cd /tmp && ./${ZED_SDK_RUN} silent skip_cuda skip_python && \
+        # since the installer installs to /usr/local/zed we need to set permissions for lib access
+        # a for all user r for read and X for conditional execute (only allow executing if it is an actual executable)
+        chmod -R a+rX /usr/local/zed && \
+        # Update library cache
+        ldconfig && \
+        rm ${ZED_SDK_RUN} && \
+        rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------
+# 3. Install Python ML Libraries (Ultralytics/YOLO)
+# ---------------------------------------------------------
+# Base image already has opencv-python with CUDA support but pip doesn't recognize it since it 
+# wasn't installed via pip, so we fake-install empty packages to satisfy dependencies
+
+# Get uv
+COPY --from=ghcr.io/astral-sh/uv:0.11.9 /uv /uvx /bin/
+ENV UV_SYSTEM_PYTHON=1
+
+# Fake opencv-python
+RUN mkdir -p /tmp/fake_cv && \
+        printf 'from setuptools import setup; setup(name="opencv-python", version="%s", packages=[])\n' "${OPENCV_VERSION}" > /tmp/fake_cv/setup.py && \
+        uv pip install --break-system-packages /tmp/fake_cv && \
+        rm -rf /tmp/fake_cv
+
+# Fake opencv-contrib-python
+RUN mkdir -p /tmp/fake_cv_contrib && \
+        printf 'from setuptools import setup; setup(name="opencv-contrib-python", version="%s", packages=[])\n' "${OPENCV_VERSION}" > /tmp/fake_cv_contrib/setup.py && \
+        uv pip install --break-system-packages /tmp/fake_cv_contrib && \
+        rm -rf /tmp/fake_cv_contrib
+
+# Fake opencv-python-headless
+RUN mkdir -p /tmp/fake_cv_headless && \
+        printf 'from setuptools import setup; setup(name="opencv-python-headless", version="%s", packages=[])\n' "${OPENCV_VERSION}" > /tmp/fake_cv_headless/setup.py && \
+        uv pip install --break-system-packages /tmp/fake_cv_headless && \
+        rm -rf /tmp/fake_cv_headless
+
+# Install actual requirements
+# Ensure Docker/dev/constraints.txt DOES NOT contain opencv lines
+COPY Docker/dev/requirements.txt Docker/dev/constraints.txt /tmp/
+RUN --mount=type=cache,target=/root/.cache/uv \
+        uv pip install --break-system-packages -c /tmp/constraints.txt -r /tmp/requirements.txt
+
+# Install inference-models with TRT10 extra for GPU-accelerated inference
+RUN uv pip install --break-system-packages onnxruntime-gpu "inference-models[torch-cu130,onnx-cu130]" -c /tmp/constraints.txt
+
+# Install ZED Python API from source
+RUN git clone -b v${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}.${ZED_SDK_PATCH} https://github.com/stereolabs/zed-python-api.git /tmp/zed-python-api && \
+        uv pip install --break-system-packages -v --no-deps --no-build-isolation /tmp/zed-python-api/src && \
+        rm -rf /tmp/zed-python-api
+ 
