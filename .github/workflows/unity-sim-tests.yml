@@ -136,7 +136,7 @@ jobs:
 
       - name: Set workspace permissions
         run: |
-          docker exec -u 0 ros2-sim chown -R douglas:douglas /home/douglas/AUV
+          docker exec -u 0 ros2-sim chown -R douglas:douglas /home/douglas/AUV/ros2_ws
       # -------------------------------------------------------------
       # 5. Build aaaalll our ros2 packages
       # ------------------------------------------------------------- 
