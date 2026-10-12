@@ -87,7 +87,7 @@ jobs:
           
           # To ensure the binary is executable, we can set the permissions (especially for Linux and macOS)
           if [[ "${{ matrix.runner }}" == "ubuntu-24.04" ]]; then
-            chmod +x sim_binary/auv-sim-linux/${{ matrix.sim_binary }}/auv-sim.x86_64
+            chmod +x sim_binary/${{ matrix.sim_binary }}/auv-sim.x86_64
           elif [[ "${{ matrix.runner }}" == "macos-26" ]]; then
             xattr -cr sim_binary/auv-sim-mac/${{ matrix.sim_binary }}/auv-sim.app
           fi # Windows binaries are typically executable by default, so no need to change permissions.
