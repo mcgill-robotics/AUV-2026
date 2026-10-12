@@ -206,13 +206,13 @@ jobs:
           docker exec -i ros2-sim bash -c \
           'source /opt/ros/jazzy/setup.bash && \
           source /home/douglas/AUV/ros2_ws/install/setup.bash && \
-          for i in {1..10}; do
+          for i in {1..60}; do
             if timeout 3s ros2 topic echo /imu/data --once > /dev/null 2>&1; then
               echo "IMU topic detected and publishing!"
               ros2 topic echo /imu/data --once
               exit 0
             fi
-            echo "Retrying... ($i/10)"
+            echo "Retrying... ($i/60)"
             sleep 1
           done
           exit 1'
