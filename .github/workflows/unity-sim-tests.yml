@@ -170,15 +170,6 @@ jobs:
           source /home/douglas/AUV/ros2_ws/install/setup.bash &&
           ros2 launch bringup bringup.launch.py sim:=true > /home/douglas/AUV/ros2_launch.log 2>&1"
       
-      - name: Wait for ROS2 topics to be available
-        run: |
-          echo "Waiting for ROS2 topics to be available..."
-          docker exec -i ros2-sim bash -c \
-          "source /opt/ros/jazzy/setup.bash && \
-          source /home/douglas/AUV/ros2_ws/install/setup.bash &&
-          timeout 30s ros2 topic echo /imu/data --once || 
-          { echo 'Timed out waiting for IMU'; exit 1; }"
-
       - name: Diagnose ROS TCP Endpoint
         shell: bash
         run: |
@@ -202,6 +193,15 @@ jobs:
 
             sleep 1
           done
+          
+      - name: Wait for ROS2 topics to be available
+        run: |
+          echo "Waiting for ROS2 topics to be available..."
+          docker exec -i ros2-sim bash -c \
+          "source /opt/ros/jazzy/setup.bash && \
+          source /home/douglas/AUV/ros2_ws/install/setup.bash &&
+          timeout 30s ros2 topic echo /imu/data --once || 
+          { echo 'Timed out waiting for IMU'; exit 1; }"
 
       # -------------------------------------------------------------
       # 8. Cleanup: Stop the simulation and ROS2 containers
