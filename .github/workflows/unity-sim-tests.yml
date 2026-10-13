@@ -174,8 +174,28 @@ jobs:
           # Also, vulkan outright refuses to run on no igpu/gpu and openGL is not available for our
           # sim. Left above is my attempt to get it to run with vulkan CPU, but it still fails.
           # TODO: Implement other ways to test Comp-vision and tracking
-          ./sim_binary/${{ matrix.sim_binary }}/auv-sim.x86_64 \
-            -batchmode -nographics -logfile $GITHUB_WORKSPACE/sim.log &
+          #./sim_binary/${{ matrix.sim_binary }}/auv-sim.x86_64 \
+          #  -batchmode -nographics -logfile $GITHUB_WORKSPACE/sim.log &
+
+
+          # Define and export variables clearly in the same subshell context
+          export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+          export MESA_VK_DEVICE_SELECT_FORCE_DISCRETE=1
+          export MESA_VK_DEVICE_SELECT=10de:2204
+
+          # Launch with variables bound explicitly to the process pipeline
+          VK_ICD_FILENAMES=$VK_ICD_FILENAMES \
+          MESA_VK_DEVICE_SELECT_FORCE_DISCRETE=1 \
+          MESA_VK_DEVICE_SELECT=10de:2204 \
+          xvfb-run --auto-servernum --server-args "-screen 0 640x480x16" \
+            ./sim_binary/${{ matrix.sim_binary }}/auv-sim.x86_64 \
+            -batchmode \
+            -screen-width 640 \
+            -screen-height 480 \
+            -logfile $GITHUB_WORKSPACE/sim.log &
+          
+          echo "Running sim"
+          echo "SIM_PID=$!" >> $GITHUB_ENV
 
           echo "Running sim"
           echo "SIM_PID=$!" >> $GITHUB_ENV
