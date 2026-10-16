@@ -36,6 +36,8 @@ To view GUI tools like `rqt` or `rviz` from inside the container, run this **on 
 xhost +si:localuser:root
 ```
 
+If it does not work, run the ```./generate_xauth_file.sh``` script in AUV/jetson_scripts/permissions and compose up your container again.
+
 ### Step 2: Build & Run
 Run the command corresponding to your hardware:
 

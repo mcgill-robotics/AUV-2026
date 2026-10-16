@@ -22,6 +22,7 @@ services:
       # Added to match original devcontainer features:
       - WAYLAND_DISPLAY=${WAYLAND_DISPLAY}
       - XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}
+      - XAUTHORITY=/tmp/.Xauthority
       - PULSE_SERVER=${PULSE_SERVER}
 
     user: "douglas"
@@ -30,7 +31,8 @@ services:
       - ../../ros2_ws/src/vision/model_pipeline/data:/images
       - /tmp/.X11-unix:/tmp/.X11-unix
       # Map Wayland/Pulse sockets if they exist
-      # - ${XDG_RUNTIME_DIR}:${XDG_RUNTIME_DIR }
+      - ${XDG_RUNTIME_DIR}:${XDG_RUNTIME_DIR}
+      - ../../jetson_scripts/permissions/.docker.xauth:/tmp/.Xauthority:ro  # Xauthority file obtained from jetson_scripts/permissions
       - /dev:/dev
 
     command: bash -c "tail -f /dev/null"

@@ -30,3 +30,11 @@ This script generates udev rules for a given device path, which can be used to c
 screen <device_path> <baud_rate>
 ```
 A good baud rate to start with is `115200`, but this may vary depending on the device. You can exit the `screen` session by pressing `Ctrl + A` followed by `K`, and then confirming with `Y`.
+
+## Permission scripts
+These scripts are used to grant permissions of certain host capabilities, such as the xauth graphics renderer, if its implementation is too complex for the Dockerfile.
+
+### [`generate_xauth_file.sh`](./generate_xauth_file.sh)
+
+This script looks into your machine to get the xauth file containing your XAUTHORITY, a secret key, that allows access to certain graphical applications such as rqt. Since the exact name of this file changes from device to device, the script will look for it and copy its information into a temporary local file in this folder, which is used by the docker-compose.yml in the containers. This ouput file is not tracked by git.
+
