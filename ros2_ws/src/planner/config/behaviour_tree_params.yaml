@@ -294,28 +294,28 @@ planner_root_tree:
       timeout: 30.0                       # (s) Transition timeout
 
       after_gate:
-        enabled: true
+        enabled: false
         do_yaw: true
         target_yaw_deg: 45.0               # Absolute global heading in degrees
         dx: 0.0
         dy: 1.0
         frame: "field"                    # "field" or "robot"
       after_slalom:
-        enabled: true
+        enabled: false
         do_yaw: true
         target_yaw_deg: 80.0
         dx: 1.0
         dy: 5.0
         frame: "field"
       after_bins:
-        enabled: true
+        enabled: false
         do_yaw: true
         target_yaw_deg: -30.0
         dx: 0.0
         dy: -7.0
         frame: "field"
       after_torpedo:
-        enabled: true
+        enabled: false
         do_yaw: true
         target_yaw_deg: 70.0
         dx: -1.0
