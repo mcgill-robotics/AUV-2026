@@ -26,11 +26,22 @@ find_package(Eigen3 REQUIRED)
 find_package(sensors REQUIRED)
 find_package(auv_msgs REQUIRED)
 
+add_library(controller_lib
+  src/attitude_controller.cpp
+  src/superimposer.cpp)
+
+target_include_directories(controller_lib PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+
 add_executable(attitude_controller
-  src/attitude_controller.cpp)
+  src/attitude_controller_node.cpp)
 
 add_executable(superimposer
-  src/superimposer.cpp)
+  src/superimposer_node.cpp)
+
+target_link_libraries(attitude_controller controller_lib)
+target_link_libraries(superimposer controller_lib)
 
 target_include_directories(attitude_controller
   PUBLIC
@@ -87,5 +98,28 @@ install(PROGRAMS
 )
 
 ament_export_include_directories(include)
+
+# If building for tests
+# -----------------------
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+
+  ament_target_dependencies(controller_lib
+    rclcpp
+    std_msgs
+    sensor_msgs
+    geometry_msgs
+    nav_msgs
+    message_filters
+    Eigen3
+    sensors
+    auv_msgs)
+
+    # Build tests
+    ament_add_gtest(test_attitude_controller
+      test/test.cpp)
+    
+    target_link_libraries(test_attitude_controller controller_lib)
+endif()
 
 ament_package()
